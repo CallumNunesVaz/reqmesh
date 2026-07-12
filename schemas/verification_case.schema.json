@@ -1,0 +1,61 @@
+{
+  "properties": {
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "name": {
+      "default": "",
+      "title": "Name",
+      "type": "string"
+    },
+    "description": {
+      "default": "",
+      "title": "Description",
+      "type": "string"
+    },
+    "method": {
+      "default": "test",
+      "title": "Method",
+      "type": "string"
+    },
+    "status": {
+      "default": "pending",
+      "title": "Status",
+      "type": "string"
+    },
+    "result": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Result"
+    },
+    "verified_requirements": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Verified Requirements",
+      "type": "array"
+    },
+    "created": {
+      "title": "Created",
+      "type": "string"
+    },
+    "modified": {
+      "title": "Modified",
+      "type": "string"
+    }
+  },
+  "required": [
+    "id"
+  ],
+  "title": "reqmesh verification_case",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

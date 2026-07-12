@@ -1,0 +1,46 @@
+{
+  "properties": {
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "name": {
+      "default": "",
+      "title": "Name",
+      "type": "string"
+    },
+    "description": {
+      "default": "",
+      "title": "Description",
+      "type": "string"
+    },
+    "requirements": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Requirements",
+      "type": "array"
+    },
+    "children": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Children",
+      "type": "array"
+    },
+    "created": {
+      "title": "Created",
+      "type": "string"
+    },
+    "modified": {
+      "title": "Modified",
+      "type": "string"
+    }
+  },
+  "required": [
+    "id"
+  ],
+  "title": "reqmesh specification",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

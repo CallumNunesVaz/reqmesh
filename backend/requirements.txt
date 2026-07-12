@@ -1,0 +1,11 @@
+fastapi==0.115.0
+uvicorn[standard]==0.30.0
+pydantic==2.9.0
+pydantic-settings==2.5.0
+ruamel.yaml==0.18.6
+python-multipart==0.0.9
+bcrypt>=4.0
+PyJWT>=2.8
+jinja2>=3.1
+weasyprint>=61
+click>=8.1

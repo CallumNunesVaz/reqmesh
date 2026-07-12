@@ -1,0 +1,42 @@
+{
+  "$defs": {
+    "TraceLink": {
+      "properties": {
+        "source": {
+          "title": "Source",
+          "type": "string"
+        },
+        "target": {
+          "title": "Target",
+          "type": "string"
+        },
+        "type": {
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source",
+        "target",
+        "type"
+      ],
+      "title": "TraceLink",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "links": {
+      "items": {
+        "$ref": "#/$defs/TraceLink"
+      },
+      "title": "Links",
+      "type": "array"
+    }
+  },
+  "required": [
+    "links"
+  ],
+  "title": "reqmesh traces",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

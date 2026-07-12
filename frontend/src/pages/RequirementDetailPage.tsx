@@ -1,0 +1,514 @@
+import { useEffect, useState, useMemo } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import { Trash2, ArrowLeft, Plus, X, ArrowRight, ArrowLeftRight } from 'lucide-react';
+import { api, type Requirement, type VerificationCase } from '../api/client';
+import RichTextEditor from '../components/RichTextEditor';
+import AutocompleteInput from '../components/AutocompleteInput';
+import { useAuthStore } from '../store/auth';
+import { useStore } from '../store';
+
+const typeOptions = ['functional', 'non_functional', 'interface', 'design', 'constraint'];
+const priorityOptions = ['low', 'medium', 'high', 'critical'];
+const methodOptions = ['test', 'analysis', 'demonstration', 'inspection'];
+
+export default function RequirementDetailPage() {
+  const { projectId, reqId } = useParams<{ projectId: string; reqId: string }>();
+  const navigate = useNavigate();
+  const [req, setReq] = useState<Requirement | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [allReqs, setAllReqs] = useState<Requirement[]>([]);
+  const [allVcs, setAllVcs] = useState<VerificationCase[]>([]);
+  const [newAttrKey, setNewAttrKey] = useState('');
+  const [newAttrVal, setNewAttrVal] = useState('');
+  const [newRelType, setNewRelType] = useState('refines');
+  const [newRelTarget, setNewRelTarget] = useState('');
+  const [reverseAdd, setReverseAdd] = useState(false);
+  const [newVC, setNewVC] = useState('');
+  const { user, editMode } = useAuthStore();
+  const bumpGraphVersion = useStore((s) => s.bumpGraphVersion);
+  const editable = user !== null && user.role !== 'viewer' && editMode;
+  const [workflow, setWorkflow] = useState<{ states: string[]; transitions: Record<string, string[]> } | null>(null);
+  const statusOptions = workflow?.states || ['proposed', 'approved', 'implemented', 'verified', 'rejected', 'deprecated'];
+
+  const refSuggestions = useMemo(() => {
+    const reqItems = [...allReqs, req].filter(Boolean).map((r) => ({ id: r!.id, label: r!.name || r!.id }));
+    const vcItems = allVcs.map((v) => ({ id: v.id, label: v.name || v.id }));
+    return [...reqItems, ...vcItems];
+  }, [allReqs, req, allVcs]);
+
+  const vcSuggestions = useMemo(
+    () => allVcs.map((v) => ({ id: v.id, label: v.name || v.id })),
+    [allVcs],
+  );
+
+  const incomingRelations = useMemo(() => {
+    if (!req) return [];
+    const results: { source: string; type: string; sourceName: string }[] = [];
+    for (const r of allReqs) {
+      for (const rel of r.relations || []) {
+        if (rel.target === req.id) {
+          results.push({ source: r.id, type: rel.type, sourceName: r.name || r.id });
+        }
+      }
+    }
+    return results;
+  }, [allReqs, req]);
+
+  useEffect(() => {
+    if (!projectId || !reqId) return;
+    Promise.all([
+      api.getRequirement(projectId, reqId),
+      api.listRequirements(projectId),
+      api.listVerificationCases(projectId),
+    ]).then(([data, all, vcs]) => {
+      setReq(data);
+      setAllReqs(all.filter((r) => r.id !== reqId));
+      setAllVcs(vcs);
+      setLoading(false);
+    }).catch(console.error);
+    api.getWorkflow(projectId).then((wf) => setWorkflow(wf)).catch(() => {});
+  }, [projectId, reqId]);
+
+  const save = async (updates: Partial<Requirement>) => {
+    if (!projectId || !reqId || !req || !editable) return;
+    try {
+      const updated = await api.updateRequirement(projectId, reqId, updates);
+      setReq(updated);
+      bumpGraphVersion();
+    } catch {
+      // silently no-op when server rejects
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!projectId || !reqId) return;
+    if (!confirm('Delete this requirement?')) return;
+    await api.deleteRequirement(projectId, reqId);
+    navigate(`/project/${projectId}/requirements`);
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full" />
+      </div>
+    );
+  }
+
+  if (!req) {
+    return (
+      <div className="p-8 text-center">
+        <p className="text-muted-foreground">Requirement not found.</p>
+        <button onClick={() => navigate(`/project/${projectId}/requirements`)} className="btn-secondary mt-4">
+          <ArrowLeft size={14} /> Back to list
+        </button>
+      </div>
+    );
+  }
+
+  const addAttribute = () => {
+    if (!newAttrKey.trim() || !newAttrVal.trim()) return;
+    save({ attributes: [...req.attributes, { key: newAttrKey.trim(), value: newAttrVal.trim() }] });
+    setNewAttrKey('');
+    setNewAttrVal('');
+  };
+
+  const removeAttribute = (index: number) => {
+    save({ attributes: req.attributes.filter((_, i) => i !== index) });
+  };
+
+  const addRelation = async () => {
+    if (!newRelTarget.trim() || !projectId || !reqId) return;
+    if (reverseAdd) {
+      const target = allReqs.find((r) => r.id === newRelTarget.trim());
+      if (!target) {
+        try {
+          await api.updateRequirement(projectId, newRelTarget.trim(), {
+            relations: [...((await api.getRequirement(projectId, newRelTarget.trim())).relations || []), { type: newRelType, target: reqId }],
+          });
+        } catch { /* target might not exist yet */ }
+      } else {
+        await api.updateRequirement(projectId, target.id, {
+          relations: [...target.relations, { type: newRelType, target: reqId }],
+        });
+      }
+    } else {
+      save({ relations: [...req.relations, { type: newRelType, target: newRelTarget.trim() }] });
+    }
+    setNewRelTarget('');
+    setReverseAdd(false);
+    bumpGraphVersion();
+  };
+
+  const removeRelation = (index: number) => {
+    save({ relations: req.relations.filter((_, i) => i !== index) });
+  };
+
+  const flipRelation = async (index: number, targetId: string, relType: string) => {
+    if (!projectId || !reqId || !req) return;
+    const updatedRelations = req.relations.filter((_, i) => i !== index);
+    await api.updateRequirement(projectId, reqId, { relations: updatedRelations });
+    setReq({ ...req, relations: updatedRelations });
+
+    try {
+      const targetReq = await api.getRequirement(projectId, targetId);
+      const targetRelations = [...(targetReq.relations || []), { type: relType, target: reqId }];
+      await api.updateRequirement(projectId, targetId, { relations: targetRelations });
+      setAllReqs((prev) => {
+        const exists = prev.find((r) => r.id === targetId);
+        if (exists) return prev.map((r) => r.id === targetId ? { ...r, relations: targetRelations } : r);
+        return prev;
+      });
+    } catch {
+      // Target may be a VC or doesn't exist — still removed from source above.
+    }
+    bumpGraphVersion();
+  };
+
+  const addVerificationCase = () => {
+    if (!newVC.trim()) return;
+    save({ verification_cases: [...req.verification_cases, newVC.trim()] });
+    setNewVC('');
+  };
+
+  const removeVerificationCase = (index: number) => {
+    save({ verification_cases: req.verification_cases.filter((_, i) => i !== index) });
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto p-8">
+      <div className="flex items-center gap-3 mb-6">
+        <button onClick={() => navigate(`/project/${projectId}/requirements`)} className="btn-secondary p-2">
+          <ArrowLeft size={16} />
+        </button>
+        <div className="flex-1">
+          <h1 className="text-xl font-bold tracking-tight font-mono text-foreground">{req.id}</h1>
+        </div>
+        <button onClick={handleDelete} className="btn-danger" disabled={!editable}>
+          <Trash2 size={14} /> Delete
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-6">
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="card p-5">
+            <label className="label">Name</label>
+            <input
+              className="input text-lg font-medium"
+              value={req.name}
+              onChange={(e) => setReq({ ...req, name: e.target.value })}
+              onBlur={(e) => save({ name: e.target.value })}
+              disabled={!editable}
+            />
+            <label className="label mt-4">Description</label>
+            <RichTextEditor
+              content={req.description}
+              onChange={(html) => { setReq({ ...req, description: html }); }}
+              onBlur={(html) => save({ description: html })}
+              disabled={!editable}
+            />
+          </motion.div>
+
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="card p-5">
+            <h2 className="font-semibold text-sm text-card-foreground mb-3">Relations</h2>
+
+            {/* Add outgoing relation */}
+            {editable && (
+            <div className="flex items-end gap-1.5 mb-4">
+              <div className="flex-1 bg-muted/40 rounded-lg p-2.5 border">
+                <div className="flex items-center gap-1.5 text-[11px]">
+                  <span className="font-mono font-semibold text-foreground">{req.id}</span>
+                  <ArrowRight size={12} className="text-muted-foreground shrink-0" />
+                  <select className="bg-transparent text-[11px] font-medium text-primary border-b border-dashed border-primary/30 px-0.5 py-px outline-none cursor-pointer" value={newRelType} onChange={(e) => setNewRelType(e.target.value)}>
+                    <option value="refines">refines</option>
+                    <option value="satisfies">satisfies</option>
+                    <option value="verified_by">verified by</option>
+                    <option value="derives">derives</option>
+                    <option value="conflicts">conflicts</option>
+                    <option value="duplicates">duplicates</option>
+                  </select>
+                  <ArrowRight size={12} className="text-muted-foreground shrink-0" />
+                  <AutocompleteInput
+                    className="bg-transparent flex-1 text-[11px] font-mono outline-none min-w-0 placeholder:text-muted-foreground/50"
+                    placeholder="target ID..."
+                    value={newRelTarget}
+                    onChange={setNewRelTarget}
+                    suggestions={refSuggestions}
+                  />
+                </div>
+              </div>
+              <button
+                onClick={() => setReverseAdd(!reverseAdd)}
+                className={`p-2 rounded-lg border transition-all shrink-0 ${reverseAdd ? 'bg-primary/10 border-primary/30 text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-accent'}`}
+                title={reverseAdd ? 'Direction: target → this (click to swap)' : 'Direction: this → target (click to swap)'}
+              >
+                <ArrowLeftRight size={14} />
+              </button>
+              <button onClick={addRelation} className="btn-secondary shrink-0" disabled={!newRelTarget.trim()}>
+                <Plus size={14} />
+              </button>
+            </div>
+            )}
+
+            {/* Outgoing: THIS → ... */}
+            <div className="mb-3">
+              <h3 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                Outgoing
+                <span className="ml-1 font-normal normal-case text-[10px] text-muted-foreground/60">
+                  ({req.id} → target)
+                </span>
+              </h3>
+              {req.relations.length === 0 ? (
+                <p className="text-xs text-muted-foreground pl-1">None</p>
+              ) : (
+                <div className="space-y-1">
+                  {req.relations.map((rel, i) => {
+                    const targetName = allReqs.find((r) => r.id === rel.target)?.name
+                      || allVcs.find((v) => v.id === rel.target)?.name;
+                    return (
+                      <div key={`out-${i}`} className="flex items-center gap-2 text-xs group py-1.5 px-2 rounded hover:bg-accent">
+                        <span className="font-mono text-[11px] font-semibold text-foreground shrink-0">{req.id}</span>
+                        <ArrowRight size={11} className="text-muted-foreground shrink-0" />
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-primary/10 text-primary shrink-0">{rel.type.replace(/_/g, ' ')}</span>
+                        <ArrowRight size={11} className="text-muted-foreground shrink-0" />
+                        <span className="font-mono text-[11px] text-foreground flex-1">
+                          {rel.target}
+                          {targetName && <span className="text-muted-foreground ml-1 font-sans">{targetName}</span>}
+                        </span>
+                        {editable && (
+                        <div className="flex items-center gap-0.5">
+                          <button
+                            onClick={() => flipRelation(i, rel.target, rel.type)}
+                            className="p-1 rounded hover:bg-primary/10 text-muted-foreground hover:text-primary opacity-0 group-hover:opacity-100 transition-all"
+                            title={`Flip: make ${rel.target} → ${rel.type} → ${req.id}`}
+                          >
+                            <ArrowLeftRight size={11} />
+                          </button>
+                          <button onClick={() => removeRelation(i)} className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all">
+                            <X size={12} />
+                          </button>
+                        </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Incoming: ... → THIS */}
+            <div>
+              <h3 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                Incoming
+                <span className="ml-1 font-normal normal-case text-[10px] text-muted-foreground/60">
+                  (source → {req.id})
+                </span>
+              </h3>
+              {incomingRelations.length === 0 ? (
+                <p className="text-xs text-muted-foreground pl-1">None</p>
+              ) : (
+                <div className="space-y-1">
+                  {incomingRelations.map((inc, i) => (
+                    <div key={`in-${i}`} className="flex items-center gap-2 text-xs py-1.5 px-2 rounded hover:bg-accent/50">
+                      <span className="font-mono text-[11px] text-foreground flex-1">
+                        {inc.source}
+                        {inc.sourceName !== inc.source && <span className="text-muted-foreground ml-1 font-sans">{inc.sourceName}</span>}
+                      </span>
+                      <ArrowRight size={11} className="text-muted-foreground shrink-0" />
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-500/10 text-emerald-400 shrink-0">{inc.type.replace(/_/g, ' ')}</span>
+                      <ArrowRight size={11} className="text-muted-foreground shrink-0" />
+                      <span className="font-mono text-[11px] font-semibold text-foreground shrink-0">{req.id}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </motion.div>
+
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="card p-5">
+            <h2 className="font-semibold text-sm text-card-foreground mb-3">Verification Cases</h2>
+            <div className="flex gap-2 mb-3">
+              <AutocompleteInput
+                className="input flex-1 font-mono text-sm"
+                placeholder="VC ID (e.g. VC-001)"
+                value={newVC}
+                onChange={setNewVC}
+                suggestions={vcSuggestions}
+                disabled={!editable}
+              />
+              <button onClick={addVerificationCase} className="btn-secondary shrink-0" disabled={!editable}><Plus size={14} /></button>
+            </div>
+            {req.verification_cases.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No verification cases linked.</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {req.verification_cases.map((vc, i) => (
+                  <span key={i} className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-muted text-xs font-mono text-foreground group">
+                    {vc}
+                    {editable && (
+                    <button onClick={() => removeVerificationCase(i)} className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all">
+                      <X size={10} />
+                    </button>
+                    )}
+                  </span>
+                ))}
+              </div>
+            )}
+          </motion.div>
+        </div>
+
+        <div className="space-y-6">
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="card p-5">
+            <h2 className="font-semibold text-sm text-card-foreground mb-3">Properties</h2>
+            <div className="space-y-3">
+              <div>
+                <label className="label">Type</label>
+                <select className="select" value={req.type} onChange={(e) => save({ type: e.target.value })} disabled={!editable}>
+                  {typeOptions.map((t) => (<option key={t} value={t}>{t.replace('_', ' ')}</option>))}
+                </select>
+              </div>
+              <div>
+                <label className="label">Status</label>
+                <select className="select" value={req.status} onChange={(e) => save({ status: e.target.value })} disabled={!editable}>
+                  {statusOptions.map((s) => (<option key={s} value={s}>{s}</option>))}
+                </select>
+                {workflow && editable && (
+                  <div className="text-[10px] text-muted-foreground mt-1 flex flex-wrap gap-1">
+                    <span>Next:</span>
+                    {(workflow.transitions[req.status] || []).map((t) => (
+                      <button
+                        key={t}
+                        onClick={() => save({ status: t })}
+                        className="px-1.5 py-px rounded bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                      >
+                        {t}
+                      </button>
+                    ))}
+                    {(workflow.transitions[req.status] || []).length === 0 && (
+                      <span className="text-muted-foreground/60">terminal</span>
+                    )}
+                  </div>
+                )}
+              </div>
+              <div>
+                <label className="label">Priority</label>
+                <select className="select" value={req.priority} onChange={(e) => save({ priority: e.target.value })} disabled={!editable}>
+                  {priorityOptions.map((p) => (<option key={p} value={p}>{p}</option>))}
+                </select>
+              </div>
+              <div>
+                <label className="label">Verification Method</label>
+                <select className="select" value={req.verification_method} onChange={(e) => save({ verification_method: e.target.value })} disabled={!editable}>
+                  {methodOptions.map((m) => (<option key={m} value={m}>{m}</option>))}
+                </select>
+              </div>
+              <div>
+                <label className="label">Verification Status</label>
+                <select className="select" value={req.verification_status || 'pending'} onChange={(e) => save({ verification_status: e.target.value })} disabled={!editable}>
+                  <option value="pending">Pending</option>
+                  <option value="in_progress">In Progress</option>
+                  <option value="passed">Passed</option>
+                  <option value="failed">Failed</option>
+                </select>
+              </div>
+              <div>
+                <label className="label">Parent</label>
+                <select
+                  className="select"
+                  value={req.parent || ''}
+                  onChange={(e) => save({ parent: e.target.value || null })}
+                  disabled={!editable}
+                >
+                  <option value="">None (top-level)</option>
+                  {allReqs.map((r) => (
+                    <option key={r.id} value={r.id}>{r.id} - {r.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="label">Rationale</label>
+                <input
+                  className="input"
+                  placeholder="Why this requirement exists..."
+                  value={req.rationale || ''}
+                  onChange={(e) => save({ rationale: e.target.value })}
+                  disabled={!editable}
+                />
+              </div>
+              <div>
+                <label className="label">Source</label>
+                <input
+                  className="input"
+                  placeholder="Stakeholder/document reference..."
+                  value={req.source || ''}
+                  onChange={(e) => save({ source: e.target.value })}
+                  disabled={!editable}
+                />
+              </div>
+              <div>
+                <label className="label">Allocated To</label>
+                <input
+                  className="input"
+                  placeholder="System element..."
+                  value={req.allocated_to || ''}
+                  onChange={(e) => save({ allocated_to: e.target.value })}
+                  disabled={!editable}
+                />
+              </div>
+              <div>
+                <label className="label">Baseline</label>
+                <div className="flex gap-1">
+                  <select
+                    className="select"
+                    value={req.baseline || ''}
+                    onChange={(e) => save({ baseline: e.target.value || null })}
+                    disabled={!editable}
+                  >
+                    <option value="">None</option>
+                    <option value="Baseline A">Baseline A</option>
+                    <option value="Baseline B">Baseline B</option>
+                    <option value="PDR">PDR</option>
+                    <option value="CDR">CDR</option>
+                    <option value="TRR">TRR</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="card p-5">
+            <h2 className="font-semibold text-sm text-card-foreground mb-3">Attributes</h2>
+            <div className="flex gap-1 mb-3">
+              <input className="input flex-1 text-xs" placeholder="Key" value={newAttrKey} onChange={(e) => setNewAttrKey(e.target.value)} disabled={!editable} />
+              <input className="input flex-1 text-xs" placeholder="Value" value={newAttrVal} onChange={(e) => setNewAttrVal(e.target.value)} disabled={!editable} />
+              <button onClick={addAttribute} className="btn-secondary shrink-0 p-2" disabled={!editable}><Plus size={12} /></button>
+            </div>
+            {req.attributes.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No custom attributes.</p>
+            ) : (
+              <div className="space-y-1.5">
+                {req.attributes.map((attr, i) => (
+                  <div key={i} className="flex items-center gap-2 text-xs group py-1 px-2 rounded hover:bg-accent">
+                    <span className="font-medium text-muted-foreground w-24 shrink-0 truncate">{attr.key}</span>
+                    <span className="text-foreground flex-1 truncate">{attr.value}</span>
+                    {editable && (
+                    <button onClick={() => removeAttribute(i)} className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all">
+                      <X size={12} />
+                    </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </motion.div>
+
+          <div className="text-xs text-muted-foreground space-y-1">
+            <div>Created: {new Date(req.created).toLocaleString()}</div>
+            <div>Modified: {new Date(req.modified).toLocaleString()}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

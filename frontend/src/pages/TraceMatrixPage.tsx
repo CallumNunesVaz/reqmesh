@@ -1,0 +1,228 @@
+import { useEffect, useState, useMemo } from 'react';
+import { useParams } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import { GitBranch, Plus, X, LayoutGrid, LayoutList } from 'lucide-react';
+import { api } from '../api/client';
+import type { TraceLink, Requirement, VerificationCase } from '../api/client';
+import { useAuthStore } from '../store/auth';
+import AutocompleteInput from '../components/AutocompleteInput';
+
+export default function TraceMatrixPage() {
+  const { projectId } = useParams<{ projectId: string }>();
+  const [links, setLinks] = useState<TraceLink[]>([]);
+  const [requirements, setRequirements] = useState<Requirement[]>([]);
+  const [verificationCases, setVerificationCases] = useState<VerificationCase[]>([]);
+  const [newLink, setNewLink] = useState({ source: '', target: '', type: 'satisfies' });
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const editable = useAuthStore((s) => s.editMode && s.user !== null && s.user.role !== 'viewer');
+
+  const entitySuggestions = useMemo(() => {
+    const reqItems = requirements.map((r) => ({ id: r.id, label: r.name || r.id }));
+    const vcItems = verificationCases.map((v) => ({ id: v.id, label: v.name || v.id }));
+    return [...reqItems, ...vcItems].sort((a, b) => a.id.localeCompare(b.id));
+  }, [requirements, verificationCases]);
+
+  const load = () => {
+    if (!projectId) return;
+    Promise.all([
+      api.getTraces(projectId),
+      api.listRequirements(projectId),
+      api.listVerificationCases(projectId),
+    ]).then(([traces, reqs, vcs]) => {
+      setLinks(traces.links || []);
+      setRequirements(reqs);
+      setVerificationCases(vcs);
+    }).catch(console.error);
+  };
+
+  useEffect(load, [projectId]);
+
+  const addLink = async () => {
+    if (!projectId || !newLink.source || !newLink.target) return;
+    const updated = [...links, { ...newLink }];
+    await api.updateTraces(projectId, { links: updated });
+    setLinks(updated);
+    setNewLink({ source: '', target: '', type: 'satisfies' });
+  };
+
+  const removeLink = async (index: number) => {
+    if (!projectId) return;
+    const updated = links.filter((_, i) => i !== index);
+    await api.updateTraces(projectId, { links: updated });
+    setLinks(updated);
+  };
+
+  const getRequirementName = (id: string) => {
+    const req = requirements.find((r) => r.id === id);
+    return req ? `${id} - ${req.name}` : id;
+  };
+
+  return (
+    <div className="max-w-5xl mx-auto p-8">
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">Traceability Matrix</h1>
+        <p className="text-sm text-muted-foreground mt-1">{links.length} trace links</p>
+        <div className="flex gap-1 mt-2">
+          <button
+            onClick={() => setViewMode('list')}
+            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs transition-colors ${viewMode === 'list' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-accent'}`}
+          >
+            <LayoutList size={13} /> List
+          </button>
+          <button
+            onClick={() => setViewMode('grid')}
+            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs transition-colors ${viewMode === 'grid' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-accent'}`}
+          >
+            <LayoutGrid size={13} /> Grid
+          </button>
+        </div>
+      </motion.div>
+
+      {editable && (
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="card p-4 mt-6">
+        <h2 className="font-semibold text-sm text-card-foreground mb-3 flex items-center gap-2">
+          <GitBranch size={16} /> Add Trace Link
+        </h2>
+        <div className="flex items-end gap-2">
+          <div className="flex-1">
+            <label className="label">Source</label>
+            <AutocompleteInput
+              className="select"
+              placeholder="Select source..."
+              value={newLink.source}
+              onChange={(v) => setNewLink({ ...newLink, source: v })}
+              suggestions={entitySuggestions}
+            />
+          </div>
+          <div>
+            <label className="label">Type</label>
+            <select className="select w-32" value={newLink.type} onChange={(e) => setNewLink({ ...newLink, type: e.target.value })}>
+              <option value="satisfies">Satisfies</option>
+              <option value="refines">Refines</option>
+              <option value="verified_by">Verified by</option>
+              <option value="derives">Derives</option>
+              <option value="conflicts">Conflicts</option>
+            </select>
+          </div>
+          <div className="flex-1">
+            <label className="label">Target</label>
+            <AutocompleteInput
+              className="select"
+              placeholder="Select target..."
+              value={newLink.target}
+              onChange={(v) => setNewLink({ ...newLink, target: v })}
+              suggestions={entitySuggestions}
+            />
+          </div>
+          <button onClick={addLink} className="btn-primary" disabled={!newLink.source || !newLink.target}>
+            <Plus size={14} /> Add
+          </button>
+        </div>
+      </motion.div>
+      )}
+
+      {links.length === 0 ? (
+        <div className="card p-12 text-center mt-6">
+          <GitBranch size={48} className="mx-auto text-muted-foreground/40 mb-4" />
+          <p className="text-card-foreground font-medium">No trace links yet</p>
+          <p className="text-sm text-muted-foreground mt-1">Add links to connect requirements and verification cases.</p>
+        </div>
+      ) : viewMode === 'list' ? (
+        <div className="card mt-6 overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b bg-muted/50">
+                <th className="text-left px-4 py-2.5 font-semibold text-xs text-muted-foreground uppercase tracking-wider">Source</th>
+                <th className="text-left px-4 py-2.5 font-semibold text-xs text-muted-foreground uppercase tracking-wider">Type</th>
+                <th className="text-left px-4 py-2.5 font-semibold text-xs text-muted-foreground uppercase tracking-wider">Target</th>
+                <th className="w-10" />
+              </tr>
+            </thead>
+            <tbody>
+              {links.map((link, i) => (
+                <motion.tr
+                  key={`${link.source}-${link.target}-${i}`}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: i * 0.02 }}
+                  className="border-b hover:bg-muted/30 transition-colors group"
+                >
+                  <td className="px-4 py-2.5 font-mono text-xs text-foreground">{getRequirementName(link.source)}</td>
+                  <td className="px-4 py-2.5">
+                    <span className="badge bg-muted text-muted-foreground">{link.type}</span>
+                  </td>
+                  <td className="px-4 py-2.5 font-mono text-xs text-foreground">{getRequirementName(link.target)}</td>
+                  <td className="px-2 py-2.5">
+                    {editable && (
+                    <button
+                      onClick={() => removeLink(i)}
+                      className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                    >
+                      <X size={12} />
+                    </button>
+                    )}
+                  </td>
+                </motion.tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="card mt-6 overflow-auto max-h-[70vh]">
+          <table className="text-sm border-separate border-spacing-0">
+            <thead>
+              <tr>
+                <th className="sticky top-0 left-0 z-20 bg-card border-b border-r px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider text-left min-w-[100px]">
+                  Req \ VC
+                </th>
+                {verificationCases.map((vc) => (
+                  <th
+                    key={vc.id}
+                    className="sticky top-0 z-10 bg-card border-b px-2 py-2 text-[9px] font-mono text-muted-foreground whitespace-nowrap"
+                    title={`${vc.id} - ${vc.name}`}
+                  >
+                    {vc.id}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {requirements.map((req) => {
+                const reqLinks = links.filter((l) => l.source === req.id);
+                return (
+                  <tr key={req.id} className="group">
+                    <td className="sticky left-0 z-10 bg-card border-r px-3 py-1.5 text-[10px] font-mono whitespace-nowrap group-hover:bg-accent/40" title={`${req.id} - ${req.name}`}>
+                      {req.id}
+                    </td>
+                    {verificationCases.map((vc) => {
+                      const link = reqLinks.find((l) => l.target === vc.id);
+                      const colorMap: Record<string, string> = {
+                        satisfies: 'bg-blue-500/20 text-blue-400',
+                        refines: 'bg-purple-500/20 text-purple-400',
+                        verified_by: 'bg-emerald-500/20 text-emerald-400',
+                        derives: 'bg-orange-500/20 text-orange-400',
+                        conflicts: 'bg-red-500/20 text-red-400',
+                      };
+                      return (
+                        <td key={vc.id} className="border-b px-2 py-1.5 text-center">
+                          {link ? (
+                            <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-medium ${colorMap[link.type] || 'bg-muted text-muted-foreground'}`}>
+                              {link.type}
+                            </span>
+                          ) : (
+                            <span className="text-[9px] text-muted-foreground/30">—</span>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {requirements.length === 0 && <p className="text-xs text-muted-foreground text-center py-8">No requirements to display.</p>}
+        </div>
+      )}
+    </div>
+  );
+}

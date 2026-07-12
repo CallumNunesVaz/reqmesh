@@ -1,0 +1,206 @@
+{
+  "$defs": {
+    "AttributeValue": {
+      "properties": {
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "value"
+      ],
+      "title": "AttributeValue",
+      "type": "object"
+    },
+    "Priority": {
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ],
+      "title": "Priority",
+      "type": "string"
+    },
+    "Relation": {
+      "properties": {
+        "type": {
+          "title": "Type",
+          "type": "string"
+        },
+        "target": {
+          "title": "Target",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "target"
+      ],
+      "title": "Relation",
+      "type": "object"
+    },
+    "RequirementStatus": {
+      "enum": [
+        "proposed",
+        "approved",
+        "implemented",
+        "verified",
+        "rejected",
+        "deprecated"
+      ],
+      "title": "RequirementStatus",
+      "type": "string"
+    },
+    "RequirementType": {
+      "enum": [
+        "functional",
+        "non_functional",
+        "interface",
+        "design",
+        "constraint"
+      ],
+      "title": "RequirementType",
+      "type": "string"
+    },
+    "VerificationMethod": {
+      "enum": [
+        "test",
+        "analysis",
+        "demonstration",
+        "inspection"
+      ],
+      "title": "VerificationMethod",
+      "type": "string"
+    }
+  },
+  "properties": {
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "type": {
+      "$ref": "#/$defs/RequirementType",
+      "default": "functional"
+    },
+    "name": {
+      "default": "",
+      "title": "Name",
+      "type": "string"
+    },
+    "description": {
+      "default": "",
+      "title": "Description",
+      "type": "string"
+    },
+    "priority": {
+      "$ref": "#/$defs/Priority",
+      "default": "medium"
+    },
+    "status": {
+      "$ref": "#/$defs/RequirementStatus",
+      "default": "proposed"
+    },
+    "verification_method": {
+      "$ref": "#/$defs/VerificationMethod",
+      "default": "test"
+    },
+    "attributes": {
+      "items": {
+        "$ref": "#/$defs/AttributeValue"
+      },
+      "title": "Attributes",
+      "type": "array"
+    },
+    "relations": {
+      "items": {
+        "$ref": "#/$defs/Relation"
+      },
+      "title": "Relations",
+      "type": "array"
+    },
+    "verification_cases": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Verification Cases",
+      "type": "array"
+    },
+    "verification_status": {
+      "default": "pending",
+      "title": "Verification Status",
+      "type": "string"
+    },
+    "parent": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Parent"
+    },
+    "cascade_from": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Cascade From"
+    },
+    "rationale": {
+      "default": "",
+      "title": "Rationale",
+      "type": "string"
+    },
+    "source": {
+      "default": "",
+      "title": "Source",
+      "type": "string"
+    },
+    "allocated_to": {
+      "default": "",
+      "title": "Allocated To",
+      "type": "string"
+    },
+    "baseline": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Baseline"
+    },
+    "created": {
+      "title": "Created",
+      "type": "string"
+    },
+    "modified": {
+      "title": "Modified",
+      "type": "string"
+    }
+  },
+  "required": [
+    "id"
+  ],
+  "title": "reqmesh requirement",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

@@ -1,0 +1,75 @@
+{
+  "$defs": {
+    "RiskSeverity": {
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ],
+      "title": "RiskSeverity",
+      "type": "string"
+    }
+  },
+  "properties": {
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "title": {
+      "default": "",
+      "title": "Title",
+      "type": "string"
+    },
+    "description": {
+      "default": "",
+      "title": "Description",
+      "type": "string"
+    },
+    "severity": {
+      "$ref": "#/$defs/RiskSeverity",
+      "default": "medium"
+    },
+    "probability": {
+      "default": "medium",
+      "title": "Probability",
+      "type": "string"
+    },
+    "impact": {
+      "default": "",
+      "title": "Impact",
+      "type": "string"
+    },
+    "mitigation": {
+      "default": "",
+      "title": "Mitigation",
+      "type": "string"
+    },
+    "linked_requirements": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Linked Requirements",
+      "type": "array"
+    },
+    "status": {
+      "default": "open",
+      "title": "Status",
+      "type": "string"
+    },
+    "created": {
+      "title": "Created",
+      "type": "string"
+    },
+    "modified": {
+      "title": "Modified",
+      "type": "string"
+    }
+  },
+  "required": [
+    "id"
+  ],
+  "title": "reqmesh risk",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

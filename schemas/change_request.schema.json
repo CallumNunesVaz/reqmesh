@@ -1,0 +1,72 @@
+{
+  "$defs": {
+    "CRStatus": {
+      "enum": [
+        "submitted",
+        "in_review",
+        "approved",
+        "rejected",
+        "implemented",
+        "closed"
+      ],
+      "title": "CRStatus",
+      "type": "string"
+    }
+  },
+  "properties": {
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "title": {
+      "default": "",
+      "title": "Title",
+      "type": "string"
+    },
+    "description": {
+      "default": "",
+      "title": "Description",
+      "type": "string"
+    },
+    "affected_requirements": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Affected Requirements",
+      "type": "array"
+    },
+    "status": {
+      "$ref": "#/$defs/CRStatus",
+      "default": "submitted"
+    },
+    "submitted_by": {
+      "default": "",
+      "title": "Submitted By",
+      "type": "string"
+    },
+    "reviewed_by": {
+      "default": "",
+      "title": "Reviewed By",
+      "type": "string"
+    },
+    "approved_by": {
+      "default": "",
+      "title": "Approved By",
+      "type": "string"
+    },
+    "created": {
+      "title": "Created",
+      "type": "string"
+    },
+    "modified": {
+      "title": "Modified",
+      "type": "string"
+    }
+  },
+  "required": [
+    "id"
+  ],
+  "title": "reqmesh change_request",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

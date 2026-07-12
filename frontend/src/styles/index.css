@@ -1,0 +1,154 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --radius: 0.5rem;
+    --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+  }
+
+  /* Cloudscape Dark Mode */
+  .dark {
+    --background: 215 25% 12%;
+    --foreground: 210 20% 92%;
+    --card: 215 25% 14%;
+    --card-foreground: 210 20% 92%;
+    --popover: 215 25% 16%;
+    --popover-foreground: 210 20% 92%;
+    --primary: 207 90% 64%;
+    --primary-foreground: 215 25% 10%;
+    --secondary: 215 20% 20%;
+    --secondary-foreground: 210 15% 80%;
+    --muted: 215 20% 18%;
+    --muted-foreground: 215 15% 65%;
+    --accent: 207 30% 22%;
+    --accent-foreground: 210 20% 90%;
+    --destructive: 0 84% 68%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 215 20% 22%;
+    --ring: 207 90% 64%;
+    --sidebar: 215 25% 10%;
+    --sidebar-foreground: 210 15% 80%;
+    --sidebar-accent: 215 20% 18%;
+
+    /* Cloudscape data viz status colors */
+    --cs-red: 0 84% 68%;
+    --cs-orange: 28 100% 53%;
+    --cs-yellow: 52 85% 48%;
+    --cs-blue: 207 90% 64%;
+    --cs-green: 145 55% 42%;
+    --cs-teal: 179 100% 31%;
+    --cs-purple: 260 100% 78%;
+    --cs-pink: 300 60% 64%;
+    --cs-grey: 195 6% 62%;
+
+    --graph-panel-bg: 215 25% 16%;
+    --graph-panel-border: 215 20% 24%;
+    --graph-panel-text: 215 15% 65%;
+    --graph-panel-muted: 215 15% 45%;
+    --graph-control: 215 25% 18%;
+    --graph-control-hover: 215 20% 26%;
+    --graph-minimap: 215 25% 10%;
+  }
+
+  /* Cloudscape Light Mode */
+  .light {
+    --background: 210 20% 98%;
+    --foreground: 215 25% 16%;
+    --card: 0 0% 100%;
+    --card-foreground: 215 25% 16%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 215 25% 16%;
+    --primary: 207 90% 54%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 15% 94%;
+    --secondary-foreground: 215 25% 16%;
+    --muted: 210 15% 94%;
+    --muted-foreground: 215 15% 48%;
+    --accent: 207 80% 94%;
+    --accent-foreground: 215 25% 16%;
+    --destructive: 0 84% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 210 15% 88%;
+    --ring: 207 90% 54%;
+    --sidebar: 210 20% 97%;
+    --sidebar-foreground: 215 25% 16%;
+    --sidebar-accent: 210 15% 92%;
+
+    --cs-red: 0 84% 55%;
+    --cs-orange: 28 100% 50%;
+    --cs-yellow: 52 85% 45%;
+    --cs-blue: 207 90% 54%;
+    --cs-green: 145 65% 38%;
+    --cs-teal: 179 100% 28%;
+    --cs-purple: 260 80% 58%;
+    --cs-pink: 300 60% 54%;
+    --cs-grey: 195 6% 55%;
+
+    --graph-panel-bg: 0 0% 100%;
+    --graph-panel-border: 210 15% 88%;
+    --graph-panel-text: 215 15% 48%;
+    --graph-panel-muted: 210 10% 70%;
+    --graph-control: 210 15% 94%;
+    --graph-control-hover: 210 15% 88%;
+    --graph-minimap: 210 20% 97%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-card text-card-foreground rounded-lg border shadow-sm;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground
+           rounded-lg hover:opacity-90 active:opacity-80 transition-opacity
+           font-medium text-sm disabled:opacity-50 shadow-sm;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground
+           rounded-lg hover:bg-secondary/80 active:opacity-80 transition-colors
+           font-medium text-sm border;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center gap-2 px-3 py-2 rounded-lg
+           hover:bg-accent hover:text-accent-foreground transition-colors
+           font-medium text-sm;
+  }
+
+  .btn-danger {
+    @apply inline-flex items-center gap-2 px-4 py-2 bg-destructive text-destructive-foreground
+           rounded-lg hover:opacity-90 active:opacity-80 transition-opacity
+           font-medium text-sm shadow-sm;
+  }
+
+  .input {
+    @apply w-full px-3 py-2 rounded-lg border bg-background text-sm
+           focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-ring/30
+           placeholder:text-muted-foreground transition-all;
+  }
+
+  .select {
+    @apply input appearance-none cursor-pointer;
+  }
+
+  .label {
+    @apply block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1;
+  }
+
+  .badge {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium;
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "properties": {
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "requirement_id": {
+      "title": "Requirement Id",
+      "type": "string"
+    },
+    "author": {
+      "default": "",
+      "title": "Author",
+      "type": "string"
+    },
+    "text": {
+      "default": "",
+      "title": "Text",
+      "type": "string"
+    },
+    "resolved": {
+      "default": false,
+      "title": "Resolved",
+      "type": "boolean"
+    },
+    "created": {
+      "title": "Created",
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "requirement_id"
+  ],
+  "title": "reqmesh comment",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

@@ -1,0 +1,64 @@
+{
+  "properties": {
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "title": {
+      "default": "",
+      "title": "Title",
+      "type": "string"
+    },
+    "context": {
+      "default": "",
+      "title": "Context",
+      "type": "string"
+    },
+    "decision": {
+      "default": "",
+      "title": "Decision",
+      "type": "string"
+    },
+    "rationale": {
+      "default": "",
+      "title": "Rationale",
+      "type": "string"
+    },
+    "consequences": {
+      "default": "",
+      "title": "Consequences",
+      "type": "string"
+    },
+    "linked_requirements": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Linked Requirements",
+      "type": "array"
+    },
+    "status": {
+      "default": "accepted",
+      "title": "Status",
+      "type": "string"
+    },
+    "decided_by": {
+      "default": "",
+      "title": "Decided By",
+      "type": "string"
+    },
+    "created": {
+      "title": "Created",
+      "type": "string"
+    },
+    "modified": {
+      "title": "Modified",
+      "type": "string"
+    }
+  },
+  "required": [
+    "id"
+  ],
+  "title": "reqmesh decision",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}
