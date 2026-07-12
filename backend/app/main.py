@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import re
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -15,7 +16,16 @@ from app.api.auth_routes import router as auth_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    Path(settings.data_root).mkdir(parents=True, exist_ok=True)
+    root = Path(settings.data_root)
+    root.mkdir(parents=True, exist_ok=True)
+    # First launch (no projects yet): seed the Cessna 172 example so the UI
+    # opens with something to explore. Disable with RT_SEED_DEMO=false.
+    if settings.seed_demo and not any((d / "_meta.yaml").exists() for d in root.iterdir() if d.is_dir()):
+        try:
+            from app.services.demo_seed import seed_demo_project
+            seed_demo_project(root)
+        except Exception:
+            logging.getLogger(__name__).exception("Failed to seed demo project")
     yield
 
 

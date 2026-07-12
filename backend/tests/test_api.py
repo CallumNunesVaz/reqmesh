@@ -319,3 +319,37 @@ def test_register_rejects_short_password(guest_client):
                             json={"username": "bob", "password": "short"})
     assert res.status_code == 400
     assert "8 characters" in res.json()["detail"]
+
+
+# ── Demo project seeding ─────────────────────────────────────────────────────
+
+def test_demo_project_seeded_on_first_launch(workspace, monkeypatch):
+    from fastapi.testclient import TestClient
+    from app.main import app
+
+    monkeypatch.setattr(settings, "seed_demo", True)
+    with TestClient(app) as c:
+        projects = c.get("/api/projects").json()
+        assert [p["id"] for p in projects] == ["cessna-172"]
+        reqs = c.get("/api/projects/cessna-172/requirements").json()
+        assert len(reqs) >= 50
+        tree = c.get("/api/projects/cessna-172/requirements/tree").json()
+        assert tree[0]["id"] == "ACFT0000"
+        assert len(c.get("/api/projects/cessna-172/verification").json()) == 7
+        assert c.get("/api/projects/cessna-172/validate").json()["valid"] is True
+
+
+def test_demo_seeding_skips_populated_data_root(workspace, monkeypatch):
+    from fastapi.testclient import TestClient
+    from app.main import app
+    from app.services.yaml_store import YamlStore
+
+    existing = Path(settings.data_root) / "my-project"
+    store = YamlStore(existing)
+    store.ensure_dirs()
+    store.write_meta({"name": "Mine"})
+
+    monkeypatch.setattr(settings, "seed_demo", True)
+    with TestClient(app) as c:
+        ids = [p["id"] for p in c.get("/api/projects").json()]
+        assert ids == ["my-project"]

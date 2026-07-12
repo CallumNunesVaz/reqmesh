@@ -12,6 +12,7 @@ def workspace(tmp_path, monkeypatch):
     """Isolate all filesystem side effects into a temp directory."""
     monkeypatch.setattr(settings, "data_root", str(tmp_path / "projects"))
     monkeypatch.setattr(settings, "git_autocommit", False)
+    monkeypatch.setattr(settings, "seed_demo", False)
     monkeypatch.setattr(auth, "USERS_FILE", tmp_path / "users.yaml")
     monkeypatch.setattr(auth, "SECRET_FILE", tmp_path / "secret")
     monkeypatch.setattr(auth, "_secret_cache", None)

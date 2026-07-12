@@ -48,8 +48,8 @@ Storage design notes:
 ```bash
 cd backend
 python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
-.venv/bin/uvicorn app.main:app --reload
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m uvicorn app.main:app --reload
 ```
 
 API available at `http://localhost:8000`
@@ -70,11 +70,22 @@ UI available at `http://localhost:5173`
 docker-compose up
 ```
 
+### Example project
+
+On first launch (when the data root has no projects yet) the backend seeds a
+**Cessna 172S Skyhawk SP** example — 54 requirements plus verification cases,
+traces, risks, change requests, and comments — so the UI opens with something
+to explore. Disable with `RT_SEED_DEMO=false`, or re-seed manually:
+
+```bash
+backend/.venv/bin/python seed_cessna.py --force
+```
+
 ### Tests
 
 ```bash
 cd backend
-.venv/bin/pip install -r requirements-dev.txt
+.venv/bin/python -m pip install -r requirements-dev.txt
 .venv/bin/python -m pytest tests/
 ```
 

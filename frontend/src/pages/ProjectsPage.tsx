@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { FolderOpen, Plus, Trash2, ClipboardList } from 'lucide-react';
+import { FolderOpen, Plus, Trash2, WifiOff, RotateCw } from 'lucide-react';
 import { api, type Project } from '../api/client';
 import { useStore } from '../store';
 import { useAuthStore } from '../store/auth';
@@ -13,10 +13,17 @@ export default function ProjectsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [newId, setNewId] = useState('');
   const [newName, setNewName] = useState('');
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  useEffect(() => {
-    api.listProjects().then(setProjects).catch(console.error);
-  }, [setProjects]);
+  const loadProjects = () => {
+    setLoadError(null);
+    api.listProjects().then(setProjects).catch((err) => {
+      console.error(err);
+      setLoadError(err.message || 'Failed to load projects');
+    });
+  };
+
+  useEffect(loadProjects, [setProjects]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -85,7 +92,19 @@ export default function ProjectsPage() {
         </motion.form>
       )}
 
-      {projects.length === 0 ? (
+      {loadError ? (
+        <div className="card p-12 text-center">
+          <WifiOff size={32} className="mx-auto mb-4 text-destructive" />
+          <p className="text-foreground font-medium">Can't reach the backend</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            Is the API running on port 8000? ({loadError})
+          </p>
+          <button onClick={loadProjects} className="btn-secondary mt-4 inline-flex items-center gap-2">
+            <RotateCw size={14} />
+            Retry
+          </button>
+        </div>
+      ) : projects.length === 0 ? (
         <div className="card p-12 text-center">
           <img src="/reqmesh-logo.svg" alt="reqmesh" className="w-48 mx-auto mb-6 opacity-80" />
           <p className="text-foreground font-medium">No projects yet</p>
