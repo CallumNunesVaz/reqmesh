@@ -16,7 +16,6 @@ if [ -z "$STAGED" ]; then
 fi
 
 echo "reqmesh: Checking staged requirements..."
-CHANGED_IDS=$(echo "$STAGED" | xargs -I{} basename {} .yaml)
 ERRORS=0
 
 for REQ_FILE in $STAGED; do

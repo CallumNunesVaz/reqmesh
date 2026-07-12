@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """In-memory search over the YAML store.
 
 Projects are directories of small YAML files that are fully loaded for most
@@ -7,6 +5,8 @@ operations anyway, so search filters the loaded documents directly. This
 keeps the project directory free of derived artifacts (no _search.db to
 commit or drift out of sync) and removes the need for index maintenance.
 """
+
+from __future__ import annotations
 
 FILTERABLE_FIELDS = ("type", "priority", "status", "verification_status")
 

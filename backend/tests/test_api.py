@@ -10,7 +10,7 @@ from .conftest import make_req
 
 def test_project_lifecycle(client):
     res = client.post("/api/projects", json={"id": "p1", "name": "Project One"})
-    assert res.status_code == 200
+    assert res.status_code == 201
     assert client.get("/api/projects").json()[0]["id"] == "p1"
     assert client.get("/api/projects/p1").json()["name"] == "Project One"
     assert client.delete("/api/projects/p1").json() == {"ok": True}
@@ -223,3 +223,99 @@ def test_git_autocommit_and_log(client, project, monkeypatch):
     assert res["is_repo"] is True
     assert len(res["commits"]) >= 1
     assert "requirements" in res["commits"][0]["message"]
+
+# ── Requirement creation with nested fields ──────────────────────────────────
+
+def test_create_requirement_accepts_relations_and_attributes(client, project):
+    make_req(client, project, "SYST0001")
+    req = make_req(client, project, "SYST0002",
+                   relations=[{"type": "refines", "target": "SYST0001"}],
+                   attributes=[{"key": "standard", "value": "DO-178C"}])
+    assert req["relations"] == [{"type": "refines", "target": "SYST0001"}]
+    assert req["attributes"] == [{"key": "standard", "value": "DO-178C"}]
+
+
+# ── Custom workflow enforcement ──────────────────────────────────────────────
+
+def _set_workflow(project_id):
+    from app.services.yaml_store import YamlStore
+    store = YamlStore(Path(settings.data_root) / project_id)
+    meta = store.read_meta()
+    meta["workflow"] = {
+        "states": ["proposed", "approved", "verified"],
+        "transitions": {"proposed": ["approved"], "approved": ["verified"]},
+        "default": "proposed",
+    }
+    store.write_meta(meta)
+
+
+def test_workflow_blocks_invalid_transition(client, project):
+    make_req(client, project, "SYST0001")
+    _set_workflow(project)
+
+    res = client.put(f"/api/projects/{project}/requirements/SYST0001", json={"status": "verified"})
+    assert res.status_code == 400
+    assert "not allowed" in res.json()["detail"]
+
+    res = client.put(f"/api/projects/{project}/requirements/SYST0001", json={"status": "approved"})
+    assert res.status_code == 200
+
+
+def test_bulk_update_respects_workflow(client, project):
+    make_req(client, project, "SYST0001")                      # proposed
+    make_req(client, project, "SYST0002", status="verified")   # terminal state
+    _set_workflow(project)
+
+    res = client.post(f"/api/projects/{project}/requirements/bulk",
+                      json={"ids": ["SYST0001", "SYST0002"], "updates": {"status": "approved"}})
+    body = res.json()
+    assert body["ids"] == ["SYST0001"]
+    assert [s["id"] for s in body["skipped"]] == ["SYST0002"]
+
+
+# ── Published reports escape user content ────────────────────────────────────
+
+def test_publish_html_escapes_user_content(client, project):
+    make_req(client, project, "SYST0001", name='<script>alert("xss")</script>')
+    res = client.post(f"/api/projects/{project}/publish", json={"format": "html"})
+    content = res.json()["content"]
+    assert '<script>alert' not in content
+    assert '&lt;script&gt;' in content
+
+
+# ── ReqIF export structure ───────────────────────────────────────────────────
+
+def test_reqif_export_is_well_formed(client, project):
+    import xml.etree.ElementTree as ET
+
+    make_req(client, project, "SYST0001", name="Root")
+    make_req(client, project, "SYST0002", name="Child",
+             relations=[{"type": "refines", "target": "SYST0001"}])
+    client.put(f"/api/projects/{project}/traces",
+               json={"links": [{"source": "SYST0002", "target": "SYST0001", "type": "refines"}]})
+
+    res = client.get(f"/api/projects/{project}/publish/download?format=reqif")
+    assert res.status_code == 200
+    root = ET.fromstring(res.content)
+
+    ns = {"r": "http://www.omg.org/spec/ReqIF/20110401/reqif.xsd"}
+    # Every attribute value carries exactly one DEFINITION element.
+    for av in root.iter("{http://www.omg.org/spec/ReqIF/20110401/reqif.xsd}ATTRIBUTE-VALUE-STRING"):
+        assert len(av.findall("r:DEFINITION", ns)) == 1
+    # Every hierarchy entry has exactly one OBJECT ref.
+    for h in root.iter("{http://www.omg.org/spec/ReqIF/20110401/reqif.xsd}SPEC-HIERARCHY"):
+        assert len(h.findall("r:OBJECT", ns)) == 1
+    # Relation identifiers are unique.
+    rel_ids = [rel.get("IDENTIFIER")
+               for rel in root.iter("{http://www.omg.org/spec/ReqIF/20110401/reqif.xsd}SPEC-RELATION")]
+    assert len(rel_ids) == 2
+    assert len(set(rel_ids)) == len(rel_ids)
+
+
+# ── Registration password policy ─────────────────────────────────────────────
+
+def test_register_rejects_short_password(guest_client):
+    res = guest_client.post("/api/auth/register",
+                            json={"username": "bob", "password": "short"})
+    assert res.status_code == 400
+    assert "8 characters" in res.json()["detail"]

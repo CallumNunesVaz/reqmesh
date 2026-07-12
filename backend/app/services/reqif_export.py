@@ -63,20 +63,20 @@ def export_reqif(store) -> str:
     children = SubElement(spec, _ns_tag("CHILDREN"))
     for r in reqs:
         child = SubElement(children, _ns_tag("SPEC-HIERARCHY"))
-        SubElement(child, _ns_tag("OBJECT"))
         obj_ref = SubElement(child, _ns_tag("OBJECT"))
         SubElement(obj_ref, _ns_tag("SPEC-OBJECT-REF")).text = r["id"]
 
-    # Spec-relations (for trace links)
+    # Spec-relations (trace links plus per-requirement relations)
     traces = store.read_traces().get("links", [])
     rels = SubElement(core, _ns_tag("SPEC-RELATIONS"))
-    for i, t in enumerate(traces):
-        _spec_relation(rels, t, i)
-
-    # Tool extension (requirement relations)
+    index = 0
+    for t in traces:
+        _spec_relation(rels, t, index)
+        index += 1
     for r in reqs:
         for rel in r.get("relations") or []:
-            _spec_relation(rels, {"source": r["id"], "target": rel["target"], "type": rel["type"]}, len(traces))
+            _spec_relation(rels, {"source": r["id"], "target": rel["target"], "type": rel["type"]}, index)
+            index += 1
 
     # -- Pretty-print
     dom = minidom.parseString(tostring(root, "utf-8"))
@@ -130,7 +130,6 @@ def _spec_object(parent: Element, req: dict, req_type_id: str) -> None:
     desc = req.get("description", "")
     if desc:
         desc_val = SubElement(values, _ns_tag("ATTRIBUTE-VALUE-XHTML"))
-        SubElement(desc_val, _ns_tag("DEFINITION"))
         defn = SubElement(desc_val, _ns_tag("DEFINITION"))
         SubElement(defn, _ns_tag("ATTRIBUTE-DEFINITION-XHTML-REF")).text = "ATTR-DESCRIPTION"
         the_val = SubElement(desc_val, _ns_tag("THE-VALUE"))
@@ -141,7 +140,6 @@ def _spec_object(parent: Element, req: dict, req_type_id: str) -> None:
 
 def _attr_value(parent: Element, attr_id: str, value: str) -> None:
     av = SubElement(parent, _ns_tag("ATTRIBUTE-VALUE-STRING"))
-    SubElement(av, _ns_tag("DEFINITION"))
     defn = SubElement(av, _ns_tag("DEFINITION"))
     SubElement(defn, _ns_tag("ATTRIBUTE-DEFINITION-STRING-REF")).text = attr_id
     SubElement(av, _ns_tag("THE-VALUE")).text = value

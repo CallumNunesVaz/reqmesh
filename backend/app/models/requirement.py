@@ -78,6 +78,9 @@ class RequirementCreate(BaseModel):
     priority: Priority = Priority.MEDIUM
     status: RequirementStatus = RequirementStatus.PROPOSED
     verification_method: VerificationMethod = VerificationMethod.TEST
+    attributes: list[AttributeValue] = Field(default_factory=list)
+    relations: list[Relation] = Field(default_factory=list)
+    verification_cases: list[str] = Field(default_factory=list)
     parent: Optional[str] = None
     cascade_from: Optional[str] = None
     rationale: str = ""

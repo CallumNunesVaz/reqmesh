@@ -40,7 +40,7 @@ async def list_projects():
     return projects
 
 
-@router.post("/projects")
+@router.post("/projects", status_code=201)
 async def create_project(data: dict, user: dict = Depends(require_edit)):
     from app.core.config import settings
 

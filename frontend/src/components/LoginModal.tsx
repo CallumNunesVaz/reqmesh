@@ -83,7 +83,7 @@ export default function LoginModal({ open, onClose }: LoginModalProps) {
                 <label className="label">Password</label>
                 <div className="relative">
                   <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                  <input type={showPw ? 'text' : 'password'} className="input pl-9 pr-9" placeholder="password" value={password} onChange={e => setPassword(e.target.value)} required minLength={4} />
+                  <input type={showPw ? 'text' : 'password'} className="input pl-9 pr-9" placeholder="password" value={password} onChange={e => setPassword(e.target.value)} required minLength={mode === 'register' ? 8 : 1} />
                   <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                     {showPw ? <EyeOff size={14} /> : <Eye size={14} />}
                   </button>

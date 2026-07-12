@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, Depends
@@ -160,14 +161,25 @@ async def bulk_update_requirements(project_id: str, data: dict, user: dict = Dep
         raise HTTPException(status_code=422, detail=exc.errors())
     if not ids or not updates:
         raise HTTPException(status_code=400, detail="ids and updates required")
+    meta = store.read_meta() if "status" in updates else None
     updated = []
+    skipped = []
     for req_id in ids:
         before = store.get_requirement(req_id)
+        if before is None:
+            continue
+        # Enforce the same workflow rules as the single-requirement update.
+        if meta is not None and before.get("status") != updates["status"]:
+            from app.services.workflow import validate_transition
+            err = validate_transition(meta, before.get("status", "proposed"), updates["status"])
+            if err:
+                skipped.append({"id": req_id, "reason": err})
+                continue
         result = store.update_requirement(req_id, updates)
         if result:
             record_change(store, req_id, "update", before, result, user.get("username", ""))
             updated.append(req_id)
-    return {"updated": len(updated), "ids": updated}
+    return {"updated": len(updated), "ids": updated, "skipped": skipped}
 
 
 @router.post("/projects/{project_id}/requirements/bulk-delete")
@@ -371,31 +383,30 @@ async def publish_project(project_id: str, data: dict, user: dict = Depends(get_
 
 @router.get("/projects/{project_id}/publish/download")
 async def download_report(project_id: str, format: str = "html", subsystems: str = ""):
+    import os
+    import tempfile
+
+    from fastapi.responses import FileResponse
+    from starlette.background import BackgroundTask
+
     store = get_store(project_id)
     sub_list = [s.strip() for s in subsystems.split(",") if s.strip()] if subsystems else None
     pub = Publisher(store, sub_list)
-    import tempfile
     ext_map = {"html": "html", "pdf": "pdf", "md": "md", "latex": "tex", "reqif": "xml", "sysml": "sysml"}
     if format not in ext_map:
         raise HTTPException(status_code=400, detail=f"Unknown format: {format}")
     ext = ext_map[format]
 
-    if format in ("reqif", "sysml"):
-        import tempfile, os
-        fd, path = tempfile.mkstemp(suffix=f".{ext}")
-        content = ""
+    fd, path = tempfile.mkstemp(suffix=f".{ext}")
+    os.close(fd)
+    try:
         if format == "reqif":
             from app.services.reqif_export import export_reqif
-            content = export_reqif(store)
+            Path(path).write_text(export_reqif(store))
         elif format == "sysml":
             from app.services.sysml_export import export_sysml_v2
-            content = export_sysml_v2(store)
-        with os.fdopen(fd, "w") as f:
-            f.write(content)
-    else:
-        with tempfile.NamedTemporaryFile(suffix=f".{ext}", delete=False) as tmp:
-            path = tmp.name
-        if format == "html":
+            Path(path).write_text(export_sysml_v2(store))
+        elif format == "html":
             pub.to_html_file(path)
         elif format == "pdf":
             pub.to_pdf_file(path)
@@ -403,9 +414,18 @@ async def download_report(project_id: str, format: str = "html", subsystems: str
             pub.to_markdown_file(path)
         elif format == "latex":
             pub.to_latex_file(path)
-    from fastapi.responses import FileResponse
+    except BaseException:
+        os.unlink(path)
+        raise
+
     project_name = store.read_meta().get("name", project_id)
-    return FileResponse(path, filename=f"{project_name.replace(' ', '_')}_report.{ext}", media_type="application/octet-stream")
+    return FileResponse(
+        path,
+        filename=f"{project_name.replace(' ', '_')}_report.{ext}",
+        media_type="application/octet-stream",
+        # Remove the temp file once the response has been sent.
+        background=BackgroundTask(os.unlink, path),
+    )
 
 
 # ── Validation ────────────────────────────────────────────────────────────────

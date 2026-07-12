@@ -1,12 +1,20 @@
 from __future__ import annotations
 
-import os
-import uuid
-import tempfile
 from datetime import datetime, timezone
-from pathlib import Path
+from html import escape as esc
 
-from jinja2 import Template
+
+def _latex_escape(text: str) -> str:
+    # Backslash goes through a placeholder so its replacement's braces aren't
+    # themselves escaped by the loop below.
+    text = text.replace("\\", "\x00")
+    for char, repl in (
+        ("&", r"\&"), ("%", r"\%"), ("$", r"\$"), ("#", r"\#"), ("_", r"\_"),
+        ("{", r"\{"), ("}", r"\}"),
+        ("~", r"\textasciitilde{}"), ("^", r"\textasciicircum{}"),
+    ):
+        text = text.replace(char, repl)
+    return text.replace("\x00", r"\textbackslash{}")
 
 
 CSS = """
@@ -95,7 +103,7 @@ class Publisher:
             self.reqs = all_reqs
 
     def _badge(self, status: str) -> str:
-        return f'<span class="badge badge-{status}">{status}</span>'
+        return f'<span class="badge badge-{esc(status, quote=True)}">{esc(status)}</span>'
 
     def _build_hierarchy(self, parent=None, depth=0):
         html = ""
@@ -108,25 +116,25 @@ class Publisher:
 
                 rel_html = ""
                 for rel in relations:
-                    rel_html += f'<span class="rel-item"><span class="type">{rel["type"]}</span> → {rel["target"]}</span>'
+                    rel_html += f'<span class="rel-item"><span class="type">{esc(rel["type"])}</span> → {esc(rel["target"])}</span>'
 
                 attr_html = ""
                 for a in attrs:
-                    attr_html += f'<span style="margin-right:8px;font-size:9pt;"><strong>{a["key"]}:</strong> {a["value"]}</span>'
+                    attr_html += f'<span style="margin-right:8px;font-size:9pt;"><strong>{esc(a["key"])}:</strong> {esc(a["value"])}</span>'
 
-                rationale = r.get("rationale", "")
-                source = r.get("source", "")
-                allocated = r.get("allocated_to", "")
-                baseline = r.get("baseline", "")
+                rationale = esc(r.get("rationale", ""))
+                source = esc(r.get("source", ""))
+                allocated = esc(r.get("allocated_to", ""))
+                baseline = esc(r.get("baseline", "") or "")
 
                 html += f"""
                 <div style="margin-left:{indent}px; margin-bottom:14px; padding:10px 14px; border-left:3px solid #e2e8f0; border-radius:0 6px 6px 0; background:#fff;">
                   <div style="font-weight:700; font-size:12pt; margin-bottom:2px;">
-                    <span style="font-family:monospace; color:#64748b; font-size:10pt;">{r['id']}</span>
-                    <span style="margin-left:6px;">{r.get('name', 'Untitled')}</span>
+                    <span style="font-family:monospace; color:#64748b; font-size:10pt;">{esc(r['id'])}</span>
+                    <span style="margin-left:6px;">{esc(r.get('name', 'Untitled'))}</span>
                     {self._badge(r.get('status','proposed'))}
-                    <span class="badge badge-{r.get('priority','medium')}">{r.get('priority','medium')}</span>
-                    {f'<span class="badge" style="background:#e0e7ff;color:#4338ca;">{r["type"].replace("_"," ")}</span>' if r.get('type') else ''}
+                    <span class="badge badge-{esc(r.get('priority','medium'), quote=True)}">{esc(r.get('priority','medium'))}</span>
+                    {f'<span class="badge" style="background:#e0e7ff;color:#4338ca;">{esc(r["type"].replace("_"," "))}</span>' if r.get('type') else ''}
                   </div>
                   {f'<div class="desc">{desc}</div>' if desc else ''}
                   {f'<div class="field"><strong>Rationale:</strong> {rationale}</div>' if rationale else ''}
@@ -151,14 +159,14 @@ class Publisher:
 
         html = '<table class="matrix"><thead><tr><th></th>'
         for vc_id in vc_ids:
-            html += f'<th>{vc_id}</th>'
+            html += f'<th>{esc(vc_id)}</th>'
         html += '</tr></thead><tbody>'
         for req in self.reqs:
-            html += f'<tr><td style="font-weight:600;font-family:monospace;">{req["id"]}</td>'
+            html += f'<tr><td style="font-weight:600;font-family:monospace;">{esc(req["id"])}</td>'
             for vc_id in vc_ids:
                 link = links_map.get(req["id"], {}).get(vc_id)
                 if link:
-                    html += f'<td class="link">{link}</td>'
+                    html += f'<td class="link">{esc(link)}</td>'
                 else:
                     html += '<td class="no-link">-</td>'
             html += '</tr>'
@@ -169,11 +177,11 @@ class Publisher:
         html = '<table><thead><tr><th>ID</th><th>Name</th><th>Method</th><th>Status</th><th>Linked Reqs</th></tr></thead><tbody>'
         for vc in self.vcs:
             html += f"""<tr>
-              <td style="font-family:monospace;">{vc['id']}</td>
-              <td>{vc.get('name','')}</td>
-              <td>{vc.get('method','')}</td>
+              <td style="font-family:monospace;">{esc(vc['id'])}</td>
+              <td>{esc(vc.get('name',''))}</td>
+              <td>{esc(vc.get('method',''))}</td>
               <td>{self._badge(vc.get('status','pending'))}</td>
-              <td>{', '.join(vc.get('verified_requirements',[]))}</td>
+              <td>{esc(', '.join(vc.get('verified_requirements',[])))}</td>
             </tr>"""
         html += '</tbody></table>'
         return html
@@ -190,7 +198,7 @@ class Publisher:
         html = ""
         for g in gaps:
             issues = ", ".join(i.replace("_", " ") for i in g["issues"])
-            html += f'<div class="gap-warn"><strong>{g["id"]}</strong> - {g["name"]}: <span class="issues">{issues}</span></div>'
+            html += f'<div class="gap-warn"><strong>{esc(g["id"])}</strong> - {esc(g["name"])}: <span class="issues">{esc(issues)}</span></div>'
         return html
 
     def _risk_table(self, risks: list | None):
@@ -198,12 +206,12 @@ class Publisher:
             return ""
         html = '<table><thead><tr><th>ID</th><th>Title</th><th>Severity</th><th>Probability</th><th>Status</th></tr></thead><tbody>'
         for r in risks:
-            sev = r.get("severity", "medium")
+            sev = esc(r.get("severity", "medium"), quote=True)
             html += f"""<tr class="risk-sev-{sev}">
-              <td style="font-family:monospace;">{r['id']}</td>
-              <td>{r.get('title','')}</td>
+              <td style="font-family:monospace;">{esc(r['id'])}</td>
+              <td>{esc(r.get('title',''))}</td>
               <td><span class="badge badge-{sev}">{sev}</span></td>
-              <td>{r.get('probability','')}</td>
+              <td>{esc(r.get('probability',''))}</td>
               <td>{self._badge(r.get('status','open'))}</td>
             </tr>"""
         html += '</tbody></table>'
@@ -213,9 +221,9 @@ class Publisher:
         html = ""
         for c in conflicts:
             if c["type"] == "duplicate_name":
-                html += f'<div class="conflict-item"><strong>Duplicate name:</strong> "{c["name"]}" - IDs: {", ".join(c.get("ids",[]))}</div>'
+                html += f'<div class="conflict-item"><strong>Duplicate name:</strong> "{esc(c["name"])}" - IDs: {esc(", ".join(c.get("ids",[])))}</div>'
             else:
-                html += f'<div class="conflict-item"><strong>Conflict:</strong> {c.get("a","")} ↔ {c.get("b","")}</div>'
+                html += f'<div class="conflict-item"><strong>Conflict:</strong> {esc(c.get("a",""))} ↔ {esc(c.get("b",""))}</div>'
         return html
 
     def build_html(self, sections: list | None = None) -> str:
@@ -223,7 +231,7 @@ class Publisher:
             sections = ["cover", "requirements", "verification", "traceability", "quality", "gaps", "risks", "conflicts"]
 
         now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-        project_name = self.meta.get("name", self.project_id)
+        project_name = esc(self.meta.get("name", self.project_id))
 
         html = f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"><title>{project_name} - Requirements Report</title>
@@ -353,20 +361,20 @@ class Publisher:
 \definecolor{rej}{RGB}{239,68,68}
 \usepackage{longtable}
 \usepackage{hyperref}
-\title{""" + self.meta.get("name", self.project_id) + r"""}
+\title{""" + _latex_escape(self.meta.get("name", self.project_id)) + r"""}
 \date{""" + datetime.now(timezone.utc).strftime("%Y-%m-%d") + r"""}
 \begin{document}
 \maketitle
 \section{Requirements}"""
         for r in self.reqs:
             status = r.get("status", "proposed")
-            latex += f"\n\n\\subsection{{{r['id']} — {r.get('name','Untitled')}}}\n"
+            latex += f"\n\n\\subsection{{{_latex_escape(r['id'])} — {_latex_escape(r.get('name','Untitled'))}}}\n"
             desc = r.get("description", "").replace("<p>", "").replace("</p>", "")
             if desc.strip():
-                latex += f"{desc}\n\n"
-            latex += f"\\textbf{{Status:}} {status} \\hspace{{1em}} \\textbf{{Priority:}} {r.get('priority','medium')}\n"
+                latex += f"{_latex_escape(desc)}\n\n"
+            latex += f"\\textbf{{Status:}} {_latex_escape(status)} \\hspace{{1em}} \\textbf{{Priority:}} {_latex_escape(r.get('priority','medium'))}\n"
             if r.get("rationale"):
-                latex += f"\\textbf{{Rationale:}} {r['rationale']}\n"
+                latex += f"\\textbf{{Rationale:}} {_latex_escape(r['rationale'])}\n"
         latex += "\n\\end{document}"
         return latex
 

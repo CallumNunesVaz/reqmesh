@@ -4,13 +4,17 @@ __pycache__/
 *.egg-info/
 .venv/
 dist/
+.pytest_cache/
+.env
 
 # Node
 node_modules/
+*.tsbuildinfo
 
 # IDE
 .vscode/
 .idea/
+.claude/settings.local.json
 
 # Project data (local)
 *.db

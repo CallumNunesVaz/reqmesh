@@ -1,5 +1,9 @@
 # reqmesh
 
+<p align="center">
+  <img src="media/reqmesh-logo.svg" alt="Reqmesh Logo" width="500">
+</p>
+
 An open-source, web-based requirements management tool with:
 
 - **Git-friendly storage** — Requirements, specifications, and verification cases stored as human-readable YAML files; no databases or binary artifacts inside your project directory
@@ -84,6 +88,8 @@ local use.** Roles:
 - `editor` — create/update/delete entities; self-registration creates editors
 - `admin` — everything, including deleting projects and assigning roles
 
+New passwords must be at least 8 characters.
+
 Tokens are JWTs signed with `RT_SECRET` if set, otherwise a random secret is
 generated and persisted to `~/.reqmesh/secret`.
 
@@ -158,6 +164,7 @@ cd backend
 .venv/bin/python -m app.cli create my-project
 .venv/bin/python -m app.cli validate <project-path>   # integrity checks (CI-friendly exit code)
 .venv/bin/python -m app.cli publish <project-path> -f pdf
+.venv/bin/python -m app.cli export <project-path> -f reqif   # or -f sysml
 .venv/bin/python -m app.cli serve <project-path>
 ```
 
@@ -166,7 +173,7 @@ cd backend
 - [x] Phase 1: Core CRUD, YAML storage, React UI
 - [x] Phase 2: Traceability & verification enhancements
 - [x] Phase 4: Git integration (auto-commit, history, hooks)
-- [ ] Phase 3: ReqIF/SysML import/export
+- [ ] Phase 3: ReqIF/SysML import/export (export to ReqIF 1.2 and SysML v2 done; import planned)
 - [ ] Phase 5: Real-time collaboration
 
 ## License

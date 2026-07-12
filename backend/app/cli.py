@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 
 @click.group()
-@click.version_option("0.3.0", prog_name="reqmesh")
+@click.version_option("0.4.0", prog_name="reqmesh")
 def cli():
     """reqmesh - Requirements management using version control."""
 
@@ -20,12 +20,20 @@ def cli():
 @click.option("--port", "-p", default=8000, help="Port to run on")
 @click.option("--host", "-h", default="0.0.0.0", help="Host to bind to")
 def serve(project_path, port, host):
-    """Start the web UI for a project directory."""
+    """Start the web UI for a project directory (or a directory of projects)."""
     import os
-    os.environ["RT_DATA_ROOT"] = str(Path(project_path).resolve())
+    root = Path(project_path).resolve()
+    # The API's data root is the directory *containing* project dirs, so when
+    # pointed at a single project, serve its parent.
+    if (root / "_meta.yaml").exists():
+        data_root = root.parent
+        click.echo(f"Project: {root}")
+    else:
+        data_root = root
+        click.echo(f"Projects root: {root}")
+    os.environ["RT_DATA_ROOT"] = str(data_root)
     import uvicorn
     click.echo(f"Starting reqmesh on http://{host}:{port}")
-    click.echo(f"Project: {Path(project_path).resolve()}")
     uvicorn.run("app.main:app", host=host, port=port, reload=True)
 
 
@@ -121,9 +129,30 @@ def create(project_id, name, path):
 
 @cli.command()
 @click.argument("project_path", default=".")
-def export(project_path):
-    """Export a project (placeholder - ReqIF/SysML coming soon)."""
-    click.echo("Export to ReqIF/SysML formats coming in a future release.")
+@click.option("--format", "-f", default="reqif", type=click.Choice(["reqif", "sysml"]))
+@click.option("--output", "-o", default=None, help="Output file path")
+def export(project_path, format, output):
+    """Export a project to ReqIF 1.2 or SysML v2 textual notation."""
+    project_root = Path(project_path).resolve()
+    if not (project_root / "_meta.yaml").exists():
+        click.echo(f"Error: {project_path} is not a valid project", err=True)
+        sys.exit(1)
+
+    from app.services.yaml_store import YamlStore
+
+    store = YamlStore(project_root)
+    if format == "reqif":
+        from app.services.reqif_export import export_reqif
+        content, ext = export_reqif(store), "reqif"
+    else:
+        from app.services.sysml_export import export_sysml_v2
+        content, ext = export_sysml_v2(store), "sysml"
+
+    if output is None:
+        project_name = store.read_meta().get("name", project_root.name)
+        output = f"{project_name.replace(' ', '_')}.{ext}"
+    Path(output).write_text(content)
+    click.echo(click.style(f"  ✓ Exported to: {output}", fg="green"))
 
 
 @cli.command()

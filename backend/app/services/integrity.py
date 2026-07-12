@@ -13,6 +13,7 @@ class IntegrityChecker:
         self.suspect_links: list[dict] = []
         self._req_ids = {r["id"] for r in self.reqs}
         self._vc_ids = {v["id"] for v in self.vcs}
+        self._parent_of = {r["id"]: r.get("parent") for r in self.reqs}
 
     def check_all(self) -> dict:
         self._check_dangling_links()
@@ -71,7 +72,7 @@ class IntegrityChecker:
             current = r["id"]
             chain = [current]
             while True:
-                parent = next((x.get("parent") for x in self.reqs if x["id"] == current), None)
+                parent = self._parent_of.get(current)
                 if not parent:
                     break
                 if parent in visited:
