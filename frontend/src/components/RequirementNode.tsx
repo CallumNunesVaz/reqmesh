@@ -1,6 +1,7 @@
 import { memo, useState } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { useGraphSelection } from './GraphPane';
+import { glow } from './graphColors';
 
 const statusColors: Record<string, { fill: string; text: string }> = {
   proposed: { fill: 'hsl(207,90%,64%)', text: '#93c5fd' },
@@ -58,6 +59,14 @@ function RequirementNode({ data, selected }: NodeProps) {
       : nodeData.name
     : 'Untitled';
 
+  // Soft, status-tinted bloom on every node; brightest when selected, then on
+  // hover, then a gentle resting glow so the whole graph feels lit.
+  const glowFilter = isSelected
+    ? `drop-shadow(0 0 18px ${glow(colors.fill, 0.55)}) drop-shadow(0 0 6px ${glow(colors.fill, 0.85)}) drop-shadow(0 3px 8px rgba(0,0,0,0.35)) brightness(1.05)`
+    : hover
+      ? `drop-shadow(0 0 13px ${glow(colors.fill, 0.42)}) drop-shadow(0 2px 6px rgba(0,0,0,0.3)) brightness(1.1)`
+      : `drop-shadow(0 0 7px ${glow(colors.fill, 0.24)}) drop-shadow(0 1px 3px rgba(0,0,0,0.22))`;
+
   return (
     <div
       className="relative"
@@ -67,8 +76,9 @@ function RequirementNode({ data, selected }: NodeProps) {
         width: w,
         height: h,
         opacity: dimmed ? 0.22 : 1,
-        filter: hover ? 'brightness(1.15) drop-shadow(0 2px 6px rgba(0,0,0,0.25))' : 'drop-shadow(0 1px 2px rgba(0,0,0,0.15))',
-        transition: 'opacity 0.25s ease, filter 0.2s ease',
+        filter: glowFilter,
+        transform: hover && !dimmed ? 'scale(1.03)' : 'scale(1)',
+        transition: 'opacity 0.25s ease, filter 0.25s ease, transform 0.2s ease',
         cursor: 'pointer',
       }}
     >
@@ -79,32 +89,31 @@ function RequirementNode({ data, selected }: NodeProps) {
 
       <svg width={w} height={h} className="overflow-visible block">
         <defs>
-          <filter id={`uml-glow-${nodeData.label}`} x="-40%" y="-40%" width="180%" height="180%">
-            <feGaussianBlur in="SourceGraphic" stdDeviation={hover ? 4 : 2} result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
+          {/* Vertical gradient for the status accent bar */}
+          <linearGradient id={`uml-accent-${nodeData.label}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor={colors.fill} stopOpacity="0.95" />
+            <stop offset="1" stopColor={colors.fill} stopOpacity="0.5" />
+          </linearGradient>
         </defs>
 
-        {/* Selection ring */}
+        {/* Selection ring — clean, glowing (bloom comes from the wrapper filter) */}
         {isSelected && (
           <rect
-            x={-3} y={-3} width={w + 6} height={h + 6} rx={7} ry={7}
-            fill="none" stroke={colors.fill} strokeWidth={1.8} strokeDasharray="5,3" opacity={0.7}
+            x={-2.5} y={-2.5} width={w + 5} height={h + 5} rx={7} ry={7}
+            fill="none" stroke={colors.fill} strokeWidth={1.6} opacity={0.9}
           />
         )}
 
         {/* Card body */}
         <rect x={0} y={0} width={w} height={h} rx={5} ry={5}
           fill="hsl(var(--card))"
-          stroke={hover ? 'hsl(var(--foreground) / 0.25)' : 'hsl(var(--border))'}
-          strokeWidth={hover ? 1.2 : 0.8}
-          filter={`url(#uml-glow-${nodeData.label})`}
+          stroke={isSelected ? colors.fill : hover ? 'hsl(var(--foreground) / 0.25)' : 'hsl(var(--border))'}
+          strokeWidth={hover || isSelected ? 1.2 : 0.8}
         />
-        {/* Status color left accent */}
-        <rect x={0} y={0} width={4} height={h} rx={5} ry={5} fill={colors.fill}
+        {/* Faint status tint over the card for a hint of colour */}
+        <rect x={0} y={0} width={w} height={h} rx={5} ry={5} fill={colors.fill} opacity={hover || isSelected ? 0.08 : 0.05} />
+        {/* Status color left accent (gradient) */}
+        <rect x={0} y={0} width={4} height={h} rx={5} ry={5} fill={`url(#uml-accent-${nodeData.label})`}
           style={{ clipPath: 'inset(0 0 0 0 round 5px 0 0 5px)' }}
         />
         {/* Header divider */}

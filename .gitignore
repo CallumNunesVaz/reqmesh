@@ -11,6 +11,9 @@ dist/
 node_modules/
 *.tsbuildinfo
 
+# Electron desktop build output
+desktop/release/
+
 # IDE
 .vscode/
 .idea/

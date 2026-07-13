@@ -79,3 +79,35 @@ app.include_router(extra_router, prefix="/api")
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+# ── Static SPA (desktop build) ────────────────────────────────────────────────
+# Registered AFTER the API routers and /health so those always win — Starlette
+# matches routes in registration order, so the catch-all below only handles
+# paths the API didn't claim. No-op unless RT_STATIC_DIR points at a build.
+def _mount_spa() -> None:
+    if not settings.static_dir:
+        return
+    static_root = Path(settings.static_dir).resolve()
+    index_file = static_root / "index.html"
+    if not index_file.is_file():
+        logging.getLogger(__name__).warning(
+            "RT_STATIC_DIR=%s has no index.html; not serving SPA", settings.static_dir
+        )
+        return
+
+    from fastapi.responses import FileResponse
+
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        # Serve a real build asset when the path maps to one; otherwise fall
+        # back to index.html so client-side (react-router) routes resolve.
+        if full_path:
+            candidate = (static_root / full_path).resolve()
+            # Guard against path traversal escaping the build directory.
+            if candidate.is_file() and candidate.is_relative_to(static_root):
+                return FileResponse(candidate)
+        return FileResponse(index_file)
+
+
+_mount_spa()

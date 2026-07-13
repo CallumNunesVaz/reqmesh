@@ -121,4 +121,52 @@ def get_user_from_token(token: str) -> dict | None:
     return {"username": username, "role": user.get("role", "viewer")}
 
 
+# --- User administration (admin-only management) ---
+
+# "editor" = standard read/write user; "admin" = administrator. "viewer" is the
+# read-only role that unauthenticated guests get and is kept for compatibility.
+ALLOWED_ROLES = ("viewer", "editor", "admin")
+
+
+def public_users() -> list[dict]:
+    """All users without their password hashes, sorted by username."""
+    users = load_users()
+    out = [
+        {"username": name, "role": u.get("role", "viewer"), "created": u.get("created", "")}
+        for name, u in users.items()
+    ]
+    return sorted(out, key=lambda x: x["username"].lower())
+
+
+def count_admins(users: dict) -> int:
+    return sum(1 for u in users.values() if u.get("role") == "admin")
+
+
+def set_user_role(username: str, role: str) -> bool:
+    users = load_users()
+    if username not in users:
+        return False
+    users[username]["role"] = role
+    save_users(users)
+    return True
+
+
+def set_user_password(username: str, password: str) -> bool:
+    users = load_users()
+    if username not in users:
+        return False
+    users[username]["password_hash"] = hash_password(password).decode()
+    save_users(users)
+    return True
+
+
+def delete_user(username: str) -> bool:
+    users = load_users()
+    if username not in users:
+        return False
+    del users[username]
+    save_users(users)
+    return True
+
+
 GUEST_USER = {"username": "guest", "role": "viewer"}

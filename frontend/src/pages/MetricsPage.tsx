@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Trash2, CheckCircle2, AlertTriangle, Search, TrendingUp, Shield, GitBranch, FileWarning } from 'lucide-react';
-import { api, type MetricsData, type ImpactResult, type GapItem } from '../api/client';
+import { Plus, Trash2, CheckCircle2, AlertTriangle, Search, TrendingUp, Shield, GitBranch, FileWarning, Sparkles } from 'lucide-react';
+import { api, type MetricsData, type ImpactResult, type GapItem, type QualityItem } from '../api/client';
 
 export default function MetricsPage() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -10,7 +10,10 @@ export default function MetricsPage() {
   const [gaps, setGaps] = useState<GapItem[]>([]);
   const [conflicts, setConflicts] = useState<{ count: number; conflicts: any[] }>({ count: 0, conflicts: [] });
   const [compliance, setCompliance] = useState<{ standards: { name: string; count: number }[] }>({ standards: [] });
-  const [coverage, setCoverage] = useState<{ coverage_pct: number; total: number; covered: number }>({ coverage_pct: 0, total: 0, covered: 0 });
+  const [coverage, setCoverage] = useState<{ coverage_pct: number; deep_pct: number; total: number; shallow_covered: number; deep_covered: number; items: any[] }>({ coverage_pct: 0, deep_pct: 0, total: 0, shallow_covered: 0, deep_covered: 0, items: [] });
+  const [quality, setQuality] = useState<QualityItem[]>([]);
+  const [qualityAvg, setQualityAvg] = useState(0);
+  const [unreviewedCount, setUnreviewedCount] = useState(0);
 
   useEffect(() => {
     if (!projectId) return;
@@ -20,12 +23,17 @@ export default function MetricsPage() {
       api.getConflicts(projectId),
       api.getCompliance(projectId),
       api.getCoverageAnalysis(projectId),
-    ]).then(([m, g, c, comp, cov]) => {
+      api.getQuality(projectId),
+      api.getUnreviewed(projectId),
+    ]).then(([m, g, c, comp, cov, qual, unrev]) => {
       setMetrics(m);
       setGaps(g.items);
       setConflicts(c);
       setCompliance(comp);
       setCoverage(cov);
+      setQuality(qual.per_requirement);
+      setQualityAvg(qual.average);
+      setUnreviewedCount(unrev.items.length);
     }).catch(console.error);
   }, [projectId]);
 
@@ -43,6 +51,7 @@ export default function MetricsPage() {
           { label: 'Coverage', value: `${coverage.coverage_pct}%`, icon: Shield, color: 'text-emerald-400 bg-emerald-400/10' },
           { label: 'Conflicts', value: conflicts.count, icon: AlertTriangle, color: conflicts.count > 0 ? 'text-red-400 bg-red-400/10' : 'text-green-400 bg-green-400/10' },
           { label: 'Gaps', value: gaps.length, icon: Search, color: gaps.length > 0 ? 'text-amber-400 bg-amber-400/10' : 'text-green-400 bg-green-400/10' },
+          { label: 'Unreviewed', value: unreviewedCount, icon: Shield, color: unreviewedCount > 0 ? 'text-amber-400 bg-amber-400/10' : 'text-emerald-400 bg-emerald-400/10' },
         ].map((card, i) => {
           const Icon = card.icon;
           return (
@@ -72,12 +81,12 @@ export default function MetricsPage() {
           <h2 className="font-semibold text-sm text-card-foreground mb-4 flex items-center gap-2"><GitBranch size={16} /> Traceability</h2>
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-muted/50 rounded-lg p-3 text-center">
-              <div className="text-2xl font-bold text-card-foreground">{coverage.covered}</div>
-              <div className="text-xs text-muted-foreground">Covered</div>
+              <div className="text-2xl font-bold text-card-foreground">{coverage.shallow_covered}</div>
+              <div className="text-xs text-muted-foreground">Shallow Covered</div>
             </div>
             <div className="bg-muted/50 rounded-lg p-3 text-center">
-              <div className="text-2xl font-bold text-card-foreground">{coverage.total - coverage.covered}</div>
-              <div className="text-xs text-muted-foreground">Uncovered</div>
+              <div className="text-2xl font-bold text-card-foreground">{coverage.deep_covered}</div>
+              <div className="text-xs text-muted-foreground">Deep Covered</div>
             </div>
             <div className="bg-muted/50 rounded-lg p-3 text-center">
               <div className="text-2xl font-bold text-card-foreground">{metrics.baselines}</div>
@@ -90,6 +99,28 @@ export default function MetricsPage() {
           </div>
         </motion.div>
       </div>
+
+      {quality.length > 0 && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.35 }} className="card p-5 mt-6">
+          <h2 className="font-semibold text-sm text-card-foreground mb-3 flex items-center gap-2"><Sparkles size={16} className="text-violet-400" /> Requirement Quality ({qualityAvg}/100)</h2>
+          <div className="space-y-2">
+            {quality.slice(0, 10).map((q) => (
+              <div key={q.id} className="flex items-center gap-2 text-xs py-1.5 px-2 rounded hover:bg-accent">
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-[11px] font-bold shrink-0 ${q.score >= 80 ? 'bg-emerald-500/10 text-emerald-400' : q.score >= 50 ? 'bg-amber-500/10 text-amber-400' : 'bg-red-500/10 text-red-400'}`}>{q.score}</div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-mono text-[11px] text-foreground">{q.id}</div>
+                  <div className="text-[10px] text-muted-foreground truncate">{q.name}</div>
+                </div>
+                <div className="flex gap-1 flex-wrap justify-end">
+                  {q.findings.slice(0, 3).map((f, fi) => (
+                    <span key={fi} className={`badge text-[9px] ${f.severity === 'error' ? 'bg-red-500/10 text-red-400' : f.severity === 'warning' ? 'bg-amber-500/10 text-amber-400' : 'bg-muted text-muted-foreground'}`} title={f.message}>{f.rule.replace(/_/g, ' ')}</span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      )}
 
       {gaps.length > 0 && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }} className="card p-5 mt-6">

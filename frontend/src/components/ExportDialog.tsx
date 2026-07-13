@@ -16,6 +16,9 @@ const formats = [
   { id: 'latex', label: 'LaTeX', icon: FileCode, desc: 'Academic-quality source for publications', ext: '.tex' },
   { id: 'reqif', label: 'ReqIF 1.2', icon: File, desc: 'Requirements Interchange Format for DOORS/Polarion import', ext: '.xml' },
   { id: 'sysml', label: 'SysML v2', icon: FileCode, desc: 'SysML v2 textual notation for MBSE tools', ext: '.sysml' },
+  { id: 'csv', label: 'CSV', icon: FileText, desc: 'Spreadsheet for Excel/Numbers import', ext: '.csv' },
+  { id: 'tsv', label: 'TSV', icon: FileText, desc: 'Tab-separated for data tools', ext: '.tsv' },
+  { id: 'xlsx', label: 'Excel (XLSX)', icon: FileText, desc: 'Microsoft Excel worksheet', ext: '.xlsx' },
 ];
 
 const allSections = [
@@ -113,7 +116,7 @@ export default function ExportDialog({ open, onClose, projectId }: ExportDialogP
   const totalCount = flatTree.length;
 
   const handleGenerate = async () => {
-    if (format === 'pdf' || format === 'reqif' || format === 'sysml') {
+    if (format === 'pdf' || format === 'reqif' || format === 'sysml' || format === 'csv' || format === 'tsv' || format === 'xlsx') {
       handleDownload();
       return;
     }

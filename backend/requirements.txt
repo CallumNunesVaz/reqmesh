@@ -9,3 +9,4 @@ PyJWT>=2.8
 jinja2>=3.1
 weasyprint>=61
 click>=8.1
+openpyxl>=3.1

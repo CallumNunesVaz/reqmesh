@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query, Depends
+from fastapi import APIRouter, HTTPException, Query, Depends, File, Form, UploadFile
 from pydantic import ValidationError
 
 from app.core.dependencies import get_store, require_edit, get_current_user
@@ -14,7 +14,7 @@ from app.models.change_request import ChangeRequestCreate, ChangeRequestUpdate
 from app.models.requirement import RequirementUpdate
 from app.models.risk import RiskCreate, RiskUpdate, CommentCreate, DecisionRecordCreate, DecisionRecordUpdate
 from app.services.publisher import Publisher
-from app.services.integrity import IntegrityChecker, mark_links_suspect, clear_suspect_links
+from app.services.integrity import IntegrityChecker, clear_suspect_links
 from app.services.git_hooks import install_hook, uninstall_hook
 from app.services.history import record_change
 
@@ -238,25 +238,25 @@ async def gap_analysis(project_id: str):
 
 @router.get("/projects/{project_id}/coverage")
 async def coverage_analysis(project_id: str):
-    store = get_store(project_id)
-    reqs = store.list_requirements()
-    vcs = store.list_verification_cases()
-    vc_req_map: dict[str, list[str]] = {}
-    for vc in vcs:
-        for rid in vc.get("verified_requirements", []):
-            vc_req_map.setdefault(rid, []).append(vc["id"])
-    results = []
-    for r in reqs:
-        vc_count = len(vc_req_map.get(r["id"], []))
-        rel_count = len(r.get("relations", []))
-        results.append({
-            "id": r["id"], "name": r.get("name", ""),
-            "verification_cases": vc_count,
-            "relations": rel_count,
-            "covered": vc_count > 0 and rel_count > 0,
-        })
-    covered = sum(1 for r in results if r["covered"])
-    return {"total": len(reqs), "covered": covered, "coverage_pct": round(covered / len(reqs) * 100) if reqs else 0, "items": results}
+    from app.services.tracing import trace_all
+    items = trace_all(get_store(project_id))
+    total = len(items)
+    if total == 0:
+        return {"total": 0, "shallow_covered": 0, "deep_covered": 0, "coverage_pct": 0, "deep_pct": 0, "items": []}
+    shallow = sum(1 for i in items if i["shallow"])
+    deep = sum(1 for i in items if i["deep"])
+    return {
+        "total": total, "shallow_covered": shallow, "deep_covered": deep,
+        "coverage_pct": round(shallow / total * 100),
+        "deep_pct": round(deep / total * 100),
+        "items": items,
+    }
+
+
+@router.get("/projects/{project_id}/trace")
+async def trace_report(project_id: str):
+    from app.services.tracing import trace_all
+    return trace_all(get_store(project_id))
 
 
 # ── Conflict Detection ────────────────────────────────────────────────────────
@@ -340,10 +340,15 @@ async def project_metrics(project_id: str):
         if r.get("relations"): with_trace += 1
         if r.get("cascade_from"): with_cascade += 1
 
+    effort_total = sum(r.get("effort") or 0 for r in reqs)
+    effort_done = sum(r.get("effort") or 0 for r in reqs if r.get("status") in ("verified", "implemented", "deprecated"))
+
     return {
         "total": total,
         "verification_cases": len(vcs),
         "baselines": len(baselines),
+        "total_effort": effort_total,
+        "completed_effort": effort_done,
         "status_distribution": statuses,
         "quality": {
             "with_description": with_desc,
@@ -360,7 +365,33 @@ async def project_metrics(project_id: str):
             "allocation": round(with_alloc / total * 100),
             "traceability": round(with_trace / total * 100),
         },
+        "total_effort": effort_total,
+        "completed_effort": effort_done,
     }
+
+
+@router.get("/projects/{project_id}/backlog")
+async def prioritized_backlog(project_id: str, sort: str = "priority"):
+    store = get_store(project_id)
+    reqs = store.list_requirements()
+    results = []
+    for r in reqs:
+        if r.get("status") in ("rejected", "deprecated"):
+            continue
+        priorities = r.get("priorities", {})
+        combined = sum(priorities.values()) if priorities else 0
+        combined -= r.get("effort") or 0
+        results.append({
+            "id": r["id"], "name": r.get("name", ""), "status": r.get("status", "proposed"),
+            "effort": r.get("effort"), "priorities": priorities, "combined_priority": combined,
+        })
+    if sort == "effort":
+        results.sort(key=lambda x: -(x["effort"] or 0))
+    else:
+        results.sort(key=lambda x: -x["combined_priority"])
+    e = sum(r.get("effort") or 0 for r in reqs)
+    d = sum(r.get("effort") or 0 for r in reqs if r.get("status") in ("verified", "implemented", "deprecated"))
+    return {"items": results, "total_effort": e, "completed_effort": d}
 
 
 # ── Publishing ────────────────────────────────────────────────────────────────
@@ -378,7 +409,10 @@ async def publish_project(project_id: str, data: dict, user: dict = Depends(get_
         return {"format": "md", "content": pub.build_markdown()}
     elif fmt == "latex":
         return {"format": "latex", "content": pub.build_latex()}
-    raise HTTPException(status_code=400, detail=f"Unknown format: {fmt} (use html, pdf, md, or latex)")
+    elif fmt in ("csv", "tsv"):
+        from app.services.table_io import export_table
+        return {"format": fmt, "content": export_table(store, fmt)}
+    raise HTTPException(status_code=400, detail=f"Unknown format: {fmt} (use html, pdf, md, latex, csv, tsv, or xlsx)")
 
 
 @router.get("/projects/{project_id}/publish/download")
@@ -392,7 +426,7 @@ async def download_report(project_id: str, format: str = "html", subsystems: str
     store = get_store(project_id)
     sub_list = [s.strip() for s in subsystems.split(",") if s.strip()] if subsystems else None
     pub = Publisher(store, sub_list)
-    ext_map = {"html": "html", "pdf": "pdf", "md": "md", "latex": "tex", "reqif": "xml", "sysml": "sysml"}
+    ext_map = {"html": "html", "pdf": "pdf", "md": "md", "latex": "tex", "reqif": "xml", "sysml": "sysml", "csv": "csv", "tsv": "tsv", "xlsx": "xlsx"}
     if format not in ext_map:
         raise HTTPException(status_code=400, detail=f"Unknown format: {format}")
     ext = ext_map[format]
@@ -414,6 +448,12 @@ async def download_report(project_id: str, format: str = "html", subsystems: str
             pub.to_markdown_file(path)
         elif format == "latex":
             pub.to_latex_file(path)
+        elif format in ("csv", "tsv"):
+            from app.services.table_io import export_table
+            Path(path).write_text(export_table(store, format))
+        elif format == "xlsx":
+            from app.services.table_io import export_xlsx
+            export_xlsx(store, path)
     except BaseException:
         os.unlink(path)
         raise
@@ -428,6 +468,33 @@ async def download_report(project_id: str, format: str = "html", subsystems: str
     )
 
 
+# ══ Code & Test Traceability ═══════════════════════════════════════════════════
+
+
+@router.post("/projects/{project_id}/scan")
+async def scan_code(project_id: str, code_root: str = Form(""), user: dict = Depends(require_edit)):
+    from app.services.code_scan import scan_tree, merge_references
+    root = Path(code_root) if code_root else Path.cwd()
+    hits = scan_tree(root)
+    summary = merge_references(get_store(project_id), hits)
+    return summary
+
+
+@router.get("/projects/{project_id}/references/freshness")
+async def reference_freshness(project_id: str):
+    from app.services.references import check_reference_freshness
+    return check_reference_freshness(get_store(project_id), Path.cwd())
+
+
+# ── Quality Analysis ──────────────────────────────────────────────────────────
+
+
+@router.get("/projects/{project_id}/quality")
+async def quality_analysis(project_id: str):
+    from app.services.quality import project_quality
+    return project_quality(get_store(project_id))
+
+
 # ── Validation ────────────────────────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/validate")
@@ -440,18 +507,15 @@ async def validate_project(project_id: str):
 @router.get("/projects/{project_id}/suspect-links")
 async def get_suspect_links(project_id: str):
     store = get_store(project_id)
-    suspect_file = store.root / "_suspect.yaml"
-    if not suspect_file.exists():
-        return {"links": [], "count": 0}
-    links = store._read_yaml(suspect_file).get("links", [])
+    from app.services.fingerprint import check_suspect_links
+    links = check_suspect_links(store)
     return {"links": links, "count": len(links)}
 
 
 @router.post("/projects/{project_id}/suspect-links/clear")
 async def clear_suspects(project_id: str, data: dict | None = None, user: dict = Depends(require_edit)):
-    store = get_store(project_id)
-    clear_suspect_links(store, (data or {}).get("ids"))
-    return {"ok": True}
+    from app.services.fingerprint import review_all
+    return {"ok": True, **review_all(get_store(project_id), user.get("username", ""))}
 
 
 # ── Git Hooks ─────────────────────────────────────────────────────────────────
@@ -480,23 +544,26 @@ async def submit_review(project_id: str, req_id: str, data: dict, user: dict = D
     if not req:
         raise HTTPException(status_code=404)
     before = dict(req)
-    status = data.get("status", "in_review")
-    req["review_status"] = status
-    req["reviewers"] = data.get("reviewers", [])
-    reviews = req.get("review_comments", [])
-    comment = data.get("comment")
-    if comment:
-        reviews.append({
-            "author": user.get("username", "unknown"),
-            "comment": comment,
-            "status": status,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
-    req["review_comments"] = reviews
-    result = store.update_requirement(req_id, req)
+
+    from app.services.fingerprint import review_item
+
+    result = review_item(store, req_id, reviewer=user.get("username", ""), comment=data.get("comment", ""))
+    if result is None:
+        raise HTTPException(status_code=404)
     record_change(store, req_id, "review", before, result, user.get("username", ""))
-    mark_links_suspect(store, req_id)
     return result
+
+
+@router.post("/projects/{project_id}/review-all")
+async def review_all_endpoint(project_id: str, user: dict = Depends(require_edit)):
+    from app.services.fingerprint import review_all
+    return review_all(get_store(project_id), user.get("username", ""))
+
+
+@router.get("/projects/{project_id}/unreviewed")
+async def get_unreviewed(project_id: str):
+    from app.services.fingerprint import check_unreviewed
+    return {"items": check_unreviewed(get_store(project_id)), "count": None}
 
 
 # ── Baselines (Enhanced) ──────────────────────────────────────────────────────
@@ -556,6 +623,45 @@ async def diff_baseline(project_id: str, name: str):
     return {"baseline": name, "frozen_at": baseline.get("frozen_at"), "changes": changes, "changed_count": len(changes)}
 
 
+# ── Import (ReqIF / SysML) ────────────────────────────────────────────────────
+
+@router.post("/projects/{project_id}/import")
+async def import_project(
+    project_id: str,
+    file: UploadFile = File(...),
+    format: str = Form("auto"),
+    mode: str = Form("merge"),
+    user: dict = Depends(require_edit),
+):
+    """Import requirements from a ReqIF 1.2 or SysML v2 file.
+
+    ``format`` is ``auto`` (sniff from content), ``reqif`` or ``sysml``.
+    ``mode`` is ``merge`` (create/update) or ``replace`` (wipe existing first).
+    """
+    store = get_store(project_id)
+    if format not in ("auto", "reqif", "sysml", "csv", "tsv"):
+        raise HTTPException(status_code=400, detail=f"Unknown format: {format}")
+    if mode not in ("merge", "replace"):
+        raise HTTPException(status_code=400, detail=f"Unknown mode: {mode}")
+
+    content = await file.read()
+    from app.services.table_io import import_table as table_import
+
+    if format in ("csv", "tsv"):
+        summary = table_import(store, content.decode("utf-8", errors="replace"), fmt=format, mode=mode)
+        return summary
+
+    from app.services.importer import parse_and_import
+    from app.services.reqif_import import ReqIFParseError
+    from app.services.sysml_import import SysMLParseError
+
+    try:
+        summary = parse_and_import(store, content, fmt=format, mode=mode)
+    except (ReqIFParseError, SysMLParseError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=f"Import failed: {exc}") from exc
+    return summary
+
+
 # ── SSE Change Notifications ──────────────────────────────────────────────────
 
 import asyncio
@@ -563,31 +669,49 @@ import json
 from fastapi.responses import StreamingResponse
 
 
+@router.get("/projects/{project_id}/presence")
+async def project_presence(project_id: str):
+    """Return the users currently viewing the project (real-time roster)."""
+    from app.services.event_bus import get_event_bus
+
+    users = get_event_bus().roster(project_id)
+    return {"users": users, "count": len({u["username"] for u in users})}
+
+
 @router.get("/projects/{project_id}/events")
-async def project_events(project_id: str):
+async def project_events(project_id: str, user: str = "guest", role: str = "viewer"):
     """Server-Sent Events stream for real-time collaboration.
 
-    Clients open a persistent connection and receive JSON events whenever
-    a mutation occurs in the project.
+    Clients open a persistent connection and receive JSON events whenever a
+    mutation occurs in the project (``event: change``) or the set of active
+    viewers changes (``event: presence``). ``user``/``role`` register the
+    caller in the presence roster for the life of the connection.
     """
     from app.services.event_bus import get_event_bus
 
     bus = get_event_bus()
     queue: asyncio.Queue = bus.subscribe(project_id)
+    client_id = uuid.uuid4().hex
 
     async def event_stream():
         try:
             # Send an initial heartbeat so the client knows the connection is alive.
             yield "event: connected\ndata: {}\n\n"
+            # Register presence (this broadcasts a presence event to everyone).
+            bus.join(project_id, client_id, user, role)
+            # Seed this client with the current roster immediately.
+            yield f"event: presence\ndata: {json.dumps({'type': 'presence', 'users': bus.roster(project_id)})}\n\n"
             while True:
                 try:
                     event = await asyncio.wait_for(queue.get(), timeout=30.0)
-                    yield f"event: change\ndata: {json.dumps(event)}\n\n"
+                    channel = "presence" if event.get("type") == "presence" else "change"
+                    yield f"event: {channel}\ndata: {json.dumps(event)}\n\n"
                 except asyncio.TimeoutError:
                     yield "event: heartbeat\ndata: {}\n\n"
         except asyncio.CancelledError:
             pass
         finally:
+            bus.leave(project_id, client_id)
             bus.unsubscribe(project_id, queue)
 
     return StreamingResponse(

@@ -10,6 +10,7 @@ interface AppState {
   loading: boolean;
   error: string | null;
   graphVersion: number;
+  dataVersion: number;
 
   setProjects: (projects: Project[]) => void;
   setCurrentProject: (project: Project | null) => void;
@@ -19,6 +20,7 @@ interface AppState {
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   bumpGraphVersion: () => void;
+  bumpDataVersion: () => void;
 }
 
 export const useStore = create<AppState>((set) => ({
@@ -30,6 +32,7 @@ export const useStore = create<AppState>((set) => ({
   loading: false,
   error: null,
   graphVersion: 0,
+  dataVersion: 0,
 
   setProjects: (projects) => set({ projects }),
   setCurrentProject: (project) => set({ currentProject: project }),
@@ -39,4 +42,5 @@ export const useStore = create<AppState>((set) => ({
   setLoading: (loading) => set({ loading }),
   setError: (error) => set({ error }),
   bumpGraphVersion: () => set((s) => ({ graphVersion: s.graphVersion + 1 })),
+  bumpDataVersion: () => set((s) => ({ dataVersion: s.dataVersion + 1 })),
 }));

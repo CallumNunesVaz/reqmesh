@@ -12,12 +12,14 @@ import ChangeRequestsPage from './pages/ChangeRequestsPage';
 import RisksPage from './pages/RisksPage';
 import MetricsPage from './pages/MetricsPage';
 import PublishPage from './pages/PublishPage';
+import UsersPage from './pages/UsersPage';
 
 export default function App() {
   return (
     <Routes>
       <Route element={<Layout />}>
         <Route path="/" element={<ProjectsPage />} />
+        <Route path="/users" element={<UsersPage />} />
         <Route path="/project/:projectId" element={<ProjectOverview />} />
         <Route path="/project/:projectId/requirements" element={<RequirementsPage />} />
         <Route path="/project/:projectId/requirements/:reqId" element={<RequirementDetailPage />} />

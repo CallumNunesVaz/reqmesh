@@ -43,6 +43,7 @@ export default function RequirementsPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
   const { requirements, setRequirements } = useStore();
+  const dataVersion = useStore((s) => s.dataVersion);
   const editMode = useAuthStore((s) => s.editMode && s.user !== null && s.user.role !== 'viewer');
 
   const [search, setSearch] = useState('');
@@ -57,7 +58,7 @@ export default function RequirementsPage() {
     if (!projectId) return;
     api.listRequirements(projectId).then(setRequirements).catch(console.error);
   };
-  useEffect(load, [projectId]);
+  useEffect(load, [projectId, dataVersion]);
 
   // '/' focuses search
   useEffect(() => {

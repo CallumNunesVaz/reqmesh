@@ -472,12 +472,15 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
     return edges.map((e) => {
       const connected = e.source === selectedReqId || e.target === selectedReqId ||
         e.source === hoveredNodeId || e.target === hoveredNodeId;
+      const stroke = (e.style as any)?.stroke as string | undefined;
       return {
         ...e,
         data: { ...e.data, showLabel: connected },
         style: {
           ...((e.style as Record<string, any>) || {}),
-          opacity: connected ? Math.max((e.style as any)?.opacity || 0.55, 0.85) : 0.04,
+          opacity: connected ? Math.max((e.style as any)?.opacity || 0.55, 0.9) : 0.04,
+          // Make active edges glow softly in their own colour.
+          filter: connected && stroke ? `drop-shadow(0 0 3px ${stroke})` : undefined,
         },
       };
     });
@@ -507,7 +510,13 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
   const handleNodeLeave = useCallback(() => { setHoveredNodeId(null); }, []);
 
   return (
-    <div className="w-full h-full bg-background relative" key={`${key}-${layoutMode}`}>
+    <div
+      className="w-full h-full bg-background relative"
+      key={`${key}-${layoutMode}`}
+      // Subtle centre glow for depth so node blooms read against some atmosphere.
+      // ReactFlow is transparent, so this backdrop shows through behind the nodes.
+      style={{ background: 'radial-gradient(ellipse at 50% 38%, hsl(var(--foreground) / 0.035), transparent 62%), hsl(var(--background))' }}
+    >
     <GraphSelectionCtx.Provider value={{ connectedIds, selectedReqId, hasSelection }}>
       <ReactFlow
         nodes={nodes}

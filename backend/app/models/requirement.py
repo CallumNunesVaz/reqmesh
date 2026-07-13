@@ -41,6 +41,15 @@ class Priority(str, Enum):
 class Relation(BaseModel):
     type: str
     target: str
+    reviewed_fingerprint: Optional[str] = None
+
+
+class Reference(BaseModel):
+    path: str
+    keyword: Optional[str] = None
+    kind: str = "impl"
+    sha256: Optional[str] = None
+    lines: Optional[str] = None
 
 
 class AttributeValue(BaseModel):
@@ -66,6 +75,13 @@ class Requirement(BaseModel):
     source: str = ""
     allocated_to: str = ""
     baseline: Optional[str] = None
+    reviewed: Optional[str] = None
+    derived: bool = False
+    normative: bool = True
+    effort: Optional[int] = None
+    priorities: dict[str, int] = Field(default_factory=dict)
+    needs: list[str] = Field(default_factory=list)
+    references: list[Reference] = Field(default_factory=list)
     created: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     modified: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
@@ -87,6 +103,13 @@ class RequirementCreate(BaseModel):
     source: str = ""
     allocated_to: str = ""
     baseline: Optional[str] = None
+    reviewed: Optional[str] = None
+    derived: bool = False
+    normative: bool = True
+    effort: Optional[int] = None
+    priorities: dict[str, int] = Field(default_factory=dict)
+    needs: list[str] = Field(default_factory=list)
+    references: list[Reference] = Field(default_factory=list)
 
 
 class RequirementUpdate(BaseModel):
@@ -106,6 +129,13 @@ class RequirementUpdate(BaseModel):
     source: Optional[str] = None
     allocated_to: Optional[str] = None
     baseline: Optional[str] = None
+    reviewed: Optional[str] = None
+    derived: Optional[bool] = None
+    normative: Optional[bool] = None
+    effort: Optional[int] = None
+    priorities: Optional[dict[str, int]] = None
+    needs: Optional[list[str]] = None
+    references: Optional[list[Reference]] = None
 
 
 class RequirementTreeNode(BaseModel):

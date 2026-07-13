@@ -1,14 +1,16 @@
 import { Outlet, Link, useParams } from 'react-router-dom';
-import { PanelRight, PanelRightClose, LogIn, LogOut, User, Pencil, Eye, FileDown } from 'lucide-react';
+import { PanelRight, PanelRightClose, LogIn, LogOut, User, Pencil, Eye, FileDown, FileUp, Users } from 'lucide-react';
 import { useState, useEffect, useCallback, createContext, useContext, useRef } from 'react';
 import { ThemeToggle } from './ThemeToggle';
 import RequirementNav from './RequirementNav';
 import GraphPane from './GraphPane';
 import LoginModal from './LoginModal';
 import ExportDialog from './ExportDialog';
+import ImportDialog from './ImportDialog';
+import PresenceBar from './PresenceBar';
 import { useAuthStore } from '../store/auth';
 import { useStore } from '../store';
-import { api } from '../api/client';
+import { api, type PresenceUser } from '../api/client';
 
 const GraphPaneCtx = createContext({ graphOpen: false, toggleGraph: () => {} });
 export function useGraphPane() { return useContext(GraphPaneCtx); }
@@ -31,6 +33,8 @@ export default function Layout() {
   const [graphOpen, setGraphOpen] = useState(true);
   const [loginOpen, setLoginOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [presence, setPresence] = useState<PresenceUser[]>([]);
   const [graphWidth, setGraphWidth] = useState(() => {
     const saved = parseInt(localStorage.getItem('rt-graph-width') || '', 10);
     const fallback = Math.round(window.innerWidth * 0.38);
@@ -91,11 +95,16 @@ export default function Layout() {
     }
   }, []);
 
-  // SSE listener for real-time collaboration.
+  // SSE listener for real-time collaboration: live data refresh + presence.
   const bumpGraphVersion = useStore((s) => s.bumpGraphVersion);
+  const bumpDataVersion = useStore((s) => s.bumpDataVersion);
+  const username = user?.username;
   useEffect(() => {
     if (!isInProject || !projectId) return;
-    const url = `/api/projects/${projectId}/events`;
+    const params = new URLSearchParams();
+    if (username) params.set('user', username);
+    if (user?.role) params.set('role', user.role);
+    const url = `/api/projects/${projectId}/events?${params.toString()}`;
     let es: EventSource | null = null;
     let reconnectTimer: ReturnType<typeof setTimeout>;
 
@@ -103,6 +112,13 @@ export default function Layout() {
       es = new EventSource(url);
       es.addEventListener('change', () => {
         bumpGraphVersion();
+        bumpDataVersion();
+      });
+      es.addEventListener('presence', (e) => {
+        try {
+          const data = JSON.parse((e as MessageEvent).data);
+          setPresence(data.users || []);
+        } catch { /* ignore malformed presence frames */ }
       });
       es.onerror = () => {
         es?.close();
@@ -115,7 +131,7 @@ export default function Layout() {
       clearTimeout(reconnectTimer);
       es?.close();
     };
-  }, [isInProject, projectId, bumpGraphVersion]);
+  }, [isInProject, projectId, username, user?.role, bumpGraphVersion, bumpDataVersion]);
 
   const toggleGraph = () => setGraphOpen((o) => !o);
   const toggleEdit = () => setEditMode(!editMode);
@@ -159,6 +175,19 @@ export default function Layout() {
             </button>
           )}
 
+          {isInProject && canToggleEdit && (
+            <button
+              onClick={() => setImportOpen(true)}
+              className="btn-ghost p-2 rounded-lg gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+              title="Import ReqIF / SysML"
+            >
+              <FileUp size={15} />
+              <span className="hidden sm:inline">Import</span>
+            </button>
+          )}
+
+          {isInProject && <PresenceBar users={presence} self={username} />}
+
           {canToggleEdit && (
             <button
               onClick={toggleEdit}
@@ -170,6 +199,17 @@ export default function Layout() {
               {editMode ? <Pencil size={15} /> : <Eye size={15} />}
               <span className="hidden sm:inline text-[10px]">{editMode ? 'EDITING' : 'VIEWING'}</span>
             </button>
+          )}
+
+          {user?.role === 'admin' && (
+            <Link
+              to="/users"
+              className="btn-ghost p-2 rounded-lg gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+              title="Manage users"
+            >
+              <Users size={15} />
+              <span className="hidden sm:inline">Users</span>
+            </Link>
           )}
 
           {user ? (
@@ -240,6 +280,7 @@ export default function Layout() {
 
       <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
       {isInProject && <ExportDialog open={exportOpen} onClose={() => setExportOpen(false)} projectId={projectId!} />}
+      {isInProject && <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} projectId={projectId!} />}
     </SelectedReqCtx.Provider>
     </GraphPaneCtx.Provider>
   );

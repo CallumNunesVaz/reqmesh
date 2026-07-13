@@ -1,4 +1,59 @@
 {
+  "$defs": {
+    "ExecutionRecord": {
+      "properties": {
+        "timestamp": {
+          "title": "Timestamp",
+          "type": "string"
+        },
+        "status": {
+          "default": "pending",
+          "title": "Status",
+          "type": "string"
+        },
+        "notes": {
+          "default": "",
+          "title": "Notes",
+          "type": "string"
+        },
+        "executed_by": {
+          "default": "",
+          "title": "Executed By",
+          "type": "string"
+        }
+      },
+      "title": "ExecutionRecord",
+      "type": "object"
+    },
+    "TestStep": {
+      "properties": {
+        "action": {
+          "default": "",
+          "title": "Action",
+          "type": "string"
+        },
+        "expected_result": {
+          "default": "",
+          "title": "Expected Result",
+          "type": "string"
+        },
+        "actual_result": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Actual Result"
+        }
+      },
+      "title": "TestStep",
+      "type": "object"
+    }
+  },
   "properties": {
     "id": {
       "title": "Id",
@@ -41,6 +96,25 @@
         "type": "string"
       },
       "title": "Verified Requirements",
+      "type": "array"
+    },
+    "test_procedure": {
+      "default": "",
+      "title": "Test Procedure",
+      "type": "string"
+    },
+    "steps": {
+      "items": {
+        "$ref": "#/$defs/TestStep"
+      },
+      "title": "Steps",
+      "type": "array"
+    },
+    "execution_history": {
+      "items": {
+        "$ref": "#/$defs/ExecutionRecord"
+      },
+      "title": "Execution History",
       "type": "array"
     },
     "created": {

@@ -1,8 +1,8 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Trash2, ArrowLeft, Plus, X, ArrowRight, ArrowLeftRight } from 'lucide-react';
-import { api, type Requirement, type VerificationCase } from '../api/client';
+import { Trash2, ArrowLeft, Plus, X, ArrowRight, ArrowLeftRight, Sparkles, ShieldCheck, ShieldOff } from 'lucide-react';
+import { api, type Requirement, type VerificationCase, type QualityItem } from '../api/client';
 import RichTextEditor from '../components/RichTextEditor';
 import AutocompleteInput from '../components/AutocompleteInput';
 import { useAuthStore } from '../store/auth';
@@ -29,6 +29,8 @@ export default function RequirementDetailPage() {
   const bumpGraphVersion = useStore((s) => s.bumpGraphVersion);
   const editable = user !== null && user.role !== 'viewer' && editMode;
   const [workflow, setWorkflow] = useState<{ states: string[]; transitions: Record<string, string[]> } | null>(null);
+  const [qualityResult, setQualityResult] = useState<QualityItem | null>(null);
+  const [unreviewedIds, setUnreviewedIds] = useState<Set<string>>(new Set());
   const statusOptions = workflow?.states || ['proposed', 'approved', 'implemented', 'verified', 'rejected', 'deprecated'];
 
   const refSuggestions = useMemo(() => {
@@ -68,6 +70,13 @@ export default function RequirementDetailPage() {
       setLoading(false);
     }).catch(console.error);
     api.getWorkflow(projectId).then((wf) => setWorkflow(wf)).catch(() => {});
+    api.getQuality(projectId).then((q) => {
+      const match = q.per_requirement.find((r) => r.id === reqId);
+      if (match) setQualityResult(match);
+    }).catch(() => {});
+    api.getUnreviewed(projectId).then((u) => {
+      setUnreviewedIds(new Set(u.items.map((r) => r.id)));
+    }).catch(() => {});
   }, [projectId, reqId]);
 
   const save = async (updates: Partial<Requirement>) => {
@@ -184,7 +193,23 @@ export default function RequirementDetailPage() {
         </button>
         <div className="flex-1">
           <h1 className="text-xl font-bold tracking-tight font-mono text-foreground">{req.id}</h1>
+          {unreviewedIds.has(req.id) && (
+            <span className="badge bg-amber-500/10 text-amber-400 text-[10px] px-2 py-0.5">Needs re-review</span>
+          )}
         </div>
+        {editable && (
+          <button
+            onClick={async () => {
+              await api.reviewRequirement(projectId!, reqId!);
+              const updated = await api.getRequirement(projectId!, reqId!);
+              setReq(updated);
+              setUnreviewedIds((prev) => { const next = new Set(prev); next.delete(reqId!); return next; });
+            }}
+            className="btn-secondary text-xs mr-2"
+          >
+            <ShieldCheck size={14} /> Review
+          </button>
+        )}
         <button onClick={handleDelete} className="btn-danger" disabled={!editable}>
           <Trash2 size={14} /> Delete
         </button>
@@ -356,6 +381,21 @@ export default function RequirementDetailPage() {
               </div>
             )}
           </motion.div>
+
+          {req.references && req.references.length > 0 && (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="card p-5">
+              <h2 className="font-semibold text-sm text-card-foreground mb-3">References</h2>
+              <div className="space-y-1.5">
+                {req.references.map((ref, i) => (
+                  <div key={i} className="flex items-center gap-2 text-xs py-1.5 px-2 rounded hover:bg-accent group">
+                    <span className={`badge text-[9px] shrink-0 ${ref.kind === 'impl' ? 'bg-blue-500/10 text-blue-400' : ref.kind === 'test' ? 'bg-purple-500/10 text-purple-400' : ref.kind === 'doc' ? 'bg-teal-500/10 text-teal-400' : 'bg-muted text-muted-foreground'}`}>{ref.kind}</span>
+                    <span className="font-mono text-[11px] text-foreground flex-1 truncate">{ref.path}</span>
+                    {ref.lines && <span className="text-[10px] text-muted-foreground shrink-0">{ref.lines}</span>}
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          )}
         </div>
 
         <div className="space-y-6">
@@ -396,6 +436,31 @@ export default function RequirementDetailPage() {
                 <select className="select" value={req.priority} onChange={(e) => save({ priority: e.target.value })} disabled={!editable}>
                   {priorityOptions.map((p) => (<option key={p} value={p}>{p}</option>))}
                 </select>
+              </div>
+              <div>
+                <label className="label flex items-center justify-between">
+                  <span>Derived</span>
+                  <input type="checkbox" checked={req.derived || false} onChange={(e) => save({ derived: e.target.checked })} disabled={!editable} className="w-4 h-4 rounded border-muted-foreground/30" />
+                </label>
+                <div className="text-[10px] text-muted-foreground mt-0.5">No parent link required</div>
+              </div>
+              <div>
+                <label className="label flex items-center justify-between">
+                  <span>Normative</span>
+                  <input type="checkbox" checked={req.normative !== false} onChange={(e) => save({ normative: e.target.checked })} disabled={!editable} className="w-4 h-4 rounded border-muted-foreground/30" />
+                </label>
+                <div className="text-[10px] text-muted-foreground mt-0.5">Included in coverage analysis</div>
+              </div>
+              <div>
+                <label className="label">Effort (story points)</label>
+                <input
+                  className="input"
+                  type="number"
+                  min="0"
+                  value={req.effort ?? ''}
+                  onChange={(e) => save({ effort: e.target.value ? parseInt(e.target.value) : null })}
+                  disabled={!editable}
+                />
               </div>
               <div>
                 <label className="label">Verification Method</label>
@@ -502,6 +567,32 @@ export default function RequirementDetailPage() {
               </div>
             )}
           </motion.div>
+
+          {qualityResult && (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }} className="card p-5">
+              <h2 className="font-semibold text-sm text-card-foreground mb-3 flex items-center gap-2"><Sparkles size={14} className="text-violet-400" /> Quality</h2>
+              <div className="flex items-center gap-3 mb-3">
+                <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-lg font-bold ${qualityResult.score >= 80 ? 'bg-emerald-500/10 text-emerald-400' : qualityResult.score >= 50 ? 'bg-amber-500/10 text-amber-400' : 'bg-red-500/10 text-red-400'}`}>
+                  {qualityResult.score}
+                </div>
+                <div className="flex-1">
+                  <div className="w-full bg-muted rounded-full h-2">
+                    <div className={`h-full rounded-full transition-all duration-500 ${qualityResult.score >= 80 ? 'bg-emerald-500' : qualityResult.score >= 50 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${qualityResult.score}%` }} />
+                  </div>
+                  <div className="text-[10px] text-muted-foreground mt-1">/100</div>
+                </div>
+              </div>
+              {qualityResult.findings.length > 0 && (
+                <div className="space-y-1">
+                  {qualityResult.findings.slice(0, 5).map((f, i) => (
+                    <div key={i} className={`text-xs px-2 py-1 rounded ${f.severity === 'error' ? 'bg-red-500/5 text-red-400' : f.severity === 'warning' ? 'bg-amber-500/5 text-amber-400' : 'bg-muted text-muted-foreground'}`}>
+                      {f.message}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </motion.div>
+          )}
 
           <div className="text-xs text-muted-foreground space-y-1">
             <div>Created: {new Date(req.created).toLocaleString()}</div>

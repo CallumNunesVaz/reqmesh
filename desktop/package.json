@@ -1,0 +1,26 @@
+{
+  "name": "reqmesh-desktop",
+  "productName": "reqmesh",
+  "version": "0.4.0",
+  "description": "Desktop (Electron) shell for reqmesh — boots the backend and loads the UI in a native window.",
+  "main": "main.js",
+  "author": "reqmesh",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "dev.reqmesh.desktop",
+    "productName": "reqmesh",
+    "files": ["main.js", "preload.js", "package.json"],
+    "extraResources": [
+      { "from": "../frontend/dist", "to": "frontend/dist" }
+    ],
+    "directories": { "output": "release" }
+  }
+}

@@ -20,6 +20,7 @@ import {
   BarChart3,
 } from 'lucide-react';
 import { api, type RequirementTreeNode } from '../api/client';
+import { useStore } from '../store';
 import { useGraphPane, useSelectedReq } from './Layout';
 
 const statusDots: Record<string, string> = {
@@ -115,11 +116,12 @@ export default function RequirementNav({ width = 300 }: RequirementNavProps) {
   const [search, setSearch] = useState('');
   const { graphOpen, toggleGraph } = useGraphPane();
   const { selectedReqId, selectReq } = useSelectedReq();
+  const dataVersion = useStore((s) => s.dataVersion);
 
   useEffect(() => {
     if (!projectId) return;
     api.getRequirementTree(projectId).then(setTree).catch(console.error);
-  }, [projectId]);
+  }, [projectId, dataVersion]);
 
   function filterTree(nodes: RequirementTreeNode[], q: string): RequirementTreeNode[] {
     if (!q) return nodes;

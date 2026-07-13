@@ -50,7 +50,7 @@ export interface Requirement {
   status: string;
   verification_method: string;
   attributes: { key: string; value: string }[];
-  relations: { type: string; target: string }[];
+  relations: { type: string; target: string; reviewed_fingerprint?: string | null }[];
   verification_cases: string[];
   verification_status: string;
   parent: string | null;
@@ -59,8 +59,23 @@ export interface Requirement {
   source: string;
   allocated_to: string;
   baseline: string | null;
+  references: Reference[];
+  reviewed: string | null;
+  derived: boolean;
+  normative: boolean;
+  effort: number | null;
+  priorities: Record<string, number>;
+  needs: string[];
   created: string;
   modified: string;
+}
+
+export interface Reference {
+  path: string;
+  keyword?: string | null;
+  kind: string;
+  sha256?: string | null;
+  lines?: string | null;
 }
 
 export interface RequirementTreeNode {
@@ -161,8 +176,29 @@ export interface ImpactResult {
 }
 
 export interface GapItem { id: string; name: string; issues: string[] }
-export interface CoverageItem { id: string; name: string; verification_cases: number; relations: number; covered: boolean }
+export interface CoverageItem {
+  id: string;
+  name: string;
+  needs: string[];
+  covered_types: string[];
+  uncovered_types: string[];
+  unwanted_coverage: string[];
+  shallow: boolean;
+  deep: boolean;
+  broken_chain: boolean;
+}
+export interface CoverageData {
+  total: number;
+  shallow_covered: number;
+  deep_covered: number;
+  coverage_pct: number;
+  deep_pct: number;
+  items: CoverageItem[];
+}
 export interface ConflictItem { ids?: string[]; a?: string; b?: string; type: string; name?: string }
+export interface QualityFinding { rule: string; severity: string; message: string; start: number; end: number }
+export interface QualityItem { id: string; name: string; score: number; findings: QualityFinding[] }
+export interface QualityData { average: number; per_requirement: QualityItem[]; total: number; config: { min_words: number; max_words: number } }
 export interface MetricsData {
   total: number;
   verification_cases: number;
@@ -170,6 +206,27 @@ export interface MetricsData {
   status_distribution: Record<string, number>;
   quality: Record<string, number>;
   quality_pct: Record<string, number>;
+}
+
+export interface ImportSummary {
+  created: number;
+  updated: number;
+  skipped: number;
+  traces_added: number;
+  verification_cases: number;
+  format: string;
+}
+
+export interface PresenceUser {
+  username: string;
+  role: string;
+  since: string;
+}
+
+export interface ManagedUser {
+  username: string;
+  role: string;
+  created: string;
 }
 
 export const api = {
@@ -182,6 +239,15 @@ export const api = {
     request<{ username: string; role: string }>('/auth/guest', { method: 'POST' }),
   whoami: () =>
     request<{ username: string; role: string }>('/auth/whoami'),
+
+  // User management (admin only)
+  listUsers: () => request<ManagedUser[]>('/auth/users'),
+  createUser: (data: { username: string; password: string; role: string }) =>
+    request<ManagedUser>('/auth/users', { method: 'POST', body: data }),
+  updateUser: (username: string, data: { role?: string; password?: string }) =>
+    request<ManagedUser>(`/auth/users/${encodeURIComponent(username)}`, { method: 'PATCH', body: data }),
+  deleteUser: (username: string) =>
+    request<void>(`/auth/users/${encodeURIComponent(username)}`, { method: 'DELETE' }),
 
   // Projects
   listProjects: () => request<Project[]>('/projects'),
@@ -285,9 +351,11 @@ export const api = {
   getGapAnalysis: (projectId: string) =>
     request<{ total: number; gaps: number; items: GapItem[] }>(`/projects/${projectId}/gap-analysis`),
   getCoverageAnalysis: (projectId: string) =>
-    request<{ total: number; covered: number; coverage_pct: number; items: CoverageItem[] }>(`/projects/${projectId}/coverage`),
+    request<CoverageData>(`/projects/${projectId}/coverage`),
   getConflicts: (projectId: string) =>
     request<{ count: number; conflicts: ConflictItem[] }>(`/projects/${projectId}/conflicts`),
+  getQuality: (projectId: string) =>
+    request<QualityData>(`/projects/${projectId}/quality`),
 
   // Metrics & Compliance
   getMetrics: (projectId: string) => request<MetricsData>(`/projects/${projectId}/metrics`),
@@ -304,9 +372,47 @@ export const api = {
   getRequirementHistory: (projectId: string, reqId: string) =>
     request<any[]>(`/projects/${projectId}/requirements/${reqId}/history`),
 
+  // Import (ReqIF / SysML)
+  importProject: (projectId: string, file: File, format: string, mode: string) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('format', format);
+    fd.append('mode', mode);
+    return request<ImportSummary>(`/projects/${projectId}/import`, { method: 'POST', body: fd });
+  },
+
+  // Presence (real-time collaboration)
+  getPresence: (projectId: string) =>
+    request<{ users: PresenceUser[]; count: number }>(`/projects/${projectId}/presence`),
+
   // UID
   getNextUid: (projectId: string, parent?: string) => {
     const qs = parent ? `?parent=${encodeURIComponent(parent)}` : '';
     return request<{ prefix: string; next_id: string }>(`/projects/${projectId}/requirements/next-uid${qs}`);
+  },
+
+  // Review
+  reviewRequirement: (projectId: string, reqId: string, comment?: string) =>
+    request<Requirement>(`/projects/${projectId}/requirements/${reqId}/review`, { method: 'POST', body: { comment } }),
+  reviewAll: (projectId: string) =>
+    request<{ reviewed: number; total: number }>(`/projects/${projectId}/review-all`, { method: 'POST' }),
+  getUnreviewed: (projectId: string) =>
+    request<{ items: { id: string; name: string; reviewed: string | null; current_fingerprint: string }[] }>(`/projects/${projectId}/unreviewed`),
+
+  // Code scan
+  scanProject: (projectId: string, codeRoot: string) => {
+    const fd = new FormData();
+    fd.append('code_root', codeRoot);
+    return request<{ created: number; updated: number; files_scanned: number; requirements_touched: number }>(
+      `/projects/${projectId}/scan`, { method: 'POST', body: fd }
+    );
+  },
+  getReferenceFreshness: (projectId: string) =>
+    request<{ req_id: string; path: string; status: string }[]>(`/projects/${projectId}/references/freshness`),
+
+  // Backlog
+  getBacklog: (projectId: string, sort?: string) => {
+    const qs = sort ? `?sort=${sort}` : '';
+    return request<{ items: { id: string; name: string; status: string; effort: number | null; priorities: Record<string, number>; combined_priority: number }[]; total_effort: number; completed_effort: number }>(`/projects/${projectId}/backlog${qs}`);
   },
 };

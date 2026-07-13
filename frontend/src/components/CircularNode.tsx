@@ -1,6 +1,7 @@
 import { memo, useState } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { useGraphSelection } from './GraphPane';
+import { glow } from './graphColors';
 
 const statusFillColors: Record<string, string> = {
   proposed: 'hsl(207,90%,64%)',
@@ -42,6 +43,13 @@ function CircularNode({ data, selected }: NodeProps) {
   const cr = childCount > 1 ? Math.min(22, 14 + childCount * 1.2) : 14;
   const nodeW = cr * 2 + 4;
 
+  // Soft, status-tinted bloom on every node; strongest when selected.
+  const glowFilter = isSelected
+    ? `drop-shadow(0 0 16px ${glow(fill, 0.6)}) drop-shadow(0 0 6px ${glow(fill, 0.9)})`
+    : hover
+      ? `drop-shadow(0 0 12px ${glow(fill, 0.5)})`
+      : `drop-shadow(0 0 7px ${glow(fill, 0.32)})`;
+
   return (
     <div
       className="relative"
@@ -51,7 +59,9 @@ function CircularNode({ data, selected }: NodeProps) {
         width: nodeW,
         height: nodeW,
         opacity: dimmed ? 0.18 : 1,
-        transition: 'opacity 0.25s ease',
+        filter: glowFilter,
+        transform: hover && !dimmed ? 'scale(1.06)' : 'scale(1)',
+        transition: 'opacity 0.25s ease, filter 0.25s ease, transform 0.2s ease',
       }}
     >
       <Handle type="target" position={Position.Top} id="t" style={{ opacity: 0 }} />
@@ -76,12 +86,12 @@ function CircularNode({ data, selected }: NodeProps) {
 
         {isSelected && (
           <circle cx={nodeW/2} cy={nodeW/2} r={cr + 5} fill="none"
-            stroke={fill} strokeWidth="1.5" opacity="0.8" />
+            stroke={fill} strokeWidth="1.6" opacity="0.9" />
         )}
 
         <circle cx={nodeW/2} cy={nodeW/2} r={cr}
           fill={fill}
-          opacity={hover ? 0.4 : 0.18}
+          opacity={isSelected ? 0.5 : hover ? 0.4 : 0.2}
           filter={`url(#circ-glow-${nodeData.label})`}
           style={{ transition: 'opacity 0.25s ease' }}
         />

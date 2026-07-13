@@ -9,7 +9,8 @@ An open-source, web-based requirements management tool with:
 - **Git-friendly storage** — Requirements, specifications, and verification cases stored as human-readable YAML files; no databases or binary artifacts inside your project directory
 - **Version control native** — Each project is a self-contained directory; if it's a git repository, every change made through the API is automatically committed
 - **Change history** — Field-level audit trail for every requirement (who changed what, when), plus the full git log
-- **Standards support** — Import/export ReqIF 1.2, SysML v1.x, and SysML v2 (Phase 3)
+- **Standards support** — Import **and** export ReqIF 1.2 and SysML v2 (round-trips through both formats)
+- **Real-time collaboration** — Live change streaming over SSE plus a presence roster of who's viewing a project
 - **Verification tracking** — Link requirements to verification cases and track pass/fail status
 - **Rich text editing** — Full TipTap editor for requirement descriptions (XHTML compatible with ReqIF)
 - **Responsive UI** — React frontend with TailwindCSS and Framer Motion animations
@@ -43,6 +44,25 @@ Storage design notes:
 
 ## Quick Start
 
+The `start.sh` launcher runs reqmesh in one of two modes:
+
+```bash
+./start.sh            # server (default) — web version
+./start.sh server     # same as above
+./start.sh desktop    # native desktop app (Electron)
+./start.sh desktop --rebuild   # force a fresh frontend build first
+```
+
+- **server** — FastAPI backend on `:8000` + Vite dev server on `:5173`; open
+  `http://localhost:5173` in a browser. There is **no** Electron wrapper in this
+  mode, so nothing sits between you and the app.
+- **desktop** — builds the frontend to static files, then an Electron shell
+  boots the backend (which also serves the UI over one origin) and shows it in a
+  native window. The backend is spawned and torn down by Electron; killing the
+  window stops everything.
+
+The steps below run the pieces individually.
+
 ### Backend
 
 ```bash
@@ -70,6 +90,31 @@ UI available at `http://localhost:5173`
 docker-compose up
 ```
 
+### Desktop App (Electron)
+
+```bash
+./start.sh desktop
+```
+
+This builds the frontend, then launches the Electron shell in `desktop/`. The
+shell:
+
+- picks a free loopback port and spawns the backend
+  (`python -m uvicorn app.main:app`) with `RT_STATIC_DIR` pointed at
+  `frontend/dist`, so the API and UI share one origin;
+- waits for `/health`, then loads the app in a native window;
+- terminates the backend when the window closes.
+
+The server/web version deliberately does **not** go through Electron — the
+wrapper only exists for the desktop build. On locked-down Linux sandboxes
+Electron may need `--no-sandbox` (`cd desktop && npm start -- --no-sandbox`).
+
+An electron-builder config is included (`cd desktop && npm run build`) and
+bundles the shell plus `frontend/dist`; note that a fully self-contained
+installer also needs the Python backend packaged (e.g. via PyInstaller), which
+is not wired up yet — the current desktop mode expects the repo's
+`backend/.venv` (or a system `python3`) to be present.
+
 ### Example project
 
 On first launch (when the data root has no projects yet) the backend seeds a
@@ -96,13 +141,29 @@ A default `admin` user is created on first run (password `admin`, or set
 local use.** Roles:
 
 - `viewer` — read-only (unauthenticated guests get this)
-- `editor` — create/update/delete entities; self-registration creates editors
-- `admin` — everything, including deleting projects and assigning roles
+- `editor` — **standard user**: create/update/delete entities; self-registration creates editors
+- `admin` — **administrator**: everything, including deleting projects and managing users
 
 New passwords must be at least 8 characters.
 
 Tokens are JWTs signed with `RT_SECRET` if set, otherwise a random secret is
 generated and persisted to `~/.reqmesh/secret`.
+
+### User management
+
+Administrators get a **Users** page (link in the top bar, or `/users`) to
+create accounts, switch a user between **Standard** and **Administrator**,
+reset passwords, and delete users. Role changes take effect immediately (the
+role is read live from the store, not from the caller's token). Guardrails
+prevent locking yourself out: you can't demote or delete the last administrator,
+and you can't delete your own account.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/auth/users` | List accounts (admin only; never returns password hashes) |
+| POST | `/api/auth/users` | Create a user (`username`, `password`, `role`) |
+| PATCH | `/api/auth/users/{username}` | Change `role` and/or reset `password` |
+| DELETE | `/api/auth/users/{username}` | Delete a user |
 
 ## Git Integration
 
@@ -113,6 +174,25 @@ message (`rt: put requirements/SYST0001`). Disable with `RT_GIT_AUTOCOMMIT=false
 - `GET /api/projects/{id}/git/log` — recent commits
 - `POST /api/projects/{id}/hooks/install` — pre-commit hook that validates requirement YAML
 - `GET /api/projects/{id}/requirements/{rid}/history` — field-level change history (works with or without git)
+
+## Interchange (ReqIF / SysML)
+
+Requirements round-trip through **ReqIF 1.2** (DOORS/Polarion/Jama) and **SysML
+v2** textual notation, in both directions:
+
+- **Export** — from the UI's Export dialog, `POST /api/projects/{id}/publish/download?format=reqif|sysml`, or `cli export -f reqif|sysml`.
+- **Import** — from the UI's Import dialog, `POST /api/projects/{id}/import`, or `cli import -i <file>`. The format is auto-detected (override with `-f`), and `mode=merge` (default) creates new entities / updates matching IDs while `mode=replace` wipes existing requirements first. The ReqIF parser matches on attribute `LONG-NAME` and is namespace-agnostic, so files from other tools import too.
+
+## Real-time Collaboration
+
+Every project exposes a Server-Sent Events stream at
+`GET /api/projects/{id}/events`. The web UI subscribes automatically and:
+
+- **Live updates** — lists, the navigation tree and the graph refresh the moment anyone (or any API client) mutates the project.
+- **Presence** — the header shows avatars of everyone currently viewing the project; `GET /api/projects/{id}/presence` returns the same roster as JSON.
+
+The event bus is in-memory (single process); clients auto-reconnect if the
+stream drops.
 
 ## API
 
@@ -136,6 +216,9 @@ message (`rt: put requirements/SYST0001`). Disable with `RT_GIT_AUTOCOMMIT=false
 | GET | `/api/projects/{id}/baselines/{name}/diff` | Diff current state against a baseline |
 | GET | `/api/projects/{id}/git/log` | Git commit log |
 | POST | `/api/projects/{id}/publish` | Publish report (html/md/latex; pdf via `/publish/download`) |
+| POST | `/api/projects/{id}/import` | Import a ReqIF/SysML file (`file`, `format=auto\|reqif\|sysml`, `mode=merge\|replace`) |
+| GET | `/api/projects/{id}/events` | SSE stream of live change + presence events (`?user=&role=`) |
+| GET | `/api/projects/{id}/presence` | Users currently viewing the project |
 
 PUT endpoints apply partial updates: only fields present in the body change,
 and explicitly sending `null` clears a nullable field (e.g. `parent`).
@@ -176,6 +259,8 @@ cd backend
 .venv/bin/python -m app.cli validate <project-path>   # integrity checks (CI-friendly exit code)
 .venv/bin/python -m app.cli publish <project-path> -f pdf
 .venv/bin/python -m app.cli export <project-path> -f reqif   # or -f sysml
+.venv/bin/python -m app.cli import <project-path> -i model.reqif   # ReqIF/SysML import (auto-detected)
+.venv/bin/python -m app.cli import <project-path> -i model.sysml -f sysml -m replace
 .venv/bin/python -m app.cli serve <project-path>
 ```
 
@@ -183,9 +268,15 @@ cd backend
 
 - [x] Phase 1: Core CRUD, YAML storage, React UI
 - [x] Phase 2: Traceability & verification enhancements
+- [x] Phase 3: ReqIF/SysML import & export (round-trips ReqIF 1.2 and SysML v2)
 - [x] Phase 4: Git integration (auto-commit, history, hooks)
-- [ ] Phase 3: ReqIF/SysML import/export (export to ReqIF 1.2 and SysML v2 done; import planned)
-- [ ] Phase 5: Real-time collaboration
+- [x] Phase 5: Real-time collaboration (live change streaming + presence)
+
+Proposed next phases (6–11) — code/test traceability, deep coverage,
+fingerprint-based review, requirement quality linting, planning/estimation, and
+CSV/XLSX interchange — with detailed implementation instructions and their
+inspiration sources (OpenFastTrace, Doorstop, rmtoo) are in
+[ROADMAP.md](ROADMAP.md).
 
 ## License
 
