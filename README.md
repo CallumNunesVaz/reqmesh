@@ -280,4 +280,4 @@ inspiration sources (OpenFastTrace, Doorstop, rmtoo) are in
 
 ## License
 
-MIT
+GNU GPL-2.0
