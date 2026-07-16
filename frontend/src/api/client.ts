@@ -87,6 +87,34 @@ export interface RequirementTreeNode {
   children: RequirementTreeNode[];
 }
 
+/** A piece of the synthesised design, as opposed to a functional requirement. */
+export interface Component {
+  id: string;
+  name: string;
+  description: string;
+  type: string;
+  parent: string | null;
+  part_number: string;
+  supplier: string;
+  quantity: number;
+  satisfies: string[];
+  verification_cases: string[];
+  attributes: { key: string; value: string }[];
+  created: string;
+  modified: string;
+}
+
+export interface ComponentTreeNode {
+  id: string;
+  name: string;
+  type: string;
+  quantity: number;
+  satisfies: string[];
+  children: ComponentTreeNode[];
+}
+
+export const COMPONENT_TYPES = ['system', 'subsystem', 'assembly', 'part', 'software', 'interface'] as const;
+
 export interface Specification {
   id: string;
   name: string;
@@ -264,6 +292,26 @@ export const api = {
   },
   getRequirementTree: (projectId: string) =>
     request<RequirementTreeNode[]>(`/projects/${projectId}/requirements/tree`),
+
+  // Components (the synthesised design)
+  listComponents: (projectId: string, params?: Record<string, string>) => {
+    const qs = params ? '?' + new URLSearchParams(params).toString() : '';
+    return request<Component[]>(`/projects/${projectId}/components${qs}`);
+  },
+  getComponentTree: (projectId: string) =>
+    request<ComponentTreeNode[]>(`/projects/${projectId}/components/tree`),
+  getComponent: (projectId: string, componentId: string) =>
+    request<Component>(`/projects/${projectId}/components/${componentId}`),
+  createComponent: (projectId: string, data: Partial<Component>) =>
+    request<Component>(`/projects/${projectId}/components`, { method: 'POST', body: data }),
+  updateComponent: (projectId: string, componentId: string, data: Partial<Component>) =>
+    request<Component>(`/projects/${projectId}/components/${componentId}`, { method: 'PUT', body: data }),
+  deleteComponent: (projectId: string, componentId: string) =>
+    request<{ ok: boolean; promoted_children: string[] }>(`/projects/${projectId}/components/${componentId}`, { method: 'DELETE' }),
+  getComponentsForRequirement: (projectId: string, reqId: string) =>
+    request<Component[]>(`/projects/${projectId}/requirements/${reqId}/components`),
+  getComponentsForVerificationCase: (projectId: string, vcId: string) =>
+    request<Component[]>(`/projects/${projectId}/verification/${vcId}/components`),
   getRequirement: (projectId: string, reqId: string) =>
     request<Requirement>(`/projects/${projectId}/requirements/${reqId}`),
   createRequirement: (projectId: string, data: Partial<Requirement>) =>

@@ -12,6 +12,7 @@ from app.core.config import settings
 from app.api.router import router
 from app.api.extra_routes import router as extra_router
 from app.api.auth_routes import router as auth_router
+from app.api.component_routes import router as component_router
 
 
 @asynccontextmanager
@@ -73,6 +74,7 @@ async def git_autocommit_middleware(request: Request, call_next):
 
 app.include_router(auth_router, prefix="/api")
 app.include_router(router, prefix="/api")
+app.include_router(component_router, prefix="/api")
 app.include_router(extra_router, prefix="/api")
 
 

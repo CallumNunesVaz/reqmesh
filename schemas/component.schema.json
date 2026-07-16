@@ -1,0 +1,116 @@
+{
+  "$defs": {
+    "AttributeValue": {
+      "properties": {
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "value"
+      ],
+      "title": "AttributeValue",
+      "type": "object"
+    },
+    "ComponentType": {
+      "enum": [
+        "system",
+        "subsystem",
+        "assembly",
+        "part",
+        "software",
+        "interface"
+      ],
+      "title": "ComponentType",
+      "type": "string"
+    }
+  },
+  "properties": {
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "name": {
+      "default": "",
+      "title": "Name",
+      "type": "string"
+    },
+    "description": {
+      "default": "",
+      "title": "Description",
+      "type": "string"
+    },
+    "type": {
+      "$ref": "#/$defs/ComponentType",
+      "default": "assembly"
+    },
+    "parent": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Parent"
+    },
+    "part_number": {
+      "default": "",
+      "title": "Part Number",
+      "type": "string"
+    },
+    "supplier": {
+      "default": "",
+      "title": "Supplier",
+      "type": "string"
+    },
+    "quantity": {
+      "default": 1,
+      "title": "Quantity",
+      "type": "integer"
+    },
+    "satisfies": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Satisfies",
+      "type": "array"
+    },
+    "verification_cases": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Verification Cases",
+      "type": "array"
+    },
+    "attributes": {
+      "items": {
+        "$ref": "#/$defs/AttributeValue"
+      },
+      "title": "Attributes",
+      "type": "array"
+    },
+    "created": {
+      "title": "Created",
+      "type": "string"
+    },
+    "modified": {
+      "title": "Modified",
+      "type": "string"
+    }
+  },
+  "required": [
+    "id"
+  ],
+  "title": "reqmesh component",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

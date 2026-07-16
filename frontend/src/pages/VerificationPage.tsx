@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useCallback, useEffect, useState, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, CheckCircle2, Trash2, XCircle, Clock, ChevronDown, X, Link as LinkIcon, Play, ListChecks, ClipboardList } from 'lucide-react';
@@ -6,6 +6,8 @@ import { api, type VerificationCase, type Requirement } from '../api/client';
 import { useStore } from '../store';
 import { useAuthStore } from '../store/auth';
 import AutocompleteInput from '../components/AutocompleteInput';
+import { EntityLink } from '../components/entities';
+import { useFocusedEntity } from '../components/useFocusedEntity';
 
 const statusBadges: Record<string, string> = {
   pending: 'border-amber-500/30 bg-amber-500/10 text-amber-400',
@@ -185,10 +187,12 @@ export default function VerificationPage() {
     load();
   };
 
-  const getReqName = (reqId: string) => {
-    const r = requirements.find((x) => x.id === reqId);
-    return r ? `${reqId} - ${r.name}` : reqId;
-  };
+  // Arriving from a link elsewhere (?focus=VC-001): open that case and scroll
+  // to it, so the reference lands on the thing it pointed at.
+  const focusId = useFocusedEntity(
+    verificationCases.length > 0,
+    useCallback((id: string) => setExpanded((prev) => new Set(prev).add(id)), []),
+  );
 
   return (
     <div className="max-w-5xl mx-auto p-8">
@@ -253,10 +257,13 @@ export default function VerificationPage() {
             return (
               <motion.div
                 key={vc.id}
+                id={`entity-${vc.id}`}
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: i * 0.03 }}
-                className="card hover:shadow-md transition-shadow group"
+                className={`card hover:shadow-md transition-shadow group ${
+                  focusId === vc.id ? 'ring-2 ring-primary/50' : ''
+                }`}
               >
                 <div
                   className="flex items-center gap-3 p-4 cursor-pointer"
@@ -345,8 +352,12 @@ export default function VerificationPage() {
                           <div className="space-y-1">
                             {vc.verified_requirements.map((reqId) => (
                               <div key={reqId} className="flex items-center gap-2 text-xs py-1 px-2 rounded hover:bg-accent group/link">
-                                <LinkIcon size={10} className="text-muted-foreground shrink-0" />
-                                <span className="font-mono text-foreground flex-1">{getReqName(reqId)}</span>
+                                <EntityLink
+                                  kind="requirement"
+                                  id={reqId}
+                                  name={requirements.find((r) => r.id === reqId)?.name}
+                                  className="flex-1 min-w-0 text-foreground hover:text-cs-blue"
+                                />
                                 {editable && (
                                 <button onClick={(e) => { e.stopPropagation(); handleUnlinkRequirement(vc.id, reqId); }} className="p-0.5 rounded text-muted-foreground hover:text-destructive opacity-0 group-hover/link:opacity-100 transition-all" title="Unlink requirement">
                                   <X size={11} />

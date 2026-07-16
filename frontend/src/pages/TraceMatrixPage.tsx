@@ -6,6 +6,7 @@ import { api } from '../api/client';
 import type { TraceLink, Requirement, VerificationCase } from '../api/client';
 import { useAuthStore } from '../store/auth';
 import AutocompleteInput from '../components/AutocompleteInput';
+import { EntityLink, type EntityKind } from '../components/entities';
 
 export default function TraceMatrixPage() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -52,10 +53,11 @@ export default function TraceMatrixPage() {
     setLinks(updated);
   };
 
-  const getRequirementName = (id: string) => {
-    const req = requirements.find((r) => r.id === id);
-    return req ? `${id} - ${req.name}` : id;
-  };
+  // Either end of a trace can be a requirement or a verification case.
+  const vcIds = useMemo(() => new Set(verificationCases.map((v) => v.id)), [verificationCases]);
+  const kindOf = (id: string): EntityKind => (vcIds.has(id) ? 'verification' : 'requirement');
+  const nameOf = (id: string) =>
+    requirements.find((r) => r.id === id)?.name ?? verificationCases.find((v) => v.id === id)?.name;
 
   return (
     <div className="max-w-5xl mx-auto p-8">
@@ -147,11 +149,15 @@ export default function TraceMatrixPage() {
                   transition={{ delay: i * 0.02 }}
                   className="border-b hover:bg-muted/30 transition-colors group"
                 >
-                  <td className="px-4 py-2.5 font-mono text-xs text-foreground">{getRequirementName(link.source)}</td>
+                  <td className="px-4 py-2.5 text-xs text-foreground">
+                    <EntityLink kind={kindOf(link.source)} id={link.source} name={nameOf(link.source)} className="hover:text-primary" />
+                  </td>
                   <td className="px-4 py-2.5">
                     <span className="badge bg-muted text-muted-foreground">{link.type}</span>
                   </td>
-                  <td className="px-4 py-2.5 font-mono text-xs text-foreground">{getRequirementName(link.target)}</td>
+                  <td className="px-4 py-2.5 text-xs text-foreground">
+                    <EntityLink kind={kindOf(link.target)} id={link.target} name={nameOf(link.target)} className="hover:text-primary" />
+                  </td>
                   <td className="px-2 py-2.5">
                     {editable && (
                     <button

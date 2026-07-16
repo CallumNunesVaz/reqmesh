@@ -357,7 +357,7 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
       edges.push({
         id: k, source: src, target: tgt, type: 'floating',
         data: { color, label },
-        style: { stroke: color, strokeWidth: style.strokeWidth, strokeDasharray: style.strokeDasharray, opacity: 0.6 },
+        style: { stroke: color, strokeWidth: style.strokeWidth, strokeDasharray: style.strokeDasharray, opacity: 0.45 },
         markerEnd: { type: style.markerEnd, color, width: 14, height: 14 },
       });
     };
@@ -479,8 +479,8 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
         style: {
           ...((e.style as Record<string, any>) || {}),
           opacity: connected ? Math.max((e.style as any)?.opacity || 0.55, 0.9) : 0.04,
-          // Make active edges glow softly in their own colour.
-          filter: connected && stroke ? `drop-shadow(0 0 3px ${stroke})` : undefined,
+          // A hint of bloom on active edges — just enough to trace them.
+          filter: connected && stroke ? `drop-shadow(0 0 2px ${stroke})` : undefined,
         },
       };
     });
@@ -546,8 +546,10 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
       >
         <Background variant={BackgroundVariant.Dots} gap={22} size={0.3} color="hsl(var(--border) / 0.2)" />
 
+        {/* Loose, rounded buttons that speak the same language as the search
+            and layout panels — the default is a hard-edged welded strip. */}
         <Controls
-          className="[&_button]:!bg-graph-panel [&_button]:!border-graph-border [&_button]:!text-graph-text [&_button]:hover:!bg-graph-control-hover [&_button_svg]:!fill-graph-text"
+          className="!shadow-none !bg-transparent [&_button]:!bg-graph-panel [&_button]:!border [&_button]:!border-graph-border [&_button]:!text-graph-text [&_button]:!rounded-lg [&_button]:!mb-1 [&_button]:!shadow-sm [&_button]:hover:!bg-graph-control-hover [&_button_svg]:!fill-graph-text"
           showZoom showFitView showInteractive={false}
         />
 
@@ -555,7 +557,7 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
           nodeColor={(node) => statusMinimapColors[(node.data?.status as string) || 'proposed'] || '#64748b'}
           bgColor="hsl(var(--graph-minimap))"
           maskColor="hsl(var(--graph-minimap) / 0.9)"
-          className="!bg-graph-minimap !border-graph-border rounded-lg overflow-hidden"
+          className="!bg-graph-minimap !border-graph-border rounded-lg overflow-hidden shadow-lg"
           nodeBorderRadius={3} pannable zoomable
         />
 

@@ -11,6 +11,7 @@ An open-source, web-based requirements management tool with:
 - **Change history** — Field-level audit trail for every requirement (who changed what, when), plus the full git log
 - **Standards support** — Import **and** export ReqIF 1.2 and SysML v2 (round-trips through both formats)
 - **Real-time collaboration** — Live change streaming over SSE plus a presence roster of who's viewing a project
+- **Design/function split** — Model the synthesised design as a hierarchy of **components**, mapped onto the requirements they satisfy and the verification cases that exercise them
 - **Verification tracking** — Link requirements to verification cases and track pass/fail status
 - **Rich text editing** — Full TipTap editor for requirement descriptions (XHTML compatible with ReqIF)
 - **Responsive UI** — React frontend with TailwindCSS and Framer Motion animations
@@ -28,6 +29,7 @@ reqmesh/          # THE TOOL (this repo)
 ├── requirements/
 ├── specifications/
 ├── verification_cases/
+├── components/            # the synthesised design (hierarchical)
 ├── traces/
 ├── baselines/             # frozen snapshots
 ├── history/               # field-level audit trail per requirement
@@ -128,11 +130,35 @@ backend/.venv/bin/python seed_cessna.py --force
 
 ### Tests
 
+**Backend** — API, storage, auth, and the ReqIF/SysML round-trip:
+
 ```bash
 cd backend
 .venv/bin/python -m pip install -r requirements-dev.txt
 .venv/bin/python -m pytest tests/
 ```
+
+**Frontend** — stores, API client, and pure helpers (vitest, no browser needed):
+
+```bash
+cd frontend
+npm test           # or: npm run test:watch
+npm run typecheck
+```
+
+**End-to-end** — the app itself is driveable with real mouse and keyboard
+through Playwright, in either the web or the desktop (Electron) shape. The
+driver sandboxes `HOME` and the data root, so a run never touches your real
+accounts or projects:
+
+```bash
+cd desktop && npm i --no-save playwright-core
+cd frontend && npm run build
+node .claude/skills/run-app/driver.mjs web      # stdin REPL: login, ss, click-text, …
+```
+
+See [`.claude/skills/run-app/`](.claude/skills/run-app/) for the driver helpers
+and the gotchas worth knowing before scripting a flow.
 
 ## Authentication
 
@@ -183,6 +209,53 @@ v2** textual notation, in both directions:
 - **Export** — from the UI's Export dialog, `POST /api/projects/{id}/publish/download?format=reqif|sysml`, or `cli export -f reqif|sysml`.
 - **Import** — from the UI's Import dialog, `POST /api/projects/{id}/import`, or `cli import -i <file>`. The format is auto-detected (override with `-f`), and `mode=merge` (default) creates new entities / updates matching IDs while `mode=replace` wipes existing requirements first. The ReqIF parser matches on attribute `LONG-NAME` and is namespace-agnostic, so files from other tools import too.
 
+## Components (the synthesised design)
+
+Requirements describe what the system must **do**. Components describe what the
+system **is** — the design synthesised to meet those requirements. They live in
+their own hierarchy (`system → subsystem → assembly → part`, plus `software`
+and `interface`) and connect back to the functional side two ways:
+
+- **`satisfies`** — the requirements a component exists to deliver.
+- **`verification_cases`** — the cases that exercise the component.
+
+Both are validated on write: a link to a requirement or case that doesn't exist
+is rejected, and `GET /validate` flags links that later break (e.g. the
+requirement was deleted). A component can't be its own parent, nor be reparented
+under one of its own descendants. Deleting a component **promotes its children**
+to the deleted component's parent, so the tree never dangles.
+
+Manage them under **Components** in the project nav, or:
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/projects/{id}/components` | List/filter components (`?search=&type=&satisfies=`) |
+| GET | `/api/projects/{id}/components/tree` | Component hierarchy |
+| POST | `/api/projects/{id}/components` | Create component |
+| GET/PUT/DELETE | `/api/projects/{id}/components/{cid}` | Get/update/delete component |
+| GET | `/api/projects/{id}/requirements/{rid}/components` | Components satisfying a requirement |
+| GET | `/api/projects/{id}/verification/{vid}/components` | Components a case exercises |
+
+The free-text `allocated_to` field on a requirement is unchanged and remains a
+label; component links are the structured mapping.
+
+## Cross-linking
+
+Every reference to a requirement, verification case, component or specification
+is a hyperlink to that entity, wherever it appears — a requirement listed under
+a verification case, a chip in a component's panel, either end of a trace link.
+Each kind carries its own colour-coded icon so you can tell at a glance what a
+reference points at.
+
+Only requirements have a detail page; the other kinds deep-link into their list
+page with `?focus=<id>`, which selects the entity, expands whatever it's nested
+inside, and scrolls to it. Where the click would otherwise drive a control (the
+parent `<select>` on a requirement, or a tree row that expands), navigation gets
+its own affordance next to it rather than stealing the control's click.
+
+The mapping lives in one place — [`frontend/src/components/entities.tsx`](frontend/src/components/entities.tsx) —
+so adding an entity kind means adding one entry.
+
 ## Real-time Collaboration
 
 Every project exposes a Server-Sent Events stream at
@@ -207,6 +280,8 @@ stream drops.
 | GET/PUT/DELETE | `/api/projects/{id}/requirements/{req_id}` | Get/update/delete requirement |
 | GET | `/api/projects/{id}/requirements/{req_id}/history` | Change history |
 | GET | `/api/projects/{id}/requirements/{req_id}/impact` | Impact analysis |
+| GET/POST | `/api/projects/{id}/components` | Components (see [Components](#components-the-synthesised-design)) |
+| GET | `/api/projects/{id}/components/tree` | Component hierarchy |
 | GET/POST | `/api/projects/{id}/specifications` | Specifications |
 | GET/POST | `/api/projects/{id}/verification` | Verification cases |
 | GET/PUT | `/api/projects/{id}/traces` | Traceability matrix |

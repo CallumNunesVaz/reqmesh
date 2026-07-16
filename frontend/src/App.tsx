@@ -5,6 +5,7 @@ import ProjectOverview from './pages/ProjectOverview';
 import RequirementsPage from './pages/RequirementsPage';
 import RequirementDetailPage from './pages/RequirementDetailPage';
 import SpecificationsPage from './pages/SpecificationsPage';
+import ComponentsPage from './pages/ComponentsPage';
 import VerificationPage from './pages/VerificationPage';
 import TraceMatrixPage from './pages/TraceMatrixPage';
 import GraphView from './pages/GraphView';
@@ -24,6 +25,7 @@ export default function App() {
         <Route path="/project/:projectId/requirements" element={<RequirementsPage />} />
         <Route path="/project/:projectId/requirements/:reqId" element={<RequirementDetailPage />} />
         <Route path="/project/:projectId/specifications" element={<SpecificationsPage />} />
+        <Route path="/project/:projectId/components" element={<ComponentsPage />} />
         <Route path="/project/:projectId/verification" element={<VerificationPage />} />
         <Route path="/project/:projectId/traces" element={<TraceMatrixPage />} />
         <Route path="/project/:projectId/graph" element={<GraphView />} />

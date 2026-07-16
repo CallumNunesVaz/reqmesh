@@ -14,6 +14,7 @@ from app.models.verification import VerificationCase
 from app.models.trace import TraceMatrix
 from app.models.risk import Risk, Comment, DecisionRecord
 from app.models.change_request import ChangeRequest
+from app.models.component import Component
 
 OUT = Path(__file__).resolve().parent.parent / "schemas"
 
@@ -26,6 +27,7 @@ MODELS = {
     "comment": Comment,
     "decision": DecisionRecord,
     "change_request": ChangeRequest,
+    "component": Component,
 }
 
 

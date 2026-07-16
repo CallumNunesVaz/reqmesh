@@ -1,7 +1,8 @@
 import { memo, useState } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
+import { Copy } from 'lucide-react';
 import { useGraphSelection } from './GraphPane';
-import { glow } from './graphColors';
+import { glow, shiftLightness } from './graphColors';
 
 const statusFillColors: Record<string, string> = {
   proposed: 'hsl(207,90%,64%)',
@@ -42,13 +43,16 @@ function CircularNode({ data, selected }: NodeProps) {
 
   const cr = childCount > 1 ? Math.min(22, 14 + childCount * 1.2) : 14;
   const nodeW = cr * 2 + 4;
+  const urgent = nodeData.priority === 'critical' || nodeData.priority === 'high';
 
-  // Soft, status-tinted bloom on every node; strongest when selected.
+  // A restrained, status-tinted bloom: enough to lift the node off the canvas,
+  // not enough to smear its edge. This is the node's ONLY glow — an SVG blur
+  // used to double it up, which is what made every node read as a fuzzy blob.
   const glowFilter = isSelected
-    ? `drop-shadow(0 0 16px ${glow(fill, 0.6)}) drop-shadow(0 0 6px ${glow(fill, 0.9)})`
+    ? `drop-shadow(0 0 6px ${glow(fill, 0.45)})`
     : hover
-      ? `drop-shadow(0 0 12px ${glow(fill, 0.5)})`
-      : `drop-shadow(0 0 7px ${glow(fill, 0.32)})`;
+      ? `drop-shadow(0 0 5px ${glow(fill, 0.3)})`
+      : `drop-shadow(0 0 3px ${glow(fill, 0.16)})`;
 
   return (
     <div
@@ -75,48 +79,43 @@ function CircularNode({ data, selected }: NodeProps) {
 
       <svg width={nodeW} height={nodeW} className="overflow-visible block">
         <defs>
-          <filter id={`circ-glow-${nodeData.label}`} x="-80%" y="-80%" width="260%" height="260%">
-            <feGaussianBlur in="SourceGraphic" stdDeviation={hover ? 3.5 : 2} result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
+          {/* Lit from the top-left, so a flat disc reads as a sphere. Both
+              stops derive from the one status colour. */}
+          <radialGradient id={`circ-fill-${nodeData.label}`} cx="34%" cy="28%" r="80%">
+            <stop offset="0%" stopColor={shiftLightness(fill, 13)} />
+            <stop offset="100%" stopColor={shiftLightness(fill, -7)} />
+          </radialGradient>
         </defs>
 
         {isSelected && (
-          <circle cx={nodeW/2} cy={nodeW/2} r={cr + 5} fill="none"
-            stroke={fill} strokeWidth="1.6" opacity="0.9" />
+          <circle cx={nodeW/2} cy={nodeW/2} r={cr + 8} fill="none"
+            stroke={fill} strokeWidth="1.25" opacity="0.7" />
         )}
 
+        {/* Priority is a thin rim on the core, not a fat one and not a
+            detached orbit: both read as a second colour competing with the
+            status fill instead of qualifying it. Low/medium stay quiet so the
+            urgent ones actually stand out. */}
         <circle cx={nodeW/2} cy={nodeW/2} r={cr}
-          fill={fill}
-          opacity={isSelected ? 0.5 : hover ? 0.4 : 0.2}
-          filter={`url(#circ-glow-${nodeData.label})`}
-          style={{ transition: 'opacity 0.25s ease' }}
-        />
-
-        <circle cx={nodeW/2} cy={nodeW/2} r={cr}
-          fill={fill}
+          fill={`url(#circ-fill-${nodeData.label})`}
           stroke={hover ? 'hsl(var(--foreground))' : ringColor}
-          strokeWidth={hover ? 2 : (nodeData.priority === 'critical' || nodeData.priority === 'high' ? 3 : 1)}
-          strokeOpacity={hover ? 0.9 : 0.55}
-          style={{ cursor: 'pointer', transition: 'stroke-width 0.15s' }}
+          strokeWidth={hover ? 1.5 : urgent ? 1.4 : 0.9}
+          strokeOpacity={hover ? 0.9 : urgent ? 0.8 : 0.35}
+          style={{ cursor: 'pointer', transition: 'stroke-opacity 0.15s ease, stroke-width 0.15s ease' }}
         />
 
         {isCascade && (
-          <text x={nodeW/2} y={nodeW/2 + 4}
-            textAnchor="middle" dominantBaseline="central"
-            fill="rgba(255,255,255,0.9)" fontSize={cr > 16 ? 11 : 9}
-            style={{ pointerEvents: 'none', userSelect: 'none' }}>
-            ⧉
-          </text>
+          <Copy
+            x={nodeW/2 - 5} y={nodeW/2 - 5} width={10} height={10}
+            color="rgba(255,255,255,0.92)"
+            style={{ pointerEvents: 'none' }}
+          />
         )}
       </svg>
 
       <div style={{
         position: 'absolute',
-        left: nodeW + 8,
+        left: nodeW + 12,
         top: '50%',
         transform: 'translateY(-50%)',
         lineHeight: 1.25,
@@ -155,7 +154,7 @@ function CircularNode({ data, selected }: NodeProps) {
           >
             <div className="font-mono text-[10px] text-muted-foreground mb-0.5">
               {nodeData.label}
-              {isCascade && <span className="ml-1 text-cs-pink">⧉</span>}
+              {isCascade && <Copy size={9} className="inline ml-1 text-cs-pink" />}
               {childCount > 0 && <span className="ml-1 text-muted-foreground">({childCount} children)</span>}
             </div>
             <div className="font-semibold text-sm leading-tight mb-1.5">{nodeData.name || 'Untitled'}</div>

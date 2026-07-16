@@ -5,6 +5,7 @@ import { Plus, FileText, Trash2 } from 'lucide-react';
 import { api, type Specification } from '../api/client';
 import { useStore } from '../store';
 import { useAuthStore } from '../store/auth';
+import { useFocusedEntity } from '../components/useFocusedEntity';
 
 export default function SpecificationsPage() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -19,6 +20,9 @@ export default function SpecificationsPage() {
   };
 
   useEffect(load, [projectId]);
+
+  // Landing here from a link elsewhere (?focus=SRS-001).
+  const focusId = useFocusedEntity(specifications.length > 0);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -90,10 +94,13 @@ export default function SpecificationsPage() {
           {specifications.map((spec, i) => (
             <motion.div
               key={spec.id}
+              id={`entity-${spec.id}`}
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: i * 0.03 }}
-              className="card p-4 hover:shadow-md transition-shadow group"
+              className={`card p-4 hover:shadow-md transition-shadow group ${
+                focusId === spec.id ? 'ring-2 ring-primary/50' : ''
+              }`}
             >
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 bg-amber-500/10 text-amber-400 rounded-lg flex items-center justify-center">

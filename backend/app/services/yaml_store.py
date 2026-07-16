@@ -21,6 +21,7 @@ COLLECTIONS = (
     "requirements",
     "specifications",
     "verification_cases",
+    "components",
     "change_requests",
     "risks",
     "comments",
@@ -184,6 +185,24 @@ class YamlStore:
     def delete_verification_case(self, vc_id: str) -> bool:
         return self.delete_item("verification_cases", vc_id)
 
+    # --- Components ---
+
+    def list_components(self) -> list[dict]:
+        return self.list_items("components")
+
+    def get_component(self, component_id: str) -> Optional[dict]:
+        return self.get_item("components", component_id)
+
+    def create_component(self, data: dict) -> dict:
+        self.ensure_dirs()
+        return self.create_item("components", data)
+
+    def update_component(self, component_id: str, data: dict) -> Optional[dict]:
+        return self.update_item("components", component_id, data)
+
+    def delete_component(self, component_id: str) -> bool:
+        return self.delete_item("components", component_id)
+
     # --- Traces ---
 
     def read_traces(self) -> dict:
@@ -219,5 +238,6 @@ class YamlStore:
             "requirements": self.list_requirements(),
             "specifications": self.list_specifications(),
             "verification_cases": self.list_verification_cases(),
+            "components": self.list_components(),
             "traces": self.read_traces(),
         }

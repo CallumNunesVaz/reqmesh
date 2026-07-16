@@ -1,5 +1,6 @@
 import { memo, useState } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
+import { ChevronDown, ChevronUp, ChevronsUp, Copy, Minus } from 'lucide-react';
 import { useGraphSelection } from './GraphPane';
 import { glow } from './graphColors';
 
@@ -12,11 +13,13 @@ const statusColors: Record<string, { fill: string; text: string }> = {
   deprecated: { fill: 'hsl(195,6%,62%)', text: '#a1a1aa' },
 };
 
-const priorityIndicators: Record<string, { color: string; label: string }> = {
-  low: { color: 'hsl(195,6%,62%)', label: '○' },
-  medium: { color: 'hsl(207,90%,64%)', label: '◐' },
-  high: { color: 'hsl(28,100%,53%)', label: '◉' },
-  critical: { color: 'hsl(0,84%,68%)', label: '●' },
+// Priority as a lucide arrow ramp rather than unicode circles — the direction
+// reads as urgency at a glance, and it survives font differences.
+const priorityIndicators: Record<string, { color: string; icon: typeof ChevronUp }> = {
+  low: { color: 'hsl(195,6%,62%)', icon: ChevronDown },
+  medium: { color: 'hsl(207,90%,64%)', icon: Minus },
+  high: { color: 'hsl(28,100%,53%)', icon: ChevronUp },
+  critical: { color: 'hsl(0,84%,68%)', icon: ChevronsUp },
 };
 
 interface RequirementNodeData {
@@ -43,6 +46,7 @@ function RequirementNode({ data, selected }: NodeProps) {
   const { connectedIds, selectedReqId, hasSelection } = useGraphSelection();
   const colors = statusColors[nodeData.status] || statusColors.proposed;
   const prio = priorityIndicators[nodeData.priority] || priorityIndicators.medium;
+  const PriorityIcon = prio.icon;
   const isCascade = !!nodeData.cascadeFrom;
   const childCount = nodeData.childCount || 0;
   const dimmed = hasSelection && !connectedIds.has(nodeData.label);
@@ -62,10 +66,10 @@ function RequirementNode({ data, selected }: NodeProps) {
   // Soft, status-tinted bloom on every node; brightest when selected, then on
   // hover, then a gentle resting glow so the whole graph feels lit.
   const glowFilter = isSelected
-    ? `drop-shadow(0 0 18px ${glow(colors.fill, 0.55)}) drop-shadow(0 0 6px ${glow(colors.fill, 0.85)}) drop-shadow(0 3px 8px rgba(0,0,0,0.35)) brightness(1.05)`
+    ? `drop-shadow(0 0 9px ${glow(colors.fill, 0.4)}) drop-shadow(0 3px 8px rgba(0,0,0,0.35)) brightness(1.03)`
     : hover
-      ? `drop-shadow(0 0 13px ${glow(colors.fill, 0.42)}) drop-shadow(0 2px 6px rgba(0,0,0,0.3)) brightness(1.1)`
-      : `drop-shadow(0 0 7px ${glow(colors.fill, 0.24)}) drop-shadow(0 1px 3px rgba(0,0,0,0.22))`;
+      ? `drop-shadow(0 0 7px ${glow(colors.fill, 0.28)}) drop-shadow(0 2px 6px rgba(0,0,0,0.3)) brightness(1.06)`
+      : `drop-shadow(0 0 3px ${glow(colors.fill, 0.13)}) drop-shadow(0 1px 3px rgba(0,0,0,0.22))`;
 
   return (
     <div
@@ -136,10 +140,8 @@ function RequirementNode({ data, selected }: NodeProps) {
           {shortName}
         </text>
         {isCascade && (
-          <text x={w - 14} y={HEADER_H + 14}
-            fill="hsl(var(--muted-foreground))" fontSize="9" textAnchor="end" opacity={0.6}>
-            ⧉
-          </text>
+          <Copy x={w - 18} y={HEADER_H + 6} width={9} height={9}
+            color="hsl(var(--muted-foreground))" opacity={0.6} />
         )}
         {hasKids && (
           <text x={w - 8} y={HEADER_H + 26}
@@ -154,9 +156,7 @@ function RequirementNode({ data, selected }: NodeProps) {
         <text x={12} y={h - 4} fill={colors.text} fontSize="7" fontFamily="sans-serif" fontWeight={600}>
           {nodeData.status}
         </text>
-        <text x={w - 12} y={h - 4} fill={prio.color} fontSize="11" textAnchor="end">
-          {prio.label}
-        </text>
+        <PriorityIcon x={w - 22} y={h - 15} width={11} height={11} color={prio.color} strokeWidth={2.5} />
       </svg>
 
       {/* Hover tooltip */}
@@ -171,7 +171,7 @@ function RequirementNode({ data, selected }: NodeProps) {
           >
             <div className="font-mono text-[10px] text-muted-foreground mb-0.5">
               {nodeData.label}
-              {isCascade && <span className="ml-1 text-cs-pink">⧉</span>}
+              {isCascade && <Copy size={9} className="inline ml-1 text-cs-pink" />}
               {childCount > 0 && <span className="ml-1 text-muted-foreground">({childCount} children)</span>}
             </div>
             <div className="font-semibold text-sm leading-tight mb-1.5">

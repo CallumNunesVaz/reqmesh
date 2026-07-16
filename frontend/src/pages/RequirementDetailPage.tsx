@@ -1,10 +1,11 @@
 import { useEffect, useState, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Trash2, ArrowLeft, Plus, X, ArrowRight, ArrowLeftRight, Sparkles, ShieldCheck, ShieldOff } from 'lucide-react';
-import { api, type Requirement, type VerificationCase, type QualityItem } from '../api/client';
+import { Trash2, ArrowLeft, Plus, X, ArrowRight, ArrowLeftRight, Sparkles, ShieldCheck, ShieldOff, ExternalLink } from 'lucide-react';
+import { api, type Requirement, type VerificationCase, type QualityItem, type Component } from '../api/client';
 import RichTextEditor from '../components/RichTextEditor';
 import AutocompleteInput from '../components/AutocompleteInput';
+import { EntityLink, type EntityKind } from '../components/entities';
 import { useAuthStore } from '../store/auth';
 import { useStore } from '../store';
 
@@ -19,6 +20,7 @@ export default function RequirementDetailPage() {
   const [loading, setLoading] = useState(true);
   const [allReqs, setAllReqs] = useState<Requirement[]>([]);
   const [allVcs, setAllVcs] = useState<VerificationCase[]>([]);
+  const [satisfiedBy, setSatisfiedBy] = useState<Component[]>([]);
   const [newAttrKey, setNewAttrKey] = useState('');
   const [newAttrVal, setNewAttrVal] = useState('');
   const [newRelType, setNewRelType] = useState('refines');
@@ -43,6 +45,11 @@ export default function RequirementDetailPage() {
     () => allVcs.map((v) => ({ id: v.id, label: v.name || v.id })),
     [allVcs],
   );
+
+  // Relations can point at either a requirement or a verification case, so the
+  // link target depends on which one actually owns the id.
+  const vcIds = useMemo(() => new Set(allVcs.map((v) => v.id)), [allVcs]);
+  const kindOf = (id: string): EntityKind => (vcIds.has(id) ? 'verification' : 'requirement');
 
   const incomingRelations = useMemo(() => {
     if (!req) return [];
@@ -69,6 +76,7 @@ export default function RequirementDetailPage() {
       setAllVcs(vcs);
       setLoading(false);
     }).catch(console.error);
+    api.getComponentsForRequirement(projectId, reqId).then(setSatisfiedBy).catch(() => setSatisfiedBy([]));
     api.getWorkflow(projectId).then((wf) => setWorkflow(wf)).catch(() => {});
     api.getQuality(projectId).then((q) => {
       const match = q.per_requirement.find((r) => r.id === reqId);
@@ -297,10 +305,12 @@ export default function RequirementDetailPage() {
                         <ArrowRight size={11} className="text-muted-foreground shrink-0" />
                         <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-primary/10 text-primary shrink-0">{rel.type.replace(/_/g, ' ')}</span>
                         <ArrowRight size={11} className="text-muted-foreground shrink-0" />
-                        <span className="font-mono text-[11px] text-foreground flex-1">
-                          {rel.target}
-                          {targetName && <span className="text-muted-foreground ml-1 font-sans">{targetName}</span>}
-                        </span>
+                        <EntityLink
+                          kind={kindOf(rel.target)}
+                          id={rel.target}
+                          name={targetName}
+                          className="text-[11px] text-foreground hover:text-primary flex-1 min-w-0"
+                        />
                         {editable && (
                         <div className="flex items-center gap-0.5">
                           <button
@@ -336,10 +346,12 @@ export default function RequirementDetailPage() {
                 <div className="space-y-1">
                   {incomingRelations.map((inc, i) => (
                     <div key={`in-${i}`} className="flex items-center gap-2 text-xs py-1.5 px-2 rounded hover:bg-accent/50">
-                      <span className="font-mono text-[11px] text-foreground flex-1">
-                        {inc.source}
-                        {inc.sourceName !== inc.source && <span className="text-muted-foreground ml-1 font-sans">{inc.sourceName}</span>}
-                      </span>
+                      <EntityLink
+                        kind={kindOf(inc.source)}
+                        id={inc.source}
+                        name={inc.sourceName !== inc.source ? inc.sourceName : undefined}
+                        className="text-[11px] text-foreground hover:text-primary flex-1 min-w-0"
+                      />
                       <ArrowRight size={11} className="text-muted-foreground shrink-0" />
                       <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-500/10 text-emerald-400 shrink-0">{inc.type.replace(/_/g, ' ')}</span>
                       <ArrowRight size={11} className="text-muted-foreground shrink-0" />
@@ -369,8 +381,13 @@ export default function RequirementDetailPage() {
             ) : (
               <div className="flex flex-wrap gap-2">
                 {req.verification_cases.map((vc, i) => (
-                  <span key={i} className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-muted text-xs font-mono text-foreground group">
-                    {vc}
+                  <span key={i} className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-muted text-xs text-foreground group">
+                    <EntityLink
+                      kind="verification"
+                      id={vc}
+                      name={allVcs.find((v) => v.id === vc)?.name}
+                      className="hover:text-primary"
+                    />
                     {editable && (
                     <button onClick={() => removeVerificationCase(i)} className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all">
                       <X size={10} />
@@ -381,6 +398,22 @@ export default function RequirementDetailPage() {
               </div>
             )}
           </motion.div>
+
+          {/* The design side of the house: which components claim to realise
+              this requirement. Read-only here — the mapping is owned by the
+              component, so editing it lives on the Components page. */}
+          {satisfiedBy.length > 0 && (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.22 }} className="card p-5">
+              <h2 className="font-semibold text-sm text-card-foreground mb-3">Satisfied By</h2>
+              <div className="flex flex-wrap gap-2">
+                {satisfiedBy.map((c) => (
+                  <span key={c.id} className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-muted text-xs text-foreground">
+                    <EntityLink kind="component" id={c.id} name={c.name} className="hover:text-primary" />
+                  </span>
+                ))}
+              </div>
+            </motion.div>
+          )}
 
           {req.references && req.references.length > 0 && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="card p-5">
@@ -479,17 +512,30 @@ export default function RequirementDetailPage() {
               </div>
               <div>
                 <label className="label">Parent</label>
-                <select
-                  className="select"
-                  value={req.parent || ''}
-                  onChange={(e) => save({ parent: e.target.value || null })}
-                  disabled={!editable}
-                >
-                  <option value="">None (top-level)</option>
-                  {allReqs.map((r) => (
-                    <option key={r.id} value={r.id}>{r.id} - {r.name}</option>
-                  ))}
-                </select>
+                {/* The select owns the value; an <option> can't be a link, so
+                    navigation to the parent gets its own button beside it. */}
+                <div className="flex items-center gap-1.5">
+                  <select
+                    className="select flex-1 min-w-0"
+                    value={req.parent || ''}
+                    onChange={(e) => save({ parent: e.target.value || null })}
+                    disabled={!editable}
+                  >
+                    <option value="">None (top-level)</option>
+                    {allReqs.map((r) => (
+                      <option key={r.id} value={r.id}>{r.id} - {r.name}</option>
+                    ))}
+                  </select>
+                  {req.parent && (
+                    <Link
+                      to={`/project/${projectId}/requirements/${encodeURIComponent(req.parent)}`}
+                      title={`Go to parent ${req.parent}`}
+                      className="p-2 rounded-md text-muted-foreground hover:text-primary hover:bg-accent transition-colors shrink-0"
+                    >
+                      <ExternalLink size={14} />
+                    </Link>
+                  )}
+                </div>
               </div>
               <div>
                 <label className="label">Rationale</label>

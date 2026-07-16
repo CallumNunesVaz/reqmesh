@@ -9,10 +9,12 @@ class IntegrityChecker:
         self.store = store
         self.reqs = store.list_requirements()
         self.vcs = store.list_verification_cases()
+        self.components = store.list_components()
         self.issues: list[dict] = []
         self.suspect_links: list[dict] = []
         self._req_ids = {r["id"] for r in self.reqs}
         self._vc_ids = {v["id"] for v in self.vcs}
+        self._component_ids = {c["id"] for c in self.components}
         self._parent_of = {r["id"]: r.get("parent") for r in self.reqs}
 
     def check_all(self) -> dict:
@@ -25,6 +27,7 @@ class IntegrityChecker:
         self._check_duplicate_ids()
         self._check_suspect_links()
         self._check_unreviewed()
+        self._check_component_links()
         return {
             "issues": self.issues,
             "suspect_links": self.suspect_links,
@@ -190,6 +193,35 @@ class IntegrityChecker:
                 })
         except ImportError:
             pass
+
+    def _check_component_links(self):
+        """The design tree can rot independently of the requirements: a linked
+        requirement or verification case may be deleted out from under it."""
+        for c in self.components:
+            parent = c.get("parent")
+            if parent and parent not in self._component_ids:
+                self.issues.append({
+                    "type": "component_orphan_parent",
+                    "id": c["id"],
+                    "parent": parent,
+                    "severity": "error",
+                })
+            for req_id in c.get("satisfies") or []:
+                if req_id not in self._req_ids:
+                    self.issues.append({
+                        "type": "component_dangling_requirement",
+                        "id": c["id"],
+                        "target": req_id,
+                        "severity": "error",
+                    })
+            for vc_id in c.get("verification_cases") or []:
+                if vc_id not in self._vc_ids:
+                    self.issues.append({
+                        "type": "component_dangling_verification",
+                        "id": c["id"],
+                        "target": vc_id,
+                        "severity": "error",
+                    })
 
 
 def mark_links_suspect(store, updated_req_id: str):

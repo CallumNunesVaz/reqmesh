@@ -18,6 +18,7 @@ import {
   GitPullRequest,
   AlertTriangle,
   BarChart3,
+  Boxes,
 } from 'lucide-react';
 import { api, type RequirementTreeNode } from '../api/client';
 import { useStore } from '../store';
@@ -148,6 +149,7 @@ export default function RequirementNav({ width = 300 }: RequirementNavProps) {
     { to: `/project/${projectId}`, label: 'Overview', icon: Home },
     { to: `/project/${projectId}/requirements`, label: 'Requirements', icon: ClipboardList },
     { to: `/project/${projectId}/specifications`, label: 'Specifications', icon: FileText },
+    { to: `/project/${projectId}/components`, label: 'Components', icon: Boxes },
     { to: `/project/${projectId}/verification`, label: 'Verification', icon: CheckCircle2 },
     { to: `/project/${projectId}/traces`, label: 'Traces', icon: GitBranch },
     { to: `/project/${projectId}/change-requests`, label: 'Changes', icon: GitPullRequest },

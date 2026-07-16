@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@dagrejs/dagre": "^3.0.0",
@@ -33,6 +36,7 @@
     "postcss": "^8.4.42",
     "tailwindcss": "^3.4.10",
     "typescript": "^5.5.4",
-    "vite": "^5.4.3"
+    "vite": "^5.4.3",
+    "vitest": "^2.1.9"
   }
 }
