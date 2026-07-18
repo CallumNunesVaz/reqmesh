@@ -1,11 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, FileText, Trash2 } from 'lucide-react';
-import { api, type Specification } from '../api/client';
+import { Plus, FileText, Trash2, ChevronDown } from 'lucide-react';
+import { api, type Requirement } from '../api/client';
 import { useStore } from '../store';
 import { useAuthStore } from '../store/auth';
+import { CopyLinkButton, EntityLink } from '../components/entities';
 import { useFocusedEntity } from '../components/useFocusedEntity';
+import { AutoLinkText } from '../components/autoLink';
+import { useEntityKinds } from '../components/entityIndex';
 
 export default function SpecificationsPage() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -13,16 +16,34 @@ export default function SpecificationsPage() {
   const editable = useAuthStore((s) => s.editMode && s.user !== null && s.user.role !== 'viewer');
   const [showCreate, setShowCreate] = useState(false);
   const [newSpec, setNewSpec] = useState({ id: '', name: '', description: '' });
+  const [requirements, setRequirements] = useState<Requirement[]>([]);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const entityKinds = useEntityKinds(projectId);
 
   const load = () => {
     if (!projectId) return;
     api.listSpecifications(projectId).then(setSpecifications).catch(console.error);
+    api.listRequirements(projectId).then(setRequirements).catch(() => {});
   };
 
   useEffect(load, [projectId]);
 
-  // Landing here from a link elsewhere (?focus=SRS-001).
-  const focusId = useFocusedEntity(specifications.length > 0);
+  const reqNames = useMemo(() => new Map(requirements.map((r) => [r.id, r.name])), [requirements]);
+  const specNames = useMemo(() => new Map(specifications.map((s) => [s.id, s.name])), [specifications]);
+
+  const toggleExpand = (specId: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      next.has(specId) ? next.delete(specId) : next.add(specId);
+      return next;
+    });
+
+  // Landing here from a link elsewhere (?focus=SRS-001): open the card too,
+  // so the contents the link pointed towards are actually visible.
+  const focusId = useFocusedEntity(
+    specifications.length > 0,
+    useCallback((id: string) => setExpanded((prev) => new Set(prev).add(id)), []),
+  );
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,18 +112,20 @@ export default function SpecificationsPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {specifications.map((spec, i) => (
+          {specifications.map((spec, i) => {
+            const isExpanded = expanded.has(spec.id);
+            return (
             <motion.div
               key={spec.id}
               id={`entity-${spec.id}`}
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: i * 0.03 }}
-              className={`card p-4 hover:shadow-md transition-shadow group ${
+              className={`card hover:shadow-md transition-shadow group ${
                 focusId === spec.id ? 'ring-2 ring-primary/50' : ''
               }`}
             >
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 p-4 cursor-pointer" onClick={() => toggleExpand(spec.id)}>
                 <div className="w-9 h-9 bg-amber-500/10 text-amber-400 rounded-lg flex items-center justify-center">
                   <FileText size={18} />
                 </div>
@@ -110,9 +133,12 @@ export default function SpecificationsPage() {
                   <div className="flex items-center gap-2">
                     <span className="font-mono text-xs text-muted-foreground">{spec.id}</span>
                     <h3 className="font-medium text-card-foreground">{spec.name || 'Untitled'}</h3>
+                    <CopyLinkButton kind="specification" id={spec.id} className="opacity-0 group-hover:opacity-100" />
                   </div>
                   {spec.description && (
-                    <p className="text-sm text-muted-foreground mt-0.5 line-clamp-1">{spec.description}</p>
+                    <p className="text-sm text-muted-foreground mt-0.5 line-clamp-1">
+                      <AutoLinkText text={spec.description} kinds={entityKinds} />
+                    </p>
                   )}
                   <div className="flex gap-4 mt-2 text-xs text-muted-foreground">
                     <span>{spec.requirements.length} requirements</span>
@@ -121,15 +147,61 @@ export default function SpecificationsPage() {
                 </div>
                 {editable && (
                 <button
-                  onClick={() => handleDelete(spec.id)}
+                  onClick={(e) => { e.stopPropagation(); handleDelete(spec.id); }}
                   className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
                 >
                   <Trash2 size={14} />
                 </button>
                 )}
+                <ChevronDown
+                  size={15}
+                  className={`text-muted-foreground transition-transform duration-200 shrink-0 ${isExpanded ? 'rotate-180' : ''}`}
+                />
               </div>
+
+              <AnimatePresence initial={false}>
+                {isExpanded && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.15 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="px-4 pb-4 border-t pt-3 space-y-3">
+                      <div>
+                        <h4 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Requirements</h4>
+                        {spec.requirements.length === 0 ? (
+                          <p className="text-xs text-muted-foreground">None assigned.</p>
+                        ) : (
+                          <div className="flex flex-wrap gap-1.5">
+                            {spec.requirements.map((rid) => (
+                              <span key={rid} className="inline-flex items-center px-2 py-1 rounded-md bg-muted text-xs">
+                                <EntityLink kind="requirement" id={rid} name={reqNames.get(rid)} className="max-w-[240px] hover:text-primary" />
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      {spec.children.length > 0 && (
+                        <div>
+                          <h4 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Sub-specifications</h4>
+                          <div className="flex flex-wrap gap-1.5">
+                            {spec.children.map((cid) => (
+                              <span key={cid} className="inline-flex items-center px-2 py-1 rounded-md bg-muted text-xs">
+                                <EntityLink kind="specification" id={cid} name={specNames.get(cid)} className="max-w-[240px] hover:text-primary" />
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </motion.div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

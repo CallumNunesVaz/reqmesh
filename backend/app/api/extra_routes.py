@@ -495,6 +495,16 @@ async def quality_analysis(project_id: str):
     return project_quality(get_store(project_id))
 
 
+# ── Parametric Evaluation ─────────────────────────────────────────────────────
+
+
+@router.get("/projects/{project_id}/evaluation")
+async def parametric_evaluation(project_id: str):
+    """Evaluate every parameter, constraint and measurement in the project."""
+    from app.services.evaluation import evaluate_project
+    return evaluate_project(get_store(project_id))
+
+
 # ── Validation ────────────────────────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/validate")

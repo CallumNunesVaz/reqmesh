@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useState, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, CheckCircle2, Trash2, XCircle, Clock, ChevronDown, X, Link as LinkIcon, Play, ListChecks, ClipboardList } from 'lucide-react';
-import { api, type VerificationCase, type Requirement } from '../api/client';
+import { Plus, CheckCircle2, Trash2, XCircle, Clock, ChevronDown, X, Link as LinkIcon, Play, ListChecks, ClipboardList, FlaskConical } from 'lucide-react';
+import { api, type VerificationCase, type Requirement, type Component } from '../api/client';
 import { useStore } from '../store';
 import { useAuthStore } from '../store/auth';
 import AutocompleteInput from '../components/AutocompleteInput';
-import { EntityLink } from '../components/entities';
+import { CopyLinkButton, EntityLink } from '../components/entities';
 import { useFocusedEntity } from '../components/useFocusedEntity';
+import { AutoLinkText } from '../components/autoLink';
+import { useEntityKinds } from '../components/entityIndex';
 
 const statusBadges: Record<string, string> = {
   pending: 'border-amber-500/30 bg-amber-500/10 text-amber-400',
@@ -37,10 +39,13 @@ export default function VerificationPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [newVC, setNewVC] = useState({ id: '', name: '', description: '', method: 'test' });
   const [requirements, setRequirements] = useState<Requirement[]>([]);
+  const [components, setComponents] = useState<Component[]>([]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const entityKinds = useEntityKinds(projectId);
   const [linkReqInput, setLinkReqInput] = useState<Record<string, string>>({});
   const [newStepAction, setNewStepAction] = useState<Record<string, string>>({});
   const [newStepExpected, setNewStepExpected] = useState<Record<string, string>>({});
+  const [newMeasurement, setNewMeasurement] = useState<Record<string, { parameter: string; value: string; unit: string }>>({});
 
   const load = () => {
     if (!projectId) return;
@@ -51,6 +56,7 @@ export default function VerificationPage() {
       setVerificationCases(vcs);
       setRequirements(reqs);
     }).catch(console.error);
+    api.listComponents(projectId).then(setComponents).catch(() => {});
   };
 
   useEffect(() => { load(); }, [projectId]);
@@ -165,6 +171,34 @@ export default function VerificationPage() {
     load();
   };
 
+  const getMeasurement = (vcId: string) => newMeasurement[vcId] || { parameter: '', value: '', unit: '' };
+  const setMeasurement = (vcId: string, patch: Partial<{ parameter: string; value: string; unit: string }>) =>
+    setNewMeasurement((prev) => ({ ...prev, [vcId]: { ...getMeasurement(vcId), ...patch } }));
+
+  const handleAddMeasurement = async (vcId: string) => {
+    const draft = getMeasurement(vcId);
+    if (!projectId || !draft.parameter.trim() || draft.value.trim() === '') return;
+    const vc = verificationCases.find((v) => v.id === vcId);
+    if (!vc) return;
+    await api.updateVerificationCase(projectId, vcId, {
+      measurements: [...(vc.measurements || []), {
+        parameter: draft.parameter.trim(), value: Number(draft.value), unit: draft.unit.trim(),
+      }],
+    } as any);
+    setNewMeasurement((prev) => ({ ...prev, [vcId]: { parameter: '', value: '', unit: '' } }));
+    load();
+  };
+
+  const handleRemoveMeasurement = async (vcId: string, idx: number) => {
+    if (!projectId) return;
+    const vc = verificationCases.find((v) => v.id === vcId);
+    if (!vc) return;
+    await api.updateVerificationCase(projectId, vcId, {
+      measurements: (vc.measurements || []).filter((_, i) => i !== idx),
+    } as any);
+    load();
+  };
+
   const handleUpdateProcedure = async (vcId: string, procedure: string) => {
     if (!projectId) return;
     await api.updateVerificationCase(projectId, vcId, { test_procedure: procedure } as any);
@@ -254,6 +288,13 @@ export default function VerificationPage() {
             const StatusIcon = statusIcons[vc.status] || Clock;
             const isExpanded = expanded.has(vc.id);
             const linkedCount = vc.verified_requirements.length;
+            // Backlinks: things that point at this case from their own side —
+            // requirements citing it beyond the list above, and components
+            // that name it as their proof of function.
+            const refReqs = requirements.filter(
+              (r) => (r.verification_cases || []).includes(vc.id) && !vc.verified_requirements.includes(r.id),
+            );
+            const refComps = components.filter((c) => (c.verification_cases || []).includes(vc.id));
             return (
               <motion.div
                 key={vc.id}
@@ -279,9 +320,12 @@ export default function VerificationPage() {
                       <span className={`badge border ${statusBadges[vc.status] || ''}`}>
                         {vc.status}
                       </span>
+                      <CopyLinkButton kind="verification" id={vc.id} className="opacity-0 group-hover:opacity-100" />
                     </div>
                     {vc.description && (
-                      <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2">{vc.description}</p>
+                      <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2">
+                        <AutoLinkText text={vc.description} kinds={entityKinds} />
+                      </p>
                     )}
                     <div className="flex gap-3 mt-2 text-xs text-muted-foreground">
                       <span>Method: <strong className="text-foreground">{vc.method}</strong></span>
@@ -366,6 +410,83 @@ export default function VerificationPage() {
                               </div>
                             ))}
                           </div>
+                        )}
+
+                        {/* Referenced by: incoming links, so every relation
+                            involving this case is traversable in both
+                            directions. */}
+                        {(refReqs.length > 0 || refComps.length > 0) && (
+                        <div className="border-t pt-3">
+                          <h4 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                            Referenced By
+                          </h4>
+                          <div className="flex flex-wrap gap-1.5">
+                            {refReqs.map((r) => (
+                              <span key={r.id} className="inline-flex items-center px-2 py-1 rounded-md bg-muted text-xs">
+                                <EntityLink kind="requirement" id={r.id} name={r.name} className="max-w-[220px] hover:text-primary" />
+                              </span>
+                            ))}
+                            {refComps.map((c) => (
+                              <span key={c.id} className="inline-flex items-center px-2 py-1 rounded-md bg-muted text-xs">
+                                <EntityLink kind="component" id={c.id} name={c.name} className="max-w-[220px] hover:text-primary" />
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                        )}
+
+                        {/* Measurements: recorded evidence, substituted into
+                            the owning requirement's constraints to compute
+                            its measured verdict. */}
+                        {((vc.measurements || []).length > 0 || editable) && (
+                        <div className="border-t pt-3">
+                          <h4 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                            <FlaskConical size={12} /> Measurements
+                          </h4>
+                          {(vc.measurements || []).map((m, mi) => (
+                            <div key={mi} className="flex items-center gap-2 text-xs py-1 px-2 rounded hover:bg-accent group/meas">
+                              <EntityLink
+                                kind="requirement"
+                                id={m.parameter.split('.')[0]}
+                                className="shrink-0 hover:text-primary"
+                              />
+                              <span className="font-mono text-muted-foreground flex-1 truncate">.{m.parameter.split('.').slice(1).join('.')}</span>
+                              <span className="font-mono text-foreground">{m.value}</span>
+                              <span className="text-muted-foreground w-10 truncate">{m.unit}</span>
+                              {editable && (
+                              <button onClick={(e) => { e.stopPropagation(); handleRemoveMeasurement(vc.id, mi); }} className="p-0.5 rounded text-muted-foreground hover:text-destructive opacity-0 group-hover/meas:opacity-100 transition-all">
+                                <X size={11} />
+                              </button>
+                              )}
+                            </div>
+                          ))}
+                          {editable && (
+                          <div className="flex gap-1.5 mt-1">
+                            <AutocompleteInput
+                              className="input flex-1 text-[11px] font-mono"
+                              placeholder="REQID.parameter"
+                              value={getMeasurement(vc.id).parameter}
+                              onChange={(v) => setMeasurement(vc.id, { parameter: v })}
+                              suggestions={requirements
+                                .filter((r) => vc.verified_requirements.includes(r.id))
+                                .flatMap((r) => (r.parameters || []).map((p) => ({ id: `${r.id}.${p.name}`, label: p.unit || '' })))}
+                            />
+                            <input className="input w-24 text-[11px] font-mono" placeholder="value"
+                              value={getMeasurement(vc.id).value}
+                              onChange={(e) => setMeasurement(vc.id, { value: e.target.value })} />
+                            <input className="input w-16 text-[11px]" placeholder="unit"
+                              value={getMeasurement(vc.id).unit}
+                              onChange={(e) => setMeasurement(vc.id, { unit: e.target.value })} />
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleAddMeasurement(vc.id); }}
+                              className="btn-secondary shrink-0"
+                              disabled={!getMeasurement(vc.id).parameter.trim() || getMeasurement(vc.id).value.trim() === ''}
+                            >
+                              <Plus size={12} />
+                            </button>
+                          </div>
+                          )}
+                        </div>
                         )}
 
                         {/* Test Procedure */}

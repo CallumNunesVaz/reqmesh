@@ -18,6 +18,75 @@
       "title": "AttributeValue",
       "type": "object"
     },
+    "Constraint": {
+      "description": "A boolean expression over parameters that must hold.\n\n`assume` is an optional precondition: when present and not satisfied the\nconstraint is out of scope rather than failed (SysML assume/require).",
+      "properties": {
+        "expr": {
+          "title": "Expr",
+          "type": "string"
+        },
+        "assume": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Assume"
+        }
+      },
+      "required": [
+        "expr"
+      ],
+      "title": "Constraint",
+      "type": "object"
+    },
+    "Parameter": {
+      "description": "A typed numeric quantity on a requirement or component.\n\nEither a literal `value`, or an `expr` deriving it from other parameters\n(`span * chord`, `GROS0001.mass - EMPT0001.mass`,\n`rollup('WING', 'mass')`). Unlike `attributes`, these participate in\nconstraint evaluation.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        },
+        "unit": {
+          "default": "",
+          "title": "Unit",
+          "type": "string"
+        },
+        "expr": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expr"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "Parameter",
+      "type": "object"
+    },
     "Priority": {
       "enum": [
         "low",
@@ -182,6 +251,20 @@
         "$ref": "#/$defs/AttributeValue"
       },
       "title": "Attributes",
+      "type": "array"
+    },
+    "parameters": {
+      "items": {
+        "$ref": "#/$defs/Parameter"
+      },
+      "title": "Parameters",
+      "type": "array"
+    },
+    "constraints": {
+      "items": {
+        "$ref": "#/$defs/Constraint"
+      },
+      "title": "Constraints",
       "type": "array"
     },
     "relations": {

@@ -12,8 +12,11 @@ import {
 } from '../api/client';
 import { useStore } from '../store';
 import { useAuthStore } from '../store/auth';
-import { COMPONENT_TYPE_META, EntityLink, type EntityKind } from '../components/entities';
+import { COMPONENT_TYPE_META, CopyLinkButton, EntityLink, type EntityKind } from '../components/entities';
 import { useFocusedEntity } from '../components/useFocusedEntity';
+import { AutoLinkText } from '../components/autoLink';
+import { useEntityKinds } from '../components/entityIndex';
+import { ParameterEditor } from '../components/parametrics';
 
 const EMPTY_DRAFT = { id: '', name: '', type: 'assembly', parent: '' };
 
@@ -287,6 +290,8 @@ interface DetailProps {
 }
 
 function ComponentDetail({ component, components, requirements, cases, editable, onPatch, onDelete, onClose }: DetailProps) {
+  const { projectId } = useParams<{ projectId: string }>();
+  const entityKinds = useEntityKinds(projectId);
   const [form, setForm] = useState({
     name: component.name,
     description: component.description,
@@ -320,7 +325,10 @@ function ComponentDetail({ component, components, requirements, cases, editable,
     >
       <div className="flex items-start justify-between">
         <div className="min-w-0">
-          <div className="font-mono text-xs text-muted-foreground">{component.id}</div>
+          <div className="flex items-center gap-1 font-mono text-xs text-muted-foreground">
+            {component.id}
+            <CopyLinkButton kind="component" id={component.id} />
+          </div>
           <h2 className="font-semibold text-card-foreground truncate">{component.name || 'Untitled'}</h2>
         </div>
         <button onClick={onClose} className="p-1 text-muted-foreground hover:text-foreground"><X size={16} /></button>
@@ -376,13 +384,27 @@ function ComponentDetail({ component, components, requirements, cases, editable,
         </>
       ) : (
         <dl className="text-sm space-y-1">
-          {component.description && <p className="text-muted-foreground">{component.description}</p>}
+          {component.description && (
+            <p className="text-muted-foreground"><AutoLinkText text={component.description} kinds={entityKinds} /></p>
+          )}
           <div className="flex justify-between"><dt className="text-muted-foreground">Type</dt><dd>{component.type}</dd></div>
           <div className="flex justify-between"><dt className="text-muted-foreground">Quantity</dt><dd>{component.quantity}</dd></div>
+          {component.parent && (
+            <div className="flex justify-between items-center">
+              <dt className="text-muted-foreground">Parent</dt>
+              <dd><EntityLink kind="component" id={component.parent} className="text-xs hover:text-primary" /></dd>
+            </div>
+          )}
           {component.part_number && <div className="flex justify-between"><dt className="text-muted-foreground">Part number</dt><dd className="font-mono text-xs">{component.part_number}</dd></div>}
           {component.supplier && <div className="flex justify-between"><dt className="text-muted-foreground">Supplier</dt><dd>{component.supplier}</dd></div>}
         </dl>
       )}
+
+      <ParameterEditor
+        parameters={component.parameters || []}
+        editable={editable}
+        onChange={(next) => onPatch(component.id, { parameters: next })}
+      />
 
       <LinkEditor
         label="Satisfies requirements"

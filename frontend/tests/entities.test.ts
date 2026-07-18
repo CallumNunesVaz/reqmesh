@@ -8,10 +8,12 @@ describe('entity routes', () => {
   });
 
   it('deep-links the entity kinds that have no detail page', () => {
-    // These three only have list pages, so a reference focuses the row.
+    // These only have list pages, so a reference focuses the row.
     expect(ENTITY_META.verification.path('demo', 'VC-001')).toBe('/project/demo/verification?focus=VC-001');
     expect(ENTITY_META.component.path('demo', 'SPAR')).toBe('/project/demo/components?focus=SPAR');
     expect(ENTITY_META.specification.path('demo', 'SRS-001')).toBe('/project/demo/specifications?focus=SRS-001');
+    expect(ENTITY_META.change.path('demo', 'CR-001')).toBe('/project/demo/change-requests?focus=CR-001');
+    expect(ENTITY_META.risk.path('demo', 'RSK-001')).toBe('/project/demo/risks?focus=RSK-001');
   });
 
   it('encodes ids so a space or slash cannot break the url', () => {

@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Trash2, CheckCircle2, AlertTriangle, Search, TrendingUp, Shield, GitBranch, FileWarning, Sparkles } from 'lucide-react';
-import { api, type MetricsData, type ImpactResult, type GapItem, type QualityItem } from '../api/client';
+import { Plus, Trash2, CheckCircle2, AlertTriangle, Search, TrendingUp, Shield, GitBranch, FileWarning, Sparkles, Sigma } from 'lucide-react';
+import { api, type MetricsData, type ImpactResult, type GapItem, type QualityItem, type EvaluationData } from '../api/client';
+import { EntityLink } from '../components/entities';
+import { VerdictBadge } from '../components/parametrics';
 
 export default function MetricsPage() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -14,9 +16,11 @@ export default function MetricsPage() {
   const [quality, setQuality] = useState<QualityItem[]>([]);
   const [qualityAvg, setQualityAvg] = useState(0);
   const [unreviewedCount, setUnreviewedCount] = useState(0);
+  const [evaluation, setEvaluation] = useState<EvaluationData | null>(null);
 
   useEffect(() => {
     if (!projectId) return;
+    api.getEvaluation(projectId).then(setEvaluation).catch(() => {});
     Promise.all([
       api.getMetrics(projectId),
       api.getGapAnalysis(projectId),
@@ -99,6 +103,44 @@ export default function MetricsPage() {
           </div>
         </motion.div>
       </div>
+
+      {evaluation && evaluation.requirements.length > 0 && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.32 }} className="card p-5 mt-6">
+          <h2 className="font-semibold text-sm text-card-foreground mb-3 flex items-center gap-2">
+            <Sigma size={16} className="text-cs-teal" /> Parametric Constraints
+            <span className="text-xs font-normal text-muted-foreground">
+              {evaluation.parameter_count} parameters · {evaluation.measurement_count} measurements
+            </span>
+          </h2>
+          <div className="flex gap-4 mb-3 text-xs">
+            {(['pass', 'fail', 'unknown', 'error'] as const).map((k) =>
+              evaluation.summary[k] ? (
+                <span key={k} className="inline-flex items-center gap-1.5">
+                  <VerdictBadge status={k} /> × {evaluation.summary[k]}
+                </span>
+              ) : null,
+            )}
+            {(evaluation.measured_summary.pass + evaluation.measured_summary.fail) > 0 && (
+              <span className="text-muted-foreground">
+                measured: {evaluation.measured_summary.pass} pass / {evaluation.measured_summary.fail} fail
+              </span>
+            )}
+          </div>
+          <div className="space-y-1.5">
+            {evaluation.requirements
+              .filter((r) => r.verdict !== 'none')
+              .sort((a, b) => (a.verdict === 'fail' || a.verdict === 'error' ? -1 : 1) - (b.verdict === 'fail' || b.verdict === 'error' ? -1 : 1))
+              .slice(0, 10)
+              .map((r) => (
+                <div key={r.id} className="flex items-center gap-2 text-xs py-1.5 px-2 rounded hover:bg-accent">
+                  <EntityLink kind="requirement" id={r.id} name={r.name} className="flex-1 min-w-0 hover:text-primary" />
+                  {r.measured_verdict && <VerdictBadge status={r.measured_verdict} prefix="measured" />}
+                  <VerdictBadge status={r.verdict} />
+                </div>
+              ))}
+          </div>
+        </motion.div>
+      )}
 
       {quality.length > 0 && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.35 }} className="card p-5 mt-6">

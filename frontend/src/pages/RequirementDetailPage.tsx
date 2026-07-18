@@ -1,13 +1,17 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Trash2, ArrowLeft, Plus, X, ArrowRight, ArrowLeftRight, Sparkles, ShieldCheck, ShieldOff, ExternalLink } from 'lucide-react';
-import { api, type Requirement, type VerificationCase, type QualityItem, type Component } from '../api/client';
+import { Trash2, ArrowLeft, Plus, X, ArrowRight, ArrowLeftRight, Sparkles, ShieldCheck, ExternalLink, ChevronRight, Waypoints } from 'lucide-react';
+import { api, type Requirement, type VerificationCase, type QualityItem, type Component, type Specification, type ChangeRequest, type Risk, type EvaluatedRequirement } from '../api/client';
+import { ParametricsCard } from '../components/parametrics';
 import RichTextEditor from '../components/RichTextEditor';
 import AutocompleteInput from '../components/AutocompleteInput';
-import { EntityLink, type EntityKind } from '../components/entities';
+import { CopyLinkButton, EntityLink, type EntityKind } from '../components/entities';
+import { AutoLinkHtml } from '../components/autoLink';
+import { useEntityKinds } from '../components/entityIndex';
 import { useAuthStore } from '../store/auth';
 import { useStore } from '../store';
+import { useGraphPane, useSelectedReq } from '../components/Layout';
 
 const typeOptions = ['functional', 'non_functional', 'interface', 'design', 'constraint'];
 const priorityOptions = ['low', 'medium', 'high', 'critical'];
@@ -21,6 +25,13 @@ export default function RequirementDetailPage() {
   const [allReqs, setAllReqs] = useState<Requirement[]>([]);
   const [allVcs, setAllVcs] = useState<VerificationCase[]>([]);
   const [satisfiedBy, setSatisfiedBy] = useState<Component[]>([]);
+  const [inSpecs, setInSpecs] = useState<Specification[]>([]);
+  const [evaluated, setEvaluated] = useState<EvaluatedRequirement | undefined>();
+  const [affectingCrs, setAffectingCrs] = useState<ChangeRequest[]>([]);
+  const [linkedRisks, setLinkedRisks] = useState<Risk[]>([]);
+  const entityKinds = useEntityKinds(projectId);
+  const { graphOpen, toggleGraph } = useGraphPane();
+  const { selectReq } = useSelectedReq();
   const [newAttrKey, setNewAttrKey] = useState('');
   const [newAttrVal, setNewAttrVal] = useState('');
   const [newRelType, setNewRelType] = useState('refines');
@@ -51,6 +62,29 @@ export default function RequirementDetailPage() {
   const vcIds = useMemo(() => new Set(allVcs.map((v) => v.id)), [allVcs]);
   const kindOf = (id: string): EntityKind => (vcIds.has(id) ? 'verification' : 'requirement');
 
+  // Ancestor chain from the root down to (excluding) this requirement, for
+  // the breadcrumb. Guards against parent cycles in hand-edited YAML.
+  const ancestors = useMemo(() => {
+    if (!req?.parent) return [];
+    const byId = new Map(allReqs.map((r) => [r.id, r]));
+    const chain: { id: string; name: string }[] = [];
+    const seen = new Set<string>([req.id]);
+    let cursor: string | null = req.parent;
+    while (cursor && !seen.has(cursor)) {
+      seen.add(cursor);
+      const parent = byId.get(cursor);
+      chain.unshift({ id: cursor, name: parent?.name || '' });
+      cursor = parent?.parent ?? null;
+    }
+    return chain;
+  }, [req, allReqs]);
+
+  const showInGraph = () => {
+    if (!req) return;
+    if (!graphOpen) toggleGraph();
+    selectReq(req.id);
+  };
+
   const incomingRelations = useMemo(() => {
     if (!req) return [];
     const results: { source: string; type: string; sourceName: string }[] = [];
@@ -77,6 +111,19 @@ export default function RequirementDetailPage() {
       setLoading(false);
     }).catch(console.error);
     api.getComponentsForRequirement(projectId, reqId).then(setSatisfiedBy).catch(() => setSatisfiedBy([]));
+    // Backlinks: everything else in the project that names this requirement.
+    api.listSpecifications(projectId)
+      .then((specs) => setInSpecs(specs.filter((s) => s.requirements.includes(reqId))))
+      .catch(() => setInSpecs([]));
+    api.listChangeRequests(projectId)
+      .then((crs) => setAffectingCrs(crs.filter((c) => c.affected_requirements.includes(reqId))))
+      .catch(() => setAffectingCrs([]));
+    api.listRisks(projectId)
+      .then((risks) => setLinkedRisks(risks.filter((r) => r.linked_requirements.includes(reqId))))
+      .catch(() => setLinkedRisks([]));
+    api.getEvaluation(projectId)
+      .then((ev) => setEvaluated(ev.requirements.find((r) => r.id === reqId)))
+      .catch(() => setEvaluated(undefined));
     api.getWorkflow(projectId).then((wf) => setWorkflow(wf)).catch(() => {});
     api.getQuality(projectId).then((q) => {
       const match = q.per_requirement.find((r) => r.id === reqId);
@@ -93,6 +140,11 @@ export default function RequirementDetailPage() {
       const updated = await api.updateRequirement(projectId, reqId, updates);
       setReq(updated);
       bumpGraphVersion();
+      if (updates.parameters || updates.constraints) {
+        api.getEvaluation(projectId)
+          .then((ev) => setEvaluated(ev.requirements.find((r) => r.id === reqId)))
+          .catch(() => {});
+      }
     } catch {
       // silently no-op when server rejects
     }
@@ -199,12 +251,29 @@ export default function RequirementDetailPage() {
         <button onClick={() => navigate(`/project/${projectId}/requirements`)} className="btn-secondary p-2">
           <ArrowLeft size={16} />
         </button>
-        <div className="flex-1">
-          <h1 className="text-xl font-bold tracking-tight font-mono text-foreground">{req.id}</h1>
+        <div className="flex-1 min-w-0">
+          {ancestors.length > 0 && (
+            <nav className="flex items-center gap-1 text-[11px] text-muted-foreground mb-0.5 flex-wrap">
+              {ancestors.map((a) => (
+                <span key={a.id} className="inline-flex items-center gap-1">
+                  <EntityLink kind="requirement" id={a.id} showIcon={false} className="hover:text-primary" />
+                  <ChevronRight size={10} className="shrink-0" />
+                </span>
+              ))}
+              <span className="font-mono text-foreground/70">{req.id}</span>
+            </nav>
+          )}
+          <div className="flex items-center gap-1.5">
+            <h1 className="text-xl font-bold tracking-tight font-mono text-foreground">{req.id}</h1>
+            <CopyLinkButton kind="requirement" id={req.id} />
+          </div>
           {unreviewedIds.has(req.id) && (
             <span className="badge bg-amber-500/10 text-amber-400 text-[10px] px-2 py-0.5">Needs re-review</span>
           )}
         </div>
+        <button onClick={showInGraph} className="btn-secondary text-xs" title="Select this requirement in the graph pane">
+          <Waypoints size={14} /> Show in graph
+        </button>
         {editable && (
           <button
             onClick={async () => {
@@ -235,12 +304,22 @@ export default function RequirementDetailPage() {
               disabled={!editable}
             />
             <label className="label mt-4">Description</label>
-            <RichTextEditor
-              content={req.description}
-              onChange={(html) => { setReq({ ...req, description: html }); }}
-              onBlur={(html) => save({ description: html })}
-              disabled={!editable}
-            />
+            {editable ? (
+              <RichTextEditor
+                content={req.description}
+                onChange={(html) => { setReq({ ...req, description: html }); }}
+                onBlur={(html) => save({ description: html })}
+                disabled={false}
+              />
+            ) : (
+              // Read mode: render the rich text with entity ids linked, which
+              // the editor (even disabled) can't do.
+              <AutoLinkHtml
+                html={req.description}
+                kinds={entityKinds}
+                className="prose prose-sm dark:prose-invert max-w-none border rounded-lg p-3 min-h-[80px] opacity-90"
+              />
+            )}
           </motion.div>
 
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="card p-5">
@@ -363,6 +442,15 @@ export default function RequirementDetailPage() {
             </div>
           </motion.div>
 
+          <ParametricsCard
+            reqId={req.id}
+            parameters={req.parameters || []}
+            constraints={req.constraints || []}
+            evaluated={evaluated}
+            editable={editable}
+            onSave={save}
+          />
+
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="card p-5">
             <h2 className="font-semibold text-sm text-card-foreground mb-3">Verification Cases</h2>
             <div className="flex gap-2 mb-3">
@@ -410,6 +498,42 @@ export default function RequirementDetailPage() {
                   <span key={c.id} className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-muted text-xs text-foreground">
                     <EntityLink kind="component" id={c.id} name={c.name} className="hover:text-primary" />
                   </span>
+                ))}
+              </div>
+            </motion.div>
+          )}
+
+          {/* Backlinks: things that name this requirement from their own
+              side. Read-only here — each mapping is owned by the other
+              entity, so editing lives on its page. */}
+          {inSpecs.length > 0 && (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.23 }} className="card p-5">
+              <h2 className="font-semibold text-sm text-card-foreground mb-3">In Specifications</h2>
+              <div className="flex flex-wrap gap-2">
+                {inSpecs.map((s) => (
+                  <span key={s.id} className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-muted text-xs text-foreground">
+                    <EntityLink kind="specification" id={s.id} name={s.name} className="hover:text-primary" />
+                  </span>
+                ))}
+              </div>
+            </motion.div>
+          )}
+
+          {(affectingCrs.length > 0 || linkedRisks.length > 0) && (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.24 }} className="card p-5">
+              <h2 className="font-semibold text-sm text-card-foreground mb-3">Change Requests &amp; Risks</h2>
+              <div className="space-y-1.5">
+                {affectingCrs.map((c) => (
+                  <div key={c.id} className="flex items-center gap-2 text-xs py-1 px-2 rounded hover:bg-accent">
+                    <EntityLink kind="change" id={c.id} name={c.title} className="flex-1 min-w-0 text-foreground hover:text-primary" />
+                    <span className="badge bg-muted text-muted-foreground shrink-0">{c.status}</span>
+                  </div>
+                ))}
+                {linkedRisks.map((r) => (
+                  <div key={r.id} className="flex items-center gap-2 text-xs py-1 px-2 rounded hover:bg-accent">
+                    <EntityLink kind="risk" id={r.id} name={r.title} className="flex-1 min-w-0 text-foreground hover:text-primary" />
+                    <span className="badge bg-muted text-muted-foreground shrink-0">{r.severity}</span>
+                  </div>
                 ))}
               </div>
             </motion.div>

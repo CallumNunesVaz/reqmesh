@@ -29,6 +29,49 @@
       ],
       "title": "ComponentType",
       "type": "string"
+    },
+    "Parameter": {
+      "description": "A typed numeric quantity on a requirement or component.\n\nEither a literal `value`, or an `expr` deriving it from other parameters\n(`span * chord`, `GROS0001.mass - EMPT0001.mass`,\n`rollup('WING', 'mass')`). Unlike `attributes`, these participate in\nconstraint evaluation.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        },
+        "unit": {
+          "default": "",
+          "title": "Unit",
+          "type": "string"
+        },
+        "expr": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expr"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "Parameter",
+      "type": "object"
     }
   },
   "properties": {
@@ -96,6 +139,13 @@
         "$ref": "#/$defs/AttributeValue"
       },
       "title": "Attributes",
+      "type": "array"
+    },
+    "parameters": {
+      "items": {
+        "$ref": "#/$defs/Parameter"
+      },
+      "title": "Parameters",
       "type": "array"
     },
     "created": {

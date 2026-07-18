@@ -239,19 +239,76 @@ Manage them under **Components** in the project nav, or:
 The free-text `allocated_to` field on a requirement is unchanged and remains a
 label; component links are the structured mapping.
 
+## Computable Requirements (SysML-style parametrics)
+
+Requirements can carry typed numeric **parameters** and boolean **constraints**
+over them, so a requirement isn't just prose — it's evaluable:
+
+```yaml
+parameters:
+  - {name: mtow, value: 1157, unit: kg}
+  - {name: useful_load, unit: kg, expr: "mtow - AFRM0000.empty_mass"}
+constraints:
+  - {expr: "useful_load >= 380"}
+```
+
+- **Bounds between requirements** — an expression can reference another
+  requirement's parameter as `ID.param`, so one requirement's value can be
+  bounded by, or derived from, others (`GROS.mass - EMPT.mass`).
+- **Budget rollups** — `rollup('WING', 'mass')` sums a parameter over a
+  component subtree, multiplying by each child's `quantity` — mass, power and
+  cost budgets that update as the design tree changes.
+- **Verdicts and margins** — every constraint evaluates to
+  pass / fail / unknown (a referenced value is missing) / error, and single
+  comparisons report their margin to the bound (absolute and %). An optional
+  `assume` expression gates applicability (SysML assume/require): when the
+  assumption doesn't hold the constraint is out of scope, not violated.
+- **Measured verdicts** — verification cases record **measurements** against
+  parameters (`{parameter: "AFRM0005.ultimate_load_factor", value: 5.92}`).
+  The engine substitutes measured values into the owning requirement's
+  constraints and reports a separate *measured* verdict — verification as
+  computed evidence rather than a hand-set status.
+
+Expressions are parsed against a strict whitelist (arithmetic, comparisons,
+`and/or/not`, `min/max/abs/sqrt/floor/ceil/round`, parameter refs, `rollup`) —
+YAML content can never execute code. Derivation chains resolve across
+requirements with cycle detection.
+
+Evaluate via `GET /api/projects/{id}/evaluation`, or in the UI: the
+**Parameters & Constraints** card on a requirement shows live verdicts and
+margins, components carry their parameters in the detail panel, verification
+cases record measurements, and **Metrics** summarises all verdicts.
+
 ## Cross-linking
 
-Every reference to a requirement, verification case, component or specification
-is a hyperlink to that entity, wherever it appears — a requirement listed under
-a verification case, a chip in a component's panel, either end of a trace link.
-Each kind carries its own colour-coded icon so you can tell at a glance what a
-reference points at.
+Every reference to a requirement, verification case, component, specification,
+change request or risk is a hyperlink to that entity, wherever it appears — a
+requirement listed under a verification case, a chip in a component's panel,
+either end (or cell) of a trace link, the requirements a change request
+affects or a risk threatens. Each kind carries its own colour-coded icon so
+you can tell at a glance what a reference points at.
 
 Only requirements have a detail page; the other kinds deep-link into their list
 page with `?focus=<id>`, which selects the entity, expands whatever it's nested
 inside, and scrolls to it. Where the click would otherwise drive a control (the
 parent `<select>` on a requirement, or a tree row that expands), navigation gets
 its own affordance next to it rather than stealing the control's click.
+
+On top of the links themselves:
+
+- **Ctrl/Cmd+K command palette** — fuzzy search across every entity in the
+  project by id, name or description; Enter jumps straight to it.
+- **Hover previews** — pause on any reference and a card shows the target's
+  kind, status and description without navigating.
+- **Copy link** — the chain icon beside an entity's id copies its absolute
+  deep-link URL for commits, chat or tickets.
+- **Backlinks** — relations render in both directions: a requirement shows the
+  specifications that contain it and the change requests / risks that name it;
+  a verification case shows the requirements and components that reference it.
+- **Breadcrumbs** — a requirement's detail page shows its clickable ancestor
+  chain, and **Show in graph** selects it in the graph pane.
+- **Auto-linking** — entity ids mentioned in descriptions become links
+  automatically, including inside rich text when viewing a requirement.
 
 The mapping lives in one place — [`frontend/src/components/entities.tsx`](frontend/src/components/entities.tsx) —
 so adding an entity kind means adding one entry.

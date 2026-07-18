@@ -1,9 +1,10 @@
 import { Outlet, Link, useParams } from 'react-router-dom';
-import { PanelRight, PanelRightClose, LogIn, LogOut, User, Pencil, Eye, FileDown, FileUp, Users } from 'lucide-react';
+import { PanelRight, PanelRightClose, LogIn, LogOut, User, Pencil, Eye, FileDown, FileUp, Users, Search } from 'lucide-react';
 import { useState, useEffect, useCallback, createContext, useContext, useRef } from 'react';
 import { ThemeToggle } from './ThemeToggle';
 import RequirementNav from './RequirementNav';
 import GraphPane from './GraphPane';
+import CommandPalette, { OPEN_PALETTE_EVENT } from './CommandPalette';
 import LoginModal from './LoginModal';
 import ExportDialog from './ExportDialog';
 import ImportDialog from './ImportDialog';
@@ -158,6 +159,17 @@ export default function Layout() {
           <div className="flex-1" />
 
           {isInProject && (
+            <button
+              onClick={() => window.dispatchEvent(new Event(OPEN_PALETTE_EVENT))}
+              className="btn-ghost p-2 rounded-lg gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+              title="Jump to anything (Ctrl+K)"
+            >
+              <Search size={15} />
+              <kbd className="hidden sm:inline text-[9px] border rounded px-1 py-px">Ctrl K</kbd>
+            </button>
+          )}
+
+          {isInProject && (
             <button onClick={toggleGraph} className={`btn-ghost p-2 rounded-lg gap-1.5 text-xs ${graphOpen ? 'bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground' : 'text-muted-foreground'}`}>
               {graphOpen ? <PanelRightClose size={15} /> : <PanelRight size={15} />}
               <span className="hidden sm:inline">Graph</span>
@@ -279,6 +291,7 @@ export default function Layout() {
       </div>
 
       <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
+      {isInProject && <CommandPalette projectId={projectId!} />}
       {isInProject && <ExportDialog open={exportOpen} onClose={() => setExportOpen(false)} projectId={projectId!} />}
       {isInProject && <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} projectId={projectId!} />}
     </SelectedReqCtx.Provider>

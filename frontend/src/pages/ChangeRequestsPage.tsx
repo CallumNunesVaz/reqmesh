@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Trash2, GitPullRequest, FileText } from 'lucide-react';
+import { Plus, Trash2, GitPullRequest } from 'lucide-react';
 import { api, type ChangeRequest } from '../api/client';
 import { useAuthStore } from '../store/auth';
+import { CopyLinkButton, EntityLink } from '../components/entities';
+import { useFocusedEntity } from '../components/useFocusedEntity';
+import { AutoLinkText } from '../components/autoLink';
+import { useEntityKinds } from '../components/entityIndex';
 
 const statusBadges: Record<string, string> = {
   submitted: 'border-blue-500/30 bg-blue-500/10 text-blue-400',
@@ -20,12 +24,16 @@ export default function ChangeRequestsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({ id: '', title: '', description: '' });
   const editable = useAuthStore((s) => s.editMode && s.user !== null && s.user.role !== 'viewer');
+  const entityKinds = useEntityKinds(projectId);
 
   const load = () => {
     if (!projectId) return;
     api.listChangeRequests(projectId).then(setCrs).catch(console.error);
   };
   useEffect(load, [projectId]);
+
+  // Arriving from a link elsewhere (?focus=CR-001).
+  const focusId = useFocusedEntity(crs.length > 0);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -78,14 +86,23 @@ export default function ChangeRequestsPage() {
 
       <div className="space-y-3">
         {crs.map((cr, i) => (
-          <motion.div key={cr.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.03 }}
-            className="card p-4 hover:shadow-md transition-shadow group">
+          <motion.div key={cr.id} id={`entity-${cr.id}`} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.03 }}
+            className={`card p-4 hover:shadow-md transition-shadow group ${focusId === cr.id ? 'ring-2 ring-primary/50' : ''}`}>
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 bg-purple-500/10 text-purple-400 rounded-lg flex items-center justify-center"><GitPullRequest size={18} /></div>
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2"><span className="font-mono text-xs text-muted-foreground">{cr.id}</span><h3 className="font-medium text-card-foreground">{cr.title || 'Untitled'}</h3><span className={`badge border ${statusBadges[cr.status] || ''}`}>{cr.status}</span></div>
-                {cr.description && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{cr.description}</p>}
-                {cr.affected_requirements.length > 0 && <p className="text-xs text-muted-foreground mt-1">{cr.affected_requirements.length} affected requirements</p>}
+                <div className="flex items-center gap-2"><span className="font-mono text-xs text-muted-foreground">{cr.id}</span><h3 className="font-medium text-card-foreground">{cr.title || 'Untitled'}</h3><span className={`badge border ${statusBadges[cr.status] || ''}`}>{cr.status}</span><CopyLinkButton kind="change" id={cr.id} className="opacity-0 group-hover:opacity-100" /></div>
+                {cr.description && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1"><AutoLinkText text={cr.description} kinds={entityKinds} /></p>}
+                {cr.affected_requirements.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                    <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Affects</span>
+                    {cr.affected_requirements.map((rid) => (
+                      <span key={rid} className="inline-flex items-center px-1.5 py-0.5 rounded bg-muted text-xs">
+                        <EntityLink kind="requirement" id={rid} className="hover:text-primary" />
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="flex items-center gap-1">
                 <select className="select text-xs py-1 w-28" value={cr.status} onChange={e => handleStatus(cr.id, e.target.value)} disabled={!editable}>

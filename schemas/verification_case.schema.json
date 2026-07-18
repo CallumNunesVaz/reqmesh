@@ -25,6 +25,30 @@
       "title": "ExecutionRecord",
       "type": "object"
     },
+    "Measurement": {
+      "description": "A measured value recorded against a requirement parameter.\n\n`parameter` is a fully-qualified reference (`\"AFRM0005.max_load\"`). The\nevaluation engine substitutes these into the owning requirement's\nconstraints to compute a verification verdict from evidence rather than a\nhand-set status.",
+      "properties": {
+        "parameter": {
+          "title": "Parameter",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "number"
+        },
+        "unit": {
+          "default": "",
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "parameter",
+        "value"
+      ],
+      "title": "Measurement",
+      "type": "object"
+    },
     "TestStep": {
       "properties": {
         "action": {
@@ -115,6 +139,13 @@
         "$ref": "#/$defs/ExecutionRecord"
       },
       "title": "Execution History",
+      "type": "array"
+    },
+    "measurements": {
+      "items": {
+        "$ref": "#/$defs/Measurement"
+      },
+      "title": "Measurements",
       "type": "array"
     },
     "created": {

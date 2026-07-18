@@ -57,6 +57,32 @@ class AttributeValue(BaseModel):
     value: str
 
 
+class Parameter(BaseModel):
+    """A typed numeric quantity on a requirement or component.
+
+    Either a literal `value`, or an `expr` deriving it from other parameters
+    (`span * chord`, `GROS0001.mass - EMPT0001.mass`,
+    `rollup('WING', 'mass')`). Unlike `attributes`, these participate in
+    constraint evaluation.
+    """
+
+    name: str
+    value: Optional[float] = None
+    unit: str = ""
+    expr: Optional[str] = None
+
+
+class Constraint(BaseModel):
+    """A boolean expression over parameters that must hold.
+
+    `assume` is an optional precondition: when present and not satisfied the
+    constraint is out of scope rather than failed (SysML assume/require).
+    """
+
+    expr: str
+    assume: Optional[str] = None
+
+
 class Requirement(BaseModel):
     id: str
     type: RequirementType = RequirementType.FUNCTIONAL
@@ -66,6 +92,8 @@ class Requirement(BaseModel):
     status: RequirementStatus = RequirementStatus.PROPOSED
     verification_method: VerificationMethod = VerificationMethod.TEST
     attributes: list[AttributeValue] = Field(default_factory=list)
+    parameters: list[Parameter] = Field(default_factory=list)
+    constraints: list[Constraint] = Field(default_factory=list)
     relations: list[Relation] = Field(default_factory=list)
     verification_cases: list[str] = Field(default_factory=list)
     verification_status: str = "pending"
@@ -95,6 +123,8 @@ class RequirementCreate(BaseModel):
     status: RequirementStatus = RequirementStatus.PROPOSED
     verification_method: VerificationMethod = VerificationMethod.TEST
     attributes: list[AttributeValue] = Field(default_factory=list)
+    parameters: list[Parameter] = Field(default_factory=list)
+    constraints: list[Constraint] = Field(default_factory=list)
     relations: list[Relation] = Field(default_factory=list)
     verification_cases: list[str] = Field(default_factory=list)
     parent: Optional[str] = None
@@ -120,6 +150,8 @@ class RequirementUpdate(BaseModel):
     status: Optional[RequirementStatus] = None
     verification_method: Optional[VerificationMethod] = None
     attributes: Optional[list[AttributeValue]] = None
+    parameters: Optional[list[Parameter]] = None
+    constraints: Optional[list[Constraint]] = None
     relations: Optional[list[Relation]] = None
     verification_cases: Optional[list[str]] = None
     verification_status: Optional[str] = None

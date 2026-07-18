@@ -41,6 +41,27 @@ export interface Project {
   path: string;
 }
 
+/** A typed numeric quantity; `expr` derives it from other parameters. */
+export interface Parameter {
+  name: string;
+  value?: number | null;
+  unit?: string;
+  expr?: string | null;
+}
+
+/** A boolean expression over parameters; `assume` gates its applicability. */
+export interface Constraint {
+  expr: string;
+  assume?: string | null;
+}
+
+/** A measured value recorded against a fully-qualified parameter ref. */
+export interface Measurement {
+  parameter: string;
+  value: number;
+  unit?: string;
+}
+
 export interface Requirement {
   id: string;
   type: string;
@@ -50,6 +71,8 @@ export interface Requirement {
   status: string;
   verification_method: string;
   attributes: { key: string; value: string }[];
+  parameters: Parameter[];
+  constraints: Constraint[];
   relations: { type: string; target: string; reviewed_fingerprint?: string | null }[];
   verification_cases: string[];
   verification_status: string;
@@ -100,6 +123,7 @@ export interface Component {
   satisfies: string[];
   verification_cases: string[];
   attributes: { key: string; value: string }[];
+  parameters: Parameter[];
   created: string;
   modified: string;
 }
@@ -136,6 +160,7 @@ export interface VerificationCase {
   test_procedure: string;
   steps: { action: string; expected_result: string; actual_result?: string | null }[];
   execution_history: { timestamp: string; status: string; notes: string; executed_by: string }[];
+  measurements: Measurement[];
   created: string;
   modified: string;
 }
@@ -227,6 +252,43 @@ export interface ConflictItem { ids?: string[]; a?: string; b?: string; type: st
 export interface QualityFinding { rule: string; severity: string; message: string; start: number; end: number }
 export interface QualityItem { id: string; name: string; score: number; findings: QualityFinding[] }
 export interface QualityData { average: number; per_requirement: QualityItem[]; total: number; config: { min_words: number; max_words: number } }
+
+export type ConstraintStatus = 'pass' | 'fail' | 'unknown' | 'error' | 'not_applicable';
+export type EvalVerdict = 'pass' | 'fail' | 'unknown' | 'error' | 'none';
+export interface EvaluatedParameter {
+  name: string;
+  unit: string;
+  expr?: string | null;
+  derived: boolean;
+  value: number | null;
+  detail?: string;
+  error?: string;
+  measured?: number;
+  measured_by?: string;
+}
+export interface EvaluatedConstraint {
+  expr: string;
+  assume?: string | null;
+  status: ConstraintStatus;
+  detail?: string;
+  margin?: { value: number; pct?: number };
+}
+export interface EvaluatedRequirement {
+  id: string;
+  name: string;
+  parameters: EvaluatedParameter[];
+  constraints: EvaluatedConstraint[];
+  verdict: EvalVerdict;
+  measured_constraints?: EvaluatedConstraint[];
+  measured_verdict?: EvalVerdict;
+}
+export interface EvaluationData {
+  requirements: EvaluatedRequirement[];
+  summary: Record<string, number>;
+  measured_summary: { pass: number; fail: number; unmeasured: number };
+  parameter_count: number;
+  measurement_count: number;
+}
 export interface MetricsData {
   total: number;
   verification_cases: number;
@@ -404,6 +466,8 @@ export const api = {
     request<{ count: number; conflicts: ConflictItem[] }>(`/projects/${projectId}/conflicts`),
   getQuality: (projectId: string) =>
     request<QualityData>(`/projects/${projectId}/quality`),
+  getEvaluation: (projectId: string) =>
+    request<EvaluationData>(`/projects/${projectId}/evaluation`),
 
   // Metrics & Compliance
   getMetrics: (projectId: string) => request<MetricsData>(`/projects/${projectId}/metrics`),

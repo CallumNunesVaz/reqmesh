@@ -1253,6 +1253,79 @@ VC_LINKS: dict[str, list[str]] = {
     "VCEV0001": ["ENVR0001", "AD2024001"],
 }
 
+# ── components (the synthesised design) ───────────────────────────────────────
+# A physical breakdown with mass and current-draw parameters, so the demo's
+# budget rollups (`rollup('C172', 'mass')`, `rollup('AVIO', 'current')`) have
+# a real tree to sum over. Masses are per-unit; `quantity` multiplies.
+
+
+def _comp(cid, name, ctype, parent, desc="", part_number="", supplier="",
+          quantity=1, satisfies=None, verification_cases=None, parameters=None):
+    return {
+        "id": cid, "name": name, "description": desc, "type": ctype,
+        "parent": parent, "part_number": part_number, "supplier": supplier,
+        "quantity": quantity, "satisfies": satisfies or [],
+        "verification_cases": verification_cases or [],
+        "attributes": [], "parameters": parameters or [],
+    }
+
+
+def _p(name, value, unit):
+    return {"name": name, "value": value, "unit": unit, "expr": None}
+
+
+COMPONENTS = [
+    _comp("C172", "Cessna 172S Airframe", "system", None,
+          desc="Top of the physical breakdown; the empty-weight budget rolls up from here.",
+          satisfies=["ACFT0000"]),
+    _comp("FUSE", "Fuselage", "assembly", "C172",
+          satisfies=["AFRM0001"], parameters=[_p("mass", 181, "kg")]),
+    _comp("WING", "Wing", "assembly", "C172",
+          satisfies=["AFRM0004"], parameters=[_p("mass", 48, "kg")]),
+    _comp("SPAR", "Main Spar", "part", "WING", quantity=2,
+          satisfies=["AFRM0005"], verification_cases=["VCAF0001"],
+          parameters=[_p("mass", 19, "kg")]),
+    _comp("TANK", "Integral Fuel Tank", "part", "WING", quantity=2,
+          satisfies=["AFRM0006"], verification_cases=["VCFL0001"],
+          parameters=[_p("mass", 9, "kg")]),
+    _comp("EMP", "Empennage", "assembly", "C172",
+          satisfies=["AFRM0007"], parameters=[_p("mass", 27, "kg")]),
+    _comp("GEAR", "Landing Gear", "assembly", "C172",
+          satisfies=["LNDG0000"], parameters=[_p("mass", 52, "kg")]),
+    _comp("ENG", "IO-360-L2A Engine", "part", "C172",
+          part_number="IO-360-L2A", supplier="Lycoming",
+          satisfies=["PROP0001"], verification_cases=["VCPR0001"],
+          parameters=[_p("mass", 122, "kg")]),
+    _comp("PRPL", "Fixed-Pitch Propeller", "part", "C172",
+          part_number="1A170E/JHA7660", supplier="McCauley",
+          satisfies=["PROP0005"], parameters=[_p("mass", 17, "kg")]),
+    _comp("AVIO", "G1000 NXi Avionics", "subsystem", "C172",
+          desc="Trays, harness and LRUs; the current rollup feeds the electrical load rule.",
+          satisfies=["AVNC0000"], parameters=[_p("mass", 4, "kg")]),
+    _comp("GDU", "GDU 1050 Display", "part", "AVIO", quantity=2,
+          part_number="GDU-1050", supplier="Garmin",
+          satisfies=["AVNC0001", "AVNC0002"], verification_cases=["VCAV0001"],
+          parameters=[_p("mass", 3.2, "kg"), _p("current", 3.5, "A")]),
+    _comp("GIA", "GIA 63W Integrated Avionics Unit", "part", "AVIO", quantity=2,
+          part_number="GIA-63W", supplier="Garmin",
+          satisfies=["AVNC0004", "AVNC0007"],
+          parameters=[_p("mass", 2.8, "kg"), _p("current", 4.9, "A")]),
+    _comp("GTX", "GTX 345R Transponder", "part", "AVIO",
+          part_number="GTX-345R", supplier="Garmin",
+          satisfies=["AVNC0008"], verification_cases=["VCAV0002"],
+          parameters=[_p("mass", 1.6, "kg"), _p("current", 1.7, "A")]),
+    _comp("GMA", "GMA 1360 Audio Panel", "part", "AVIO",
+          part_number="GMA-1360", supplier="Garmin",
+          satisfies=["AVNC0009"],
+          parameters=[_p("mass", 0.9, "kg"), _p("current", 0.6, "A")]),
+    _comp("BATT", "24 V Main Battery", "part", "C172",
+          satisfies=["ELEC0002"], verification_cases=["VCEL0002"],
+          parameters=[_p("mass", 13, "kg")]),
+    _comp("ALT", "60 A Alternator", "part", "C172",
+          satisfies=["ELEC0001"], verification_cases=["VCEL0001"],
+          parameters=[_p("mass", 5, "kg")]),
+]
+
 # ── relations (source, target, relation_type) ─────────────────────────────────
 
 RELATIONS = [
@@ -1554,11 +1627,121 @@ def seed_demo_project(data_root: Path, force: bool = False) -> bool:
         _add_attr(reqs[rid], "standard", "FAR Part 23")
     _add_attr(reqs["ACFT0000"], "author", "Systems Engineering")
 
+    # ── Parametrics: SysML-style computable requirements ─────────────────
+    # Weight & balance: MTOW bound, useful load derived across requirements,
+    # and the C172S's real full-fuel payload shortfall as a live failure.
+    reqs["ACFT0000"]["parameters"] = [
+        {"name": "mtow", "value": 1157, "unit": "kg", "expr": None},
+        {"name": "useful_load", "value": None, "unit": "kg",
+         "expr": "mtow - AFRM0000.empty_mass"},
+        {"name": "full_fuel_payload", "value": None, "unit": "kg",
+         "expr": "useful_load - PROP0006.fuel_mass"},
+    ]
+    reqs["ACFT0000"]["constraints"] = [
+        {"expr": "useful_load >= 380", "assume": None},
+        # 390 kg useful load minus ~145 kg of full fuel leaves ~245 kg — this
+        # fails on purpose: full tanks and four adults never fit in a 172S.
+        {"expr": "full_fuel_payload >= 250", "assume": None},
+    ]
+    reqs["AFRM0000"]["parameters"] = [
+        {"name": "empty_mass", "value": 767, "unit": "kg", "expr": None}]
+    reqs["AFRM0000"]["constraints"] = [
+        {"expr": "empty_mass <= 780", "assume": None},
+        # Budget rollup: everything tracked in the design tree must fit
+        # inside the empty weight.
+        {"expr": "rollup('C172', 'mass') <= empty_mass", "assume": None},
+    ]
+
+    # Structure: bound plus measured evidence from the static test.
+    reqs["AFRM0005"]["parameters"] = [
+        {"name": "ultimate_load_factor", "value": 5.89, "unit": "g", "expr": None}]
+    reqs["AFRM0005"]["constraints"] = [
+        {"expr": "ultimate_load_factor >= 5.7", "assume": None}]
+    vcs["VCAF0001"]["measurements"] = [
+        {"parameter": "AFRM0005.ultimate_load_factor", "value": 5.92, "unit": "g"}]
+
+    # Fuel: derived fuel mass and endurance, measured max flow, and a
+    # cross-requirement capacity check from the wing tanks.
+    reqs["PROP0006"]["parameters"] = [
+        {"name": "usable_fuel_l", "value": 201, "unit": "L", "expr": None},
+        {"name": "fuel_density", "value": 0.72, "unit": "kg/L", "expr": None},
+        {"name": "cruise_burn_lph", "value": 36, "unit": "L/h", "expr": None},
+        {"name": "fuel_mass", "value": None, "unit": "kg",
+         "expr": "usable_fuel_l * fuel_density"},
+        {"name": "endurance", "value": None, "unit": "h",
+         "expr": "usable_fuel_l / cruise_burn_lph"},
+        {"name": "max_flow_gph", "value": 15.0, "unit": "GPH", "expr": None},
+    ]
+    reqs["PROP0006"]["constraints"] = [
+        {"expr": "endurance >= 4.5", "assume": None},
+        {"expr": "max_flow_gph >= 14", "assume": None},
+    ]
+    vcs["VCFL0001"]["measurements"] = [
+        {"parameter": "PROP0006.max_flow_gph", "value": 15.4, "unit": "GPH"}]
+    reqs["AFRM0006"]["parameters"] = [
+        {"name": "tank_capacity_l", "value": 106, "unit": "L", "expr": None}]
+    reqs["AFRM0006"]["constraints"] = [
+        {"expr": "2 * tank_capacity_l >= PROP0006.usable_fuel_l", "assume": None}]
+
+    # Engine: a chained comparison bound with measured run-up evidence.
+    reqs["PROP0001"]["parameters"] = [
+        {"name": "rated_power_hp", "value": 180, "unit": "hp", "expr": None},
+        {"name": "static_rpm", "value": 2360, "unit": "RPM", "expr": None},
+    ]
+    reqs["PROP0001"]["constraints"] = [
+        {"expr": "rated_power_hp >= 160", "assume": None},
+        {"expr": "2300 <= static_rpm <= 2400", "assume": None},
+    ]
+    vcs["VCPR0001"]["measurements"] = [
+        {"parameter": "PROP0001.static_rpm", "value": 2345, "unit": "RPM"}]
+
+    # Electrical: the 80 %-continuous-load rule fed by a current rollup over
+    # the avionics subtree.
+    reqs["ELEC0001"]["parameters"] = [
+        {"name": "alternator_amps", "value": 60, "unit": "A", "expr": None},
+        {"name": "continuous_load_limit", "value": None, "unit": "A",
+         "expr": "0.8 * alternator_amps"},
+    ]
+    reqs["ELEC0001"]["constraints"] = [
+        {"expr": "rollup('AVIO', 'current') <= continuous_load_limit",
+         "assume": None}]
+
+    # Stall warning: the horn must sound 5-10 kn above stall; flight test
+    # measured where it actually sounds.
+    reqs["SAFE0001"]["parameters"] = [
+        {"name": "stall_speed_kcas", "value": 48, "unit": "kn", "expr": None},
+        {"name": "horn_activation_kn", "value": 54, "unit": "kn", "expr": None},
+    ]
+    reqs["SAFE0001"]["constraints"] = [
+        {"expr": "stall_speed_kcas + 5 <= horn_activation_kn <= stall_speed_kcas + 10",
+         "assume": None}]
+    vcs["VCSF0001"]["measurements"] = [
+        {"parameter": "SAFE0001.horn_activation_kn", "value": 55, "unit": "kn"}]
+
+    # Cabin heat: an assume/require pair — the arctic clause is out of scope
+    # at the -18 °C design case, the standard clause applies and passes.
+    reqs["ENVR0001"]["parameters"] = [
+        {"name": "oat_c", "value": -18, "unit": "degC", "expr": None},
+        {"name": "temp_rise_c", "value": 25, "unit": "degC", "expr": None},
+    ]
+    reqs["ENVR0001"]["constraints"] = [
+        {"expr": "temp_rise_c >= 22", "assume": None},
+        {"expr": "temp_rise_c >= 30", "assume": "oat_c <= -30"},
+    ]
+
+    # ELT battery life is still TBD from the vendor — an honest "unknown".
+    reqs["SAFE0003"]["parameters"] = [
+        {"name": "battery_life_h", "value": None, "unit": "h", "expr": None}]
+    reqs["SAFE0003"]["constraints"] = [
+        {"expr": "battery_life_h >= 24", "assume": None}]
+
     # Write everything to disk
     for r in reqs.values():
         store.create_requirement(r)
     for vc in vcs.values():
         store.create_verification_case(vc)
+    for comp in COMPONENTS:
+        store.create_component(dict(comp))
 
     store.write_traces({"links": TRACES})
 

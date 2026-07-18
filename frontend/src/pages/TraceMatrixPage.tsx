@@ -1,12 +1,12 @@
 import { useEffect, useState, useMemo } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { GitBranch, Plus, X, LayoutGrid, LayoutList } from 'lucide-react';
 import { api } from '../api/client';
 import type { TraceLink, Requirement, VerificationCase } from '../api/client';
 import { useAuthStore } from '../store/auth';
 import AutocompleteInput from '../components/AutocompleteInput';
-import { EntityLink, type EntityKind } from '../components/entities';
+import { ENTITY_META, EntityLink, type EntityKind } from '../components/entities';
 
 export default function TraceMatrixPage() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -184,10 +184,9 @@ export default function TraceMatrixPage() {
                 {verificationCases.map((vc) => (
                   <th
                     key={vc.id}
-                    className="sticky top-0 z-10 bg-card border-b px-2 py-2 text-[9px] font-mono text-muted-foreground whitespace-nowrap"
-                    title={`${vc.id} - ${vc.name}`}
+                    className="sticky top-0 z-10 bg-card border-b px-2 py-2 text-[9px] font-mono whitespace-nowrap"
                   >
-                    {vc.id}
+                    <EntityLink kind="verification" id={vc.id} showIcon={false} className="text-muted-foreground hover:text-primary" />
                   </th>
                 ))}
               </tr>
@@ -197,8 +196,8 @@ export default function TraceMatrixPage() {
                 const reqLinks = links.filter((l) => l.source === req.id);
                 return (
                   <tr key={req.id} className="group">
-                    <td className="sticky left-0 z-10 bg-card border-r px-3 py-1.5 text-[10px] font-mono whitespace-nowrap group-hover:bg-accent/40" title={`${req.id} - ${req.name}`}>
-                      {req.id}
+                    <td className="sticky left-0 z-10 bg-card border-r px-3 py-1.5 text-[10px] font-mono whitespace-nowrap group-hover:bg-accent/40">
+                      <EntityLink kind="requirement" id={req.id} showIcon={false} className="text-foreground hover:text-primary" />
                     </td>
                     {verificationCases.map((vc) => {
                       const link = reqLinks.find((l) => l.target === vc.id);
@@ -212,9 +211,15 @@ export default function TraceMatrixPage() {
                       return (
                         <td key={vc.id} className="border-b px-2 py-1.5 text-center">
                           {link ? (
-                            <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-medium ${colorMap[link.type] || 'bg-muted text-muted-foreground'}`}>
+                            // The headers already link both ends; the cell
+                            // itself takes you to the target the pairing hits.
+                            <Link
+                              to={ENTITY_META.verification.path(projectId!, vc.id)}
+                              title={`${req.id} ${link.type} ${vc.id}`}
+                              className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-medium hover:ring-1 hover:ring-primary/40 transition-shadow ${colorMap[link.type] || 'bg-muted text-muted-foreground'}`}
+                            >
                               {link.type}
-                            </span>
+                            </Link>
                           ) : (
                             <span className="text-[9px] text-muted-foreground/30">—</span>
                           )}

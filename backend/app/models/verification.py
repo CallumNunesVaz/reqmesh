@@ -19,6 +19,20 @@ class ExecutionRecord(BaseModel):
     executed_by: str = ""
 
 
+class Measurement(BaseModel):
+    """A measured value recorded against a requirement parameter.
+
+    `parameter` is a fully-qualified reference (`"AFRM0005.max_load"`). The
+    evaluation engine substitutes these into the owning requirement's
+    constraints to compute a verification verdict from evidence rather than a
+    hand-set status.
+    """
+
+    parameter: str
+    value: float
+    unit: str = ""
+
+
 class VerificationCase(BaseModel):
     id: str
     name: str = ""
@@ -30,6 +44,7 @@ class VerificationCase(BaseModel):
     test_procedure: str = ""
     steps: list[TestStep] = Field(default_factory=list)
     execution_history: list[ExecutionRecord] = Field(default_factory=list)
+    measurements: list[Measurement] = Field(default_factory=list)
     created: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     modified: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
@@ -51,3 +66,4 @@ class VerificationCaseUpdate(BaseModel):
     test_procedure: Optional[str] = None
     steps: Optional[list[TestStep]] = None
     execution_history: Optional[list[ExecutionRecord]] = None
+    measurements: Optional[list[Measurement]] = None
