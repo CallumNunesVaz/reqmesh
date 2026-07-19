@@ -14,6 +14,7 @@ export default function TraceMatrixPage() {
   const [requirements, setRequirements] = useState<Requirement[]>([]);
   const [verificationCases, setVerificationCases] = useState<VerificationCase[]>([]);
   const [newLink, setNewLink] = useState({ source: '', target: '', type: 'satisfies' });
+  const [error, setError] = useState('');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const editable = useAuthStore((s) => s.editMode && s.user !== null && s.user.role !== 'viewer');
 
@@ -40,17 +41,21 @@ export default function TraceMatrixPage() {
 
   const addLink = async () => {
     if (!projectId || !newLink.source || !newLink.target) return;
-    const updated = [...links, { ...newLink }];
-    await api.updateTraces(projectId, { links: updated });
-    setLinks(updated);
-    setNewLink({ source: '', target: '', type: 'satisfies' });
+    try {
+      const updated = [...links, { ...newLink }];
+      await api.updateTraces(projectId, { links: updated });
+      setLinks(updated);
+      setNewLink({ source: '', target: '', type: 'satisfies' });
+    } catch (err: any) { setError(err.message || 'Failed to add link'); }
   };
 
   const removeLink = async (index: number) => {
     if (!projectId) return;
-    const updated = links.filter((_, i) => i !== index);
-    await api.updateTraces(projectId, { links: updated });
-    setLinks(updated);
+    try {
+      const updated = links.filter((_, i) => i !== index);
+      await api.updateTraces(projectId, { links: updated });
+      setLinks(updated);
+    } catch (err: any) { setError(err.message || 'Failed to remove link'); }
   };
 
   // Either end of a trace can be a requirement or a verification case.
@@ -101,7 +106,7 @@ export default function TraceMatrixPage() {
             <select className="select w-32" value={newLink.type} onChange={(e) => setNewLink({ ...newLink, type: e.target.value })}>
               <option value="satisfies">Satisfies</option>
               <option value="refines">Refines</option>
-              <option value="verified_by">Verified by</option>
+              <option value="verified_by">Verified By</option>
               <option value="derives">Derives</option>
               <option value="conflicts">Conflicts</option>
             </select>

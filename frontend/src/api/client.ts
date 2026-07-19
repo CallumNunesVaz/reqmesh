@@ -55,12 +55,14 @@ export interface Parameter {
   value?: number | null;
   unit?: string;
   expr?: string | null;
+  kind?: 'MOE' | 'MOP' | 'TPM' | null;
 }
 
 /** A boolean expression over parameters; `assume` gates its applicability. */
 export interface Constraint {
   expr: string;
   assume?: string | null;
+  kind?: 'MOE' | 'MOP' | 'TPM' | null;
 }
 
 /** A measured value recorded against a fully-qualified parameter ref. */
@@ -97,6 +99,8 @@ export interface Requirement {
   effort: number | null;
   priorities: Record<string, number>;
   needs: string[];
+  requirement_kind: 'stakeholder_need' | 'system_requirement';
+  system_states: string[];
   created: string;
   modified: string;
 }
@@ -130,6 +134,7 @@ export interface Component {
   quantity: number;
   satisfies: string[];
   verification_cases: string[];
+  relations: { type: string; target: string }[];
   attributes: { key: string; value: string }[];
   parameters: Parameter[];
   created: string;
@@ -169,6 +174,9 @@ export interface VerificationCase {
   steps: { action: string; expected_result: string; actual_result?: string | null }[];
   execution_history: { timestamp: string; status: string; notes: string; executed_by: string }[];
   measurements: Measurement[];
+  case_type: 'verification' | 'validation';
+  environment: string;
+  decision_gate: string | null;
   created: string;
   modified: string;
 }
@@ -324,6 +332,11 @@ export interface PresenceUser {
 export interface ManagedUser {
   username: string;
   role: string;
+  full_name: string;
+  email: string;
+  email_verified: boolean;
+  last_active: string;
+  joined: string;
   created: string;
 }
 
@@ -340,18 +353,22 @@ export const api = {
 
   // User management (admin only)
   listUsers: () => request<ManagedUser[]>('/auth/users'),
-  createUser: (data: { username: string; password: string; role: string }) =>
+  createUser: (data: { username: string; password: string; role: string; email?: string; full_name?: string }) =>
     request<ManagedUser>('/auth/users', { method: 'POST', body: data }),
-  updateUser: (username: string, data: { role?: string; password?: string }) =>
+  updateUser: (username: string, data: { role?: string; password?: string; email?: string; full_name?: string }) =>
     request<ManagedUser>(`/auth/users/${encodeURIComponent(username)}`, { method: 'PATCH', body: data }),
   deleteUser: (username: string) =>
     request<void>(`/auth/users/${encodeURIComponent(username)}`, { method: 'DELETE' }),
+  updateProfile: (data: { full_name?: string; email?: string; password?: string }) =>
+    request<{ ok: boolean }>('/auth/profile', { method: 'PATCH', body: data }),
 
   // Projects
   listProjects: () => request<Project[]>('/projects'),
   createProject: (data: { id: string; name: string }) => request<Project>('/projects', { method: 'POST', body: data }),
   getProject: (id: string) => request<Project>(`/projects/${id}`),
   deleteProject: (id: string) => request<void>(`/projects/${id}`, { method: 'DELETE' }),
+  updateProject: (id: string, data: { name?: string; naming?: Record<string, any>; quality?: Record<string, any>; workflow?: Record<string, any>; git?: Record<string, any> }) =>
+    request<any>(`/projects/${id}`, { method: 'PATCH', body: data }),
   getWorkflow: (projectId: string) =>
     request<{ states: string[]; transitions: Record<string, string[]>; default: string }>(`/projects/${projectId}/workflow`),
 
@@ -416,6 +433,10 @@ export const api = {
     request<{ name: string; requirements: string[]; count: number }[]>(`/projects/${projectId}/baselines`),
   createBaseline: (projectId: string, name: string, requirements: string[]) =>
     request<{ name: string; requirements_assigned: number }>(`/projects/${projectId}/baselines`, { method: 'POST', body: { name, requirements } }),
+  renameBaseline: (projectId: string, oldName: string, newName: string) =>
+    request<{ old_name: string; new_name: string; requirements_updated: number }>(`/projects/${projectId}/baselines/${encodeURIComponent(oldName)}`, { method: 'PATCH', body: { name: newName } }),
+  deleteBaseline: (projectId: string, name: string) =>
+    request<{ name: string; requirements_cleared: number }>(`/projects/${projectId}/baselines/${encodeURIComponent(name)}`, { method: 'DELETE' }),
 
   // Specifications
   listSpecifications: (projectId: string) => request<Specification[]>(`/projects/${projectId}/specifications`),

@@ -33,14 +33,14 @@ export const ENTITY_META: Record<EntityKind, EntityMeta> = {
   verification: {
     icon: CheckCircle2,
     cls: 'text-cs-green',
-    label: 'Verification case',
+    label: 'Verification Case',
     path: (p, id) => `/project/${p}/verification?focus=${encodeURIComponent(id)}`,
   },
   component: {
     icon: Boxes,
     cls: 'text-cs-orange',
     label: 'Component',
-    path: (p, id) => `/project/${p}/components?focus=${encodeURIComponent(id)}`,
+    path: (p, id) => `/project/${p}/components/${encodeURIComponent(id)}`,
   },
   specification: {
     icon: FileText,
@@ -51,7 +51,7 @@ export const ENTITY_META: Record<EntityKind, EntityMeta> = {
   change: {
     icon: GitPullRequest,
     cls: 'text-cs-purple',
-    label: 'Change request',
+    label: 'Change Request',
     path: (p, id) => `/project/${p}/change-requests?focus=${encodeURIComponent(id)}`,
   },
   risk: {

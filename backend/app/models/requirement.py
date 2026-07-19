@@ -1,5 +1,13 @@
 from __future__ import annotations
 
+"""Requirements model — aligned with ISO/IEC 15288:2023 §6.4.2.3 (Stakeholder Needs and Requirements Definition).
+
+A Requirement represents either a stakeholder requirement (expressing a need
+or expectation) or a system requirement (derived from stakeholder requirements,
+expressed in technical terms). The 'type' field distinguishes these:
+functional, non_functional, interface, design, and constraint.
+"""
+
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
@@ -38,6 +46,19 @@ class Priority(str, Enum):
     CRITICAL = "critical"
 
 
+class RequirementKind(str, Enum):
+    """OOSEM / ISO 15288 distinction: stakeholder need vs system requirement."""
+    STAKEHOLDER_NEED = "stakeholder_need"
+    SYSTEM_REQUIREMENT = "system_requirement"
+
+
+class MeasureKind(str, Enum):
+    """OOSEM measure taxonomy: MOE (operational), MOP (system), TPM (component)."""
+    MOE = "MOE"
+    MOP = "MOP"
+    TPM = "TPM"
+
+
 class Relation(BaseModel):
     type: str
     target: str
@@ -70,6 +91,7 @@ class Parameter(BaseModel):
     value: Optional[float] = None
     unit: str = ""
     expr: Optional[str] = None
+    kind: Optional[MeasureKind] = None
 
 
 class Constraint(BaseModel):
@@ -81,6 +103,7 @@ class Constraint(BaseModel):
 
     expr: str
     assume: Optional[str] = None
+    kind: Optional[MeasureKind] = None
 
 
 class Requirement(BaseModel):
@@ -110,6 +133,8 @@ class Requirement(BaseModel):
     priorities: dict[str, int] = Field(default_factory=dict)
     needs: list[str] = Field(default_factory=list)
     references: list[Reference] = Field(default_factory=list)
+    requirement_kind: RequirementKind = RequirementKind.SYSTEM_REQUIREMENT
+    system_states: list[str] = Field(default_factory=list)
     created: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     modified: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
@@ -140,6 +165,8 @@ class RequirementCreate(BaseModel):
     priorities: dict[str, int] = Field(default_factory=dict)
     needs: list[str] = Field(default_factory=list)
     references: list[Reference] = Field(default_factory=list)
+    requirement_kind: RequirementKind = RequirementKind.SYSTEM_REQUIREMENT
+    system_states: list[str] = Field(default_factory=list)
 
 
 class RequirementUpdate(BaseModel):
@@ -168,6 +195,8 @@ class RequirementUpdate(BaseModel):
     priorities: Optional[dict[str, int]] = None
     needs: Optional[list[str]] = None
     references: Optional[list[Reference]] = None
+    requirement_kind: Optional[RequirementKind] = None
+    system_states: Optional[list[str]] = None
 
 
 class RequirementTreeNode(BaseModel):

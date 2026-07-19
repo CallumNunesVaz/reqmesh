@@ -8,6 +8,7 @@ import {
 import { api, type Requirement, type EvalVerdict } from '../api/client';
 import { useStore } from '../store';
 import { useAuthStore } from '../store/auth';
+import LoadingSplash from '../components/LoadingSplash';
 
 const statusStyles: Record<string, { dot: string; text: string }> = {
   proposed: { dot: 'bg-cs-blue', text: 'text-cs-blue' },
@@ -55,10 +56,14 @@ export default function RequirementsPage() {
   const searchRef = useRef<HTMLInputElement>(null);
 
   const [verdicts, setVerdicts] = useState<Map<string, EvalVerdict>>(new Map());
+  // Splash only covers the very first fetch — SSE-triggered background
+  // reloads swap the data in place without interrupting the reader.
+  const [loading, setLoading] = useState(true);
 
   const load = () => {
     if (!projectId) return;
-    api.listRequirements(projectId).then(setRequirements).catch(console.error);
+    api.listRequirements(projectId).then(setRequirements).catch(console.error)
+      .finally(() => setLoading(false));
     // Constraint verdicts, so a failing parametric bound is visible from the
     // list without opening each requirement.
     api.getEvaluation(projectId)
@@ -188,7 +193,8 @@ export default function RequirementsPage() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-6">
+    <div className="relative max-w-4xl mx-auto px-6 py-6 min-h-[50vh]">
+      {loading && requirements.length === 0 && <LoadingSplash label="Loading requirements…" />}
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
         <div>
@@ -435,9 +441,10 @@ function CreateRequirementModal({
     setBusy(true);
     setError('');
     try {
+      const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
       await api.createRequirement(projectId, {
         ...form,
-        description: form.description ? `<p>${form.description}</p>` : '',
+        description: form.description ? `<p>${esc(form.description)}</p>` : '',
         parent: form.parent || undefined,
       });
       setForm({ id: '', name: '', type: 'functional', priority: 'medium', parent: '', description: '' });

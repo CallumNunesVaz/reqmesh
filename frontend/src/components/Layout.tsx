@@ -1,10 +1,13 @@
 import { Outlet, Link, useParams } from 'react-router-dom';
-import { PanelRight, PanelRightClose, LogIn, LogOut, User, Pencil, Eye, FileDown, FileUp, Users, Search, HelpCircle } from 'lucide-react';
+import { PanelRight, PanelRightClose, LogIn, LogOut, User, Pencil, Eye, FileDown, FileUp, Users, Search, HelpCircle, BookOpen } from 'lucide-react';
 import { useState, useEffect, useCallback, createContext, useContext, useRef } from 'react';
 import { ThemeToggle } from './ThemeToggle';
 import RequirementNav from './RequirementNav';
 import GraphPane from './GraphPane';
 import CommandPalette, { OPEN_PALETTE_EVENT } from './CommandPalette';
+import ShortcutHelp from './ShortcutHelp';
+import DocumentationPanel from './DocumentationPanel';
+import { useKeyboardShortcuts } from './useKeyboardShortcuts';
 import LoginModal from './LoginModal';
 import ExportDialog from './ExportDialog';
 import ImportDialog from './ImportDialog';
@@ -26,6 +29,7 @@ export function useSelectedReq() { return useContext(SelectedReqCtx); }
 const GRAPH_MIN = 320;
 const NAV_MIN = 200;
 const NAV_MAX = 480;
+const NAV_RAIL = 40;
 const graphMax = () => Math.round(window.innerWidth * 0.65);
 
 export default function Layout() {
@@ -35,10 +39,12 @@ export default function Layout() {
   const [loginOpen, setLoginOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [docsOpen, setDocsOpen] = useState(false);
   const [presence, setPresence] = useState<PresenceUser[]>([]);
   const [graphWidth, setGraphWidth] = useState(() => {
     const saved = parseInt(localStorage.getItem('rt-graph-width') || '', 10);
-    const fallback = Math.round(window.innerWidth * 0.38);
+    const fallback = Math.round(window.innerWidth * 0.44);
     return Math.min(Math.max(isNaN(saved) ? fallback : saved, GRAPH_MIN), graphMax());
   });
   const [navWidth, setNavWidth] = useState(() => {
@@ -47,20 +53,36 @@ export default function Layout() {
   });
   const [resizing, setResizing] = useState<'graph' | 'nav' | false>(false);
   const [selectedReqId, setSelectedReqId] = useState<string | null>(null);
+  const [navCollapsed, setNavCollapsed] = useState(() => localStorage.getItem('rt-nav-collapsed') === '1');
+
+  const toggleNavCollapsed = useCallback(() => {
+    setNavCollapsed((c) => {
+      localStorage.setItem('rt-nav-collapsed', c ? '0' : '1');
+      return !c;
+    });
+  }, []);
+
+  // Collapsing the nav hands its freed width to the canvas, not the page.
+  const canvasBonus = navCollapsed ? navWidth + 4 - NAV_RAIL : 0;
 
   const selectReq = useCallback((id: string | null) => {
     setSelectedReqId(id);
   }, []);
 
+  // The canvas sits between the nav and the page content, so its width is
+  // measured from the nav's right edge. While the nav is collapsed the canvas
+  // renders with a width bonus, so dragging adjusts the stored base width.
   const startGraphResize = useCallback((e: React.PointerEvent) => {
     e.preventDefault();
     setResizing('graph');
-    const onMove = (ev: PointerEvent) => {
-      const w = Math.min(Math.max(window.innerWidth - ev.clientX, GRAPH_MIN), graphMax());
-      setGraphWidth(w);
-    };
+    const left = navCollapsed ? NAV_RAIL : navWidth + 4;
+    const bonus = navCollapsed ? navWidth + 4 - NAV_RAIL : 0;
+    const baseWidth = (clientX: number) =>
+      Math.min(Math.max(clientX - left - bonus, GRAPH_MIN), graphMax());
+    const onMove = (ev: PointerEvent) => setGraphWidth(baseWidth(ev.clientX));
     const onUp = (ev: PointerEvent) => {
-      const w = Math.min(Math.max(window.innerWidth - ev.clientX, GRAPH_MIN), graphMax());
+      const w = baseWidth(ev.clientX);
+      setGraphWidth(w);
       localStorage.setItem('rt-graph-width', String(w));
       setResizing(false);
       window.removeEventListener('pointermove', onMove);
@@ -68,7 +90,7 @@ export default function Layout() {
     };
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
-  }, []);
+  }, [navWidth, navCollapsed]);
 
   const startNavResize = useCallback((e: React.PointerEvent) => {
     e.preventDefault();
@@ -139,6 +161,16 @@ export default function Layout() {
   const toggleGraph = () => setGraphOpen((o) => !o);
   const toggleEdit = () => setEditMode(!editMode);
 
+  useKeyboardShortcuts(projectId, {
+    onEditToggle: () => { if (canToggleEdit) toggleEdit(); },
+    onGraphToggle: toggleGraph,
+    onHelperToggle: toggleHelpers,
+    onHelpToggle: () => setHelpOpen(o => !o),
+    onDocsOpen: () => setDocsOpen(o => !o),
+    onDetailEscape: () => window.history.back(),
+    onListEscape: () => {},
+  });
+
   const canToggleEdit = user && user.role !== 'viewer';
 
   return (
@@ -164,10 +196,21 @@ export default function Layout() {
             <button
               onClick={() => window.dispatchEvent(new Event(OPEN_PALETTE_EVENT))}
               className="btn-ghost p-2 rounded-lg gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-              title="Jump to anything (Ctrl+K)"
+              title="Jump to anything (Ctrl+K)" aria-label="Open command palette"
             >
               <Search size={15} />
               <kbd className="hidden sm:inline text-[9px] border rounded px-1 py-px">Ctrl K</kbd>
+            </button>
+          )}
+
+          {isInProject && (
+            <button
+              onClick={() => setDocsOpen(true)}
+              className="btn-ghost p-2 rounded-lg gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+              title="Documentation (F1)"
+            >
+              <BookOpen size={15} />
+              <span className="hidden sm:inline text-[10px]">Docs</span>
             </button>
           )}
 
@@ -178,14 +221,14 @@ export default function Layout() {
               title={helpersEnabled ? 'Helpers ON — click to hide guidance' : 'Helpers OFF — click to show guidance'}
             >
               <HelpCircle size={15} />
-              <span className="hidden sm:inline text-[10px]">{helpersEnabled ? 'GUIDED' : 'GUIDED'}</span>
+              <span className="hidden sm:inline text-[10px]">{helpersEnabled ? 'GUIDED ON' : 'GUIDED OFF'}</span>
             </button>
           )}
 
           {isInProject && (
             <button onClick={toggleGraph} className={`btn-ghost p-2 rounded-lg gap-1.5 text-xs ${graphOpen ? 'bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground' : 'text-muted-foreground'}`}>
               {graphOpen ? <PanelRightClose size={15} /> : <PanelRight size={15} />}
-              <span className="hidden sm:inline">Graph</span>
+              <span className="hidden sm:inline">Canvas</span>
             </button>
           )}
 
@@ -270,15 +313,43 @@ export default function Layout() {
           <ThemeToggle />
         </header>
 
+        {/* Workspace order follows the MBSE anatomy: model browser (left),
+            diagram canvas (centre), page content as the inspector surface. */}
         <div className="flex flex-1 min-h-0 overflow-hidden">
           {isInProject && (
             <>
-              <div className="shrink-0 overflow-hidden bg-sidebar" style={{ width: navWidth }}>
-                <RequirementNav width={navWidth} />
+              <div
+                className="shrink-0 overflow-hidden bg-sidebar"
+                style={{
+                  width: navCollapsed ? NAV_RAIL : navWidth,
+                  transition: resizing ? 'none' : 'width 0.3s ease',
+                }}
+              >
+                <RequirementNav width={navWidth} collapsed={navCollapsed} onToggleCollapse={toggleNavCollapsed} />
+              </div>
+              {!navCollapsed && (
+                <div
+                  onPointerDown={startNavResize}
+                  className={`w-1 shrink-0 cursor-col-resize transition-colors ${resizing === 'nav' ? 'bg-primary/60' : 'bg-border/60 hover:bg-primary/40'}`}
+                  title="Drag to resize"
+                />
+              )}
+            </>
+          )}
+          {isInProject && graphOpen && (
+            <>
+              <div
+                className="shrink-0 overflow-hidden bg-background"
+                style={{
+                  width: graphWidth + canvasBonus,
+                  transition: resizing ? 'none' : 'width 0.3s ease',
+                }}
+              >
+                <GraphPane projectId={projectId!} />
               </div>
               <div
-                onPointerDown={startNavResize}
-                className={`w-1 shrink-0 cursor-col-resize transition-colors ${resizing === 'nav' ? 'bg-primary/60' : 'bg-border/60 hover:bg-primary/40'}`}
+                onPointerDown={startGraphResize}
+                className={`w-1 shrink-0 cursor-col-resize transition-colors ${resizing === 'graph' ? 'bg-primary/60' : 'bg-border/60 hover:bg-primary/40'}`}
                 title="Drag to resize"
               />
             </>
@@ -286,18 +357,6 @@ export default function Layout() {
           <main className="flex-1 overflow-auto">
             <Outlet />
           </main>
-          {isInProject && graphOpen && (
-            <>
-              <div
-                onPointerDown={startGraphResize}
-                className={`w-1 shrink-0 cursor-col-resize transition-colors ${resizing === 'graph' ? 'bg-primary/60' : 'bg-border/60 hover:bg-primary/40'}`}
-                title="Drag to resize"
-              />
-              <div className="border-l shrink-0 overflow-hidden bg-background" style={{ width: graphWidth }}>
-                <GraphPane projectId={projectId!} />
-              </div>
-            </>
-          )}
         </div>
         {/* Capture pointer events over the canvas while resizing */}
         {resizing && <div className="fixed inset-0 z-50 cursor-col-resize" />}
@@ -307,6 +366,8 @@ export default function Layout() {
       {isInProject && <CommandPalette projectId={projectId!} />}
       {isInProject && <ExportDialog open={exportOpen} onClose={() => setExportOpen(false)} projectId={projectId!} />}
       {isInProject && <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} projectId={projectId!} />}
+      <ShortcutHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
+      <DocumentationPanel open={docsOpen} onClose={() => setDocsOpen(false)} />
     </SelectedReqCtx.Provider>
     </GraphPaneCtx.Provider>
   );

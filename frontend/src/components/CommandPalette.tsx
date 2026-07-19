@@ -54,10 +54,20 @@ export default function CommandPalette({ projectId }: { projectId: string }) {
 
   const results = searchEntities(entities, query);
 
+  // Recent items — shown at top when query is empty
+  const [recentIds, setRecentIds] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem(`rt-recent-${projectId}`) || '[]'); }
+    catch { return []; }
+  });
+  const recentEntities = !query.trim() ? recentIds.map(id => entities.find(e => e.id === id)).filter(Boolean) as IndexedEntity[] : [];
+
   const pick = useCallback((entity: IndexedEntity) => {
     setOpen(false);
+    const newRecent = [entity.id, ...recentIds.filter(id => id !== entity.id)].slice(0, 8);
+    setRecentIds(newRecent);
+    try { localStorage.setItem(`rt-recent-${projectId}`, JSON.stringify(newRecent)); } catch {}
     navigate(ENTITY_META[entity.kind].path(projectId, entity.id));
-  }, [navigate, projectId]);
+  }, [navigate, projectId, recentIds]);
 
   const onInputKey = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') { setOpen(false); return; }
@@ -98,6 +108,25 @@ export default function CommandPalette({ projectId }: { projectId: string }) {
             </div>
 
             <div ref={listRef} className="max-h-[50vh] overflow-y-auto p-1.5">
+              {recentEntities.length > 0 && !query.trim() && (
+                <>
+                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1">Recent</p>
+                  {recentEntities.map((e) => {
+                    const meta = ENTITY_META[e.kind];
+                    const Icon = meta.icon;
+                    return (
+                      <button key={`recent-${e.kind}-${e.id}`} onClick={() => pick(e)}
+                        className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left hover:bg-accent/50 transition-colors">
+                        <Icon size={14} className={`${meta.cls} shrink-0`} />
+                        <span className="font-mono text-xs text-muted-foreground shrink-0">{e.id}</span>
+                        <span className="text-sm text-card-foreground truncate">{e.name || 'Untitled'}</span>
+                        <span className="ml-auto text-[10px] text-muted-foreground">{meta.label}</span>
+                      </button>
+                    );
+                  })}
+                  <div className="border-t my-1 mx-1" />
+                </>
+              )}
               {results.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-8">No matches.</p>
               ) : (

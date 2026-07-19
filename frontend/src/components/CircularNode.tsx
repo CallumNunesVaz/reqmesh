@@ -1,8 +1,9 @@
 import { memo, useState } from 'react';
-import { Handle, Position, type NodeProps } from '@xyflow/react';
-import { Copy } from 'lucide-react';
+import { Handle, Position, useStore, type NodeProps } from '@xyflow/react';
+import { Copy, Sigma } from 'lucide-react';
 import { useGraphSelection } from './GraphPane';
 import { glow, shiftLightness } from './graphColors';
+import { zoomLevel, labelScale, type ZoomLevel } from './semanticZoom';
 
 const statusFillColors: Record<string, string> = {
   proposed: 'hsl(207,90%,64%)',
@@ -28,12 +29,26 @@ interface CircularNodeData {
   type: string;
   cascadeFrom: string | null;
   childCount?: number;
+  params?: { name: string; display: string }[];
+  verdict?: string | null;
+  vcCount?: number;
 }
+
+const verdictColors: Record<string, string> = {
+  pass: 'hsl(179,100%,38%)',
+  fail: 'hsl(0,84%,68%)',
+  error: 'hsl(0,84%,68%)',
+  unknown: 'hsl(45,90%,55%)',
+};
 
 function CircularNode({ data, selected }: NodeProps) {
   const nodeData = data as unknown as CircularNodeData;
   const [hover, setHover] = useState(false);
   const { connectedIds, selectedReqId, hasSelection } = useGraphSelection();
+  // Semantic zoom: far out only the hub (parent) nodes keep their names, as
+  // scaled map labels; close in every node reveals id, status and parametrics.
+  const level: ZoomLevel = useStore((s) => zoomLevel(s.transform[2]));
+  const textScale = useStore((s) => labelScale(s.transform[2]));
   const fill = statusFillColors[nodeData.status] || statusFillColors.proposed;
   const ringColor = priorityRingColors[nodeData.priority] || 'hsl(195,6%,62%)';
   const isCascade = !!nodeData.cascadeFrom;
@@ -113,35 +128,68 @@ function CircularNode({ data, selected }: NodeProps) {
         )}
       </svg>
 
-      <div style={{
-        position: 'absolute',
-        left: nodeW + 12,
-        top: '50%',
-        transform: 'translateY(-50%)',
-        lineHeight: 1.25,
-        pointerEvents: 'none',
-        whiteSpace: 'nowrap',
-      }}>
+      {/* Side label — content follows the semantic zoom level. L1 keeps only
+          hub names (scaled like map labels) so the far-out view reads as
+          subsystem structure instead of 57 colliding captions. */}
+      {(level > 1 || childCount > 0) && (
         <div style={{
-          fontFamily: 'var(--font-mono)',
-          fontSize: 10,
-          color: 'hsl(var(--muted-foreground))',
-          fontWeight: 500,
-          letterSpacing: '0.02em',
+          position: 'absolute',
+          left: nodeW + 12,
+          top: '50%',
+          transform: `translateY(-50%) scale(${level <= 2 ? textScale : 1})`,
+          transformOrigin: 'left center',
+          lineHeight: 1.25,
+          pointerEvents: 'none',
+          whiteSpace: 'nowrap',
         }}>
-          {nodeData.label}
+          {level >= 3 && (
+            <div style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 10,
+              color: 'hsl(var(--muted-foreground))',
+              fontWeight: 500,
+              letterSpacing: '0.02em',
+            }}>
+              {nodeData.label}
+            </div>
+          )}
+          <div style={{
+            fontSize: level === 1 ? 12 : 11,
+            fontWeight: 600,
+            color: 'hsl(var(--foreground))',
+            maxWidth: 140,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            textShadow: level <= 2 ? '0 1px 4px hsl(var(--background) / 0.9)' : undefined,
+          }}>
+            {nodeData.name || 'Untitled'}
+          </div>
+          {level >= 4 && (
+            <div className="flex items-center gap-1" style={{ fontSize: 9 }}>
+              <span style={{ color: fill, fontWeight: 600 }}>{nodeData.status}</span>
+              {level >= 5 && <span style={{ color: 'hsl(var(--muted-foreground))' }}>&middot; {nodeData.priority}</span>}
+              {(nodeData.vcCount ?? 0) > 0 && level >= 5 && (
+                <span style={{ color: 'hsl(var(--muted-foreground))' }}>&middot; {nodeData.vcCount} VC</span>
+              )}
+              {nodeData.verdict && (
+                <span className="flex items-center gap-0.5" style={{ color: verdictColors[nodeData.verdict] || verdictColors.unknown, fontWeight: 600 }}>
+                  <Sigma size={8} /> {nodeData.verdict === 'not_applicable' ? 'n/a' : nodeData.verdict}
+                </span>
+              )}
+            </div>
+          )}
+          {level >= 5 && (nodeData.params?.length ?? 0) > 0 && (
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8.5, color: 'hsl(var(--foreground) / 0.75)' }}>
+              {nodeData.params!.slice(0, 3).map((p) => (
+                <div key={p.name}>{p.name} {p.display}</div>
+              ))}
+              {nodeData.params!.length > 3 && (
+                <div style={{ color: 'hsl(var(--muted-foreground))' }}>+{nodeData.params!.length - 3} more</div>
+              )}
+            </div>
+          )}
         </div>
-        <div style={{
-          fontSize: 11,
-          fontWeight: 600,
-          color: 'hsl(var(--foreground))',
-          maxWidth: 140,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-        }}>
-          {nodeData.name || 'Untitled'}
-        </div>
-      </div>
+      )}
 
       {hover && (
         <div

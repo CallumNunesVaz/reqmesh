@@ -73,10 +73,11 @@ export default function RichTextEditor({ content, onChange, onBlur, disabled = f
     return <div className="input min-h-[100px]" />;
   }
 
-  const ToolbarButton = ({ active, onClick, children }: { active?: boolean; onClick: () => void; children: React.ReactNode }) => (
+  const ToolbarButton = ({ active, onClick, label, children }: { active?: boolean; onClick: () => void; label: string; children: React.ReactNode }) => (
     <button
       type="button"
       onClick={onClick}
+      aria-label={label}
       className={`p-1.5 rounded transition-colors ${
         active
           ? 'bg-primary text-primary-foreground'
@@ -91,27 +92,27 @@ export default function RichTextEditor({ content, onChange, onBlur, disabled = f
     <div className={`border rounded-lg overflow-hidden ${!disabled ? 'focus-within:ring-2 focus-within:ring-ring/20 focus-within:border-ring/30' : 'opacity-70'} transition-all`}>
       {!disabled && (
       <div className="flex items-center gap-0.5 px-2 py-1.5 border-b bg-muted/50">
-        <ToolbarButton active={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()}>
+        <ToolbarButton label="Bold" active={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()}>
           <Bold size={15} />
         </ToolbarButton>
-        <ToolbarButton active={editor.isActive('italic')} onClick={() => editor.chain().focus().toggleItalic().run()}>
+        <ToolbarButton label="Italic" active={editor.isActive('italic')} onClick={() => editor.chain().focus().toggleItalic().run()}>
           <Italic size={15} />
         </ToolbarButton>
         <div className="w-px h-4 bg-border mx-1" />
-        <ToolbarButton active={editor.isActive('heading', { level: 1 })} onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}>
+        <ToolbarButton label="Heading" active={editor.isActive('heading', { level: 1 })} onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}>
           <Heading1 size={15} />
         </ToolbarButton>
-        <ToolbarButton active={editor.isActive('bulletList')} onClick={() => editor.chain().focus().toggleBulletList().run()}>
+        <ToolbarButton label="Bullet List" active={editor.isActive('bulletList')} onClick={() => editor.chain().focus().toggleBulletList().run()}>
           <List size={15} />
         </ToolbarButton>
-        <ToolbarButton active={editor.isActive('orderedList')} onClick={() => editor.chain().focus().toggleOrderedList().run()}>
+        <ToolbarButton label="Ordered List" active={editor.isActive('orderedList')} onClick={() => editor.chain().focus().toggleOrderedList().run()}>
           <ListOrdered size={15} />
         </ToolbarButton>
         <div className="flex-1" />
-        <ToolbarButton onClick={() => editor.chain().focus().undo().run()}>
+        <ToolbarButton label="Undo" onClick={() => editor.chain().focus().undo().run()}>
           <Undo2 size={15} />
         </ToolbarButton>
-        <ToolbarButton onClick={() => editor.chain().focus().redo().run()}>
+        <ToolbarButton label="Redo" onClick={() => editor.chain().focus().redo().run()}>
           <Redo2 size={15} />
         </ToolbarButton>
         </div>

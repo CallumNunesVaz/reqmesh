@@ -1,9 +1,11 @@
-"""Components — the synthesised design.
+"""Components — the synthesised design.  Aligned with ISO/IEC 15288:2023.
 
 A requirement says what the system must *do*; a component says what the system
-*is*. Components form their own hierarchy (system → subsystem → assembly →
-part) and map onto the functional side by satisfying requirements and by being
-exercised by verification cases.
+*is* (ISO 15288 §4.48: system element). Components form their own hierarchy
+(system → subsystem → assembly → part, plus software and interface types) and
+map onto the functional side via:
+- §6.4.3 Architecture Definition: the component tree with satisfies links
+- §6.4.4 Design Definition: numeric parameters enabling budget rollups
 """
 
 from __future__ import annotations

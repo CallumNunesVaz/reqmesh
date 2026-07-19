@@ -22,6 +22,7 @@ export default function ChangeRequestsPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const [crs, setCrs] = useState<ChangeRequest[]>([]);
   const [showCreate, setShowCreate] = useState(false);
+  const [error, setError] = useState('');
   const [form, setForm] = useState({ id: '', title: '', description: '' });
   const editable = useAuthStore((s) => s.editMode && s.user !== null && s.user.role !== 'viewer');
   const entityKinds = useEntityKinds(projectId);
@@ -38,26 +39,33 @@ export default function ChangeRequestsPage() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!projectId || !form.id.trim()) return;
-    await api.createChangeRequest(projectId, form);
-    setShowCreate(false);
-    setForm({ id: '', title: '', description: '' });
-    load();
+    try {
+      await api.createChangeRequest(projectId, form);
+      setShowCreate(false);
+      setForm({ id: '', title: '', description: '' });
+      load();
+    } catch (err: any) { setError(err.message || 'Failed to create'); }
   };
 
   const handleStatus = async (crId: string, status: string) => {
     if (!projectId) return;
-    await api.updateChangeRequest(projectId, crId, { status });
-    load();
+    try {
+      await api.updateChangeRequest(projectId, crId, { status });
+      load();
+    } catch (err: any) { setError(err.message || 'Failed to update'); }
   };
 
   const handleDelete = async (crId: string) => {
     if (!projectId || !confirm('Delete this change request?')) return;
-    await api.deleteChangeRequest(projectId, crId);
-    setCrs(crs.filter((c) => c.id !== crId));
+    try {
+      await api.deleteChangeRequest(projectId, crId);
+      setCrs(crs.filter((c) => c.id !== crId));
+    } catch (err: any) { setError(err.message || 'Failed to delete'); }
   };
 
   return (
     <div className="max-w-5xl mx-auto p-8">
+      {error && <div className="mb-4 text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">{error}</div>}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Change Requests</h1>
@@ -65,7 +73,7 @@ export default function ChangeRequestsPage() {
         </div>
         {editable && (
         <button onClick={() => setShowCreate(!showCreate)} className="btn-primary">
-          <Plus size={16} /> New CR
+          <Plus size={16} /> New Change Request
         </button>
         )}
       </div>

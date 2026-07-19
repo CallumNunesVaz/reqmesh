@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     # Push auto-commits to a configured remote after each change.
     git_remote_url: str = ""
     git_push_on_commit: bool = False
+    git_push_interval_minutes: int = 0  # 0 = immediate (when push_on_commit is true)
     # Seed the Cessna 172 example project when the data root has no projects.
     seed_demo: bool = True
     # When set to a built frontend directory (e.g. frontend/dist), the backend

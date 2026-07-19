@@ -79,7 +79,38 @@ async def create_project(data: ProjectCreate, user: dict = Depends(require_edit)
 async def get_project(project_id: str):
     store = get_store(project_id)
     meta = store.read_meta()
-    return {"id": project_id, "name": meta.get("name", project_id), "path": str(store.root)}
+    naming = meta.get("naming", {})
+    return {
+        "id": project_id,
+        "name": meta.get("name", project_id),
+        "path": str(store.root),
+        "workflow": meta.get("workflow"),
+        "naming": naming,
+        "quality": meta.get("quality"),
+    }
+
+
+class ProjectSettings(BaseModel):
+    name: Optional[str] = None
+    naming: Optional[dict] = None
+    quality: Optional[dict] = None
+    workflow: Optional[dict] = None
+
+
+@router.patch("/projects/{project_id}")
+async def update_project_settings(project_id: str, data: ProjectSettings, user: dict = Depends(require_edit)):
+    store = get_store(project_id)
+    meta = store.read_meta()
+    updates = {}
+    for field in ("name", "naming", "quality", "workflow"):
+        val = getattr(data, field, None)
+        if val is not None:
+            updates[field] = val
+    if not updates:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    meta.update(updates)
+    store.write_meta(meta)
+    return meta
 
 
 @router.delete("/projects/{project_id}")
@@ -365,6 +396,34 @@ async def create_baseline(project_id: str, data: BaselineCreate, user: dict = De
         if store.update_requirement(req_id, {"baseline": name}):
             updated += 1
     return {"name": name, "requirements_assigned": updated}
+
+
+@router.patch("/projects/{project_id}/baselines/{name}")
+async def rename_baseline(project_id: str, name: str, data: dict, user: dict = Depends(require_edit)):
+    store = get_store(project_id)
+    safe_id(name, "baseline name")
+    new_name = data.get("name")
+    if not new_name:
+        raise HTTPException(status_code=400, detail="New name is required")
+    safe_id(new_name, "baseline name")
+    updated = 0
+    for r in store.list_requirements():
+        if r.get("baseline") == name:
+            store.update_requirement(r["id"], {"baseline": new_name})
+            updated += 1
+    return {"old_name": name, "new_name": new_name, "requirements_updated": updated}
+
+
+@router.delete("/projects/{project_id}/baselines/{name}")
+async def delete_baseline(project_id: str, name: str, user: dict = Depends(require_edit)):
+    store = get_store(project_id)
+    store.delete_item("baselines", name)
+    updated = 0
+    for r in store.list_requirements():
+        if r.get("baseline") == name:
+            store.update_requirement(r["id"], {"baseline": None})
+            updated += 1
+    return {"name": name, "requirements_cleared": updated}
 
 
 # ── Verification Cases ───────────────────────────────────────────────────────

@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Trash2, ArrowLeft, Plus, X, ArrowRight, ArrowLeftRight, Sparkles, ShieldCheck, ExternalLink, ChevronRight, Waypoints, AlertTriangle } from 'lucide-react';
+import { Trash2, ArrowLeft, Plus, X, ArrowRight, ArrowLeftRight, Sparkles, ShieldCheck, ExternalLink, ChevronRight, Waypoints, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { api, type Requirement, type VerificationCase, type QualityItem, type Component, type Specification, type ChangeRequest, type Risk, type EvaluatedRequirement } from '../api/client';
 import { ParametricsCard } from '../components/parametrics';
 import RichTextEditor from '../components/RichTextEditor';
@@ -15,6 +15,8 @@ import { useGraphPane, useSelectedReq } from '../components/Layout';
 import { HelpTip } from '../components/HelpTip';
 import DescriptionHelper from '../components/DescriptionHelper';
 import ParametricsGuide from '../components/ParametricsGuide';
+import { useKeyboardShortcuts } from '../components/useKeyboardShortcuts';
+import LoadingSplash from '../components/LoadingSplash';
 
 const typeOptions = ['functional', 'non_functional', 'interface', 'design', 'constraint'];
 const priorityOptions = ['low', 'medium', 'high', 'critical'];
@@ -48,6 +50,7 @@ export default function RequirementDetailPage() {
   const [qualityResult, setQualityResult] = useState<QualityItem | null>(null);
   const [unreviewedIds, setUnreviewedIds] = useState<Set<string>>(new Set());
   const [saveError, setSaveError] = useState('');
+  const [saveSuccess, setSaveSuccess] = useState(false);
   const statusOptions = workflow?.states || ['proposed', 'approved', 'implemented', 'verified', 'rejected', 'deprecated'];
 
   const refSuggestions = useMemo(() => {
@@ -144,6 +147,8 @@ export default function RequirementDetailPage() {
       const updated = await api.updateRequirement(projectId, reqId, updates);
       setReq(updated);
       setSaveError('');
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 2000);
       bumpGraphVersion();
       if (updates.parameters || updates.constraints) {
         api.getEvaluation(projectId)
@@ -163,12 +168,14 @@ export default function RequirementDetailPage() {
     navigate(`/project/${projectId}/requirements`);
   };
 
+  useKeyboardShortcuts(projectId, {
+    onDetailSave: () => req && save({}),
+    onDetailDelete: handleDelete,
+    onDetailEscape: () => { if (window.history.length > 1) navigate(-1); else navigate(`/project/${projectId}/requirements`); },
+  });
+
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full" />
-      </div>
-    );
+    return <div className="relative h-[60vh]"><LoadingSplash label="Loading requirement…" /></div>;
   }
 
   if (!req) {
@@ -259,6 +266,11 @@ export default function RequirementDetailPage() {
           <button onClick={() => setSaveError('')} className="ml-auto text-red-400/50 hover:text-red-400">
             <X size={14} />
           </button>
+        </div>
+      )}
+      {saveSuccess && (
+        <div className="mb-4 px-4 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm flex items-center gap-2">
+          <CheckCircle2 size={14} /> Saved
         </div>
       )}
       <div className="flex items-center gap-3 mb-6">
@@ -586,6 +598,25 @@ export default function RequirementDetailPage() {
                 <select className="select" value={req.type} onChange={(e) => save({ type: e.target.value })} disabled={!editable}>
                   {typeOptions.map((t) => (<option key={t} value={t}>{t.replace('_', ' ')}</option>))}
                 </select>
+              </div>
+              <div>
+                <label className="label">Kind</label>
+                <select className="select" value={req.requirement_kind || 'system_requirement'} onChange={(e) => save({ requirement_kind: e.target.value as any })} disabled={!editable}>
+                  <option value="system_requirement">System Requirement</option>
+                  <option value="stakeholder_need">Stakeholder Need</option>
+                </select>
+                <div className="text-[10px] text-muted-foreground mt-0.5">OOSEM: system requirement vs stakeholder need</div>
+              </div>
+              <div>
+                <label className="label">System States</label>
+                <input
+                  className="input font-mono text-xs"
+                  placeholder="takeoff, cruise, landing"
+                  value={(req.system_states || []).join(', ')}
+                  onBlur={(e) => save({ system_states: e.target.value ? e.target.value.split(',').map(s => s.trim()).filter(Boolean) : [] })}
+                  disabled={!editable}
+                />
+                <div className="text-[10px] text-muted-foreground mt-0.5">OOSEM: modes this requirement applies to</div>
               </div>
               <div>
                 <label className="label">Status</label>

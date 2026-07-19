@@ -145,6 +145,7 @@ export default function PublishPage() {
                   srcDoc={result.content}
                   className="w-full h-[600px] border-0"
                   title="Report Preview"
+                  sandbox="allow-same-origin"
                 />
               )}
             </motion.div>

@@ -30,6 +30,16 @@
       "title": "ComponentType",
       "type": "string"
     },
+    "MeasureKind": {
+      "description": "OOSEM measure taxonomy: MOE (operational), MOP (system), TPM (component).",
+      "enum": [
+        "MOE",
+        "MOP",
+        "TPM"
+      ],
+      "title": "MeasureKind",
+      "type": "string"
+    },
     "Parameter": {
       "description": "A typed numeric quantity on a requirement or component.\n\nEither a literal `value`, or an `expr` deriving it from other parameters\n(`span * chord`, `GROS0001.mass - EMPT0001.mass`,\n`rollup('WING', 'mass')`). Unlike `attributes`, these participate in\nconstraint evaluation.",
       "properties": {
@@ -65,6 +75,17 @@
           ],
           "default": null,
           "title": "Expr"
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MeasureKind"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [

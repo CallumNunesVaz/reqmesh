@@ -36,6 +36,17 @@
           ],
           "default": null,
           "title": "Assume"
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MeasureKind"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -43,6 +54,16 @@
       ],
       "title": "Constraint",
       "type": "object"
+    },
+    "MeasureKind": {
+      "description": "OOSEM measure taxonomy: MOE (operational), MOP (system), TPM (component).",
+      "enum": [
+        "MOE",
+        "MOP",
+        "TPM"
+      ],
+      "title": "MeasureKind",
+      "type": "string"
     },
     "Parameter": {
       "description": "A typed numeric quantity on a requirement or component.\n\nEither a literal `value`, or an `expr` deriving it from other parameters\n(`span * chord`, `GROS0001.mass - EMPT0001.mass`,\n`rollup('WING', 'mass')`). Unlike `attributes`, these participate in\nconstraint evaluation.",
@@ -79,6 +100,17 @@
           ],
           "default": null,
           "title": "Expr"
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MeasureKind"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -180,6 +212,15 @@
       ],
       "title": "Relation",
       "type": "object"
+    },
+    "RequirementKind": {
+      "description": "OOSEM / ISO 15288 distinction: stakeholder need vs system requirement.",
+      "enum": [
+        "stakeholder_need",
+        "system_requirement"
+      ],
+      "title": "RequirementKind",
+      "type": "string"
     },
     "RequirementStatus": {
       "enum": [
@@ -390,6 +431,17 @@
         "$ref": "#/$defs/Reference"
       },
       "title": "References",
+      "type": "array"
+    },
+    "requirement_kind": {
+      "$ref": "#/$defs/RequirementKind",
+      "default": "system_requirement"
+    },
+    "system_states": {
+      "items": {
+        "type": "string"
+      },
+      "title": "System States",
       "type": "array"
     },
     "created": {

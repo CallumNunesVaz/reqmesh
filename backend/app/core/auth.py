@@ -59,6 +59,7 @@ def load_users() -> dict:
                 "username": "admin",
                 "password_hash": hash_password(env_pw).decode(),
                 "role": "admin",
+                "full_name": "Administrator",
                 "email": "",
                 "email_verified": True,
                 "created": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -116,6 +117,8 @@ def authenticate(username: str, password: str) -> dict | None:
         return None
     if not verify_password(password, user["password_hash"]):
         return None
+    user["last_active"] = time.strftime("%Y-%m-%dT%H:%M:%SZ")
+    save_users(users)
     return {"username": username, "role": user.get("role", "viewer"), "token": create_token(username, user.get("role", "viewer"))}
 
 
@@ -127,6 +130,7 @@ def register_user(username: str, password: str, role: str = "editor") -> dict | 
         "username": username,
         "password_hash": hash_password(password).decode(),
         "role": role,
+        "full_name": "",
         "email": "",
         "email_verified": False,
         "token_version": 0,
@@ -149,7 +153,9 @@ def get_user_from_token(token: str) -> dict | None:
     stored_version = user.get("token_version", 0)
     if token_version != stored_version:
         return None
-    return {"username": username, "role": user.get("role", "viewer"), "email_verified": user.get("email_verified", False)}
+    return {"username": username, "role": user.get("role", "viewer"),
+            "full_name": user.get("full_name", ""),
+            "email_verified": user.get("email_verified", False)}
 
 
 # --- User administration (admin-only management) ---
@@ -163,7 +169,11 @@ def public_users() -> list[dict]:
     """All users without their password hashes, sorted by username."""
     users = load_users()
     out = [
-        {"username": name, "role": u.get("role", "viewer"), "email": u.get("email", ""), "created": u.get("created", "")}
+        {"username": name, "role": u.get("role", "viewer"), "full_name": u.get("full_name", ""),
+         "email": u.get("email", ""), "email_verified": u.get("email_verified", False),
+         "last_active": u.get("last_active", ""),
+         "joined": u.get("created", ""),
+         "created": u.get("created", "")}
         for name, u in users.items()
     ]
     return sorted(out, key=lambda x: x["username"].lower())

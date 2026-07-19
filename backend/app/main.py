@@ -93,12 +93,39 @@ async def git_autocommit_middleware(request: Request, call_next):
             action = unquote(m.group(2) or "").strip("/") or "project"
 
             if settings.git_autocommit and project_root.is_dir():
-                from app.services.git_service import auto_commit, push_to_remote
-                committed = await asyncio.to_thread(
-                    auto_commit, project_root, f"rt: {request.method.lower()} {action}"
-                )
-                if committed and settings.git_push_on_commit and settings.git_remote_url:
-                    await asyncio.to_thread(push_to_remote, project_root)
+                # Per-project git settings from _meta.yaml override global config
+                try:
+                    from app.services.git_service import _project_git_config
+                    git_cfg = _project_git_config(project_root)
+                except Exception:
+                    git_cfg = {}
+                auto_commit_enabled = git_cfg.get("auto_commit", settings.git_autocommit)
+                if auto_commit_enabled:
+                    username = ""
+                    auth = request.headers.get("Authorization", "")
+                    if auth.startswith("Bearer "):
+                        try:
+                            from app.core.auth import get_user_from_token
+                            user = get_user_from_token(auth.removeprefix("Bearer "))
+                            username = user.get("username", "") if user else ""
+                        except Exception:
+                            pass
+
+                    from app.services.git_service import auto_commit, schedule_push
+                    msg = f"rt: {request.method.lower()} {action}"
+                    if username:
+                        msg += f" ({username})"
+                    committed = await asyncio.to_thread(
+                        auto_commit, project_root, msg, username=username
+                    )
+                    push_on_commit = git_cfg.get("push_on_commit", settings.git_push_on_commit)
+                    push_interval = git_cfg.get("push_interval_minutes", settings.git_push_interval_minutes)
+                    remote_url = git_cfg.get("remote_url") or settings.git_remote_url
+                    if committed and remote_url:
+                        if push_on_commit:
+                            await asyncio.to_thread(schedule_push, project_root)
+                        elif push_interval > 0:
+                            schedule_push(project_root)
 
             from app.services.event_bus import get_event_bus
             get_event_bus().publish(project_id, {

@@ -41,6 +41,7 @@ async def create_change_request(project_id: str, data: ChangeRequestCreate, user
     cr.setdefault("reviewed_by", "")
     cr.setdefault("approved_by", "")
     result = store.create_item("change_requests", cr)
+    record_change(store, result["id"], "create", None, result, user.get("username", ""))
     try:
         from app.services.email_service import notify_change_request
         notify_change_request(store, project_id, result["id"], "created", user.get("username", ""))
@@ -51,12 +52,15 @@ async def create_change_request(project_id: str, data: ChangeRequestCreate, user
 
 @router.put("/projects/{project_id}/change-requests/{cr_id}")
 async def update_change_request(project_id: str, cr_id: str, data: ChangeRequestUpdate, user: dict = Depends(require_edit)):
-    result = get_store(project_id).update_item("change_requests", cr_id, data.model_dump(mode="json", exclude_unset=True))
+    store = get_store(project_id)
+    before = store.get_item("change_requests", cr_id)
+    result = store.update_item("change_requests", cr_id, data.model_dump(mode="json", exclude_unset=True))
     if result is None:
         raise HTTPException(status_code=404, detail="Change request not found")
+    record_change(store, cr_id, "update", before, result, user.get("username", ""))
     try:
         from app.services.email_service import notify_change_request
-        notify_change_request(get_store(project_id), project_id, cr_id, "updated", user.get("username", ""))
+        notify_change_request(store, project_id, cr_id, "updated", user.get("username", ""))
     except Exception:
         pass
     return result
@@ -64,8 +68,11 @@ async def update_change_request(project_id: str, cr_id: str, data: ChangeRequest
 
 @router.delete("/projects/{project_id}/change-requests/{cr_id}")
 async def delete_change_request(project_id: str, cr_id: str, user: dict = Depends(require_edit)):
-    if not get_store(project_id).delete_item("change_requests", cr_id):
-        raise HTTPException(status_code=404)
+    store = get_store(project_id)
+    before = store.get_item("change_requests", cr_id)
+    if not store.delete_item("change_requests", cr_id):
+        raise HTTPException(status_code=404, detail="Change request not found")
+    record_change(store, cr_id, "delete", before, None, user.get("username", ""))
     return {"ok": True}
 
 
@@ -85,6 +92,7 @@ async def create_risk(project_id: str, data: RiskCreate, user: dict = Depends(re
     r.setdefault("status", "open")
     store = get_store(project_id)
     result = store.create_item("risks", r)
+    record_change(store, result["id"], "create", None, result, user.get("username", ""))
     try:
         from app.services.email_service import notify_risk
         notify_risk(store, project_id, result["id"], "created", user.get("username", ""))
@@ -95,9 +103,12 @@ async def create_risk(project_id: str, data: RiskCreate, user: dict = Depends(re
 
 @router.put("/projects/{project_id}/risks/{risk_id}")
 async def update_risk(project_id: str, risk_id: str, data: RiskUpdate, user: dict = Depends(require_edit)):
-    result = get_store(project_id).update_item("risks", risk_id, data.model_dump(mode="json", exclude_unset=True))
+    store = get_store(project_id)
+    before = store.get_item("risks", risk_id)
+    result = store.update_item("risks", risk_id, data.model_dump(mode="json", exclude_unset=True))
     if result is None:
-        raise HTTPException(status_code=404)
+        raise HTTPException(status_code=404, detail="Risk not found")
+    record_change(store, risk_id, "update", before, result, user.get("username", ""))
     try:
         from app.services.email_service import notify_risk
         notify_risk(get_store(project_id), project_id, risk_id, "updated", user.get("username", ""))
@@ -108,8 +119,11 @@ async def update_risk(project_id: str, risk_id: str, data: RiskUpdate, user: dic
 
 @router.delete("/projects/{project_id}/risks/{risk_id}")
 async def delete_risk(project_id: str, risk_id: str, user: dict = Depends(require_edit)):
-    if not get_store(project_id).delete_item("risks", risk_id):
-        raise HTTPException(status_code=404)
+    store = get_store(project_id)
+    before = store.get_item("risks", risk_id)
+    if not store.delete_item("risks", risk_id):
+        raise HTTPException(status_code=404, detail="Risk not found")
+    record_change(store, risk_id, "delete", before, None, user.get("username", ""))
     return {"ok": True}
 
 
@@ -141,7 +155,7 @@ async def create_comment(project_id: str, data: CommentCreate, user: dict = Depe
 @router.delete("/projects/{project_id}/comments/{comment_id}")
 async def delete_comment(project_id: str, comment_id: str, user: dict = Depends(require_edit)):
     if not get_store(project_id).delete_item("comments", comment_id):
-        raise HTTPException(status_code=404)
+        raise HTTPException(status_code=404, detail="Not found")
     return {"ok": True}
 
 
@@ -178,6 +192,7 @@ async def create_decision(project_id: str, data: DecisionRecordCreate, user: dic
     d.setdefault("status", "accepted")
     d.setdefault("decided_by", user.get("username", ""))
     result = get_store(project_id).create_item("decisions", d)
+    record_change(get_store(project_id), result["id"], "create", None, result, user.get("username", ""))
     try:
         from app.services.email_service import notify_decision
         notify_decision(get_store(project_id), project_id, result["id"], "created", user.get("username", ""))
@@ -188,9 +203,12 @@ async def create_decision(project_id: str, data: DecisionRecordCreate, user: dic
 
 @router.put("/projects/{project_id}/decisions/{dec_id}")
 async def update_decision(project_id: str, dec_id: str, data: DecisionRecordUpdate, user: dict = Depends(require_edit)):
-    result = get_store(project_id).update_item("decisions", dec_id, data.model_dump(mode="json", exclude_unset=True))
+    store = get_store(project_id)
+    before = store.get_item("decisions", dec_id)
+    result = store.update_item("decisions", dec_id, data.model_dump(mode="json", exclude_unset=True))
     if result is None:
-        raise HTTPException(status_code=404)
+        raise HTTPException(status_code=404, detail="Decision not found")
+    record_change(store, dec_id, "update", before, result, user.get("username", ""))
     try:
         from app.services.email_service import notify_decision
         notify_decision(get_store(project_id), project_id, dec_id, "updated", user.get("username", ""))
@@ -201,8 +219,11 @@ async def update_decision(project_id: str, dec_id: str, data: DecisionRecordUpda
 
 @router.delete("/projects/{project_id}/decisions/{dec_id}")
 async def delete_decision(project_id: str, dec_id: str, user: dict = Depends(require_edit)):
-    if not get_store(project_id).delete_item("decisions", dec_id):
-        raise HTTPException(status_code=404)
+    store = get_store(project_id)
+    before = store.get_item("decisions", dec_id)
+    if not store.delete_item("decisions", dec_id):
+        raise HTTPException(status_code=404, detail="Decision not found")
+    record_change(store, dec_id, "delete", before, None, user.get("username", ""))
     return {"ok": True}
 
 
@@ -259,7 +280,7 @@ async def get_impact(project_id: str, req_id: str):
     all_reqs = store.list_requirements()
     req = store.get_requirement(req_id)
     if not req:
-        raise HTTPException(status_code=404)
+        raise HTTPException(status_code=404, detail="Not found")
     dependents = []
     cascades = []
     for r in all_reqs:
@@ -459,7 +480,7 @@ async def prioritized_backlog(project_id: str, sort: str = "priority"):
 # ── Publishing ────────────────────────────────────────────────────────────────
 
 @router.post("/projects/{project_id}/publish")
-async def publish_project(project_id: str, data: dict, user: dict = Depends(get_current_user)):
+async def publish_project(project_id: str, data: dict, user: dict = Depends(require_edit)):
     store = get_store(project_id)
     pub = Publisher(store, data.get("subsystems"))
     fmt = data.get("format", "html")
@@ -628,14 +649,14 @@ async def submit_review(project_id: str, req_id: str, data: dict, user: dict = D
     store = get_store(project_id)
     req = store.get_requirement(req_id)
     if not req:
-        raise HTTPException(status_code=404)
+        raise HTTPException(status_code=404, detail="Not found")
     before = dict(req)
 
     from app.services.fingerprint import review_item
 
     result = review_item(store, req_id, reviewer=user.get("username", ""), comment=data.get("comment", ""))
     if result is None:
-        raise HTTPException(status_code=404)
+        raise HTTPException(status_code=404, detail="Not found")
     record_change(store, req_id, "review", before, result, user.get("username", ""))
     try:
         from app.services.email_service import notify_reviewed
@@ -691,7 +712,7 @@ async def diff_baseline(project_id: str, name: str):
     store = get_store(project_id)
     baseline = store.get_item("baselines", name)
     if baseline is None:
-        raise HTTPException(status_code=404)
+        raise HTTPException(status_code=404, detail="Not found")
     snapshot = baseline.get("snapshot", {})
     current = store.list_requirements()
     changes = []

@@ -15,6 +15,7 @@ from app.core.auth import (
     count_admins,
     delete_user,
     get_user_from_token,
+    hash_password,
     load_users,
     public_users,
     register_user,
@@ -62,7 +63,9 @@ async def login(data: LoginRequest, _rate: None = Depends(rate_limit(5, 60))):
 
 
 @router.post("/auth/register")
-async def register(data: RegisterRequest, authorization: Optional[str] = Header(None)):
+async def register(data: RegisterRequest, authorization: Optional[str] = Header(None), _rate: None = Depends(rate_limit(3, 300))):
+    if not USERNAME_RE.match(data.username):
+        raise HTTPException(status_code=400, detail="Username must be 3–32 chars: letters, digits, . _ -")
     if len(data.username) < 3:
         raise HTTPException(status_code=400, detail="Username must be at least 3 characters")
     _validate_password(data.password)
@@ -89,7 +92,42 @@ async def login_as_guest():
 
 @router.get("/auth/whoami")
 async def whoami(user: dict = Depends(get_current_user)):
-    return user
+    users = load_users()
+    u = users.get(user.get("username", ""), {})
+    return {
+        "username": user.get("username", "guest"),
+        "role": user.get("role", "viewer"),
+        "full_name": u.get("full_name", ""),
+        "email": u.get("email", ""),
+        "email_verified": u.get("email_verified", False),
+        "last_active": u.get("last_active", ""),
+        "joined": u.get("created", ""),
+    }
+
+
+class ProfileUpdateRequest(BaseModel):
+    full_name: Optional[str] = None
+    email: Optional[str] = None
+    password: Optional[str] = None
+
+
+@router.patch("/auth/profile")
+async def update_profile(data: ProfileUpdateRequest, user: dict = Depends(get_current_user), _rate: None = Depends(rate_limit(3, 300))):
+    username = user.get("username", "")
+    if username in ("guest", ""):
+        raise HTTPException(status_code=403, detail="Guests cannot update a profile")
+    users = load_users()
+    if data.full_name is not None:
+        users[username]["full_name"] = data.full_name.strip()
+    if data.email is not None:
+        users[username]["email"] = data.email.strip()
+    if data.password is not None:
+        _validate_password(data.password)
+        users[username]["password_hash"] = hash_password(data.password).decode()
+        users[username]["token_version"] = users[username].get("token_version", 0) + 1
+    from app.core.auth import save_users
+    save_users(users)
+    return {"ok": True}
 
 
 # ── Password reset ────────────────────────────────────────────────────────────
@@ -137,7 +175,7 @@ class VerifyEmailRequest(BaseModel):
 
 
 @router.post("/auth/verify-email")
-async def verify_email_endpoint(data: VerifyEmailRequest):
+async def verify_email_endpoint(data: VerifyEmailRequest, _rate: None = Depends(rate_limit(5, 300))):
     username = verify_email(data.token)
     if not username:
         raise HTTPException(status_code=400, detail="Invalid or expired verification token")
@@ -145,7 +183,7 @@ async def verify_email_endpoint(data: VerifyEmailRequest):
 
 
 @router.post("/auth/resend-verification")
-async def resend_verification(user: dict = Depends(get_current_user)):
+async def resend_verification(user: dict = Depends(get_current_user), _rate: None = Depends(rate_limit(1, 120))):
     from app.core.config import settings
     from app.services.email_service import _send_email, _is_configured
     username = user.get("username", "")
@@ -173,12 +211,14 @@ class CreateUserRequest(BaseModel):
     password: str
     role: str = "editor"
     email: str = ""
+    full_name: str = ""
 
 
 class UpdateUserRequest(BaseModel):
     role: Optional[str] = None
     password: Optional[str] = None
     email: Optional[str] = None
+    full_name: Optional[str] = None
 
 
 def _validate_role(role: str) -> None:
@@ -201,12 +241,15 @@ async def create_user(data: CreateUserRequest, admin: dict = Depends(require_adm
     result = register_user(data.username, data.password, data.role)
     if not result:
         raise HTTPException(status_code=409, detail="Username already exists")
-    if data.email.strip():
+    if data.email.strip() or data.full_name.strip():
         from app.core.auth import load_users, save_users
         users = load_users()
-        users[data.username]["email"] = data.email.strip()
+        if data.email.strip():
+            users[data.username]["email"] = data.email.strip()
+        if data.full_name.strip():
+            users[data.username]["full_name"] = data.full_name.strip()
         save_users(users)
-    return {"username": data.username, "role": data.role}
+    return {"username": data.username, "role": data.role, "full_name": data.full_name.strip()}
 
 
 @router.patch("/auth/users/{username}")
@@ -226,14 +269,20 @@ async def update_user(username: str, data: UpdateUserRequest, admin: dict = Depe
         _validate_password(data.password)
         set_user_password(username, data.password)
 
-    if data.email is not None:
+    if data.email is not None or data.full_name is not None:
         users = load_users()
-        users[username]["email"] = data.email.strip()
+        if data.email is not None:
+            users[username]["email"] = data.email.strip()
+        if data.full_name is not None:
+            users[username]["full_name"] = data.full_name.strip()
         from app.core.auth import save_users
         save_users(users)
 
     users = load_users()
-    return {"username": username, "role": users[username].get("role", "viewer"), "email": users[username].get("email", ""), "created": users[username].get("created", "")}
+    return {"username": username, "role": users[username].get("role", "viewer"),
+            "email": users[username].get("email", ""),
+            "full_name": users[username].get("full_name", ""),
+            "created": users[username].get("created", "")}
 
 
 @router.delete("/auth/users/{username}")

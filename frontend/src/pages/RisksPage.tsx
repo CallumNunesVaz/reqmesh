@@ -20,6 +20,7 @@ export default function RisksPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const [risks, setRisks] = useState<Risk[]>([]);
   const [showCreate, setShowCreate] = useState(false);
+  const [error, setError] = useState('');
   const [form, setForm] = useState({ id: '', title: '', description: '', severity: 'medium', probability: 'medium' });
   const editable = useAuthStore((s) => s.editMode && s.user !== null && s.user.role !== 'viewer');
   const entityKinds = useEntityKinds(projectId);
@@ -33,19 +34,24 @@ export default function RisksPage() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!projectId || !form.id.trim()) return;
-    await api.createRisk(projectId, form);
-    setShowCreate(false); setForm({ id: '', title: '', description: '', severity: 'medium', probability: 'medium' });
-    load();
+    try {
+      await api.createRisk(projectId, form);
+      setShowCreate(false); setForm({ id: '', title: '', description: '', severity: 'medium', probability: 'medium' });
+      load();
+    } catch (err: any) { setError(err.message || 'Failed to create'); }
   };
 
   const handleDelete = async (id: string) => {
     if (!projectId || !confirm('Delete this risk?')) return;
-    await api.deleteRisk(projectId, id);
-    setRisks(risks.filter(r => r.id !== id));
+    try {
+      await api.deleteRisk(projectId, id);
+      setRisks(risks.filter(r => r.id !== id));
+    } catch (err: any) { setError(err.message || 'Failed to delete'); }
   };
 
   return (
     <div className="max-w-5xl mx-auto p-8">
+      {error && <div className="mb-4 text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">{error}</div>}
       <div className="flex items-center justify-between mb-6">
         <div><h1 className="text-2xl font-bold text-foreground">Risks</h1><p className="text-sm text-muted-foreground mt-1">{risks.length} risks</p></div>
         {editable && (

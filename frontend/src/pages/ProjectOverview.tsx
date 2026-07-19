@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { BarChart3, ClipboardList, FileText, CheckCircle2, AlertTriangle, Zap, Gauge, Plug, PenTool, Lock, Boxes } from 'lucide-react';
+import { BarChart3, ClipboardList, FileText, CheckCircle2, AlertTriangle, Zap, Gauge, Plug, PenTool, Lock, Boxes, Settings } from 'lucide-react';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LabelList } from 'recharts';
+import LoadingSplash from '../components/LoadingSplash';
 import { api, type Requirement, type VerificationCase } from '../api/client';
+import { useAuthStore } from '../store/auth';
 
 const statusColors: Record<string, string> = {
   proposed: 'border-blue-500/50 bg-blue-500/10 text-blue-400',
@@ -77,6 +79,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 export default function ProjectOverview() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
+  const editable = useAuthStore((s) => s.editMode && s.user !== null && s.user.role !== 'viewer');
   const [project, setProject] = useState<{ id: string; name: string; path: string } | null>(null);
   const [stats, setStats] = useState<ProjectStats | null>(null);
 
@@ -146,11 +149,7 @@ export default function ProjectOverview() {
   }, [projectId]);
 
   if (!stats) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full" />
-      </div>
-    );
+    return <div className="relative h-[60vh]"><LoadingSplash label="Loading project…" /></div>;
   }
 
   const statCards = [
@@ -174,9 +173,16 @@ export default function ProjectOverview() {
 
   return (
     <div className="max-w-6xl mx-auto p-8">
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">{project?.name || projectId}</h1>
-        <p className="text-sm text-muted-foreground font-mono mt-1">{project?.path || ''}</p>
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">{project?.name || projectId}</h1>
+          <p className="text-sm text-muted-foreground font-mono mt-1">{project?.path || ''}</p>
+        </div>
+        {editable && (
+          <button onClick={() => navigate(`/project/${projectId}/settings`)} className="btn-secondary" title="Project settings">
+            <Settings size={15} /> Settings
+          </button>
+        )}
       </motion.div>
 
       {/* Stat cards */}

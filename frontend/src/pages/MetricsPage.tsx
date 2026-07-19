@@ -6,6 +6,7 @@ import { api, type MetricsData, type ImpactResult, type GapItem, type QualityIte
 import { EntityLink } from '../components/entities';
 import { VerdictBadge } from '../components/parametrics';
 import { HelpTip } from '../components/HelpTip';
+import LoadingSplash from '../components/LoadingSplash';
 
 export default function MetricsPage() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -42,7 +43,7 @@ export default function MetricsPage() {
     }).catch(console.error);
   }, [projectId]);
 
-  if (!metrics) return <div className="flex items-center justify-center h-64"><div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full" /></div>;
+  if (!metrics) return <div className="relative h-[70vh]"><LoadingSplash label="Analysing project…" /></div>;
 
   const q = metrics.quality_pct;
 
@@ -53,7 +54,7 @@ export default function MetricsPage() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {[
-          { label: 'Total Reqs', value: metrics.total, icon: FileWarning, color: 'text-blue-400 bg-blue-400/10' },
+          { label: 'Total Requirements', value: metrics.total, icon: FileWarning, color: 'text-blue-400 bg-blue-400/10' },
           { label: 'Coverage', value: `${coverage.coverage_pct}%`, icon: Shield, color: 'text-emerald-400 bg-emerald-400/10' },
           { label: 'Conflicts', value: conflicts.count, icon: AlertTriangle, color: conflicts.count > 0 ? 'text-red-400 bg-red-400/10' : 'text-green-400 bg-green-400/10' },
           { label: 'Gaps', value: gaps.length, icon: Search, color: gaps.length > 0 ? 'text-amber-400 bg-amber-400/10' : 'text-green-400 bg-green-400/10' },

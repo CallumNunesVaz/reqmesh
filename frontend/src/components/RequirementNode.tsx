@@ -4,7 +4,7 @@ import { ChevronDown, ChevronUp, ChevronsUp, Copy, Minus } from 'lucide-react';
 import { useGraphSelection } from './GraphPane';
 import { glow } from './graphColors';
 
-const statusColors: Record<string, { fill: string; text: string }> = {
+export const statusColors: Record<string, { fill: string; text: string }> = {
   proposed: { fill: 'hsl(207,90%,64%)', text: '#93c5fd' },
   approved: { fill: 'hsl(145,55%,42%)', text: '#4ade80' },
   implemented: { fill: 'hsl(260,100%,78%)', text: '#c4b5fd' },

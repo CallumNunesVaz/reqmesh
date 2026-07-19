@@ -1,5 +1,14 @@
 {
   "$defs": {
+    "CaseType": {
+      "description": "OOSEM Activity 6: verification (did we build it right?) vs validation (did we build the right thing?).",
+      "enum": [
+        "verification",
+        "validation"
+      ],
+      "title": "CaseType",
+      "type": "string"
+    },
     "ExecutionRecord": {
       "properties": {
         "timestamp": {
@@ -147,6 +156,27 @@
       },
       "title": "Measurements",
       "type": "array"
+    },
+    "case_type": {
+      "$ref": "#/$defs/CaseType",
+      "default": "verification"
+    },
+    "environment": {
+      "default": "",
+      "title": "Environment",
+      "type": "string"
+    },
+    "decision_gate": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Decision Gate"
     },
     "created": {
       "title": "Created",

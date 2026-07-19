@@ -247,7 +247,7 @@ export default function VerificationPage() {
         </div>
         {editable && (
         <button onClick={() => setShowCreate(!showCreate)} className="btn-primary whitespace-nowrap shrink-0 self-start">
-          <Plus size={16} /> New Case
+          <Plus size={16} /> New Verification Case
         </button>
         )}
       </div>
@@ -272,6 +272,12 @@ export default function VerificationPage() {
             className="btn-primary text-xs px-3 py-1"
           >
             Apply
+          </button>
+          <button
+            onClick={() => setSelectedVcs(new Set(verificationCases.map(v => v.id)))}
+            className="btn-ghost text-xs px-2 py-1"
+          >
+            Select all
           </button>
           <button onClick={() => setSelectedVcs(new Set())} className="btn-ghost text-xs px-2 py-1 ml-auto">
             Clear
