@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Trash2, ArrowLeft, Plus, X, ArrowRight, ArrowLeftRight, Sparkles, ShieldCheck, ExternalLink, ChevronRight, Waypoints } from 'lucide-react';
+import { Trash2, ArrowLeft, Plus, X, ArrowRight, ArrowLeftRight, Sparkles, ShieldCheck, ExternalLink, ChevronRight, Waypoints, AlertTriangle } from 'lucide-react';
 import { api, type Requirement, type VerificationCase, type QualityItem, type Component, type Specification, type ChangeRequest, type Risk, type EvaluatedRequirement } from '../api/client';
 import { ParametricsCard } from '../components/parametrics';
 import RichTextEditor from '../components/RichTextEditor';
@@ -12,6 +12,9 @@ import { useEntityKinds } from '../components/entityIndex';
 import { useAuthStore } from '../store/auth';
 import { useStore } from '../store';
 import { useGraphPane, useSelectedReq } from '../components/Layout';
+import { HelpTip } from '../components/HelpTip';
+import DescriptionHelper from '../components/DescriptionHelper';
+import ParametricsGuide from '../components/ParametricsGuide';
 
 const typeOptions = ['functional', 'non_functional', 'interface', 'design', 'constraint'];
 const priorityOptions = ['low', 'medium', 'high', 'critical'];
@@ -44,6 +47,7 @@ export default function RequirementDetailPage() {
   const [workflow, setWorkflow] = useState<{ states: string[]; transitions: Record<string, string[]> } | null>(null);
   const [qualityResult, setQualityResult] = useState<QualityItem | null>(null);
   const [unreviewedIds, setUnreviewedIds] = useState<Set<string>>(new Set());
+  const [saveError, setSaveError] = useState('');
   const statusOptions = workflow?.states || ['proposed', 'approved', 'implemented', 'verified', 'rejected', 'deprecated'];
 
   const refSuggestions = useMemo(() => {
@@ -139,14 +143,16 @@ export default function RequirementDetailPage() {
     try {
       const updated = await api.updateRequirement(projectId, reqId, updates);
       setReq(updated);
+      setSaveError('');
       bumpGraphVersion();
       if (updates.parameters || updates.constraints) {
         api.getEvaluation(projectId)
           .then((ev) => setEvaluated(ev.requirements.find((r) => r.id === reqId)))
           .catch(() => {});
       }
-    } catch {
-      // silently no-op when server rejects
+    } catch (err: any) {
+      setSaveError(err?.message || 'Save failed');
+      setTimeout(() => setSaveError(''), 5000);
     }
   };
 
@@ -247,6 +253,14 @@ export default function RequirementDetailPage() {
 
   return (
     <div className="max-w-4xl mx-auto p-8">
+      {saveError && (
+        <div className="mb-4 px-4 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm flex items-center gap-2">
+          <AlertTriangle size={14} /> {saveError}
+          <button onClick={() => setSaveError('')} className="ml-auto text-red-400/50 hover:text-red-400">
+            <X size={14} />
+          </button>
+        </div>
+      )}
       <div className="flex items-center gap-3 mb-6">
         <button onClick={() => navigate(`/project/${projectId}/requirements`)} className="btn-secondary p-2">
           <ArrowLeft size={16} />
@@ -303,7 +317,10 @@ export default function RequirementDetailPage() {
               onBlur={(e) => save({ name: e.target.value })}
               disabled={!editable}
             />
-            <label className="label mt-4">Description</label>
+            <label className="label mt-4 flex items-center gap-2">
+              Description
+              <DescriptionHelper description={req.description} verificationMethod={req.verification_method} />
+            </label>
             {editable ? (
               <RichTextEditor
                 content={req.description}
@@ -323,7 +340,8 @@ export default function RequirementDetailPage() {
           </motion.div>
 
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="card p-5">
-            <h2 className="font-semibold text-sm text-card-foreground mb-3">Relations</h2>
+            <h2 className="font-semibold text-sm text-card-foreground mb-1">Relations</h2>
+            <HelpTip>Link this requirement to others using relationship types like refines, satisfies, derives, or conflicts. Relations form the traceability graph — they show which requirements depend on or are detailed by others.</HelpTip>
 
             {/* Add outgoing relation */}
             {editable && (
@@ -442,6 +460,8 @@ export default function RequirementDetailPage() {
             </div>
           </motion.div>
 
+          <ParametricsGuide />
+
           <ParametricsCard
             reqId={req.id}
             parameters={req.parameters || []}
@@ -452,8 +472,9 @@ export default function RequirementDetailPage() {
           />
 
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="card p-5">
-            <h2 className="font-semibold text-sm text-card-foreground mb-3">Verification Cases</h2>
-            <div className="flex gap-2 mb-3">
+            <h2 className="font-semibold text-sm text-card-foreground mb-1">Verification Cases</h2>
+            <HelpTip>Verification cases prove that this requirement is met. They can be tests, analyses, demonstrations, or inspections. Link existing VCs or create new ones from the Verification page.</HelpTip>
+            <div className="flex gap-2 mt-2 mb-3">
               <AutocompleteInput
                 className="input flex-1 font-mono text-sm"
                 placeholder="VC ID (e.g. VC-001)"
@@ -557,8 +578,9 @@ export default function RequirementDetailPage() {
 
         <div className="space-y-6">
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="card p-5">
-            <h2 className="font-semibold text-sm text-card-foreground mb-3">Properties</h2>
-            <div className="space-y-3">
+            <h2 className="font-semibold text-sm text-card-foreground mb-1">Properties</h2>
+            <HelpTip>Classification metadata for this requirement. Type describes what kind of requirement it is. Status tracks its lifecycle. Priority reflects stakeholder importance. Verification method selects the approach used to prove it.</HelpTip>
+            <div className="space-y-3 mt-2">
               <div>
                 <label className="label">Type</label>
                 <select className="select" value={req.type} onChange={(e) => save({ type: e.target.value })} disabled={!editable}>
@@ -609,13 +631,45 @@ export default function RequirementDetailPage() {
                 <div className="text-[10px] text-muted-foreground mt-0.5">Included in coverage analysis</div>
               </div>
               <div>
+                <label className="label">Coverage Needs</label>
+                <input
+                  className="input font-mono text-xs"
+                  placeholder="e.g. design, verification_case"
+                  value={(req.needs || []).join(', ')}
+                  onChange={(e) => save({ needs: e.target.value ? e.target.value.split(',').map(s => s.trim()).filter(Boolean) : [] })}
+                  disabled={!editable}
+                />
+                <div className="text-[10px] text-muted-foreground mt-0.5">Artifact types that must cover this requirement</div>
+              </div>
+              <div>
+                <label className="label">Stakeholder Priorities</label>
+                <textarea
+                  className="input font-mono text-xs h-16 resize-none"
+                  placeholder="development: 5&#10;customers: 8&#10;safety: 10"
+                  value={Object.entries(req.priorities || {}).map(([k, v]) => `${k}: ${v}`).join('\n')}
+                  onChange={(e) => {
+                    const prio: Record<string, number> = {};
+                    for (const line of e.target.value.split('\n')) {
+                      const [k, v] = line.split(':').map(s => s.trim());
+                      if (k && v && !isNaN(Number(v))) prio[k] = Number(v);
+                    }
+                    save({ priorities: prio });
+                  }}
+                  disabled={!editable}
+                />
+                <div className="text-[10px] text-muted-foreground mt-0.5">Per-stakeholder priority scores (e.g. development: 5)</div>
+              </div>
+              <div>
                 <label className="label">Effort (story points)</label>
                 <input
                   className="input"
                   type="number"
                   min="0"
                   value={req.effort ?? ''}
-                  onChange={(e) => save({ effort: e.target.value ? parseInt(e.target.value) : null })}
+                  onBlur={(e) => {
+                    const v = parseInt(e.target.value);
+                    save({ effort: !isNaN(v) && v >= 0 ? v : null });
+                  }}
                   disabled={!editable}
                 />
               </div>
@@ -667,7 +721,8 @@ export default function RequirementDetailPage() {
                   className="input"
                   placeholder="Why this requirement exists..."
                   value={req.rationale || ''}
-                  onChange={(e) => save({ rationale: e.target.value })}
+                  onChange={(e) => setReq({ ...req, rationale: e.target.value })}
+                  onBlur={(e) => save({ rationale: e.target.value })}
                   disabled={!editable}
                 />
               </div>
@@ -677,7 +732,8 @@ export default function RequirementDetailPage() {
                   className="input"
                   placeholder="Stakeholder/document reference..."
                   value={req.source || ''}
-                  onChange={(e) => save({ source: e.target.value })}
+                  onChange={(e) => setReq({ ...req, source: e.target.value })}
+                  onBlur={(e) => save({ source: e.target.value })}
                   disabled={!editable}
                 />
               </div>
@@ -687,7 +743,8 @@ export default function RequirementDetailPage() {
                   className="input"
                   placeholder="System element..."
                   value={req.allocated_to || ''}
-                  onChange={(e) => save({ allocated_to: e.target.value })}
+                  onChange={(e) => setReq({ ...req, allocated_to: e.target.value })}
+                  onBlur={(e) => save({ allocated_to: e.target.value })}
                   disabled={!editable}
                 />
               </div>

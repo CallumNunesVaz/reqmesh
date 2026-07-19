@@ -39,7 +39,7 @@ import { launch, helpers, close, sleep } from '<repo>/.claude/skills/run-app/dri
 const { page, handle } = await launch({ mode: 'web' })   // seeds the Cessna demo
 const h = helpers(page)
 
-await h.login()                                  // admin/admin
+await h.login()                                  // admin / uitest-admin (sandbox RT_ADMIN_PASSWORD)
 await h.clickText('Cessna 172S Skyhawk SP')      // project cards are divs — see gotcha 2
 await sleep(2000)
 await h.ss('project')

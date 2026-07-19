@@ -58,10 +58,30 @@ def _req_to_row(req: dict, meta: dict | None = None) -> dict:
     return row
 
 
+_HEADER_ALIASES: dict[str, str] = {
+    "requirement_id": "id",
+    "req_id": "id",
+    "req id": "id",
+    "requirement type": "type",
+    "priority_level": "priority",
+    "verification": "verification_method",
+    "verification method": "verification_method",
+    "v_cases": "verification_cases",
+    "test_cases": "verification_cases",
+    "linked_to": "relations",
+    "linked requirements": "relations",
+    "parent_id": "parent",
+    "justification": "rationale",
+    "allocated_to": "allocated_to",
+    "allocated": "allocated_to",
+    "system_element": "allocated_to",
+}
+
+
 def _row_to_req(row: dict) -> dict:
     names = {n.lower().strip().replace(" ", "_"): n for n in row}
     get = lambda key, default: row.get(
-        names.get(key), default
+        names.get(key) or names.get(_HEADER_ALIASES.get(key, "")), default
     )
 
     relations = []
@@ -124,7 +144,7 @@ def export_table(store, fmt: str) -> str:
     return out.getvalue()
 
 
-def import_table(store, content: str, fmt: str = "csv", mode: str = "merge") -> dict:
+def import_table(store, content: str, fmt: str = "csv", mode: str = "merge", dry_run: bool = False) -> dict:
     if fmt not in ("csv", "tsv"):
         raise ValueError(f"Unknown table format: {fmt}")
     if mode not in ("merge", "replace"):
@@ -139,8 +159,31 @@ def import_table(store, content: str, fmt: str = "csv", mode: str = "merge") -> 
     skipped = 0
 
     if mode == "replace":
+        if dry_run:
+            return {"created": 0, "updated": 0, "skipped": 0, "traces_added": 0,
+                    "verification_cases": 0, "format": fmt,
+                    "dry_run": True, "would_delete": len(store.list_requirements()),
+                    "rows": len(rows)}
         for req in store.list_requirements():
             store.delete_requirement(req["id"])
+
+    if dry_run:
+        would_create = 0
+        would_update = 0
+        for row in rows:
+            req_data = _row_to_req(row)
+            rid = req_data.get("id", "").strip()
+            if not rid:
+                skipped += 1
+                continue
+            if store.get_requirement(rid):
+                would_update += 1
+            else:
+                would_create += 1
+        return {"created": 0, "updated": 0, "skipped": skipped, "traces_added": 0,
+                "verification_cases": 0, "format": fmt,
+                "dry_run": True, "would_create": would_create, "would_update": would_update,
+                "rows": len(rows)}
 
     for row in rows:
         req_data = _row_to_req(row)
@@ -193,3 +236,60 @@ def export_xlsx(store, path: str) -> None:
             ws.cell(row=row_idx, column=col_idx, value=row_data.get(col_name, ""))
 
     wb.save(path)
+
+
+def import_xlsx(store, content: bytes, mode: str = "merge", dry_run: bool = False) -> dict:
+    if not HAS_OPENPYXL:
+        raise ImportError("openpyxl is required for XLSX import. Install with: pip install openpyxl")
+    if mode not in ("merge", "replace"):
+        raise ValueError(f"Unknown mode: {mode}")
+
+    import openpyxl
+    wb = openpyxl.load_workbook(io.BytesIO(content), read_only=True)
+    ws = wb.active
+    headers = [str(cell.value or "").strip() for cell in next(ws.iter_rows(min_row=1, max_row=1))]
+    created = 0
+    updated = 0
+    skipped = 0
+
+    if mode == "replace":
+        if dry_run:
+            wb.close()
+            return {"created": 0, "updated": 0, "skipped": 0, "traces_added": 0,
+                    "verification_cases": 0, "format": "xlsx",
+                    "dry_run": True, "would_delete": len(store.list_requirements()),
+                    "rows": ws.max_row - 1 if ws.max_row else 0}
+        for req in store.list_requirements():
+            store.delete_requirement(req["id"])
+
+    row_count = 0
+    for row in ws.iter_rows(min_row=2, values_only=True):
+        if not any(v is not None for v in row):
+            continue
+        row_count += 1
+        row_dict = {headers[i]: str(v) if v is not None else "" for i, v in enumerate(row) if i < len(headers)}
+        req_data = _row_to_req(row_dict)
+        rid = req_data.get("id", "").strip()
+        if not rid:
+            skipped += 1
+            continue
+        if dry_run:
+            if store.get_requirement(rid):
+                updated += 1
+            else:
+                created += 1
+        else:
+            existing = store.get_requirement(rid)
+            if existing:
+                store.update_requirement(rid, req_data)
+                updated += 1
+            else:
+                store.create_requirement(req_data)
+                created += 1
+
+    wb.close()
+    return {
+        "created": created, "updated": updated, "skipped": skipped,
+        "traces_added": 0, "verification_cases": 0, "format": "xlsx",
+        **({"dry_run": True, "rows": row_count} if dry_run else {}),
+    }

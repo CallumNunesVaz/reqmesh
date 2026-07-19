@@ -5,6 +5,7 @@ import { Plus, Trash2, CheckCircle2, AlertTriangle, Search, TrendingUp, Shield, 
 import { api, type MetricsData, type ImpactResult, type GapItem, type QualityItem, type EvaluationData } from '../api/client';
 import { EntityLink } from '../components/entities';
 import { VerdictBadge } from '../components/parametrics';
+import { HelpTip } from '../components/HelpTip';
 
 export default function MetricsPage() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -47,7 +48,8 @@ export default function MetricsPage() {
 
   return (
     <div className="max-w-6xl mx-auto p-8">
-      <h1 className="text-2xl font-bold text-foreground mb-6">Metrics & Analysis</h1>
+      <h1 className="text-2xl font-bold text-foreground mb-1">Metrics & Analysis</h1>
+      <HelpTip>High-level project health dashboard. Summary cards show overall counts. Quality scores measure completeness (descriptions, rationales, sources). Traceability shows shallow vs deep coverage. Gap analysis flags requirements missing key fields. Parametric constraints show pass/fail from the evaluation engine.</HelpTip>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {[
@@ -150,7 +152,7 @@ export default function MetricsPage() {
               <div key={q.id} className="flex items-center gap-2 text-xs py-1.5 px-2 rounded hover:bg-accent">
                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-[11px] font-bold shrink-0 ${q.score >= 80 ? 'bg-emerald-500/10 text-emerald-400' : q.score >= 50 ? 'bg-amber-500/10 text-amber-400' : 'bg-red-500/10 text-red-400'}`}>{q.score}</div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-mono text-[11px] text-foreground">{q.id}</div>
+                  <EntityLink kind="requirement" id={q.id} />
                   <div className="text-[10px] text-muted-foreground truncate">{q.name}</div>
                 </div>
                 <div className="flex gap-1 flex-wrap justify-end">
@@ -170,8 +172,8 @@ export default function MetricsPage() {
           <div className="space-y-1.5">
             {gaps.slice(0, 10).map((g, i) => (
               <div key={i} className="flex items-center gap-2 text-xs py-1 px-2 rounded hover:bg-accent">
-                <span className="font-mono text-muted-foreground">{g.id}</span>
-                <span className="text-foreground">{g.name || '(' + g.id + ')'}</span>
+                <EntityLink kind="requirement" id={g.id} />
+                <span className="text-foreground">{g.name || ''}</span>
                 <div className="flex gap-1 ml-auto">{g.issues.map(iss => <span key={iss} className="badge bg-amber-500/10 text-amber-400 text-[10px]">{iss.replace(/_/g, ' ')}</span>)}</div>
               </div>
             ))}

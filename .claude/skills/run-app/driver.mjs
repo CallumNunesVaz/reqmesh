@@ -56,7 +56,9 @@ function sandboxEnv(seed) {
     RT_DATA_ROOT: path.join(SANDBOX, 'projects'),
     RT_GIT_AUTOCOMMIT: 'false',
     RT_SEED_DEMO: seed ? 'true' : 'false',
-    RT_ADMIN_PASSWORD: 'admin',
+    // The backend refuses 'admin' as an env password and generates a
+    // random one instead — the sandbox needs a real (non-'admin') value.
+    RT_ADMIN_PASSWORD: 'uitest-admin',
     DISPLAY: process.env.DISPLAY || ':1',
   }
 }
@@ -276,12 +278,13 @@ export function helpers(page) {
     }, { s: t, r: rootSel || null }))
 
   /**
-   * Sign in through the real login modal (default account: admin/admin).
+   * Sign in through the real login modal (default account: admin/uitest-admin,
+   * set via RT_ADMIN_PASSWORD in sandboxEnv).
    * On a cold load the app has already auto-signed-in as a guest, and a guest
    * occupies the signed-in header branch — so there is no "Sign in" button
    * until we sign the guest out first.
    */
-  const login = async (username = 'admin', password = 'admin') => {
+  const login = async (username = 'admin', password = 'uitest-admin') => {
     const opened = await page.evaluate(() => {
       const signIn = document.querySelector('[title="Sign in"]')
       if (signIn) { signIn.click(); return 'opened' }

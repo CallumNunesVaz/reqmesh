@@ -4,9 +4,10 @@ from app.services.quality import score_requirement, project_quality, strip_html
 
 
 def test_strip_html():
-    assert strip_html("<p>Hello <b>world</b></p>") == "Hello world"
+    assert strip_html("<p>Hello <b>world</b></p>").strip() == "Hello world"
     assert strip_html("Plain text") == "Plain text"
     assert strip_html("") == ""
+    assert "Hello world" in strip_html("<div>Hello</div><div>world</div>")
 
 
 def test_clean_sentence_scores_100():

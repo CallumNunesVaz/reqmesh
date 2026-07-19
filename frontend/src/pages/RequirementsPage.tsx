@@ -5,7 +5,7 @@ import {
   Plus, Search, X, Trash2, ChevronRight, ChevronDown, ChevronsDownUp, ChevronsUpDown,
   Zap, Gauge, Plug, PenTool, Lock, Inbox, Square, CheckSquare,
 } from 'lucide-react';
-import { api, type Requirement } from '../api/client';
+import { api, type Requirement, type EvalVerdict } from '../api/client';
 import { useStore } from '../store';
 import { useAuthStore } from '../store/auth';
 
@@ -54,9 +54,18 @@ export default function RequirementsPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const searchRef = useRef<HTMLInputElement>(null);
 
+  const [verdicts, setVerdicts] = useState<Map<string, EvalVerdict>>(new Map());
+
   const load = () => {
     if (!projectId) return;
     api.listRequirements(projectId).then(setRequirements).catch(console.error);
+    // Constraint verdicts, so a failing parametric bound is visible from the
+    // list without opening each requirement.
+    api.getEvaluation(projectId)
+      .then((ev) => setVerdicts(new Map(
+        ev.requirements.filter((r) => r.verdict !== 'none').map((r) => [r.id, r.verdict]),
+      )))
+      .catch(() => {});
   };
   useEffect(load, [projectId, dataVersion]);
 
@@ -329,6 +338,18 @@ export default function RequirementsPage() {
                   </span>
                   {req.verification_status === 'passed' && <span className="w-1.5 h-1.5 rounded-full bg-cs-green" title="Verification passed" />}
                   {req.verification_status === 'failed' && <span className="w-1.5 h-1.5 rounded-full bg-cs-red" title="Verification failed" />}
+                  {verdicts.has(req.id) && (
+                    <span
+                      className={`text-[10px] font-semibold leading-none ${
+                        verdicts.get(req.id) === 'pass' ? 'text-cs-teal'
+                          : verdicts.get(req.id) === 'unknown' ? 'text-cs-yellow'
+                          : 'text-cs-red'
+                      }`}
+                      title={`Parametric constraints: ${verdicts.get(req.id)}`}
+                    >
+                      Σ
+                    </span>
+                  )}
                   {editMode && (
                     <button
                       onClick={(e) => { e.stopPropagation(); handleDelete(req.id); }}

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, CheckCircle2, Trash2, XCircle, Clock, ChevronDown, X, Link as LinkIcon, Play, ListChecks, ClipboardList, FlaskConical } from 'lucide-react';
+import { Plus, CheckCircle2, Trash2, XCircle, Clock, ChevronDown, X, Link as LinkIcon, Play, ListChecks, ClipboardList, FlaskConical, Loader } from 'lucide-react';
 import { api, type VerificationCase, type Requirement, type Component } from '../api/client';
 import { useStore } from '../store';
 import { useAuthStore } from '../store/auth';
@@ -10,6 +10,7 @@ import { CopyLinkButton, EntityLink } from '../components/entities';
 import { useFocusedEntity } from '../components/useFocusedEntity';
 import { AutoLinkText } from '../components/autoLink';
 import { useEntityKinds } from '../components/entityIndex';
+import { HelpTip } from '../components/HelpTip';
 
 const statusBadges: Record<string, string> = {
   pending: 'border-amber-500/30 bg-amber-500/10 text-amber-400',
@@ -46,6 +47,9 @@ export default function VerificationPage() {
   const [newStepAction, setNewStepAction] = useState<Record<string, string>>({});
   const [newStepExpected, setNewStepExpected] = useState<Record<string, string>>({});
   const [newMeasurement, setNewMeasurement] = useState<Record<string, { parameter: string; value: string; unit: string }>>({});
+  const [runningVcs, setRunningVcs] = useState<Set<string>>(new Set());
+  const [selectedVcs, setSelectedVcs] = useState<Set<string>>(new Set());
+  const [bulkStatus, setBulkStatus] = useState('passed');
 
   const load = () => {
     if (!projectId) return;
@@ -207,18 +211,23 @@ export default function VerificationPage() {
 
   const handleRunTest = async (vcId: string) => {
     if (!projectId) return;
-    const vc = verificationCases.find((v) => v.id === vcId);
-    if (!vc) return;
-    const stepResults: Record<string, string> = {};
-    (vc.steps || []).forEach((_s, i) => {
-      stepResults[String(i)] = '';
-    });
-    await api.runVerification(projectId, vcId, {
-      status: vc.status === 'pending' ? 'in_progress' : vc.status,
-      notes: '',
-      step_results: stepResults,
-    });
-    load();
+    setRunningVcs(p => new Set(p).add(vcId));
+    try {
+      const vc = verificationCases.find((v) => v.id === vcId);
+      if (!vc) return;
+      const stepResults: Record<string, string> = {};
+      (vc.steps || []).forEach((_s, i) => {
+        stepResults[String(i)] = '';
+      });
+      await api.runVerification(projectId, vcId, {
+        status: vc.status === 'pending' ? 'in_progress' : vc.status,
+        notes: '',
+        step_results: stepResults,
+      });
+      await load();
+    } finally {
+      setRunningVcs(p => { const n = new Set(p); n.delete(vcId); return n; });
+    }
   };
 
   // Arriving from a link elsewhere (?focus=VC-001): open that case and scroll
@@ -233,14 +242,42 @@ export default function VerificationPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Verification Cases</h1>
+          <HelpTip>Verification cases prove that requirements are met. Choose a method (test, analysis, demonstration, or inspection), link the requirements being verified, and optionally record measurements to feed the parametric evaluation engine.</HelpTip>
           <p className="text-sm text-muted-foreground mt-1">{verificationCases.length} verification cases</p>
         </div>
         {editable && (
-        <button onClick={() => setShowCreate(!showCreate)} className="btn-primary">
-          <Plus size={16} /> New Verification Case
+        <button onClick={() => setShowCreate(!showCreate)} className="btn-primary whitespace-nowrap shrink-0 self-start">
+          <Plus size={16} /> New Case
         </button>
         )}
       </div>
+
+      {selectedVcs.size > 0 && (
+        <div className="mb-4 px-4 py-2 rounded-lg bg-primary/10 border border-primary/20 flex items-center gap-3 text-sm">
+          <span className="text-xs text-foreground">{selectedVcs.size} selected</span>
+          <select className="input text-xs w-28" value={bulkStatus} onChange={(e) => setBulkStatus(e.target.value)}>
+            <option value="pending">pending</option>
+            <option value="in_progress">in_progress</option>
+            <option value="passed">passed</option>
+            <option value="failed">failed</option>
+          </select>
+          <button
+            onClick={async () => {
+              for (const id of selectedVcs) {
+                await api.updateVerificationCase(projectId!, id, { status: bulkStatus } as any);
+              }
+              setSelectedVcs(new Set());
+              load();
+            }}
+            className="btn-primary text-xs px-3 py-1"
+          >
+            Apply
+          </button>
+          <button onClick={() => setSelectedVcs(new Set())} className="btn-ghost text-xs px-2 py-1 ml-auto">
+            Clear
+          </button>
+        </div>
+      )}
 
       <AnimatePresence>
         {showCreate && (
@@ -310,7 +347,19 @@ export default function VerificationPage() {
                   className="flex items-center gap-3 p-4 cursor-pointer"
                   onClick={() => toggleExpand(vc.id)}
                 >
-                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${statusIconColors[vc.status] || 'bg-muted text-muted-foreground'}`}>
+                  <div className="flex items-center gap-2">
+                    {editable && (
+                      <input
+                        type="checkbox"
+                        checked={selectedVcs.has(vc.id)}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          setSelectedVcs(p => { const n = new Set(p); e.target.checked ? n.add(vc.id) : n.delete(vc.id); return n; });
+                        }}
+                        className="w-4 h-4 rounded border-muted-foreground/30 shrink-0"
+                      />
+                    )}
+                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${statusIconColors[vc.status] || 'bg-muted text-muted-foreground'}`}>
                     <StatusIcon size={18} />
                   </div>
                   <div className="flex-1 min-w-0">
@@ -331,6 +380,7 @@ export default function VerificationPage() {
                       <span>Method: <strong className="text-foreground">{vc.method}</strong></span>
                       <span>{linkedCount} linked requirement{linkedCount !== 1 ? 's' : ''}</span>
                     </div>
+                  </div>
                   </div>
                   <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                     <select
@@ -462,28 +512,38 @@ export default function VerificationPage() {
                           ))}
                           {editable && (
                           <div className="flex gap-1.5 mt-1">
-                            <AutocompleteInput
-                              className="input flex-1 text-[11px] font-mono"
-                              placeholder="REQID.parameter"
-                              value={getMeasurement(vc.id).parameter}
-                              onChange={(v) => setMeasurement(vc.id, { parameter: v })}
-                              suggestions={requirements
+                            {(() => {
+                              const suggestions = requirements
                                 .filter((r) => vc.verified_requirements.includes(r.id))
-                                .flatMap((r) => (r.parameters || []).map((p) => ({ id: `${r.id}.${p.name}`, label: p.unit || '' })))}
-                            />
-                            <input className="input w-24 text-[11px] font-mono" placeholder="value"
-                              value={getMeasurement(vc.id).value}
-                              onChange={(e) => setMeasurement(vc.id, { value: e.target.value })} />
-                            <input className="input w-16 text-[11px]" placeholder="unit"
-                              value={getMeasurement(vc.id).unit}
-                              onChange={(e) => setMeasurement(vc.id, { unit: e.target.value })} />
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleAddMeasurement(vc.id); }}
-                              className="btn-secondary shrink-0"
-                              disabled={!getMeasurement(vc.id).parameter.trim() || getMeasurement(vc.id).value.trim() === ''}
-                            >
-                              <Plus size={12} />
-                            </button>
+                                .flatMap((r) => (r.parameters || []).map((p) => ({
+                                  id: `${r.id}.${p.name}`, label: p.unit || '', unit: p.unit || ''
+                                })));
+                              return <>
+                                <AutocompleteInput
+                                  className="input flex-1 text-[11px] font-mono"
+                                  placeholder="REQID.parameter"
+                                  value={getMeasurement(vc.id).parameter}
+                                  onChange={(v) => {
+                                    const match = suggestions.find((s) => s.id === v);
+                                    setMeasurement(vc.id, { parameter: v, unit: match?.unit || '' });
+                                  }}
+                                  suggestions={suggestions}
+                                />
+                                <input className="input w-24 text-[11px] font-mono" placeholder="value"
+                                  value={getMeasurement(vc.id).value}
+                                  onChange={(e) => setMeasurement(vc.id, { value: e.target.value })} />
+                                <input className="input w-16 text-[11px]" placeholder="unit"
+                                  value={getMeasurement(vc.id).unit}
+                                  onChange={(e) => setMeasurement(vc.id, { unit: e.target.value })} />
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleAddMeasurement(vc.id); }}
+                                  className="btn-secondary shrink-0"
+                                  disabled={!getMeasurement(vc.id).parameter.trim() || getMeasurement(vc.id).value.trim() === ''}
+                                >
+                                  <Plus size={12} />
+                                </button>
+                              </>;
+                            })()}
                           </div>
                           )}
                         </div>
@@ -578,9 +638,14 @@ export default function VerificationPage() {
                         <div className="border-t pt-3">
                           <button
                             onClick={(e) => { e.stopPropagation(); handleRunTest(vc.id); }}
-                            className="btn-primary w-full justify-center text-xs"
+                            disabled={runningVcs.has(vc.id)}
+                            className="btn-primary w-full justify-center text-xs disabled:opacity-60"
                           >
-                            <Play size={13} /> Run Test
+                            {runningVcs.has(vc.id) ? (
+                              <Loader size={13} className="animate-spin" />
+                            ) : (
+                              <Play size={13} />
+                            )} Run Test
                           </button>
                         </div>
                         )}

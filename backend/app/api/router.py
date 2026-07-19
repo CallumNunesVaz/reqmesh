@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, Depends
+from pydantic import BaseModel
 
 from app.core.dependencies import get_store, require_edit, require_admin
 from app.core.ids import safe_id
@@ -18,6 +19,26 @@ from app.models.verification import VerificationCaseCreate, VerificationCaseUpda
 from app.services.yaml_store import YamlStore
 from app.services.search import search_requirements
 from app.services.history import record_change
+
+
+class ProjectCreate(BaseModel):
+    id: str
+    name: str
+
+
+class BaselineCreate(BaseModel):
+    name: str
+    requirements: list[str] = []
+
+
+class RunVerification(BaseModel):
+    status: str
+    notes: str = ""
+    step_results: dict[str, str] | None = None
+
+
+class BreakCascade(BaseModel):
+    break_children: bool = False
 
 router = APIRouter()
 
@@ -41,17 +62,17 @@ async def list_projects():
 
 
 @router.post("/projects", status_code=201)
-async def create_project(data: dict, user: dict = Depends(require_edit)):
+async def create_project(data: ProjectCreate, user: dict = Depends(require_edit)):
     from app.core.config import settings
 
-    project_id = safe_id(data.get("id", ""), "project id")
+    project_id = safe_id(data.id, "project id")
     project_root = Path(settings.data_root) / project_id
     if project_root.exists():
         raise HTTPException(status_code=409, detail="Project already exists")
     store = YamlStore(project_root)
     store.ensure_dirs()
-    store.write_meta({"name": data.get("name", project_id), "created": data.get("created", "")})
-    return {"id": project_id, "name": data.get("name", project_id), "path": str(project_root)}
+    store.write_meta({"name": data.name or project_id})
+    return {"id": project_id, "name": data.name or project_id, "path": str(project_root)}
 
 
 @router.get("/projects/{project_id}")
@@ -124,13 +145,16 @@ async def list_requirements(
     type: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
     priority: Optional[str] = Query(None),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(500, ge=1, le=2000),
 ):
     store = get_store(project_id)
     reqs = store.list_requirements()
     if search or type or status or priority:
         filters = {k: v for k, v in [("type", type), ("status", status), ("priority", priority)] if v}
-        return search_requirements(reqs, search or "", filters)
-    return reqs
+        reqs = search_requirements(reqs, search or "", filters)
+    total = len(reqs)
+    return {"items": reqs[offset:offset + limit], "total": total, "offset": offset, "limit": limit}
 
 
 @router.get("/projects/{project_id}/requirements/{req_id}")
@@ -243,7 +267,7 @@ async def cascade_requirement(project_id: str, req_id: str, user: dict = Depends
 
 
 @router.post("/projects/{project_id}/requirements/{req_id}/break-cascade")
-async def break_cascade(project_id: str, req_id: str, data: dict | None = None, user: dict = Depends(require_edit)):
+async def break_cascade(project_id: str, req_id: str, data: BreakCascade | None = None, user: dict = Depends(require_edit)):
     store = get_store(project_id)
     req = store.get_requirement(req_id)
     if req is None:
@@ -251,7 +275,7 @@ async def break_cascade(project_id: str, req_id: str, data: dict | None = None, 
     if not req.get("cascade_from"):
         raise HTTPException(status_code=400, detail="Not a cascaded requirement")
 
-    break_children = (data or {}).get("break_children", False)
+    break_children = data.break_children if data else False
     source_id = req["cascade_from"]
 
     req["cascade_from"] = None
@@ -292,24 +316,30 @@ async def create_specification(project_id: str, data: SpecificationCreate, user:
     spec_dict = data.model_dump(mode="json")
     spec_dict.setdefault("requirements", [])
     spec_dict.setdefault("children", [])
-    return store.create_specification(spec_dict)
+    result = store.create_specification(spec_dict)
+    record_change(store, result["id"], "create", None, result, user.get("username", ""))
+    return result
 
 
 @router.put("/projects/{project_id}/specifications/{spec_id}")
 async def update_specification(project_id: str, spec_id: str, data: SpecificationUpdate, user: dict = Depends(require_edit)):
     store = get_store(project_id)
+    before = store.get_specification(spec_id)
     update_dict = data.model_dump(mode="json", exclude_unset=True)
     result = store.update_specification(spec_id, update_dict)
     if result is None:
         raise HTTPException(status_code=404, detail="Specification not found")
+    record_change(store, spec_id, "update", before, result, user.get("username", ""))
     return result
 
 
 @router.delete("/projects/{project_id}/specifications/{spec_id}")
 async def delete_specification(project_id: str, spec_id: str, user: dict = Depends(require_edit)):
     store = get_store(project_id)
+    before = store.get_specification(spec_id)
     if not store.delete_specification(spec_id):
         raise HTTPException(status_code=404, detail="Specification not found")
+    record_change(store, spec_id, "delete", before, None, user.get("username", ""))
     return {"ok": True}
 
 
@@ -327,11 +357,11 @@ async def list_baselines(project_id: str):
 
 
 @router.post("/projects/{project_id}/baselines")
-async def create_baseline(project_id: str, data: dict, user: dict = Depends(require_edit)):
+async def create_baseline(project_id: str, data: BaselineCreate, user: dict = Depends(require_edit)):
     store = get_store(project_id)
-    name = safe_id(data.get("name", ""), "baseline name")
+    name = safe_id(data.name, "baseline name")
     updated = 0
-    for req_id in data.get("requirements", []):
+    for req_id in data.requirements:
         if store.update_requirement(req_id, {"baseline": name}):
             updated += 1
     return {"name": name, "requirements_assigned": updated}
@@ -364,29 +394,35 @@ async def create_verification_case(project_id: str, data: VerificationCaseCreate
     vc_dict.setdefault("status", "pending")
     vc_dict.setdefault("result", None)
     vc_dict.setdefault("verified_requirements", [])
-    return store.create_verification_case(vc_dict)
+    result = store.create_verification_case(vc_dict)
+    record_change(store, result["id"], "create", None, result, user.get("username", ""))
+    return result
 
 
 @router.put("/projects/{project_id}/verification/{vc_id}")
 async def update_verification_case(project_id: str, vc_id: str, data: VerificationCaseUpdate, user: dict = Depends(require_edit)):
     store = get_store(project_id)
+    before = store.get_verification_case(vc_id)
     update_dict = data.model_dump(mode="json", exclude_unset=True)
     result = store.update_verification_case(vc_id, update_dict)
     if result is None:
         raise HTTPException(status_code=404, detail="Verification case not found")
+    record_change(store, vc_id, "update", before, result, user.get("username", ""))
     return result
 
 
 @router.delete("/projects/{project_id}/verification/{vc_id}")
 async def delete_verification_case(project_id: str, vc_id: str, user: dict = Depends(require_edit)):
     store = get_store(project_id)
+    before = store.get_verification_case(vc_id)
     if not store.delete_verification_case(vc_id):
         raise HTTPException(status_code=404, detail="Verification case not found")
+    record_change(store, vc_id, "delete", before, None, user.get("username", ""))
     return {"ok": True}
 
 
 @router.post("/projects/{project_id}/verification/{vc_id}/run")
-async def run_verification(project_id: str, vc_id: str, data: dict, user: dict = Depends(require_edit)):
+async def run_verification(project_id: str, vc_id: str, data: RunVerification, user: dict = Depends(require_edit)):
     """Record a test execution run with optional step results and new status."""
     store = get_store(project_id)
     vc = store.get_verification_case(vc_id)
@@ -394,10 +430,10 @@ async def run_verification(project_id: str, vc_id: str, data: dict, user: dict =
         raise HTTPException(status_code=404, detail="Verification case not found")
 
     from datetime import datetime, timezone
-    new_status = data.get("status", "passed")
-    notes = data.get("notes", "")
+    new_status = data.status
+    notes = data.notes
     executed_by = user.get("username", "unknown")
-    step_results = data.get("step_results")  # {index: "actual result string"}
+    step_results = data.step_results
 
     # Update step actual results if provided.
     steps = vc.get("steps") or []

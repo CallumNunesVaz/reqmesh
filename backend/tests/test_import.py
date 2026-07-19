@@ -130,7 +130,7 @@ def test_import_endpoint_reqif_and_replace(client, project):
     files = {"file": ("out.xml", io.BytesIO(reqif.encode()), "application/xml")}
     res = client.post(f"/api/projects/{project}/import", files=files, data={"format": "reqif", "mode": "replace"})
     assert res.status_code == 200, res.text
-    ids = {r["id"] for r in client.get(f"/api/projects/{project}/requirements").json()}
+    ids = {r["id"] for r in client.get(f"/api/projects/{project}/requirements").json()["items"]}
     assert ids == {"SYST0001"}
 
 

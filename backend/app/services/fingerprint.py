@@ -17,9 +17,11 @@ def _canonical(req: dict, include_links: bool = False) -> str:
     for field in NORMATIVE_FIELDS:
         val = req.get(field, "")
         if isinstance(val, list):
-            parts[field] = sorted(val)
+            parts[field] = sorted([v for v in val if v is not None])
+        elif val is None:
+            parts[field] = ""
         else:
-            parts[field] = val or ""
+            parts[field] = val
     if include_links:
         relations = req.get("relations", [])
         parts["relations"] = sorted(

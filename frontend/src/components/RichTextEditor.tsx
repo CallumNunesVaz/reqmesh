@@ -1,8 +1,10 @@
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
+import Image from '@tiptap/extension-image';
+import CharacterCount from '@tiptap/extension-character-count';
 import { Bold, Italic, List, ListOrdered, Heading1, Undo2, Redo2 } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 interface RichTextEditorProps {
   content: string;
@@ -22,7 +24,24 @@ export default function RichTextEditor({ content, onChange, onBlur, disabled = f
       Placeholder.configure({
         placeholder: 'Write your requirement description...',
       }),
+      Image.configure({
+        inline: true,
+      }),
+      CharacterCount.configure({}),
     ],
+    editorProps: {
+      transformPastedHTML(html: string) {
+        return html
+          .replace(/<meta[^>]*>/gi, '')
+          .replace(/<o:[^>]+>[^<]*<\/o:[^>]+>/gi, '')
+          .replace(/<!--[\s\S]*?-->/g, '')
+          .replace(/\s*(class|style|lang|width|height|align|valign|bgcolor|border|cellpadding|cellspacing|mso-[a-z-]+|xml:[a-z]+)=["'][^"']*["']/gi, '')
+          .replace(/<font[^>]*>/gi, '')
+          .replace(/<\/font>/gi, '')
+          .replace(/<span[^>]*>/gi, '<span>')
+          .replace(/<(\w+)\s+>/g, '<$1>');
+      },
+    },
     content: content || '',
     editable: !disabled,
     onUpdate: ({ editor }) => {
@@ -106,6 +125,11 @@ export default function RichTextEditor({ content, onChange, onBlur, disabled = f
           [&_.ProseMirror_p.is-editor-empty:first-child::before]:float-left
           [&_.ProseMirror_p.is-editor-empty:first-child::before]:pointer-events-none"
       />
+      {!disabled && (
+        <div className="px-3 py-1 border-t text-[10px] text-muted-foreground/50 flex justify-end">
+          {editor.storage.characterCount.words()} words · {editor.storage.characterCount.characters()} chars
+        </div>
+      )}
     </div>
   );
 }

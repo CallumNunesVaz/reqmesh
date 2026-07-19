@@ -1,0 +1,70 @@
+# Production deployment — single-origin serve, no Vite dev server.
+#
+# The backend serves both the API and the pre-built frontend (RT_STATIC_DIR).
+# Add the Caddy service below for TLS; comment out the bare port if using the
+# reverse proxy so the app is only reachable through HTTPS.
+#
+# Quick-start:
+#   RT_SECRET=$(openssl rand -hex 32) \
+#   RT_ADMIN_PASSWORD=$(openssl rand -base64 12) \
+#   docker compose -f docker-compose.prod.yml up -d
+
+services:
+  reqmesh:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    ports:
+      - "${RT_BIND:-127.0.0.1}:8000:8000"
+    environment:
+      - RT_STATIC_DIR=/app/frontend/dist
+      - RT_DATA_ROOT=/data/projects
+      - RT_HOST=0.0.0.0
+      - RT_PORT=8000
+      - RT_SECRET=${RT_SECRET:?RT_SECRET is required — generate with: openssl rand -hex 32}
+      - RT_ADMIN_PASSWORD=${RT_ADMIN_PASSWORD:?RT_ADMIN_PASSWORD is required — generate with: openssl rand -base64 12}
+      - RT_GIT_AUTOCOMMIT=true
+      - RT_GIT_REMOTE_URL=${RT_GIT_REMOTE_URL:-}
+      - RT_GIT_PUSH_ON_COMMIT=${RT_GIT_PUSH_ON_COMMIT:-false}
+      - RT_SEED_DEMO=${RT_SEED_DEMO:-true}
+      - RT_CORS_ORIGINS=${RT_CORS_ORIGINS:-}
+      - RT_OFFLINE_MODE=${RT_OFFLINE_MODE:-false}
+      - RT_BASE_URL=${RT_BASE_URL:-http://localhost:8000}
+      - RT_SMTP_HOST=${RT_SMTP_HOST:-}
+      - RT_SMTP_PORT=${RT_SMTP_PORT:-587}
+      - RT_SMTP_USERNAME=${RT_SMTP_USERNAME:-}
+      - RT_SMTP_PASSWORD=${RT_SMTP_PASSWORD:-}
+      - RT_SMTP_FROM=${RT_SMTP_FROM:-reqmesh@localhost}
+    volumes:
+      - reqmesh-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # ═══ Optional — reverse proxy with automatic TLS via Caddy ═══════════════════
+  # Uncomment this block, comment the `ports:` section on the reqmesh service,
+  # and access via https://<hostname> instead of http://<ip>:8000.
+  #
+  # Requires a Caddyfile (see repo root). For a local-only domain use
+  # `tls internal` to get a self-signed certificate; for a public domain
+  # Caddy will automatically provision a Let's Encrypt certificate.
+  #
+  # caddy:
+  #   image: caddy:2-alpine
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #   volumes:
+  #     - ./Caddyfile:/etc/caddy/Caddyfile:ro
+  #     - caddy-data:/data
+  #   depends_on:
+  #     - reqmesh
+  #   restart: unless-stopped
+
+volumes:
+  reqmesh-data:
+  # caddy-data:

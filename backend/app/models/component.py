@@ -14,7 +14,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
-from app.models.requirement import AttributeValue, Parameter
+from app.models.requirement import AttributeValue, Parameter, Relation
 
 
 class ComponentType(str, Enum):
@@ -41,6 +41,7 @@ class Component(BaseModel):
     satisfies: list[str] = Field(default_factory=list)
     verification_cases: list[str] = Field(default_factory=list)
     attributes: list[AttributeValue] = Field(default_factory=list)
+    relations: list[Relation] = Field(default_factory=list)
     # Numeric quantities (mass, power draw, cost…) that budget rollups sum
     # over the design tree.
     parameters: list[Parameter] = Field(default_factory=list)
@@ -59,6 +60,7 @@ class ComponentCreate(BaseModel):
     quantity: int = 1
     satisfies: list[str] = Field(default_factory=list)
     verification_cases: list[str] = Field(default_factory=list)
+    relations: list[Relation] = Field(default_factory=list)
     parameters: list[Parameter] = Field(default_factory=list)
 
 
@@ -72,5 +74,6 @@ class ComponentUpdate(BaseModel):
     quantity: Optional[int] = None
     satisfies: Optional[list[str]] = None
     verification_cases: Optional[list[str]] = None
+    relations: Optional[list[Relation]] = None
     attributes: Optional[list[AttributeValue]] = None
     parameters: Optional[list[Parameter]] = None

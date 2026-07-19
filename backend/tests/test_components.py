@@ -41,7 +41,7 @@ def test_create_component_defaults(client, project):
 def test_list_is_sorted_by_id(client, project):
     make_component(client, project, "C-002")
     make_component(client, project, "C-001")
-    ids = [c["id"] for c in client.get(f"/api/projects/{project}/components").json()]
+    ids = [c["id"] for c in client.get(f"/api/projects/{project}/components").json()["items"]]
     assert ids == ["C-001", "C-002"]
 
 
@@ -208,20 +208,20 @@ def test_filter_by_satisfied_requirement(client, wired):
     make_component(client, wired, "C-001", satisfies=["REQ-001"])
     make_component(client, wired, "C-002")
     res = client.get(f"/api/projects/{wired}/components", params={"satisfies": "REQ-001"})
-    assert [c["id"] for c in res.json()] == ["C-001"]
+    assert [c["id"] for c in res.json()["items"]] == ["C-001"]
 
 
 def test_filter_by_type_and_search(client, project):
     make_component(client, project, "C-001", name="Fuel Pump", type="part", part_number="FP-9")
     make_component(client, project, "C-002", name="Avionics Bay", type="assembly")
 
-    by_type = client.get(f"/api/projects/{project}/components", params={"type": "part"}).json()
+    by_type = client.get(f"/api/projects/{project}/components", params={"type": "part"}).json()["items"]
     assert [c["id"] for c in by_type] == ["C-001"]
 
-    by_name = client.get(f"/api/projects/{project}/components", params={"search": "fuel"}).json()
+    by_name = client.get(f"/api/projects/{project}/components", params={"search": "fuel"}).json()["items"]
     assert [c["id"] for c in by_name] == ["C-001"]
 
-    by_pn = client.get(f"/api/projects/{project}/components", params={"search": "FP-9"}).json()
+    by_pn = client.get(f"/api/projects/{project}/components", params={"search": "FP-9"}).json()["items"]
     assert [c["id"] for c in by_pn] == ["C-001"]
 
 

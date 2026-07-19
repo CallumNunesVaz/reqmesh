@@ -17,6 +17,8 @@ import { useFocusedEntity } from '../components/useFocusedEntity';
 import { AutoLinkText } from '../components/autoLink';
 import { useEntityKinds } from '../components/entityIndex';
 import { ParameterEditor } from '../components/parametrics';
+import { HelpTip } from '../components/HelpTip';
+import ParametricsGuide from '../components/ParametricsGuide';
 
 const EMPTY_DRAFT = { id: '', name: '', type: 'assembly', parent: '' };
 
@@ -192,6 +194,7 @@ export default function ComponentsPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Components</h1>
+          <HelpTip>Components represent the physical design — what the system IS. Each component can satisfy requirements and carry numeric parameters for budget rollups (e.g. mass, current draw). Build a tree from system → subsystem → assembly → part to enable automated rollups in the parametrics engine.</HelpTip>
           <p className="text-sm text-muted-foreground mt-1">
             {components.length} components — the synthesised design
           </p>
@@ -302,6 +305,16 @@ function ComponentDetail({ component, components, requirements, cases, editable,
     parent: component.parent ?? '',
   });
 
+  const _orig = {name: component.name, description: component.description, type: component.type,
+    part_number: component.part_number, supplier: component.supplier,
+    quantity: component.quantity, parent: component.parent ?? ''};
+  const dirty = editable && (
+    form.name !== _orig.name || form.description !== _orig.description ||
+    form.type !== _orig.type || form.part_number !== _orig.part_number ||
+    form.supplier !== _orig.supplier || form.quantity !== _orig.quantity ||
+    form.parent !== _orig.parent
+  );
+
   // A component cannot be reparented into its own branch — the API rejects it,
   // so don't offer it.
   const ownBranch = branchIds(components, component.id);
@@ -377,9 +390,9 @@ function ComponentDetail({ component, components, requirements, cases, editable,
           </div>
           <button
             onClick={() => onPatch(component.id, { ...form, parent: form.parent || null })}
-            className="btn-primary w-full justify-center"
+            className={`btn-primary w-full justify-center ${dirty ? 'ring-2 ring-amber-500/50' : ''}`}
           >
-            <Save size={14} /> Save
+            <Save size={14} /> {dirty ? 'Save *' : 'Save'}
           </button>
         </>
       ) : (
@@ -399,6 +412,8 @@ function ComponentDetail({ component, components, requirements, cases, editable,
           {component.supplier && <div className="flex justify-between"><dt className="text-muted-foreground">Supplier</dt><dd>{component.supplier}</dd></div>}
         </dl>
       )}
+
+      <ParametricsGuide />
 
       <ParameterEditor
         parameters={component.parameters || []}

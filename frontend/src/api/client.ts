@@ -41,6 +41,14 @@ export interface Project {
   path: string;
 }
 
+/** Envelope returned by paginated list endpoints. */
+export interface Paged<T> {
+  items: T[];
+  total: number;
+  offset: number;
+  limit: number;
+}
+
 /** A typed numeric quantity; `expr` derives it from other parameters. */
 export interface Parameter {
   name: string;
@@ -348,17 +356,33 @@ export const api = {
     request<{ states: string[]; transitions: Record<string, string[]>; default: string }>(`/projects/${projectId}/workflow`),
 
   // Requirements
-  listRequirements: (projectId: string, params?: Record<string, string>) => {
+  //
+  // The list endpoint is paginated ({items, total, offset, limit}).
+  // listRequirements unwraps it at the server's maximum page size so every
+  // existing "give me the project" caller keeps working; use the Paged
+  // variant to actually page.
+  listRequirements: async (projectId: string, params?: Record<string, string>) => {
+    const qs = '?' + new URLSearchParams({ limit: '2000', ...params }).toString();
+    const page = await request<Paged<Requirement>>(`/projects/${projectId}/requirements${qs}`);
+    return page.items;
+  },
+  listRequirementsPaged: (projectId: string, params?: Record<string, string>) => {
     const qs = params ? '?' + new URLSearchParams(params).toString() : '';
-    return request<Requirement[]>(`/projects/${projectId}/requirements${qs}`);
+    return request<Paged<Requirement>>(`/projects/${projectId}/requirements${qs}`);
   },
   getRequirementTree: (projectId: string) =>
     request<RequirementTreeNode[]>(`/projects/${projectId}/requirements/tree`),
 
   // Components (the synthesised design)
-  listComponents: (projectId: string, params?: Record<string, string>) => {
+  // Paginated like requirements — see listRequirements.
+  listComponents: async (projectId: string, params?: Record<string, string>) => {
+    const qs = '?' + new URLSearchParams({ limit: '2000', ...params }).toString();
+    const page = await request<Paged<Component>>(`/projects/${projectId}/components${qs}`);
+    return page.items;
+  },
+  listComponentsPaged: (projectId: string, params?: Record<string, string>) => {
     const qs = params ? '?' + new URLSearchParams(params).toString() : '';
-    return request<Component[]>(`/projects/${projectId}/components${qs}`);
+    return request<Paged<Component>>(`/projects/${projectId}/components${qs}`);
   },
   getComponentTree: (projectId: string) =>
     request<ComponentTreeNode[]>(`/projects/${projectId}/components/tree`),

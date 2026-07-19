@@ -13,6 +13,8 @@ from app.core.dependencies import get_store, require_edit
 from app.core.ids import safe_id
 from app.models.component import ComponentCreate, ComponentUpdate
 from app.services.yaml_store import YamlStore
+from app.services.history import record_change
+from app.services.yaml_store import YamlStore
 
 router = APIRouter()
 
@@ -81,6 +83,8 @@ async def list_components(
     search: str | None = Query(None),
     type: str | None = Query(None),
     satisfies: str | None = Query(None),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(500, ge=1, le=2000),
 ):
     store = get_store(project_id)
     items = store.list_components()
@@ -95,7 +99,9 @@ async def list_components(
             if needle in f"{c.get('id', '')} {c.get('name', '')} {c.get('part_number', '')} "
                          f"{c.get('supplier', '')} {c.get('description', '')}".lower()
         ]
-    return sorted(items, key=lambda c: c.get("id", ""))
+    items = sorted(items, key=lambda c: c.get("id", ""))
+    total = len(items)
+    return {"items": items[offset:offset + limit], "total": total, "offset": offset, "limit": limit}
 
 
 @router.get("/projects/{project_id}/components/{component_id}")
@@ -115,7 +121,9 @@ async def create_component(project_id: str, data: ComponentCreate, user: dict = 
         raise HTTPException(status_code=409, detail="Component already exists")
     _validate_parent(store, data.id, data.parent)
     _validate_links(store, data.satisfies, data.verification_cases)
-    return store.create_component(data.model_dump(mode="json"))
+    result = store.create_component(data.model_dump(mode="json"))
+    record_change(store, result["id"], "create", None, result, user.get("username", ""))
+    return result
 
 
 @router.put("/projects/{project_id}/components/{component_id}")
@@ -123,7 +131,8 @@ async def update_component(
     project_id: str, component_id: str, data: ComponentUpdate, user: dict = Depends(require_edit)
 ):
     store = get_store(project_id)
-    if store.get_component(component_id) is None:
+    before = store.get_component(component_id)
+    if before is None:
         raise HTTPException(status_code=404, detail="Component not found")
 
     update = data.model_dump(mode="json", exclude_unset=True)
@@ -134,6 +143,7 @@ async def update_component(
     result = store.update_component(component_id, update)
     if result is None:
         raise HTTPException(status_code=404, detail="Component not found")
+    record_change(store, component_id, "update", before, result, user.get("username", ""))
     return result
 
 
@@ -153,6 +163,7 @@ async def delete_component(project_id: str, component_id: str, user: dict = Depe
             promoted.append(child["id"])
 
     store.delete_component(component_id)
+    record_change(store, component_id, "delete", doomed, None, user.get("username", ""))
     return {"ok": True, "promoted_children": promoted}
 
 

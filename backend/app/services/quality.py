@@ -1,19 +1,35 @@
 from __future__ import annotations
 
+import html
 import re
 from html.parser import HTMLParser
+
+_BLOCK_TAGS = {"p", "div", "br", "li", "h1", "h2", "h3", "h4", "h5", "h6", "td", "th", "tr", "section", "article", "header", "footer", "blockquote"}
 
 
 class _HTMLStripper(HTMLParser):
     def __init__(self):
         super().__init__()
         self._text: list[str] = []
+        self._last_data = False
+
+    def handle_starttag(self, tag, attrs):
+        if tag in _BLOCK_TAGS and self._last_data:
+            self._text.append(" ")
+            self._last_data = False
+
+    def handle_endtag(self, tag):
+        if tag in _BLOCK_TAGS:
+            self._text.append(" ")
+            self._last_data = False
 
     def handle_data(self, data: str):
         self._text.append(data)
+        self._last_data = True
 
     def get_text(self) -> str:
-        return "".join(self._text)
+        raw = "".join(self._text)
+        return html.unescape(raw)
 
 
 def strip_html(text: str) -> str:
@@ -55,6 +71,11 @@ MEASURABLE_TERMS = re.compile(
     r"Hz|kHz|MHz|GHz|bps|fps|px|mm|cm|m|km|g|kg|lb|°C|°F)\b",
     re.IGNORECASE,
 )
+
+_WEAK_WORD_PATTERNS: dict[str, re.Pattern] = {
+    word: re.compile(r"\b" + re.escape(word) + r"\b", re.IGNORECASE)
+    for word in WEAK_WORDS
+}
 
 DEFAULT_CONFIG = {
     "min_words": 5,
@@ -111,8 +132,7 @@ def score_requirement(req: dict, config: dict | None = None) -> dict:
 
     if rules.get("weak_words", True):
         lower = plain.lower()
-        for word in WEAK_WORDS:
-            pattern = re.compile(r"\b" + re.escape(word) + r"\b", re.IGNORECASE)
+        for word, pattern in _WEAK_WORD_PATTERNS.items():
             for m in pattern.finditer(lower):
                 findings.append({
                     "rule": "weak_words",

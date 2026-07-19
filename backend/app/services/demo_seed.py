@@ -1306,8 +1306,8 @@ COMPONENTS = [
           part_number="GDU-1050", supplier="Garmin",
           satisfies=["AVNC0001", "AVNC0002"], verification_cases=["VCAV0001"],
           parameters=[_p("mass", 3.2, "kg"), _p("current", 3.5, "A")]),
-    _comp("GIA", "GIA 63W Integrated Avionics Unit", "part", "AVIO", quantity=2,
-          part_number="GIA-63W", supplier="Garmin",
+    _comp("GIA", "GIA 64W Integrated Avionics Unit", "part", "AVIO", quantity=2,
+          part_number="GIA-64W", supplier="Garmin",
           satisfies=["AVNC0004", "AVNC0007"],
           parameters=[_p("mass", 2.8, "kg"), _p("current", 4.9, "A")]),
     _comp("GTX", "GTX 345R Transponder", "part", "AVIO",
@@ -1324,6 +1324,27 @@ COMPONENTS = [
     _comp("ALT", "60 A Alternator", "part", "C172",
           satisfies=["ELEC0001"], verification_cases=["VCEL0001"],
           parameters=[_p("mass", 5, "kg")]),
+]
+
+# ── specifications ────────────────────────────────────────────────────────────
+# Two levels: the system spec collects the top-level requirements and owns the
+# avionics spec as a child, so the Specifications page shows a real breakdown.
+
+SPECIFICATIONS = [
+    {"id": "SPEC-SYS", "name": "System Requirements Specification",
+     "description": "Top-level specification for the complete aircraft;"
+                    " decomposes into subsystem specifications.",
+     "requirements": ["ACFT0000", "AFRM0000", "PROP0000", "AVNC0000",
+                      "FLTC0000", "LNDG0000", "ELEC0000", "ENVR0000",
+                      "SAFE0000"],
+     "children": ["SPEC-AVIO"]},
+    {"id": "SPEC-AVIO", "name": "Avionics Subsystem Specification",
+     "description": "G1000 NXi avionics suite requirements, refined from"
+                    " AVNC0000 in SPEC-SYS.",
+     "requirements": ["AVNC0001", "AVNC0002", "AVNC0003", "AVNC0004",
+                      "AVNC0005", "AVNC0006", "AVNC0007", "AVNC0008",
+                      "AVNC0009", "AVNC0010"],
+     "children": []},
 ]
 
 # ── relations (source, target, relation_type) ─────────────────────────────────
@@ -1742,6 +1763,8 @@ def seed_demo_project(data_root: Path, force: bool = False) -> bool:
         store.create_verification_case(vc)
     for comp in COMPONENTS:
         store.create_component(dict(comp))
+    for spec in SPECIFICATIONS:
+        store.create_specification(dict(spec))
 
     store.write_traces({"links": TRACES})
 

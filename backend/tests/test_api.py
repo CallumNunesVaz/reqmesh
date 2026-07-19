@@ -18,7 +18,7 @@ def test_project_lifecycle(client):
 
 
 def test_project_id_traversal_rejected(client):
-    res = client.post("/api/projects", json={"id": "../escape"})
+    res = client.post("/api/projects", json={"id": "../escape", "name": "escape"})
     assert res.status_code == 400
     res = client.get("/api/projects/..%2F..%2Fetc")
     assert res.status_code in (400, 404)
@@ -87,13 +87,13 @@ def test_search_and_filters(client, project):
     make_req(client, project, "SYST0001", name="Engine thrust", status="approved")
     make_req(client, project, "SYST0002", name="Wing loading", status="proposed")
 
-    hits = client.get(f"/api/projects/{project}/requirements?search=thrust").json()
+    hits = client.get(f"/api/projects/{project}/requirements?search=thrust").json()["items"]
     assert [r["id"] for r in hits] == ["SYST0001"]
 
-    hits = client.get(f"/api/projects/{project}/requirements?status=proposed").json()
+    hits = client.get(f"/api/projects/{project}/requirements?status=proposed").json()["items"]
     assert [r["id"] for r in hits] == ["SYST0002"]
 
-    hits = client.get(f"/api/projects/{project}/requirements?search=wing&status=approved").json()
+    hits = client.get(f"/api/projects/{project}/requirements?search=wing&status=approved").json()["items"]
     assert hits == []
 
 
@@ -165,11 +165,11 @@ def test_guest_cannot_mutate(guest_client):
 
 def test_self_registration_cannot_grant_admin(guest_client):
     res = guest_client.post("/api/auth/register",
-                            json={"username": "mallory", "password": "pass1234", "role": "admin"})
+                            json={"username": "mallory", "password": "TestPass1!secure", "role": "admin"})
     assert res.status_code == 403
 
     res = guest_client.post("/api/auth/register",
-                            json={"username": "alice", "password": "pass1234"})
+                            json={"username": "alice", "password": "TestPass1!secure"})
     assert res.status_code == 200
     assert res.json()["role"] == "editor"
 
@@ -316,9 +316,9 @@ def test_reqif_export_is_well_formed(client, project):
 
 def test_register_rejects_short_password(guest_client):
     res = guest_client.post("/api/auth/register",
-                            json={"username": "bob", "password": "short"})
+                            json={"username": "bob", "password": "Sh1!"})
     assert res.status_code == 400
-    assert "8 characters" in res.json()["detail"]
+    assert "12 characters" in res.json()["detail"]
 
 
 # ── Demo project seeding ─────────────────────────────────────────────────────
@@ -331,7 +331,7 @@ def test_demo_project_seeded_on_first_launch(workspace, monkeypatch):
     with TestClient(app) as c:
         projects = c.get("/api/projects").json()
         assert [p["id"] for p in projects] == ["cessna-172"]
-        reqs = c.get("/api/projects/cessna-172/requirements").json()
+        reqs = c.get("/api/projects/cessna-172/requirements").json()["items"]
         assert len(reqs) >= 50
         tree = c.get("/api/projects/cessna-172/requirements/tree").json()
         assert tree[0]["id"] == "ACFT0000"

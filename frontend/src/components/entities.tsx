@@ -173,7 +173,7 @@ export function EntityLink({ kind, id, name, projectId, showIcon = true, classNa
       className={`inline-flex items-center gap-1 rounded hover:underline underline-offset-2 transition-colors ${className}`}
     >
       {showIcon && <Icon size={12} className={`${meta.cls} shrink-0`} />}
-      <span className="font-mono">{id}</span>
+      <span className="font-mono whitespace-nowrap">{id}</span>
       {name && <span className="truncate">{name}</span>}
       {preview && anchor && <HoverPreview entity={preview} anchor={anchor} />}
     </Link>

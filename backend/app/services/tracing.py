@@ -60,7 +60,13 @@ def shallow_status(req: dict, graph: dict) -> dict:
     }
 
 
-def deep_status(req: dict, graph: dict, memo: dict | None = None, visiting: set | None = None) -> bool:
+MAX_DEPTH = 1000
+
+
+def deep_status(req: dict, graph: dict, memo: dict | None = None, visiting: set | None = None, depth: int = 0) -> bool:
+    if depth > MAX_DEPTH:
+        memo[req["id"]] = False if memo is not None else False
+        return False
     if memo is None:
         memo = {}
     if visiting is None:
@@ -94,7 +100,7 @@ def deep_status(req: dict, graph: dict, memo: dict | None = None, visiting: set 
         source_req = req_map.get(source_id)
         if source_req is None:
             continue
-        if not deep_status(source_req, graph, memo, visiting):
+        if not deep_status(source_req, graph, memo, visiting, depth + 1):
             all_covered_deep = False
             break
 

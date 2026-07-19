@@ -78,16 +78,16 @@ def test_merge_references_creates_new_links(client, project):
 
 
 def test_scan_api_endpoint(client, project, tmp_path):
-    src = tmp_path / "code"
-    src.mkdir(parents=True)
-    (src / "main.py").write_text("# [impl->REQ-API-SCAN]\ndef go(): pass")
-
     from app.services.yaml_store import YamlStore
     from app.core.config import settings
     from pathlib import Path
 
     store = YamlStore(Path(settings.data_root) / project)
     store.create_requirement({"id": "REQ-API-SCAN", "name": "API Scan Test"})
+
+    src = store.root / "src"
+    src.mkdir(parents=True, exist_ok=True)
+    (src / "main.py").write_text("# [impl->REQ-API-SCAN]\ndef go(): pass")
 
     res = client.post(
         f"/api/projects/{project}/scan",

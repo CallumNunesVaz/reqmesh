@@ -15,6 +15,7 @@ from app.models.trace import TraceMatrix
 from app.models.risk import Risk, Comment, DecisionRecord
 from app.models.change_request import ChangeRequest
 from app.models.component import Component
+from app.models.baseline import Baseline
 
 OUT = Path(__file__).resolve().parent.parent / "schemas"
 
@@ -28,6 +29,7 @@ MODELS = {
     "decision": DecisionRecord,
     "change_request": ChangeRequest,
     "component": Component,
+    "baseline": Baseline,
 }
 
 

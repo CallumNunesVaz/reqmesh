@@ -1,0 +1,31 @@
+{
+  "properties": {
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "frozen_at": {
+      "default": "",
+      "title": "Frozen At",
+      "type": "string"
+    },
+    "frozen": {
+      "default": true,
+      "title": "Frozen",
+      "type": "boolean"
+    },
+    "snapshot": {
+      "additionalProperties": {
+        "type": "object"
+      },
+      "title": "Snapshot",
+      "type": "object"
+    }
+  },
+  "required": [
+    "name"
+  ],
+  "title": "reqmesh baseline",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

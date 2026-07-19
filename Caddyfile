@@ -1,0 +1,28 @@
+# Caddy reverse proxy for reqmesh
+#
+# Caddy automatically provisions TLS certificates from Let's Encrypt for public
+# domains. For local-only domains (like 'reqmesh.lan' or 'localserver.reqmesh.com'
+# that only resolve on your LAN), use `tls internal` to get self-signed
+# certificates instead.
+#
+# When the Caddy service is active in docker-compose.prod.yml, comment out the
+# `ports:` block on the reqmesh service so it is only reachable through Caddy.
+
+localserver.reqmesh.com {
+    # For a LAN-only domain that doesn't have a public DNS entry, use:
+    # tls internal
+
+    reverse_proxy reqmesh:8000 {
+        # Streaming flush for Server-Sent Events (real-time collaboration).
+        flush_interval -1
+    }
+}
+
+# Fallback if you access the server by IP instead of hostname.
+# Replace 192.168.1.100 with your server's actual LAN address.
+# :443 {
+#     tls internal
+#     reverse_proxy reqmesh:8000 {
+#         flush_interval -1
+#     }
+# }

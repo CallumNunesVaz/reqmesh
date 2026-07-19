@@ -52,20 +52,42 @@ export function loadEntityIndex(projectId: string): Promise<IndexedEntity[]> {
 export function searchEntities(entities: IndexedEntity[], query: string, limit = 40): IndexedEntity[] {
   const q = query.trim().toLowerCase();
   if (!q) return entities.slice(0, limit);
+
+  const words = q.split(/\s+/).filter(Boolean);
   const scored: { e: IndexedEntity; score: number }[] = [];
+
   for (const e of entities) {
     const id = e.id.toLowerCase();
     const name = e.name.toLowerCase();
-    let score: number;
-    if (id === q) score = 0;
-    else if (id.startsWith(q)) score = 1;
-    else if (id.includes(q)) score = 2;
-    else if (name.startsWith(q)) score = 3;
-    else if (name.includes(q)) score = 4;
-    else if (e.detail.toLowerCase().includes(q)) score = 5;
-    else continue;
+    const detail = (e.detail || '').toLowerCase();
+    let score = 0;
+
+    if (id === q) {
+      score = 0;
+    } else if (id.includes(q)) {
+      score = 1;
+    } else if (name.toLowerCase().includes(q)) {
+      score = 3;
+    } else if (detail.toLowerCase().includes(q)) {
+      score = 5;
+    } else if (words.length > 1) {
+      const allMatch = words.every(w => id.includes(w) || name.includes(w) || detail.includes(w));
+      if (allMatch) {
+        const matched = words.filter(w => id.includes(w) || name.includes(w)).length;
+        score = 10 - matched;
+      } else {
+        continue;
+      }
+    } else {
+      continue;
+    }
+
+    if (!id.startsWith(q) && id.includes(q)) score += 1;
+    if (!name.startsWith(q) && name.includes(q)) score += 2;
+
     scored.push({ e, score });
   }
+
   scored.sort((a, b) => a.score - b.score);
   return scored.slice(0, limit).map((s) => s.e);
 }

@@ -72,6 +72,36 @@
       ],
       "title": "Parameter",
       "type": "object"
+    },
+    "Relation": {
+      "properties": {
+        "type": {
+          "title": "Type",
+          "type": "string"
+        },
+        "target": {
+          "title": "Target",
+          "type": "string"
+        },
+        "reviewed_fingerprint": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reviewed Fingerprint"
+        }
+      },
+      "required": [
+        "type",
+        "target"
+      ],
+      "title": "Relation",
+      "type": "object"
     }
   },
   "properties": {
@@ -139,6 +169,13 @@
         "$ref": "#/$defs/AttributeValue"
       },
       "title": "Attributes",
+      "type": "array"
+    },
+    "relations": {
+      "items": {
+        "$ref": "#/$defs/Relation"
+      },
+      "title": "Relations",
       "type": "array"
     },
     "parameters": {

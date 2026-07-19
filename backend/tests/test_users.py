@@ -15,7 +15,7 @@ def test_list_users_returns_default_admin(client):
 
 
 def test_create_standard_user(client):
-    res = client.post("/api/auth/users", json={"username": "bob", "password": "password1", "role": "editor"})
+    res = client.post("/api/auth/users", json={"username": "bob", "password": "TestPass1!secure", "role": "editor"})
     assert res.status_code == 201, res.text
     assert res.json()["role"] == "editor"
     names = {u["username"] for u in client.get("/api/auth/users").json()}
@@ -23,45 +23,45 @@ def test_create_standard_user(client):
 
 
 def test_create_admin_user(client):
-    res = client.post("/api/auth/users", json={"username": "alice", "password": "password1", "role": "admin"})
+    res = client.post("/api/auth/users", json={"username": "alice", "password": "TestPass1!secure", "role": "admin"})
     assert res.status_code == 201
     assert res.json()["role"] == "admin"
 
 
 def test_create_rejects_short_password(client):
-    res = client.post("/api/auth/users", json={"username": "bob", "password": "short", "role": "editor"})
+    res = client.post("/api/auth/users", json={"username": "bob", "password": "Sh1!", "role": "editor"})
     assert res.status_code == 400
 
 
 def test_create_rejects_bad_username(client):
-    res = client.post("/api/auth/users", json={"username": "a b!", "password": "password1", "role": "editor"})
+    res = client.post("/api/auth/users", json={"username": "a b!", "password": "TestPass1!secure", "role": "editor"})
     assert res.status_code == 400
 
 
 def test_create_rejects_invalid_role(client):
-    res = client.post("/api/auth/users", json={"username": "bobby", "password": "password1", "role": "superuser"})
+    res = client.post("/api/auth/users", json={"username": "bobby", "password": "TestPass1!secure", "role": "superuser"})
     assert res.status_code == 400
 
 
 def test_create_duplicate_conflicts(client):
-    client.post("/api/auth/users", json={"username": "bob", "password": "password1", "role": "editor"})
-    res = client.post("/api/auth/users", json={"username": "bob", "password": "password1", "role": "editor"})
+    client.post("/api/auth/users", json={"username": "bob", "password": "TestPass1!secure", "role": "editor"})
+    res = client.post("/api/auth/users", json={"username": "bob", "password": "TestPass1!secure", "role": "editor"})
     assert res.status_code == 409
 
 
 def test_change_role(client):
-    client.post("/api/auth/users", json={"username": "bob", "password": "password1", "role": "editor"})
+    client.post("/api/auth/users", json={"username": "bob", "password": "TestPass1!secure", "role": "editor"})
     res = client.patch("/api/auth/users/bob", json={"role": "admin"})
     assert res.status_code == 200
     assert res.json()["role"] == "admin"
 
 
 def test_reset_password_then_login(client):
-    client.post("/api/auth/users", json={"username": "bob", "password": "password1", "role": "editor"})
-    res = client.patch("/api/auth/users/bob", json={"password": "brandnewpass"})
+    client.post("/api/auth/users", json={"username": "bob", "password": "TestPass1!secure", "role": "editor"})
+    res = client.patch("/api/auth/users/bob", json={"password": "NewPass2!secure"})
     assert res.status_code == 200
     # Login goes through real authentication against the users file.
-    login = client.post("/api/auth/login", json={"username": "bob", "password": "brandnewpass"})
+    login = client.post("/api/auth/login", json={"username": "bob", "password": "NewPass2!secure"})
     assert login.status_code == 200
     assert login.json()["role"] == "editor"
 
@@ -81,14 +81,14 @@ def test_cannot_delete_last_admin(client):
 def test_cannot_delete_self(client):
     # The overridden admin identity is "tester"; create that account then try
     # to delete it — a second admin ("admin") exists so only the self-guard fires.
-    client.post("/api/auth/users", json={"username": "tester", "password": "password1", "role": "admin"})
+    client.post("/api/auth/users", json={"username": "tester", "password": "TestPass1!secure", "role": "admin"})
     res = client.delete("/api/auth/users/tester")
     assert res.status_code == 400
     assert "your own account" in res.json()["detail"].lower()
 
 
 def test_delete_user(client):
-    client.post("/api/auth/users", json={"username": "bob", "password": "password1", "role": "editor"})
+    client.post("/api/auth/users", json={"username": "bob", "password": "TestPass1!secure", "role": "editor"})
     res = client.delete("/api/auth/users/bob")
     assert res.status_code == 200
     names = {u["username"] for u in client.get("/api/auth/users").json()}

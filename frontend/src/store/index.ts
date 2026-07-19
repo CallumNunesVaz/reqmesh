@@ -11,6 +11,7 @@ interface AppState {
   error: string | null;
   graphVersion: number;
   dataVersion: number;
+  helpersEnabled: boolean;
 
   setProjects: (projects: Project[]) => void;
   setCurrentProject: (project: Project | null) => void;
@@ -21,6 +22,7 @@ interface AppState {
   setError: (error: string | null) => void;
   bumpGraphVersion: () => void;
   bumpDataVersion: () => void;
+  toggleHelpers: () => void;
 }
 
 export const useStore = create<AppState>((set) => ({
@@ -33,6 +35,7 @@ export const useStore = create<AppState>((set) => ({
   error: null,
   graphVersion: 0,
   dataVersion: 0,
+  helpersEnabled: true,
 
   setProjects: (projects) => set({ projects }),
   setCurrentProject: (project) => set({ currentProject: project }),
@@ -43,4 +46,5 @@ export const useStore = create<AppState>((set) => ({
   setError: (error) => set({ error }),
   bumpGraphVersion: () => set((s) => ({ graphVersion: s.graphVersion + 1 })),
   bumpDataVersion: () => set((s) => ({ dataVersion: s.dataVersion + 1 })),
+  toggleHelpers: () => set((s) => ({ helpersEnabled: !s.helpersEnabled })),
 }));

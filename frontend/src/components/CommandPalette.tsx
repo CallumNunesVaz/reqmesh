@@ -41,12 +41,15 @@ export default function CommandPalette({ projectId }: { projectId: string }) {
   }, []);
 
   useEffect(() => {
-    if (!open) return;
-    setQuery('');
-    setCursor(0);
-    loadEntityIndex(projectId).then(setEntities);
-    // The input mounts with the panel; focus it on the next frame.
-    requestAnimationFrame(() => inputRef.current?.focus());
+    if (open) {
+      document.body.style.overflow = 'hidden';
+      setQuery('');
+      setCursor(0);
+      loadEntityIndex(projectId).then(setEntities);
+      requestAnimationFrame(() => inputRef.current?.focus());
+    } else {
+      document.body.style.overflow = '';
+    }
   }, [open, projectId, dataVersion]);
 
   const results = searchEntities(entities, query);

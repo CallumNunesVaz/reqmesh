@@ -95,22 +95,41 @@ describe('request', () => {
 });
 
 describe('listRequirements', () => {
-  it('appends filters as a query string', async () => {
-    const f = stubFetch({ json: async () => [] });
+  // The list endpoint is paginated; the unwrapping wrapper asks for the
+  // server's max page so "list the project" callers see a plain array.
+  const page = (items: unknown[] = []) =>
+    ({ json: async () => ({ items, total: items.length, offset: 0, limit: 2000 }) });
+
+  it('appends filters after the max-page limit', async () => {
+    const f = stubFetch(page());
     await api.listRequirements('demo', { search: 'stall', type: 'functional' });
-    expect(callOf(f).url).toBe('/api/projects/demo/requirements?search=stall&type=functional');
+    expect(callOf(f).url).toBe('/api/projects/demo/requirements?limit=2000&search=stall&type=functional');
   });
 
-  it('sends a bare path when no filters are given', async () => {
-    const f = stubFetch({ json: async () => [] });
-    await api.listRequirements('demo');
-    expect(callOf(f).url).toBe('/api/projects/demo/requirements');
+  it('requests the max page when no filters are given, and unwraps items', async () => {
+    const f = stubFetch(page([{ id: 'R1' }]));
+    const result = await api.listRequirements('demo');
+    expect(callOf(f).url).toBe('/api/projects/demo/requirements?limit=2000');
+    expect(result).toEqual([{ id: 'R1' }]);
+  });
+
+  it('lets an explicit limit override the default', async () => {
+    const f = stubFetch(page());
+    await api.listRequirements('demo', { limit: '50' });
+    expect(callOf(f).url).toBe('/api/projects/demo/requirements?limit=50');
   });
 
   it('url-encodes filter values', async () => {
-    const f = stubFetch({ json: async () => [] });
+    const f = stubFetch(page());
     await api.listRequirements('demo', { search: 'fuel & air' });
-    expect(callOf(f).url).toBe('/api/projects/demo/requirements?search=fuel+%26+air');
+    expect(callOf(f).url).toBe('/api/projects/demo/requirements?limit=2000&search=fuel+%26+air');
+  });
+
+  it('exposes the raw envelope through the paged variant', async () => {
+    const f = stubFetch(page([{ id: 'R1' }]));
+    const result = await api.listRequirementsPaged('demo', { offset: '10' });
+    expect(callOf(f).url).toBe('/api/projects/demo/requirements?offset=10');
+    expect(result.total).toBe(1);
   });
 });
 
@@ -121,10 +140,11 @@ describe('components', () => {
     expect(callOf(f).url).toBe('/api/projects/demo/components/tree');
   });
 
-  it('filters components by the requirement they satisfy', async () => {
-    const f = stubFetch({ json: async () => [] });
-    await api.listComponents('demo', { satisfies: 'REQ-001' });
-    expect(callOf(f).url).toBe('/api/projects/demo/components?satisfies=REQ-001');
+  it('filters components by the requirement they satisfy, unwrapping the page', async () => {
+    const f = stubFetch({ json: async () => ({ items: [{ id: 'C-001' }], total: 1, offset: 0, limit: 2000 }) });
+    const result = await api.listComponents('demo', { satisfies: 'REQ-001' });
+    expect(callOf(f).url).toBe('/api/projects/demo/components?limit=2000&satisfies=REQ-001');
+    expect(result).toEqual([{ id: 'C-001' }]);
   });
 
   it('creates a component with its parent link', async () => {

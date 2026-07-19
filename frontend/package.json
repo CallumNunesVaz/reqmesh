@@ -13,6 +13,8 @@
   },
   "dependencies": {
     "@dagrejs/dagre": "^3.0.0",
+    "@tiptap/extension-character-count": "^2.27.2",
+    "@tiptap/extension-image": "^2.27.2",
     "@tiptap/extension-placeholder": "^2.9.0",
     "@tiptap/pm": "^2.9.0",
     "@tiptap/react": "^2.9.0",

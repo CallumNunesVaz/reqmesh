@@ -1,12 +1,16 @@
 import asyncio
 import logging
 import re
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import unquote
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.core.config import settings
 from app.api.router import router
@@ -19,8 +23,6 @@ from app.api.component_routes import router as component_router
 async def lifespan(app: FastAPI):
     root = Path(settings.data_root)
     root.mkdir(parents=True, exist_ok=True)
-    # First launch (no projects yet): seed the Cessna 172 example so the UI
-    # opens with something to explore. Disable with RT_SEED_DEMO=false.
     if settings.seed_demo and not any((d / "_meta.yaml").exists() for d in root.iterdir() if d.is_dir()):
         try:
             from app.services.demo_seed import seed_demo_project
@@ -33,10 +35,18 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="reqmesh",
     version="0.4.0",
-    description="A git-native requirements management tool",
+    description="A git-native requirements management tool with traceability, verification tracking, parametrics, and real-time collaboration.",
     lifespan=lifespan,
+    contact={"name": "reqmesh", "url": "https://github.com/CallumNunesVaz/reqmesh"},
+    license_info={"name": "GNU GPL-2.0", "url": "https://www.gnu.org/licenses/gpl-2.0.html"},
+    openapi_tags=[
+        {"name": "auth", "description": "Authentication — login, register, guest access, user management"},
+        {"name": "projects", "description": "Project CRUD and lifecycle"},
+        {"name": "requirements", "description": "Requirements — the core entity"},
+    ],
 )
 
+app.add_middleware(GZipMiddleware, minimum_size=512)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
@@ -49,8 +59,31 @@ _PROJECT_PATH_RE = re.compile(r"^/api/projects/([^/]+)(/.*)?$")
 
 
 @app.middleware("http")
+async def request_logging_middleware(request: Request, call_next):
+    start = time.monotonic()
+    response = await call_next(request)
+    duration_ms = int((time.monotonic() - start) * 1000)
+    logging.getLogger("http").info(
+        "%s %s → %s (%dms)",
+        request.method, request.url.path, response.status_code, duration_ms,
+    )
+    return response
+
+
+@app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+    if request.url.scheme == "https":
+        response.headers.setdefault("Strict-Transport-Security", "max-age=63072000")
+    return response
+
+
+@app.middleware("http")
 async def git_autocommit_middleware(request: Request, call_next):
-    """After any successful mutation, auto-commit (if enabled) and publish SSE events."""
     response = await call_next(request)
     if request.method in {"POST", "PUT", "PATCH", "DELETE"} and response.status_code < 400:
         m = _PROJECT_PATH_RE.match(request.url.path)
@@ -60,8 +93,12 @@ async def git_autocommit_middleware(request: Request, call_next):
             action = unquote(m.group(2) or "").strip("/") or "project"
 
             if settings.git_autocommit and project_root.is_dir():
-                from app.services.git_service import auto_commit
-                await asyncio.to_thread(auto_commit, project_root, f"rt: {request.method.lower()} {action}")
+                from app.services.git_service import auto_commit, push_to_remote
+                committed = await asyncio.to_thread(
+                    auto_commit, project_root, f"rt: {request.method.lower()} {action}"
+                )
+                if committed and settings.git_push_on_commit and settings.git_remote_url:
+                    await asyncio.to_thread(push_to_remote, project_root)
 
             from app.services.event_bus import get_event_bus
             get_event_bus().publish(project_id, {
@@ -70,6 +107,20 @@ async def git_autocommit_middleware(request: Request, call_next):
                 "path": request.url.path,
             })
     return response
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    from fastapi.exceptions import HTTPException
+    if isinstance(exc, HTTPException):
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.detail},
+            headers=getattr(exc, "headers", None) or {},
+        )
+    logging.getLogger(__name__).exception("Unhandled exception: %s %s", request.method, request.url.path)
+    detail = str(exc) if settings.debug else "Internal server error"
+    return JSONResponse(status_code=500, content={"detail": detail})
 
 
 app.include_router(auth_router, prefix="/api")
@@ -83,10 +134,6 @@ async def health():
     return {"status": "ok"}
 
 
-# ── Static SPA (desktop build) ────────────────────────────────────────────────
-# Registered AFTER the API routers and /health so those always win — Starlette
-# matches routes in registration order, so the catch-all below only handles
-# paths the API didn't claim. No-op unless RT_STATIC_DIR points at a build.
 def _mount_spa() -> None:
     if not settings.static_dir:
         return
@@ -102,14 +149,15 @@ def _mount_spa() -> None:
 
     @app.get("/{full_path:path}")
     async def serve_spa(full_path: str):
-        # Serve a real build asset when the path maps to one; otherwise fall
-        # back to index.html so client-side (react-router) routes resolve.
         if full_path:
             candidate = (static_root / full_path).resolve()
-            # Guard against path traversal escaping the build directory.
             if candidate.is_file() and candidate.is_relative_to(static_root):
+                if candidate.name.startswith("."):
+                    return JSONResponse(status_code=404, content={"detail": "Not found"})
+                if full_path.endswith((".js", ".css", ".woff2", ".woff", ".ttf", ".svg", ".png")):
+                    return FileResponse(candidate, headers={"Cache-Control": "public, max-age=31536000, immutable"})
                 return FileResponse(candidate)
-        return FileResponse(index_file)
+        return FileResponse(index_file, headers={"Cache-Control": "no-cache"})
 
 
 _mount_spa()

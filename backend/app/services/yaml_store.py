@@ -59,18 +59,24 @@ class YamlStore:
         self._traces_file.parent.mkdir(parents=True, exist_ok=True)
 
     def _read_yaml(self, path: Path) -> dict:
-        with open(path) as f:
-            return yaml.load(f) or {}
+        try:
+            with open(path) as f:
+                return yaml.load(f) or {}
+        except Exception:
+            import logging
+            logging.getLogger(__name__).warning("Failed to read YAML: %s", path)
+            return {}
 
     def _write_yaml(self, path: Path, data: dict) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
-        fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
+        tmp = None
         try:
+            fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
             with os.fdopen(fd, "w") as f:
                 yaml.dump(data, f)
             os.replace(tmp, path)
         except BaseException:
-            if os.path.exists(tmp):
+            if tmp and os.path.exists(tmp):
                 os.remove(tmp)
             raise
 

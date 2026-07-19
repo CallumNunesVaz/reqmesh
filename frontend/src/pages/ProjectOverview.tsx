@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { BarChart3, ClipboardList, FileText, CheckCircle2, AlertTriangle, Zap, Gauge, Plug, PenTool, Lock } from 'lucide-react';
+import { BarChart3, ClipboardList, FileText, CheckCircle2, AlertTriangle, Zap, Gauge, Plug, PenTool, Lock, Boxes } from 'lucide-react';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LabelList } from 'recharts';
 import { api, type Requirement, type VerificationCase } from '../api/client';
 
@@ -49,6 +49,7 @@ interface ProjectStats {
   totalRequirements: number;
   totalVerificationCases: number;
   totalSpecifications: number;
+  totalComponents: number;
   statusCounts: Record<string, number>;
   verificationStatus: { pending: number; passed: number; failed: number };
   coverage: number;
@@ -86,7 +87,8 @@ export default function ProjectOverview() {
       api.listRequirements(projectId) as Promise<Requirement[]>,
       api.listSpecifications(projectId) as Promise<{ id: string; name: string }[]>,
       api.listVerificationCases(projectId) as Promise<VerificationCase[]>,
-    ]).then(([proj, reqs, specs, vcs]) => {
+      api.listComponents(projectId).catch(() => []),
+    ]).then(([proj, reqs, specs, vcs, components]) => {
       setProject(proj);
       const statusCounts: Record<string, number> = {};
       const priorityCounts: Record<string, number> = {};
@@ -120,6 +122,7 @@ export default function ProjectOverview() {
         totalRequirements: total,
         totalVerificationCases: vcs.length,
         totalSpecifications: specs.length,
+        totalComponents: components.length,
         statusCounts,
         priorityCounts,
         typeCounts,
@@ -153,6 +156,7 @@ export default function ProjectOverview() {
   const statCards = [
     { label: 'Requirements', value: stats.totalRequirements, icon: ClipboardList, color: 'text-blue-400 bg-blue-400/10', to: `/project/${projectId}/requirements` },
     { label: 'Specifications', value: stats.totalSpecifications, icon: FileText, color: 'text-amber-400 bg-amber-400/10', to: `/project/${projectId}/specifications` },
+    { label: 'Components', value: stats.totalComponents, icon: Boxes, color: 'text-orange-400 bg-orange-400/10', to: `/project/${projectId}/components` },
     { label: 'Verification Cases', value: stats.totalVerificationCases, icon: CheckCircle2, color: 'text-green-400 bg-green-400/10', to: `/project/${projectId}/verification` },
     { label: 'Coverage', value: `${stats.coverage}%`, icon: BarChart3, color: 'text-purple-400 bg-purple-400/10', to: `/project/${projectId}/traces` },
   ];
@@ -176,7 +180,7 @@ export default function ProjectOverview() {
       </motion.div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mt-6">
         {statCards.map((card, i) => {
           const Icon = card.icon;
           return (
@@ -328,12 +332,12 @@ export default function ProjectOverview() {
                 {typeData.map((t) => {
                   const Icon = typeIcons[Object.keys(typeColors).find(k => k.replace('_', ' ') === t.name) || 'functional'] || Zap;
                   return (
-                    <div key={t.name} className="flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-1.5">
+                    <div key={t.name} className="flex items-center justify-between gap-3 text-xs">
+                      <div className="flex items-center gap-1.5 min-w-0">
                         <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: t.fill }} />
-                        <span className="text-muted-foreground capitalize">{t.name}</span>
+                        <span className="text-muted-foreground capitalize truncate">{t.name}</span>
                       </div>
-                      <span className="font-mono text-muted-foreground">{t.count}</span>
+                      <span className="font-mono tabular-nums text-muted-foreground shrink-0">{t.count}</span>
                     </div>
                   );
                 })}

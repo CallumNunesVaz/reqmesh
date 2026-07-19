@@ -40,7 +40,13 @@ async def create_change_request(project_id: str, data: ChangeRequestCreate, user
     cr.setdefault("submitted_by", user.get("username", ""))
     cr.setdefault("reviewed_by", "")
     cr.setdefault("approved_by", "")
-    return store.create_item("change_requests", cr)
+    result = store.create_item("change_requests", cr)
+    try:
+        from app.services.email_service import notify_change_request
+        notify_change_request(store, project_id, result["id"], "created", user.get("username", ""))
+    except Exception:
+        pass
+    return result
 
 
 @router.put("/projects/{project_id}/change-requests/{cr_id}")
@@ -48,6 +54,11 @@ async def update_change_request(project_id: str, cr_id: str, data: ChangeRequest
     result = get_store(project_id).update_item("change_requests", cr_id, data.model_dump(mode="json", exclude_unset=True))
     if result is None:
         raise HTTPException(status_code=404, detail="Change request not found")
+    try:
+        from app.services.email_service import notify_change_request
+        notify_change_request(get_store(project_id), project_id, cr_id, "updated", user.get("username", ""))
+    except Exception:
+        pass
     return result
 
 
@@ -72,7 +83,14 @@ async def create_risk(project_id: str, data: RiskCreate, user: dict = Depends(re
     r.setdefault("mitigation", "")
     r.setdefault("linked_requirements", [])
     r.setdefault("status", "open")
-    return get_store(project_id).create_item("risks", r)
+    store = get_store(project_id)
+    result = store.create_item("risks", r)
+    try:
+        from app.services.email_service import notify_risk
+        notify_risk(store, project_id, result["id"], "created", user.get("username", ""))
+    except Exception:
+        pass
+    return result
 
 
 @router.put("/projects/{project_id}/risks/{risk_id}")
@@ -80,6 +98,11 @@ async def update_risk(project_id: str, risk_id: str, data: RiskUpdate, user: dic
     result = get_store(project_id).update_item("risks", risk_id, data.model_dump(mode="json", exclude_unset=True))
     if result is None:
         raise HTTPException(status_code=404)
+    try:
+        from app.services.email_service import notify_risk
+        notify_risk(get_store(project_id), project_id, risk_id, "updated", user.get("username", ""))
+    except Exception:
+        pass
     return result
 
 
@@ -106,7 +129,13 @@ async def create_comment(project_id: str, data: CommentCreate, user: dict = Depe
     c["id"] = f"COMMENT-{uuid.uuid4().hex[:8].upper()}"
     c["resolved"] = False
     c.setdefault("author", user.get("username", ""))
-    return get_store(project_id).create_item("comments", c)
+    result = get_store(project_id).create_item("comments", c)
+    try:
+        from app.services.email_service import notify_comment
+        notify_comment(get_store(project_id), project_id, data.requirement_id, user.get("username", ""), data.text)
+    except Exception:
+        pass
+    return result
 
 
 @router.delete("/projects/{project_id}/comments/{comment_id}")
@@ -114,6 +143,23 @@ async def delete_comment(project_id: str, comment_id: str, user: dict = Depends(
     if not get_store(project_id).delete_item("comments", comment_id):
         raise HTTPException(status_code=404)
     return {"ok": True}
+
+
+@router.patch("/projects/{project_id}/comments/{comment_id}")
+async def update_comment(project_id: str, comment_id: str, data: dict, user: dict = Depends(require_edit)):
+    store = get_store(project_id)
+    existing = store.get_item("comments", comment_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Comment not found")
+    updates = {}
+    if "resolved" in data:
+        updates["resolved"] = bool(data["resolved"])
+    if "text" in data and data["text"] is not None:
+        updates["text"] = str(data["text"])
+    if not updates:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    result = store.update_item("comments", comment_id, updates)
+    return result
 
 
 # ── Decision Records ──────────────────────────────────────────────────────────
@@ -131,7 +177,13 @@ async def create_decision(project_id: str, data: DecisionRecordCreate, user: dic
     d.setdefault("linked_requirements", [])
     d.setdefault("status", "accepted")
     d.setdefault("decided_by", user.get("username", ""))
-    return get_store(project_id).create_item("decisions", d)
+    result = get_store(project_id).create_item("decisions", d)
+    try:
+        from app.services.email_service import notify_decision
+        notify_decision(get_store(project_id), project_id, result["id"], "created", user.get("username", ""))
+    except Exception:
+        pass
+    return result
 
 
 @router.put("/projects/{project_id}/decisions/{dec_id}")
@@ -139,6 +191,11 @@ async def update_decision(project_id: str, dec_id: str, data: DecisionRecordUpda
     result = get_store(project_id).update_item("decisions", dec_id, data.model_dump(mode="json", exclude_unset=True))
     if result is None:
         raise HTTPException(status_code=404)
+    try:
+        from app.services.email_service import notify_decision
+        notify_decision(get_store(project_id), project_id, dec_id, "updated", user.get("username", ""))
+    except Exception:
+        pass
     return result
 
 
@@ -254,9 +311,16 @@ async def coverage_analysis(project_id: str):
 
 
 @router.get("/projects/{project_id}/trace")
-async def trace_report(project_id: str):
+async def trace_report(project_id: str, format: str = "json"):
     from app.services.tracing import trace_all
-    return trace_all(get_store(project_id))
+    items = trace_all(get_store(project_id))
+    if format == "text":
+        lines = []
+        for item in items:
+            status = "ok" if item["deep"] else "not ok"
+            lines.append(f"{status} [ {item['id']} ] shallow={item['shallow']} deep={item['deep']}")
+        return {"format": "text", "content": "\n".join(lines)}
+    return items
 
 
 # ── Conflict Detection ────────────────────────────────────────────────────────
@@ -365,8 +429,6 @@ async def project_metrics(project_id: str):
             "allocation": round(with_alloc / total * 100),
             "traceability": round(with_trace / total * 100),
         },
-        "total_effort": effort_total,
-        "completed_effort": effort_done,
     }
 
 
@@ -474,9 +536,23 @@ async def download_report(project_id: str, format: str = "html", subsystems: str
 @router.post("/projects/{project_id}/scan")
 async def scan_code(project_id: str, code_root: str = Form(""), user: dict = Depends(require_edit)):
     from app.services.code_scan import scan_tree, merge_references
-    root = Path(code_root) if code_root else Path.cwd()
+    store = get_store(project_id)
+
+    if code_root:
+        root = Path(code_root).resolve()
+        project_root = store.root.resolve()
+        try:
+            root.relative_to(project_root)
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail=f"code_root must be inside the project directory: {project_root}",
+            )
+    else:
+        root = store.root
+
     hits = scan_tree(root)
-    summary = merge_references(get_store(project_id), hits)
+    summary = merge_references(store, hits)
     return summary
 
 
@@ -561,6 +637,11 @@ async def submit_review(project_id: str, req_id: str, data: dict, user: dict = D
     if result is None:
         raise HTTPException(status_code=404)
     record_change(store, req_id, "review", before, result, user.get("username", ""))
+    try:
+        from app.services.email_service import notify_reviewed
+        notify_reviewed(store, project_id, req_id, user.get("username", ""), data.get("comment", ""))
+    except Exception:
+        pass
     return result
 
 
@@ -649,7 +730,7 @@ async def import_project(
     ``mode`` is ``merge`` (create/update) or ``replace`` (wipe existing first).
     """
     store = get_store(project_id)
-    if format not in ("auto", "reqif", "sysml", "csv", "tsv"):
+    if format not in ("auto", "reqif", "sysml", "csv", "tsv", "xlsx"):
         raise HTTPException(status_code=400, detail=f"Unknown format: {format}")
     if mode not in ("merge", "replace"):
         raise HTTPException(status_code=400, detail=f"Unknown mode: {mode}")
@@ -660,6 +741,10 @@ async def import_project(
     if format in ("csv", "tsv"):
         summary = table_import(store, content.decode("utf-8", errors="replace"), fmt=format, mode=mode)
         return summary
+
+    if format == "xlsx":
+        from app.services.table_io import import_xlsx
+        return import_xlsx(store, content, mode=mode)
 
     from app.services.importer import parse_and_import
     from app.services.reqif_import import ReqIFParseError
@@ -689,26 +774,22 @@ async def project_presence(project_id: str):
 
 
 @router.get("/projects/{project_id}/events")
-async def project_events(project_id: str, user: str = "guest", role: str = "viewer"):
-    """Server-Sent Events stream for real-time collaboration.
-
-    Clients open a persistent connection and receive JSON events whenever a
-    mutation occurs in the project (``event: change``) or the set of active
-    viewers changes (``event: presence``). ``user``/``role`` register the
-    caller in the presence roster for the life of the connection.
-    """
+async def project_events(project_id: str, user: dict = Depends(get_current_user)):
+    """Server-Sent Events stream for real-time collaboration."""
     from app.services.event_bus import get_event_bus
 
     bus = get_event_bus()
     queue: asyncio.Queue = bus.subscribe(project_id)
     client_id = uuid.uuid4().hex
+    username = user.get("username", "guest")
+    role = user.get("role", "viewer")
 
     async def event_stream():
         try:
             # Send an initial heartbeat so the client knows the connection is alive.
             yield "event: connected\ndata: {}\n\n"
             # Register presence (this broadcasts a presence event to everyone).
-            bus.join(project_id, client_id, user, role)
+            bus.join(project_id, client_id, username, role)
             # Seed this client with the current roster immediately.
             yield f"event: presence\ndata: {json.dumps({'type': 'presence', 'users': bus.roster(project_id)})}\n\n"
             while True:

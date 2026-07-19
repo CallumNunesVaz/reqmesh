@@ -1,5 +1,5 @@
 import { Outlet, Link, useParams } from 'react-router-dom';
-import { PanelRight, PanelRightClose, LogIn, LogOut, User, Pencil, Eye, FileDown, FileUp, Users, Search } from 'lucide-react';
+import { PanelRight, PanelRightClose, LogIn, LogOut, User, Pencil, Eye, FileDown, FileUp, Users, Search, HelpCircle } from 'lucide-react';
 import { useState, useEffect, useCallback, createContext, useContext, useRef } from 'react';
 import { ThemeToggle } from './ThemeToggle';
 import RequirementNav from './RequirementNav';
@@ -99,6 +99,8 @@ export default function Layout() {
   // SSE listener for real-time collaboration: live data refresh + presence.
   const bumpGraphVersion = useStore((s) => s.bumpGraphVersion);
   const bumpDataVersion = useStore((s) => s.bumpDataVersion);
+  const helpersEnabled = useStore((s) => s.helpersEnabled);
+  const toggleHelpers = useStore((s) => s.toggleHelpers);
   const username = user?.username;
   useEffect(() => {
     if (!isInProject || !projectId) return;
@@ -166,6 +168,17 @@ export default function Layout() {
             >
               <Search size={15} />
               <kbd className="hidden sm:inline text-[9px] border rounded px-1 py-px">Ctrl K</kbd>
+            </button>
+          )}
+
+          {isInProject && (
+            <button
+              onClick={toggleHelpers}
+              className={`btn-ghost p-2 rounded-lg gap-1.5 text-xs transition-all ${helpersEnabled ? 'bg-violet-500/15 text-violet-400 border border-violet-500/30' : 'text-muted-foreground'}`}
+              title={helpersEnabled ? 'Helpers ON — click to hide guidance' : 'Helpers OFF — click to show guidance'}
+            >
+              <HelpCircle size={15} />
+              <span className="hidden sm:inline text-[10px]">{helpersEnabled ? 'GUIDED' : 'GUIDED'}</span>
             </button>
           )}
 
