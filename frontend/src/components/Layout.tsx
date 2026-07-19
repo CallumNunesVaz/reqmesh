@@ -167,8 +167,8 @@ export default function Layout() {
     onHelperToggle: toggleHelpers,
     onHelpToggle: () => setHelpOpen(o => !o),
     onDocsOpen: () => setDocsOpen(o => !o),
-    onDetailEscape: () => window.history.back(),
-    onListEscape: () => {},
+    // Escape/save/delete on detail pages belong to the page's own
+    // useKeyboardShortcuts instance — a second handler here would fire twice.
   });
 
   const canToggleEdit = user && user.role !== 'viewer';

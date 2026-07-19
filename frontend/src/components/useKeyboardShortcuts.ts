@@ -31,6 +31,7 @@ interface ShortcutHandlers {
  */
 export function useKeyboardShortcuts(projectId: string | undefined, handlers: ShortcutHandlers) {
   const location = useLocation();
+  const navigate = useNavigate();
   const isDetail = /\/project\/[^/]+\/(requirements|components)\/[^/]+/.test(location.pathname);
   const isList = /\/project\/[^/]+\/(requirements|components|specifications|verification|traces|change-requests|risks)$/.test(location.pathname);
   const isInProject = !!projectId;
@@ -55,7 +56,8 @@ export function useKeyboardShortcuts(projectId: string | undefined, handlers: Sh
         else handlers.onHelpToggle?.();
         return;
       }
-      if (!ctrl && !shift && key === '?' && !inTextInput) { e.preventDefault(); handlers.onHelpToggle?.(); return; }
+      // '?' arrives with shiftKey set on most layouts — match on the key alone.
+      if (!ctrl && key === '?' && !inTextInput) { e.preventDefault(); handlers.onHelpToggle?.(); return; }
     }
 
     // ── Escape closes modals / goes back (works everywhere) ────────────────
@@ -96,9 +98,9 @@ export function useKeyboardShortcuts(projectId: string | undefined, handlers: Sh
         p: `/project/${projectId}/publish`,
       };
       const path = routes[key];
-      if (path) { e.preventDefault(); window.location.href = path; return; }
+      if (path) { e.preventDefault(); navigate(path); return; }
     }
-  }, [handlers, isInProject, isDetail, isList]);
+  }, [handlers, isInProject, isDetail, isList, navigate, projectId]);
 
   useEffect(() => {
     document.addEventListener('keydown', h);

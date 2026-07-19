@@ -117,14 +117,23 @@ async def update_profile(data: ProfileUpdateRequest, user: dict = Depends(get_cu
     if username in ("guest", ""):
         raise HTTPException(status_code=403, detail="Guests cannot update a profile")
     users = load_users()
+    record = users.get(username)
+    if record is None:
+        raise HTTPException(status_code=404, detail="User not found")
     if data.full_name is not None:
-        users[username]["full_name"] = data.full_name.strip()
+        record["full_name"] = data.full_name.strip()
     if data.email is not None:
-        users[username]["email"] = data.email.strip()
+        email = data.email.strip()
+        if email and "@" not in email:
+            raise HTTPException(status_code=400, detail="Invalid email address")
+        if email != record.get("email", ""):
+            # A new address has not been verified yet.
+            record["email_verified"] = False
+        record["email"] = email
     if data.password is not None:
         _validate_password(data.password)
-        users[username]["password_hash"] = hash_password(data.password).decode()
-        users[username]["token_version"] = users[username].get("token_version", 0) + 1
+        record["password_hash"] = hash_password(data.password).decode()
+        record["token_version"] = record.get("token_version", 0) + 1
     from app.core.auth import save_users
     save_users(users)
     return {"ok": True}

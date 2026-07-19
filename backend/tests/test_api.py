@@ -355,3 +355,65 @@ def test_demo_seeding_skips_populated_data_root(workspace, monkeypatch):
     with TestClient(app) as c:
         ids = [p["id"] for p in c.get("/api/projects").json()]
         assert ids == ["my-project"]
+
+
+def test_baseline_rename_carries_snapshot_and_labels(client, project):
+    make_req(client, project, "SYST0001")
+    client.post(f"/api/projects/{project}/baselines",
+                json={"name": "BL1", "requirements": ["SYST0001"]})
+    client.post(f"/api/projects/{project}/baselines/BL1/freeze")
+
+    res = client.patch(f"/api/projects/{project}/baselines/BL1", json={"name": "BL2"})
+    assert res.status_code == 200
+    assert res.json()["requirements_updated"] == 1
+
+    # The requirement label moved and the frozen snapshot moved with it.
+    req = client.get(f"/api/projects/{project}/requirements/SYST0001").json()
+    assert req["baseline"] == "BL2"
+    assert client.get(f"/api/projects/{project}/baselines/BL2/diff").status_code == 200
+    assert client.get(f"/api/projects/{project}/baselines/BL1/diff").status_code == 404
+
+
+def test_baseline_rename_missing_is_404(client, project):
+    res = client.patch(f"/api/projects/{project}/baselines/NOPE", json={"name": "NEW"})
+    assert res.status_code == 404
+
+
+def test_project_git_settings_roundtrip_and_visibility(client, project):
+    from app.core import auth as auth_mod
+
+    res = client.patch(f"/api/projects/{project}",
+                       json={"git": {"remote_url": "https://token@example.com/r.git",
+                                     "push_interval_minutes": 5}})
+    assert res.status_code == 200
+
+    # Anonymous readers never see the git block (remote URLs may hold tokens).
+    anon = client.get(f"/api/projects/{project}", headers={"Authorization": ""})
+    assert "git" not in anon.json()
+
+    # A signed-in editor gets it back for the settings page.
+    auth_mod.register_user("ed", "Password123!", "editor")
+    tok = auth_mod.create_token("ed", "editor")
+    seen = client.get(f"/api/projects/{project}",
+                      headers={"Authorization": f"Bearer {tok}"}).json()
+    assert seen["git"]["push_interval_minutes"] == 5
+
+
+def test_profile_email_change_resets_verification(client, workspace):
+    from app.core import auth as auth_mod
+
+    auth_mod.register_user("pat", "Password123!", "editor")
+    users = auth_mod.load_users()
+    users["pat"]["email"] = "old@example.com"
+    users["pat"]["email_verified"] = True
+    auth_mod.save_users(users)
+
+    tok = auth_mod.create_token("pat", "editor")
+    res = client.patch("/api/auth/profile", json={"email": "new@example.com"},
+                       headers={"Authorization": f"Bearer {tok}"})
+    assert res.status_code == 200
+    assert auth_mod.load_users()["pat"]["email_verified"] is False
+
+    res = client.patch("/api/auth/profile", json={"email": "not-an-email"},
+                       headers={"Authorization": f"Bearer {tok}"})
+    assert res.status_code == 400

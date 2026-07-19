@@ -111,7 +111,7 @@ async def git_autocommit_middleware(request: Request, call_next):
                         except Exception:
                             pass
 
-                    from app.services.git_service import auto_commit, schedule_push
+                    from app.services.git_service import auto_commit, push_to_remote, schedule_push
                     msg = f"rt: {request.method.lower()} {action}"
                     if username:
                         msg += f" ({username})"
@@ -122,10 +122,11 @@ async def git_autocommit_middleware(request: Request, call_next):
                     push_interval = git_cfg.get("push_interval_minutes", settings.git_push_interval_minutes)
                     remote_url = git_cfg.get("remote_url") or settings.git_remote_url
                     if committed and remote_url:
-                        if push_on_commit:
-                            await asyncio.to_thread(schedule_push, project_root)
-                        elif push_interval > 0:
-                            schedule_push(project_root)
+                        if push_interval > 0:
+                            # Batched: only queues + arms a timer, safe inline.
+                            schedule_push(project_root, push_interval)
+                        elif push_on_commit:
+                            await asyncio.to_thread(push_to_remote, project_root)
 
             from app.services.event_bus import get_event_bus
             get_event_bus().publish(project_id, {

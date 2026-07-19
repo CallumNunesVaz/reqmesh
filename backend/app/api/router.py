@@ -7,7 +7,7 @@ import uuid
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query, Depends
+from fastapi import APIRouter, Header, HTTPException, Query, Depends
 from pydantic import BaseModel
 
 from app.core.dependencies import get_store, require_edit, require_admin
@@ -76,11 +76,11 @@ async def create_project(data: ProjectCreate, user: dict = Depends(require_edit)
 
 
 @router.get("/projects/{project_id}")
-async def get_project(project_id: str):
+async def get_project(project_id: str, authorization: Optional[str] = Header(None)):
     store = get_store(project_id)
     meta = store.read_meta()
     naming = meta.get("naming", {})
-    return {
+    out = {
         "id": project_id,
         "name": meta.get("name", project_id),
         "path": str(store.root),
@@ -88,6 +88,14 @@ async def get_project(project_id: str):
         "naming": naming,
         "quality": meta.get("quality"),
     }
+    # Git settings can hold a credentialed remote URL, so unlike the rest of
+    # the project metadata they are only shown to signed-in editors.
+    if authorization and authorization.startswith("Bearer "):
+        from app.core.auth import get_user_from_token
+        user = get_user_from_token(authorization.removeprefix("Bearer "))
+        if user and user.get("role") in ("editor", "admin"):
+            out["git"] = meta.get("git", {})
+    return out
 
 
 class ProjectSettings(BaseModel):
@@ -95,6 +103,7 @@ class ProjectSettings(BaseModel):
     naming: Optional[dict] = None
     quality: Optional[dict] = None
     workflow: Optional[dict] = None
+    git: Optional[dict] = None
 
 
 @router.patch("/projects/{project_id}")
@@ -102,7 +111,7 @@ async def update_project_settings(project_id: str, data: ProjectSettings, user: 
     store = get_store(project_id)
     meta = store.read_meta()
     updates = {}
-    for field in ("name", "naming", "quality", "workflow"):
+    for field in ("name", "naming", "quality", "workflow", "git"):
         val = getattr(data, field, None)
         if val is not None:
             updates[field] = val
@@ -406,11 +415,21 @@ async def rename_baseline(project_id: str, name: str, data: dict, user: dict = D
     if not new_name:
         raise HTTPException(status_code=400, detail="New name is required")
     safe_id(new_name, "baseline name")
+    if store.get_item("baselines", new_name) is not None:
+        raise HTTPException(status_code=409, detail="A baseline with that name already exists")
     updated = 0
     for r in store.list_requirements():
         if r.get("baseline") == name:
             store.update_requirement(r["id"], {"baseline": new_name})
             updated += 1
+    # Carry any frozen snapshot across to the new name.
+    frozen = store.get_item("baselines", name)
+    if frozen is not None:
+        frozen["name"] = new_name
+        store.write_item("baselines", new_name, frozen)
+        store.delete_item("baselines", name)
+    elif updated == 0:
+        raise HTTPException(status_code=404, detail="Baseline not found")
     return {"old_name": name, "new_name": new_name, "requirements_updated": updated}
 
 

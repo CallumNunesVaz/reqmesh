@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, BookOpen, Boxes, FileText, CheckCircle2, GitBranch, Sigma, Sparkles, ShieldCheck, TrendingUp, Keyboard, Terminal, Globe, Search, Info, AlertTriangle, Lightbulb, ExternalLink } from 'lucide-react';
+import { X, BookOpen, Boxes, FileText, CheckCircle2, GitBranch, Sigma, Sparkles, ShieldCheck, TrendingUp, Keyboard, Terminal, Globe, Search, Info, AlertTriangle, Lightbulb } from 'lucide-react';
 
-type DocSection = { id: string; icon: typeof BookOpen; title: string; render: () => ReactNode };
+type DocSection = { id: string; icon: typeof BookOpen; title: string; keywords: string; render: () => ReactNode };
 
 /* ── Helper components ──────────────────────────────────────────────────── */
 
@@ -68,20 +68,13 @@ function Callout({ variant, children }: { variant: 'info' | 'warning' | 'tip'; c
     </div>
   );
 }
-function DT({ term, def }: { term: ReactNode; def: ReactNode }) {
-  return (
-    <div className="flex gap-3 text-sm mb-1">
-      <dt className="font-medium text-card-foreground shrink-0 w-36 text-right">{term}</dt>
-      <dd className="text-card-foreground/80">{def}</dd>
-    </div>
-  );
-}
 
 /* ── Each section is a proper React component ──────────────────────────── */
 
 const DOCS: DocSection[] = [
   {
     id: 'overview', icon: BookOpen, title: 'Getting Started',
+    keywords: 'welcome introduction iso 15288 tour getting started yaml git-native processes',
     render: () => (
       <>
         <H2>Welcome to reqmesh</H2>
@@ -169,6 +162,7 @@ const DOCS: DocSection[] = [
   },
   {
     id: 'keyboard', icon: Keyboard, title: 'Keyboard Shortcuts',
+    keywords: 'shortcuts keys hotkeys ctrl alt navigation palette f1',
     render: () => (
       <>
         <H2>Keyboard Shortcuts</H2>
@@ -221,6 +215,7 @@ const DOCS: DocSection[] = [
   },
   {
     id: 'requirements', icon: FileText, title: 'Requirements Management',
+    keywords: 'requirement properties status priority traceability relations refines satisfies derives conflicts coverage needs',
     render: () => (
       <>
         <H2>Requirements</H2>
@@ -254,6 +249,7 @@ const DOCS: DocSection[] = [
   },
   {
     id: 'components', icon: Boxes, title: 'Components — the Design',
+    keywords: 'component hierarchy system subsystem assembly part software interface satisfies quantity rollup budget mass',
     render: () => (
       <>
         <H2>Components</H2>
@@ -288,6 +284,7 @@ const DOCS: DocSection[] = [
   },
   {
     id: 'parametrics', icon: Sigma, title: 'Parametrics & Constraints',
+    keywords: 'parameter constraint expression derived margin verdict pass fail unknown rollup evaluate sysml units',
     render: () => (
       <>
         <H2>Parametric Evaluation</H2>
@@ -328,6 +325,7 @@ const DOCS: DocSection[] = [
   },
   {
     id: 'verification', icon: CheckCircle2, title: 'Verification Cases',
+    keywords: 'verification case test analysis demonstration inspection measurement execution run bulk',
     render: () => (
       <>
         <H2>Verification Cases</H2>
@@ -348,6 +346,7 @@ const DOCS: DocSection[] = [
   },
   {
     id: 'coverage', icon: GitBranch, title: 'Traceability & Coverage',
+    keywords: 'traceability shallow deep coverage broken chain scan tags openfasttrace report ci trace',
     render: () => (
       <>
         <H2>Deep Traceability</H2>
@@ -374,6 +373,7 @@ const DOCS: DocSection[] = [
   },
   {
     id: 'review', icon: ShieldCheck, title: 'Review & Fingerprints',
+    keywords: 'fingerprint review suspect link doorstop sha-256 unreviewed normative derived baseline',
     render: () => (
       <>
         <H2>Fingerprint-Based Review</H2>
@@ -399,6 +399,7 @@ const DOCS: DocSection[] = [
   },
   {
     id: 'quality', icon: Sparkles, title: 'Quality Linting',
+    keywords: 'linting incose ears iso 29148 weak words vague placeholder passive voice atomic guided mode score',
     render: () => (
       <>
         <H2>Requirement Quality Linting</H2>
@@ -473,6 +474,7 @@ const DOCS: DocSection[] = [
   },
   {
     id: 'planning', icon: TrendingUp, title: 'Planning & Estimation',
+    keywords: 'effort story points backlog stakeholder priorities burndown decision records estimation',
     render: () => (
       <>
         <H2>Planning & Estimation</H2>
@@ -498,6 +500,7 @@ const DOCS: DocSection[] = [
   },
   {
     id: 'git', icon: GitBranch, title: 'Git Integration',
+    keywords: 'git auto-commit push remote offline air-gapped history commits version control',
     render: () => (
       <>
         <H2>Git Integration</H2>
@@ -519,6 +522,7 @@ const DOCS: DocSection[] = [
   },
   {
     id: 'interchange', icon: FileText, title: 'Import & Export',
+    keywords: 'import export reqif sysml csv tsv xlsx excel doors polarion jama merge replace interchange',
     render: () => (
       <>
         <H2>Interchange Formats</H2>
@@ -544,6 +548,7 @@ const DOCS: DocSection[] = [
   },
   {
     id: 'cli', icon: Terminal, title: 'CLI Reference',
+    keywords: 'command line cli terminal validate trace review scan publish export import serve create',
     render: () => (
       <>
         <H2>Command-Line Interface</H2>
@@ -580,6 +585,7 @@ const DOCS: DocSection[] = [
   },
   {
     id: 'deployment', icon: Globe, title: 'Deployment',
+    keywords: 'deploy docker server electron desktop environment variables tls https smtp production secret admin',
     render: () => (
       <>
         <H2>Deployment</H2>
@@ -630,12 +636,13 @@ const DOCS: DocSection[] = [
   },
   {
     id: 'glossary', icon: BookOpen, title: 'Glossary',
+    keywords: 'glossary terms definitions dictionary terminology',
     render: () => (
       <>
         <H2>Glossary of Terms</H2>
         <P>Key terminology used across reqmesh, listed alphabetically.</P>
 
-        <div className="space-y-4 mt-4">
+        <dl className="space-y-4 mt-4">
           {[
             { term: 'Baseline', def: 'A frozen snapshot of all requirements at a point in time. Baselines can be compared with the current state to identify changes.' },
             { term: 'Budget Rollup', def: 'A parametric expression (rollup(\'C172\', \'mass\')) that sums a parameter across an entire component hierarchy, multiplying by each component\'s quantity.' },
@@ -681,7 +688,7 @@ const DOCS: DocSection[] = [
               <dd className="text-sm text-card-foreground/70 leading-relaxed pl-0">{def}</dd>
             </div>
           ))}
-        </div>
+        </dl>
       </>
     ),
   },
@@ -698,20 +705,21 @@ export default function DocumentationPanel({ open, onClose }: { open: boolean; o
     if (open) contentRef.current?.scrollTo(0, 0);
   }, [open, activeId]);
 
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } };
+    document.addEventListener('keydown', onKey, true);
+    return () => document.removeEventListener('keydown', onKey, true);
+  }, [open, onClose]);
+
   const activeTopic = DOCS.find((t) => t.id === activeId);
 
-  const searchResults = query.trim()
-    ? DOCS.filter((t) => t.id === activeId ? true : false).filter((t) => {
-        // crude content search by checking rendered string
-        const div = document.createElement('div');
-        div.innerHTML = '';
-        return t.title.toLowerCase().includes(query.toLowerCase());
-      })
-    : DOCS;
-
-  const filteredResults = query.trim()
-    ? DOCS.filter((t) => t.title.toLowerCase().includes(query.toLowerCase()))
-    : DOCS;
+  // Match titles first, then section keywords, so a search for "reqif" or
+  // "docker" lands on the right topic even though no title mentions it.
+  const q = query.trim().toLowerCase();
+  const matches = (t: DocSection) =>
+    t.title.toLowerCase().includes(q) || t.keywords.toLowerCase().includes(q);
+  const filteredResults = q ? DOCS.filter(matches) : DOCS;
 
   return (
     <AnimatePresence>
@@ -741,8 +749,12 @@ export default function DocumentationPanel({ open, onClose }: { open: boolean; o
                     placeholder="Search topics…"
                     value={query}
                     onChange={(e) => {
-                      setQuery(e.target.value);
-                      const match = DOCS.find((t) => t.title.toLowerCase().includes(e.target.value.toLowerCase()));
+                      const next = e.target.value;
+                      setQuery(next);
+                      const nq = next.trim().toLowerCase();
+                      if (!nq) return;
+                      const match = DOCS.find((t) =>
+                        t.title.toLowerCase().includes(nq) || t.keywords.toLowerCase().includes(nq));
                       if (match) setActiveId(match.id);
                     }}
                   />

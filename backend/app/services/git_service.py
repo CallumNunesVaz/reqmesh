@@ -185,22 +185,24 @@ def push_to_remote(project_root: Path, branch: str = "main") -> bool:
         return False
 
 
-def schedule_push(project_root: Path) -> None:
-    """Queue a project for batched push at the configured interval.
-    
-    When RT_GIT_PUSH_INTERVAL_MINUTES is set, pushes are batched — calling
-    this repeatedly within the interval only pushes once when the timer fires.
-    When the interval is 0 or not set, pushes happen immediately via
-    push_to_remote().
+def schedule_push(project_root: Path, interval_minutes: int | None = None) -> None:
+    """Queue a project for a batched push, or push immediately.
+
+    With a positive interval, pushes are batched — calling this repeatedly
+    within the window only pushes once when the timer fires (cheap: only
+    queues, safe to call from the event loop). With interval 0 the push runs
+    synchronously via push_to_remote(), so call that path from a worker
+    thread. When interval_minutes is None the global setting applies.
     """
-    from app.core.config import settings
-    interval = settings.git_push_interval_minutes
-    if interval <= 0 or settings.git_push_on_commit:
+    if interval_minutes is None:
+        from app.core.config import settings
+        interval_minutes = settings.git_push_interval_minutes
+    if interval_minutes <= 0:
         push_to_remote(project_root)
         return
     with _push_lock:
-        _push_queue.add(project_root)
-        _ensure_timer(interval)
+        _push_queue.add(Path(project_root))
+        _ensure_timer(interval_minutes)
 
 
 def _ensure_timer(interval_minutes: int) -> None:

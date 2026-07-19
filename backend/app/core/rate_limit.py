@@ -9,8 +9,11 @@ _window_attempts: defaultdict[str, list[float]] = defaultdict(list)
 def rate_limit(max_attempts: int = 5, window_seconds: int = 60):
     def limiter(request: Request):
         ip = request.client.host if request.client else "unknown"
+        # Bucket per endpoint as well as per IP, so exhausting one limit
+        # (e.g. login) never locks the caller out of the others.
+        key = f"{ip}:{request.url.path}"
         now = time.time()
-        attempts = _window_attempts[ip]
+        attempts = _window_attempts[key]
         attempts[:] = [t for t in attempts if t > now - window_seconds]
         if len(attempts) >= max_attempts:
             raise HTTPException(status_code=429, detail="Too many requests. Try again later.")

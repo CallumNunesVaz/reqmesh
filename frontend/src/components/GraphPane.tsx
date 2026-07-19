@@ -26,6 +26,8 @@ import { Search, RotateCw, ListTree, Orbit, Boxes, SlidersHorizontal } from 'luc
 import { api, type Requirement, type TraceLink, type EvaluatedRequirement, type EvaluatedParameter, type Component } from '../api/client';
 import CircularNode from './CircularNode';
 import BlockNode, { BLOCK_W, type BlockParam, type BlockConstraint } from './BlockNode';
+import OrthoEdge from './OrthoEdge';
+import { routeEdges, type NodeRect } from './orthoRoute';
 import LoadingSplash from './LoadingSplash';
 import { zoomLevel, LEVEL_LABELS } from './semanticZoom';
 import { useTheme } from './ThemeProvider';
@@ -251,7 +253,7 @@ function FloatingEdge({ id, source, target, data, style, markerEnd }: EdgeProps)
   );
 }
 
-const edgeTypes = { floating: FloatingEdge };
+const edgeTypes = { floating: FloatingEdge, ortho: OrthoEdge };
 
 const blockNodeTypes = { requirementNode: BlockNode };
 const circleNodeTypes = { requirementNode: CircularNode };
@@ -583,28 +585,44 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
       ? hierarchyLayout(initialNodes, initialEdges, gs)
       : forceLayout(initialNodes, initialEdges);
     setNodes(laid);
-    // UML mode routes edges orthogonally between the blocks' side ports
-    // (node-graph-editor style); force mode keeps floating centre-to-centre.
-    setEdges(layoutMode === 'uml'
-      ? initialEdges.map((e) => {
-          // Composition (parent) edges carry the diagram's structure, so in
-          // block-diagram mode they read stronger than the relation overlays.
-          const isParent = e.id.endsWith('-parent');
-          return {
-            ...e,
-            type: 'smoothstep',
-            sourceHandle: 'sr',
-            targetHandle: 'l',
-            pathOptions: { borderRadius: 10 },
-            style: {
-              ...(e.style as Record<string, unknown>),
-              ...(isParent
-                ? { stroke: 'hsl(var(--muted-foreground) / 0.55)', strokeWidth: 1.4, opacity: 0.7 }
-                : { opacity: 0.55 }),
-            },
-          };
-        })
-      : initialEdges);
+    // UML mode plans all edges together with the orthogonal router: ports fan
+    // out along block faces, parallel runs get separate lanes, and long or
+    // backward edges travel corridors that stay clear of intervening blocks.
+    // Force mode keeps floating centre-to-centre edges.
+    if (layoutMode === 'uml') {
+      const rects: NodeRect[] = laid.map((n) => ({
+        id: n.id, x: n.position.x, y: n.position.y, w: NODE_W, h: NODE_H,
+      }));
+      const vertical = gs.rankdir === 'TB' || gs.rankdir === 'BT';
+      const routes = routeEdges(
+        rects,
+        initialEdges.map((e) => ({ id: e.id, source: e.source, target: e.target })),
+        {
+          rankdir: gs.rankdir,
+          // Fan ports across the block width when flow is vertical; on the
+          // side faces stay within the height every zoom level guarantees.
+          portBand: vertical ? [28, NODE_W - 28] : [12, 44],
+        },
+      );
+      setEdges(initialEdges.map((e) => {
+        // Composition (parent) edges carry the diagram's structure, so in
+        // block-diagram mode they read stronger than the relation overlays.
+        const isParent = e.id.endsWith('-parent');
+        return {
+          ...e,
+          type: 'ortho',
+          data: { ...e.data, points: routes.get(e.id) },
+          style: {
+            ...(e.style as Record<string, unknown>),
+            ...(isParent
+              ? { stroke: 'hsl(var(--muted-foreground) / 0.55)', strokeWidth: 1.4, opacity: 0.7 }
+              : { opacity: 0.55 }),
+          },
+        };
+      }));
+    } else {
+      setEdges(initialEdges);
+    }
     selectReq(null);
     // Re-fit once the laid-out nodes have rendered and been measured.
     const t = setTimeout(() => rfRef.current?.fitView({ padding: 0.12, maxZoom: gs.maxZoom }), 250);
@@ -677,20 +695,12 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
       const connected = e.source === selectedReqId || e.target === selectedReqId ||
         e.source === hoveredNodeId || e.target === hoveredNodeId;
       const stroke = (e.style as any)?.stroke as string | undefined;
-      const relLabel = (e.data as any)?.label as string | undefined;
+      const dashed = ((e.style as any)?.strokeDasharray ?? 'none') !== 'none';
       return {
         ...e,
         data: { ...e.data, showLabel: connected },
-        // Built-in smoothstep edges (UML mode) label via the edge prop.
-        ...(e.type === 'smoothstep' && connected && relLabel
-          ? {
-              label: relLabel,
-              labelStyle: { fill: stroke, fontSize: 9, fontWeight: 600 },
-              labelBgStyle: { fill: 'hsl(var(--card))', fillOpacity: 0.9 },
-              labelBgPadding: [4, 2] as [number, number],
-              labelBgBorderRadius: 3,
-            }
-          : { label: undefined }),
+        // Highlighted dashed relations drift slowly along their direction.
+        className: connected && dashed ? 'rt-drift' : undefined,
         style: {
           ...((e.style as Record<string, any>) || {}),
           opacity: connected ? Math.max((e.style as any)?.opacity || 0.55, 0.9) : 0.04,
@@ -920,7 +930,11 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
 
       <style>{`
         .react-flow__node { font-family: var(--font-sans); }
-        .react-flow__edge-path { transition: stroke-opacity 0.2s; }
+        .react-flow__edge-path { transition: stroke-opacity 0.2s, opacity 0.25s ease, filter 0.25s ease; }
+        .react-flow__edge.rt-drift .react-flow__edge-path {
+          animation: rt-dash-drift 22s linear infinite;
+        }
+        @keyframes rt-dash-drift { to { stroke-dashoffset: -315; } }
         .react-flow__controls-button { width: 24px; height: 24px; }
         .react-flow__background { background-color: transparent !important; }
         .react-flow__minimap { background-color: hsl(var(--graph-minimap)) !important; }
