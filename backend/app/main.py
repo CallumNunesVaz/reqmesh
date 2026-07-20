@@ -18,12 +18,22 @@ from app.api.router import router
 from app.api.extra_routes import router as extra_router
 from app.api.auth_routes import router as auth_router
 from app.api.component_routes import router as component_router
+from app.api.system_routes import router as system_router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     root = Path(settings.data_root)
     root.mkdir(parents=True, exist_ok=True)
+    # Bring existing data forward to the current schema before serving — this is
+    # what makes updating from an older program version clean.
+    try:
+        from app.services.migrations import run_migrations
+        summary = run_migrations(root)
+        if summary.get("ran"):
+            logging.getLogger(__name__).info("applied data migrations: %s", summary)
+    except Exception:
+        logging.getLogger(__name__).exception("data migration failed")
     if settings.seed_demo and not any((d / "_meta.yaml").exists() for d in root.iterdir() if d.is_dir()):
         try:
             from app.services.demo_seed import seed_demo_project
@@ -155,6 +165,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 app.include_router(auth_router, prefix="/api")
 app.include_router(router, prefix="/api")
 app.include_router(component_router, prefix="/api")
+app.include_router(system_router, prefix="/api")
 app.include_router(extra_router, prefix="/api")
 
 

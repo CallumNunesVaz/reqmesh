@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, BookOpen, Boxes, FileText, CheckCircle2, GitBranch, Sigma, Sparkles, ShieldCheck, TrendingUp, Keyboard, Terminal, Globe, Search, Info, AlertTriangle, Lightbulb } from 'lucide-react';
+import { X, BookOpen, Boxes, FileText, CheckCircle2, GitBranch, Sigma, Sparkles, ShieldCheck, TrendingUp, Keyboard, Terminal, Globe, Search, Info, AlertTriangle, Lightbulb, ArrowUpCircle } from 'lucide-react';
 
 type DocSection = { id: string; icon: typeof BookOpen; title: string; keywords: string; render: () => ReactNode };
 
@@ -655,6 +655,31 @@ const DOCS: DocSection[] = [
           <LI><InlineCode>ghcr.io/&lt;owner&gt;/reqmesh:X.Y.Z</InlineCode> — <InlineCode>docker compose -f docker-compose.prod.yml up -d</InlineCode>.</LI>
         </UL>
         <Callout variant="tip">See <InlineCode>RELEASING.md</InlineCode> in the repo for the full process, including <InlineCode>--dry-run</InlineCode> and <InlineCode>--no-push</InlineCode> options.</Callout>
+      </>
+    ),
+  },
+  {
+    id: 'updates', icon: ArrowUpCircle, title: 'Updates',
+    keywords: 'update self-update upgrade new version admin system settings docker sidecar rollback migration backup latest github release',
+    render: () => (
+      <>
+        <H2>Updates</H2>
+        <P>Administrators can check for and apply new versions from the <InlineCode>System</InlineCode> page (top bar &rarr; System). reqmesh compares its running version to the latest release on GitHub and shows when a newer one is available, with its release notes.</P>
+
+        <H3>One-click update (Docker)</H3>
+        <P>When deployed with Docker and the <InlineCode>self-update</InlineCode> profile, an admin can update in place. reqmesh backs up every project (a <InlineCode>pre-update-&lt;version&gt;</InlineCode> git tag), then a small updater sidecar pulls the new image and recreates the app. The app container never holds the Docker socket &mdash; only the sidecar does.</P>
+        <Code>docker compose -f docker-compose.prod.yml --profile self-update up -d</Code>
+
+        <H3>Clean transition</H3>
+        <UL>
+          <LI>Project data lives on its own volume and is preserved across the update.</LI>
+          <LI>Data-schema migrations run automatically on the new version's first start.</LI>
+          <LI>A pre-update backup tag per project allows rollback if a migration misbehaves.</LI>
+        </UL>
+
+        <H3>Other deployments</H3>
+        <P>Without the self-update profile (or on bare-metal), the System page shows the exact manual commands instead &mdash; typically <InlineCode>docker compose pull &amp;&amp; up -d</InlineCode>, or downloading the new release tarball and re-running <InlineCode>install.sh</InlineCode>. In offline mode, update checks are disabled.</P>
+        <Callout variant="info">See <InlineCode>DEPLOYMENT.md</InlineCode> &sect;12b for enabling self-update and the related environment variables.</Callout>
       </>
     ),
   },

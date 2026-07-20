@@ -1,5 +1,5 @@
 import { Outlet, Link, useParams } from 'react-router-dom';
-import { PanelRight, PanelRightClose, LogIn, LogOut, User, Pencil, Eye, FileDown, FileUp, Users, Search, HelpCircle, BookOpen } from 'lucide-react';
+import { PanelRight, PanelRightClose, LogIn, LogOut, User, Pencil, Eye, FileDown, FileUp, Users, Search, HelpCircle, BookOpen, Server } from 'lucide-react';
 import { useState, useEffect, useCallback, createContext, useContext, useRef } from 'react';
 import { ThemeToggle } from './ThemeToggle';
 import RequirementNav from './RequirementNav';
@@ -302,6 +302,17 @@ export default function Layout() {
             >
               <Users size={15} />
               <span className="hidden sm:inline">Users</span>
+            </Link>
+          )}
+
+          {user?.role === 'admin' && (
+            <Link
+              to="/system"
+              className="btn-ghost p-2 rounded-lg gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+              title="System & updates"
+            >
+              <Server size={15} />
+              <span className="hidden sm:inline">System</span>
             </Link>
           )}
 

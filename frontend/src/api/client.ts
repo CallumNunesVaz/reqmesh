@@ -348,9 +348,50 @@ export interface BuildInfo {
   channel: string;
 }
 
+export interface SystemInfo {
+  version: string;
+  docker: boolean;
+  offline: boolean;
+  self_update_enabled: boolean;
+  control_dir_writable: boolean;
+  self_update_supported: boolean;
+  github_repo: string;
+}
+
+export interface UpdateCheck {
+  current: string;
+  latest: string | null;
+  update_available: boolean;
+  offline: boolean;
+  checked_at: string;
+  error: string | null;
+  notes: string;
+  html_url: string;
+  published_at: string;
+}
+
+export interface UpdateStatus {
+  state: 'idle' | 'preparing' | 'requested' | 'in_progress' | 'completed' | 'failed' | 'unsupported';
+  current?: string;
+  target_version: string | null;
+  message: string;
+  updated_at: string;
+  backup?: { tag: string; projects: string[]; created_at?: string };
+}
+
 export const api = {
   // Build metadata (version, git sha, build time)
   getVersion: () => request<BuildInfo>('/version'),
+
+  // System / self-update (admin only)
+  systemInfo: () => request<SystemInfo>('/system/info'),
+  checkUpdate: (force = false) =>
+    request<UpdateCheck>(`/system/update/check${force ? '?force=true' : ''}`),
+  updateStatus: () => request<UpdateStatus>('/system/update/status'),
+  startUpdate: (targetVersion?: string) =>
+    request<{ state: string; target_version: string; backup: { tag: string; projects: string[] } }>(
+      '/system/update', { method: 'POST', body: { target_version: targetVersion ?? null } }),
+  dismissUpdate: () => request<{ ok: boolean }>('/system/update/dismiss', { method: 'POST' }),
 
   // Auth
   login: (username: string, password: string) =>

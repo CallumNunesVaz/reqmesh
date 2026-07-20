@@ -9,8 +9,15 @@
 #   RT_ADMIN_PASSWORD=$(openssl rand -base64 12) \
 #   docker compose -f docker-compose.prod.yml up -d
 
+# Fixed project name so the app's own `docker compose up` and the updater
+# sidecar operate on the same project/containers regardless of directory name.
+name: reqmesh
+
 services:
   reqmesh:
+    # Pull the published image by version tag (the updater bumps REQMESH_VERSION).
+    # `build` is kept so `docker compose build` still works for local/CI images.
+    image: ghcr.io/callumnunesvaz/reqmesh:${REQMESH_VERSION:-latest}
     build:
       context: .
       dockerfile: Dockerfile.prod
@@ -18,6 +25,10 @@ services:
       - "${RT_BIND:-127.0.0.1}:8000:8000"
     environment:
       - RT_STATIC_DIR=/app/frontend/dist
+      - RT_UPDATE_CONTROL_DIR=/control
+      - RT_GITHUB_REPO=${RT_GITHUB_REPO:-CallumNunesVaz/reqmesh}
+      - RT_GITHUB_TOKEN=${RT_GITHUB_TOKEN:-}
+      - RT_SELF_UPDATE_ENABLED=${RT_SELF_UPDATE_ENABLED:-true}
       - RT_DATA_ROOT=/data/projects
       - RT_HOST=0.0.0.0
       - RT_PORT=8000
@@ -38,6 +49,9 @@ services:
       - RT_SMTP_FROM=${RT_SMTP_FROM:-reqmesh@localhost}
     volumes:
       - reqmesh-data:/data
+      # Shared with the updater sidecar. The app writes update requests here; it
+      # never mounts the Docker socket itself.
+      - reqmesh-control:/control
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/health"]
@@ -45,6 +59,32 @@ services:
       timeout: 5s
       retries: 3
       start_period: 15s
+
+  # ═══ Update sidecar — performs the supervised container swap ═════════════════
+  # Holds the Docker socket (which the app container does not) and recreates the
+  # reqmesh service when an admin triggers an update from the UI. Enable it with
+  # the `self-update` profile:
+  #
+  #   docker compose -f docker-compose.prod.yml --profile self-update up -d
+  #
+  # Without the profile the app runs normally but reports self-update as
+  # unavailable (admins see manual update instructions instead).
+  updater:
+    image: docker:27-cli
+    profiles: ["self-update"]
+    working_dir: /deploy
+    command: ["sh", "/deploy/scripts/updater/watch.sh"]
+    environment:
+      - CONTROL_DIR=/control
+      - DEPLOY_DIR=/deploy
+      - COMPOSE_FILE=docker-compose.prod.yml
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - reqmesh-control:/control
+      # The deployment dir (compose file, .env, scripts). Read-only: the sidecar
+      # writes only to the control volume.
+      - ./:/deploy:ro
+    restart: unless-stopped
 
   # ═══ Optional — reverse proxy with automatic TLS via Caddy ═══════════════════
   # Uncomment this block, comment the `ports:` section on the reqmesh service,
@@ -68,4 +108,5 @@ services:
 
 volumes:
   reqmesh-data:
+  reqmesh-control:
   # caddy-data:

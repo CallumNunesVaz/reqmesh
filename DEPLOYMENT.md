@@ -442,6 +442,44 @@ volumes:
 
 ---
 
+## 12b. In-app updates (self-update)
+
+Admins can check for and apply new releases from the **System** page in the app
+(top bar → System, admins only). The app compares its running version against
+the latest GitHub release of `RT_GITHUB_REPO` and, when configured for it,
+performs a supervised update to the new `ghcr.io` image.
+
+**How the supervised update works.** The app container never holds the Docker
+socket. Instead a small `updater` sidecar (enabled by a compose profile) holds
+the socket and watches a shared `reqmesh-control` volume. On an admin's click the
+app snapshots each project's git repo (a `pre-update-<version>` tag), then writes
+an update request; the sidecar pulls the requested image tag and recreates the
+`reqmesh` service. Project data lives on its own volume and is preserved; data
+migrations run automatically on the new version's first start.
+
+**Enable it** by starting with the `self-update` profile:
+
+```bash
+docker compose -f docker-compose.prod.yml --profile self-update up -d
+```
+
+Relevant environment variables:
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `RT_SELF_UPDATE_ENABLED` | `true` | Gate the admin update action |
+| `RT_GITHUB_REPO` | `CallumNunesVaz/reqmesh` | Repo checked for releases |
+| `RT_GITHUB_TOKEN` | – | Optional; private repos / higher API rate limit |
+| `REQMESH_VERSION` | `latest` | Image tag the `reqmesh` service runs (bumped by the updater) |
+
+Without the `self-update` profile the app runs normally but reports one-click
+update as unavailable — admins then see the manual `docker compose pull && up -d`
+steps instead. In **offline mode** (`RT_OFFLINE_MODE=true`) update checks are
+disabled. Rolling back is `REQMESH_VERSION=<old> docker compose up -d reqmesh`;
+project data can be restored from the `pre-update-*` git tags.
+
+---
+
 ## 13. Troubleshooting
 
 ### Cannot reach the server from other machines

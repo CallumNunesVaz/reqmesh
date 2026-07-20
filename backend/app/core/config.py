@@ -44,6 +44,16 @@ class Settings(BaseSettings):
     token_ttl_seconds: int = 604800
     allow_self_registration: bool = True
     require_email_verification: bool = False
+    # Self-update: check the GitHub repo for newer releases and let an admin
+    # update the running instance. github_repo is "owner/name"; a token is only
+    # needed for private repos or to raise the API rate limit. self_update_enabled
+    # gates the admin "Update" action; the control_dir is a volume shared with the
+    # updater sidecar that performs the container swap (see docker-compose.prod.yml).
+    github_repo: str = "CallumNunesVaz/reqmesh"
+    github_token: str = ""
+    self_update_enabled: bool = True
+    update_control_dir: str = "/control"
+    update_check_ttl_seconds: int = 3600
     # Logging
     log_level: str = "INFO"
     debug: bool = False
