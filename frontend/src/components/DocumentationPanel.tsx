@@ -635,6 +635,30 @@ const DOCS: DocSection[] = [
     ),
   },
   {
+    id: 'releases', icon: GitBranch, title: 'Releases',
+    keywords: 'release version vX.Y.Z semver tag github bundle tarball docker ghcr deploy install manifest changelog',
+    render: () => (
+      <>
+        <H2>Releases</H2>
+        <P>A release is a version-controlled <InlineCode>vX.Y.Z</InlineCode> build of reqmesh, bundled for deployment on a server. Each release ships the backend, the built frontend, and the pre-seeded Cessna 172S example project, plus deployment configs and an installer.</P>
+
+        <H3>Version source of truth</H3>
+        <P>The repo-root <InlineCode>VERSION</InlineCode> file is authoritative; <InlineCode>scripts/set_version.py</InlineCode> propagates it to the backend and the frontend/desktop <InlineCode>package.json</InlineCode>. The running version is served at <InlineCode>/version</InlineCode> and shown next to the reqmesh logo.</P>
+
+        <H3>Cutting a release</H3>
+        <Code>scripts/release.sh minor    # 0.4.0 -&gt; 0.5.0 (also: patch | major | X.Y.Z)</Code>
+        <P>This bumps the version everywhere, writes release notes from the commits since the last tag, builds the bundle as a smoke test, commits, tags <InlineCode>vX.Y.Z</InlineCode>, and pushes. Pushing the tag runs the GitHub Actions workflow, which publishes a GitHub Release (tarball + checksum) and pushes the Docker image to <InlineCode>ghcr.io</InlineCode>.</P>
+
+        <H3>Artifacts</H3>
+        <UL>
+          <LI><InlineCode>reqmesh-vX.Y.Z.tar.gz</InlineCode> — unpack and run <InlineCode>./install.sh</InlineCode> (Docker if present, else a Python venv).</LI>
+          <LI><InlineCode>ghcr.io/&lt;owner&gt;/reqmesh:X.Y.Z</InlineCode> — <InlineCode>docker compose -f docker-compose.prod.yml up -d</InlineCode>.</LI>
+        </UL>
+        <Callout variant="tip">See <InlineCode>RELEASING.md</InlineCode> in the repo for the full process, including <InlineCode>--dry-run</InlineCode> and <InlineCode>--no-push</InlineCode> options.</Callout>
+      </>
+    ),
+  },
+  {
     id: 'glossary', icon: BookOpen, title: 'Glossary',
     keywords: 'glossary terms definitions dictionary terminology',
     render: () => (

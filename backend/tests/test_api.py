@@ -417,3 +417,23 @@ def test_profile_email_change_resets_verification(client, workspace):
     res = client.patch("/api/auth/profile", json={"email": "not-an-email"},
                        headers={"Authorization": f"Bearer {tok}"})
     assert res.status_code == 400
+
+
+# ── Version / build metadata ─────────────────────────────────────────────────
+
+def test_version_endpoints_report_version(client):
+    from app.core.version import get_version
+
+    ver = get_version()
+    root = client.get("/version")
+    assert root.status_code == 200
+    assert root.json()["version"] == ver
+    assert root.json()["name"] == "reqmesh"
+
+    api = client.get("/api/version")
+    assert api.status_code == 200
+    assert api.json()["version"] == ver
+
+    health = client.get("/health")
+    assert health.status_code == 200
+    assert health.json()["version"] == ver

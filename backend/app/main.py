@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.core.config import settings
+from app.core.version import get_version, get_build_info
 from app.api.router import router
 from app.api.extra_routes import router as extra_router
 from app.api.auth_routes import router as auth_router
@@ -34,7 +35,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="reqmesh",
-    version="0.4.0",
+    version=get_version(),
     description="A git-native requirements management tool with traceability, verification tracking, parametrics, and real-time collaboration.",
     lifespan=lifespan,
     contact={"name": "reqmesh", "url": "https://github.com/CallumNunesVaz/reqmesh"},
@@ -159,7 +160,13 @@ app.include_router(extra_router, prefix="/api")
 
 @app.get("/health")
 async def health():
-    return {"status": "ok"}
+    return {"status": "ok", "version": get_version()}
+
+
+@app.get("/version")
+async def version():
+    """Build metadata for this instance — version, git sha, build time, channel."""
+    return get_build_info()
 
 
 def _mount_spa() -> None:

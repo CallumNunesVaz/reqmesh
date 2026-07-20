@@ -1,0 +1,85 @@
+name: Release
+
+# Cut by pushing a tag (scripts/release.sh does this). Builds the bundle,
+# publishes a GitHub Release with the tarball attached, and pushes the Docker
+# image to the GitHub Container Registry.
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write   # create releases
+  packages: write   # push to ghcr.io
+
+jobs:
+  bundle:
+    name: Build bundle & publish release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # need tags/history for release notes
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verify tag matches VERSION file
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          FILE_VER="$(cat VERSION)"
+          if [ "$TAG" != "$FILE_VER" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match VERSION ($FILE_VER)"
+            exit 1
+          fi
+
+      - name: Install frontend deps
+        run: npm ci
+        working-directory: frontend
+
+      - name: Install backend deps (for example seeding)
+        run: pip install -r backend/requirements.txt
+
+      - name: Extract release notes from tag
+        run: |
+          git tag -l --format='%(contents)' "$GITHUB_REF_NAME" > RELEASE_NOTES.md
+          cat RELEASE_NOTES.md
+
+      - name: Build bundle
+        env:
+          PYTHON: python
+          RELEASE_NOTES_FILE: RELEASE_NOTES.md
+        run: bash scripts/build_bundle.sh
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="$(cat VERSION)"
+          gh release create "$GITHUB_REF_NAME" \
+            --title "reqmesh v${VERSION}" \
+            --notes-file RELEASE_NOTES.md \
+            "dist/reqmesh-v${VERSION}.tar.gz" \
+            "dist/reqmesh-v${VERSION}.tar.gz.sha256"
+
+  docker:
+    name: Build & push Docker image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to ghcr.io
+        run: echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Build and push image
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          IMAGE="ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
+          docker build -f Dockerfile.prod -t "$IMAGE:$VERSION" -t "$IMAGE:latest" .
+          docker push "$IMAGE:$VERSION"
+          docker push "$IMAGE:latest"

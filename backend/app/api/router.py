@@ -43,6 +43,13 @@ class BreakCascade(BaseModel):
 router = APIRouter()
 
 
+@router.get("/version")
+async def api_version():
+    """Build metadata for this instance (also served at /version for probes)."""
+    from app.core.version import get_build_info
+    return get_build_info()
+
+
 # ── Projects ────────────────────────────────────────────────────────────────
 
 @router.get("/projects")

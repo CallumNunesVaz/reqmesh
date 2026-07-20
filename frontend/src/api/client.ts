@@ -340,7 +340,18 @@ export interface ManagedUser {
   created: string;
 }
 
+export interface BuildInfo {
+  name: string;
+  version: string;
+  git_sha: string;
+  built_at: string;
+  channel: string;
+}
+
 export const api = {
+  // Build metadata (version, git sha, build time)
+  getVersion: () => request<BuildInfo>('/version'),
+
   // Auth
   login: (username: string, password: string) =>
     request<{ username: string; role: string; token: string }>('/auth/login', { method: 'POST', body: { username, password } }),

@@ -19,6 +19,30 @@ import { api, type PresenceUser } from '../api/client';
 const GraphPaneCtx = createContext({ graphOpen: false, toggleGraph: () => {} });
 export function useGraphPane() { return useContext(GraphPaneCtx); }
 
+// Fetched once per page load; the version rarely changes within a session.
+let _versionCache: string | null = null;
+
+function VersionBadge() {
+  const [version, setVersion] = useState<string | null>(_versionCache);
+  useEffect(() => {
+    if (_versionCache) return;
+    let alive = true;
+    api.getVersion()
+      .then((info) => { _versionCache = info.version; if (alive) setVersion(info.version); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
+  if (!version) return null;
+  return (
+    <span
+      className="hidden md:inline text-[10px] font-mono text-muted-foreground/70 border rounded px-1 py-px"
+      title="reqmesh version"
+    >
+      v{version}
+    </span>
+  );
+}
+
 interface SelectedReqCtxValue {
   selectedReqId: string | null;
   selectReq: (id: string | null) => void;
@@ -182,6 +206,7 @@ export default function Layout() {
             <img src="/reqmesh-mark.png" alt="reqmesh" className="w-7 h-7" />
             <span className="font-semibold text-sm tracking-tight text-foreground hidden sm:inline">reqmesh</span>
           </Link>
+          <VersionBadge />
 
           {isInProject && (
             <div className="flex items-center gap-1 min-w-0">
