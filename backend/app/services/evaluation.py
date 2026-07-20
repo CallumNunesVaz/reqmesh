@@ -75,8 +75,10 @@ class Evaluator:
     """
 
     def __init__(self, requirements: list[dict], components: list[dict],
-                 overrides: Optional[dict[str, float]] = None):
+                 overrides: Optional[dict[str, float]] = None,
+                 definitions: Optional[list[dict]] = None):
         self.overrides = overrides or {}
+        self.definitions = {d["id"]: d for d in (definitions or []) if d.get("id")}
         self.params: dict[str, dict] = {}
         for entity in [*requirements, *components]:
             for p in entity.get("parameters", []) or []:
@@ -101,9 +103,17 @@ class Evaluator:
         param = self.params.get(ref)
         if param is None:
             raise UnknownValue(f"unknown parameter '{ref}'")
+        owner = ref.rsplit(".", 1)[0]
         expr = param.get("expr")
-        if expr:
-            owner = ref.rsplit(".", 1)[0]
+        if param.get("calc_def"):
+            definition = self.definitions.get(param["calc_def"])
+            if definition is None:
+                raise EvalError(f"parameter '{ref}' references unknown calc def '{param['calc_def']}'")
+            value = self.eval_expr(definition.get("expr", ""), owner, stack | {ref},
+                                   env=param.get("bindings") or {})
+            if isinstance(value, bool):
+                raise EvalError(f"parameter '{ref}' derives to a boolean, not a number")
+        elif expr:
             value = self.eval_expr(expr, owner, stack | {ref})
             if isinstance(value, bool):
                 raise EvalError(f"parameter '{ref}' derives to a boolean, not a number")
@@ -144,20 +154,25 @@ class Evaluator:
 
     # ---- expression evaluation ------------------------------------------
 
-    def eval_expr(self, text: str, owner: str, stack: frozenset[str] = frozenset()):
+    def eval_expr(self, text: str, owner: str, stack: frozenset[str] = frozenset(),
+                  env: Optional[dict[str, str]] = None):
         try:
             tree = ast.parse(text, mode="eval")
         except SyntaxError as e:
             raise EvalError(f"syntax error: {e.msg}")
-        return self._eval(tree.body, owner, stack)
+        return self._eval(tree.body, owner, stack, env or {})
 
-    def _eval(self, node: ast.AST, owner: str, stack: frozenset[str]):
+    def _eval(self, node: ast.AST, owner: str, stack: frozenset[str],
+              env: dict[str, str] = {}):
         if isinstance(node, ast.Constant):
             if isinstance(node.value, bool) or not isinstance(node.value, (int, float)):
                 raise EvalError(f"literal {node.value!r} is not a number")
             return float(node.value)
 
         if isinstance(node, ast.Name):
+            # A bound formal resolves to its actual ref; otherwise own-parameter.
+            if node.id in env:
+                return self.resolve(env[node.id], stack)
             return self.resolve(f"{owner}.{node.id}", stack)
 
         if isinstance(node, ast.Attribute):
@@ -169,15 +184,15 @@ class Evaluator:
             op = _BIN_OPS.get(type(node.op))
             if op is None:
                 raise EvalError(f"operator {type(node.op).__name__} is not allowed")
-            left = self._eval(node.left, owner, stack)
-            right = self._eval(node.right, owner, stack)
+            left = self._eval(node.left, owner, stack, env)
+            right = self._eval(node.right, owner, stack, env)
             try:
                 return op(left, right)
             except ZeroDivisionError:
                 raise EvalError("division by zero")
 
         if isinstance(node, ast.UnaryOp):
-            operand = self._eval(node.operand, owner, stack)
+            operand = self._eval(node.operand, owner, stack, env)
             if isinstance(node.op, ast.USub):
                 return -operand
             if isinstance(node.op, ast.UAdd):
@@ -187,19 +202,19 @@ class Evaluator:
             raise EvalError(f"operator {type(node.op).__name__} is not allowed")
 
         if isinstance(node, ast.Compare):
-            left = self._eval(node.left, owner, stack)
+            left = self._eval(node.left, owner, stack, env)
             for op_node, comparator in zip(node.ops, node.comparators):
                 op = _CMP_OPS.get(type(op_node))
                 if op is None:
                     raise EvalError(f"comparison {type(op_node).__name__} is not allowed")
-                right = self._eval(comparator, owner, stack)
+                right = self._eval(comparator, owner, stack, env)
                 if not op(left, right):
                     return False
                 left = right
             return True
 
         if isinstance(node, ast.BoolOp):
-            values = [self._eval(v, owner, stack) for v in node.values]
+            values = [self._eval(v, owner, stack, env) for v in node.values]
             return all(values) if isinstance(node.op, ast.And) else any(values)
 
         if isinstance(node, ast.Call):
@@ -215,13 +230,104 @@ class Evaluator:
             func = ALLOWED_FUNCS.get(fname)
             if func is None:
                 raise EvalError(f"function '{fname}' is not allowed")
-            args = [self._eval(a, owner, stack) for a in node.args]
+            args = [self._eval(a, owner, stack, env) for a in node.args]
             try:
                 return func(*args)
             except (ValueError, TypeError) as e:
                 raise EvalError(f"{fname}: {e}")
 
         raise EvalError(f"disallowed syntax: {type(node).__name__}")
+
+
+# ---- dimensional checking (non-fatal) -----------------------------------
+
+class DimensionEvaluator:
+    """Infers the SI dimension of an expression from parameter units, so the
+    project evaluation can flag dimensionally inconsistent parameters and
+    constraints as *warnings*. Unknown units and numeric literals are wildcards,
+    so this only ever fires on genuinely inconsistent, known quantities.
+    """
+
+    def __init__(self, params: dict[str, dict]):
+        from app.services import units
+        self._units = units
+        self.params = params
+        self._cache: dict[str, object] = {}
+
+    def dim_of_ref(self, ref: str, stack: frozenset[str] = frozenset()):
+        if ref in self._cache:
+            return self._cache[ref]
+        if ref in stack:
+            return None
+        param = self.params.get(ref)
+        if param is None:
+            return None
+        unit = param.get("unit")
+        if unit:
+            dim = self._units.dimension_of(unit)
+        elif param.get("expr"):
+            dim = self.dim_of_expr(param["expr"], ref.rsplit(".", 1)[0], stack | {ref})
+        else:
+            dim = None
+        self._cache[ref] = dim
+        return dim
+
+    def dim_of_expr(self, text: str, owner: str, stack: frozenset[str] = frozenset()):
+        try:
+            tree = ast.parse(text, mode="eval")
+        except SyntaxError:
+            return None
+        return self._walk(tree.body, owner, stack)
+
+    def _walk(self, node, owner, stack):
+        if isinstance(node, ast.Constant):
+            return None  # bare number: dimension-agnostic
+        if isinstance(node, ast.Name):
+            return self.dim_of_ref(f"{owner}.{node.id}", stack)
+        if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name):
+            return self.dim_of_ref(f"{node.value.id}.{node.attr}", stack)
+        if isinstance(node, ast.BinOp):
+            op = {ast.Add: "+", ast.Sub: "-", ast.Mult: "*", ast.Div: "/"}.get(type(node.op))
+            left = self._walk(node.left, owner, stack)
+            right = self._walk(node.right, owner, stack)
+            if op is None:
+                return None
+            return self._units.combine(left, op, right)
+        if isinstance(node, ast.UnaryOp):
+            return self._walk(node.operand, owner, stack)
+        if isinstance(node, ast.Compare):
+            left = self._walk(node.left, owner, stack)
+            for comparator in node.comparators:
+                right = self._walk(comparator, owner, stack)
+                self._units.compare_dims(left, right)  # raises DimensionError on clash
+                left = right
+            return None
+        if isinstance(node, ast.BoolOp):
+            for v in node.values:
+                self._walk(v, owner, stack)
+            return None
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+            if node.func.id in ("min", "max", "abs"):
+                dim = None
+                for a in node.args:
+                    d = self._walk(a, owner, stack)
+                    if d is not None:
+                        dim = d
+                return dim
+            for a in node.args:
+                self._walk(a, owner, stack)
+            return None
+        return None
+
+
+def _dimension_warning(dim_eval: "DimensionEvaluator", expr: str, owner: str) -> Optional[str]:
+    """Return a human message if ``expr`` mixes incompatible units, else None."""
+    from app.services.units import DimensionError
+    try:
+        dim_eval.dim_of_expr(expr, owner)
+    except DimensionError as e:
+        return str(e)
+    return None
 
 
 # ---- margins ------------------------------------------------------------
@@ -261,9 +367,20 @@ def _margin(evaluator: Evaluator, expr: str, owner: str) -> Optional[dict]:
 # ---- project-level evaluation -------------------------------------------
 
 def _constraint_verdict(evaluator: Evaluator, constraint: dict, owner: str) -> dict:
-    expr = constraint.get("expr") or ""
     assume = constraint.get("assume")
-    out: dict = {"expr": expr, "assume": assume}
+    env: dict[str, str] = {}
+    if constraint.get("constraint_def"):
+        definition = evaluator.definitions.get(constraint["constraint_def"])
+        if definition is None:
+            return {"expr": "", "assume": assume, "status": "error",
+                    "detail": f"unknown constraint def '{constraint['constraint_def']}'"}
+        expr = definition.get("expr", "")
+        env = constraint.get("bindings") or {}
+        display = f"{constraint['constraint_def']}({', '.join(f'{k}={v}' for k, v in env.items())})"
+    else:
+        expr = constraint.get("expr") or ""
+        display = expr
+    out: dict = {"expr": display, "assume": assume}
     try:
         if assume:
             held = evaluator.eval_expr(assume, owner)
@@ -271,11 +388,12 @@ def _constraint_verdict(evaluator: Evaluator, constraint: dict, owner: str) -> d
                 out["status"] = "not_applicable"
                 out["detail"] = "assumption does not hold"
                 return out
-        result = evaluator.eval_expr(expr, owner)
+        result = evaluator.eval_expr(expr, owner, env=env)
         out["status"] = "pass" if result else "fail"
-        margin = _margin(evaluator, expr, owner)
-        if margin is not None:
-            out["margin"] = margin
+        if not env:  # margin is only meaningful for inline single-comparison exprs
+            margin = _margin(evaluator, expr, owner)
+            if margin is not None:
+                out["margin"] = margin
     except UnknownValue as e:
         out["status"] = "unknown"
         out["detail"] = e.reason
@@ -299,10 +417,21 @@ def _aggregate(statuses: list[str]) -> str:
     return "pass"
 
 
-def evaluate_project(store) -> dict:
+def evaluate_project(store, scope: Optional[set[str]] = None,
+                     extra_overrides: Optional[dict[str, float]] = None) -> dict:
+    """Evaluate the project's parametrics.
+
+    ``scope`` limits which requirements are reported (None = all). ``extra_overrides``
+    injects hypothetical parameter values into the design evaluation — this is how
+    analysis cases explore what-if inputs while reusing the same solver.
+    """
     requirements = store.list_requirements()
     components = store.list_components()
     vcs = store.list_verification_cases()
+    try:
+        definitions = store.list_items("definitions")
+    except Exception:
+        definitions = []
 
     # Measured values: later VCs win on conflict, and each substitution
     # remembers which case supplied the evidence.
@@ -315,8 +444,9 @@ def evaluate_project(store) -> dict:
                 measured[ref] = float(m["value"])
                 measured_by[ref] = vc["id"]
 
-    design = Evaluator(requirements, components)
-    as_measured = Evaluator(requirements, components, overrides=measured)
+    design = Evaluator(requirements, components, overrides=extra_overrides, definitions=definitions)
+    as_measured = Evaluator(requirements, components, overrides=measured, definitions=definitions)
+    dim_eval = DimensionEvaluator(design.params)
 
     items = []
     summary = {"pass": 0, "fail": 0, "unknown": 0, "error": 0, "none": 0}
@@ -324,6 +454,8 @@ def evaluate_project(store) -> dict:
 
     for req in requirements:
         rid = req["id"]
+        if scope is not None and rid not in scope:
+            continue
         params_out = []
         for p in req.get("parameters", []) or []:
             ref = f"{rid}.{p.get('name')}"
@@ -340,10 +472,19 @@ def evaluate_project(store) -> dict:
             if ref in measured:
                 entry["measured"] = measured[ref]
                 entry["measured_by"] = measured_by[ref]
+            if p.get("expr"):
+                warning = _dimension_warning(dim_eval, p["expr"], rid)
+                if warning:
+                    entry["unit_warning"] = warning
             params_out.append(entry)
 
-        constraints_out = [_constraint_verdict(design, c, rid)
-                           for c in req.get("constraints", []) or []]
+        constraints_out = []
+        for c in req.get("constraints", []) or []:
+            cv = _constraint_verdict(design, c, rid)
+            warning = _dimension_warning(dim_eval, c.get("expr", ""), rid)
+            if warning:
+                cv["unit_warning"] = warning
+            constraints_out.append(cv)
         verdict = _aggregate([c["status"] for c in constraints_out])
         summary[verdict] = summary.get(verdict, 0) + 1
 
@@ -375,3 +516,13 @@ def evaluate_project(store) -> dict:
         "parameter_count": len(design.params),
         "measurement_count": len(measured),
     }
+
+
+def run_analysis_case(store, case: dict) -> dict:
+    """Evaluate one analysis case: its scope + hypothetical overrides."""
+    scope = set(case.get("scope") or []) or None
+    overrides = {k: float(v) for k, v in (case.get("overrides") or {}).items()}
+    result = evaluate_project(store, scope=scope, extra_overrides=overrides)
+    result["case"] = {"id": case.get("id"), "name": case.get("name", ""),
+                      "scope": case.get("scope") or [], "overrides": case.get("overrides") or {}}
+    return result

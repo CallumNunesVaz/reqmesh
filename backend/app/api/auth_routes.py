@@ -19,8 +19,13 @@ from app.core.auth import (
     load_users,
     public_users,
     register_user,
+    save_users,
     set_user_password,
     set_user_role,
+    set_user_disabled,
+    unlock_user,
+    bump_token_version,
+    create_invited_user,
     create_reset_token,
     consume_reset_token,
     create_verify_token,
@@ -56,10 +61,19 @@ class RegisterRequest(BaseModel):
 
 @router.post("/auth/login")
 async def login(data: LoginRequest, _rate: None = Depends(rate_limit(5, 60))):
+    import time as _time
     result = authenticate(data.username, data.password)
-    if not result:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-    return result
+    status = result.get("status")
+    if status == "ok":
+        return {"username": result["username"], "role": result["role"], "token": result["token"]}
+    if status == "disabled":
+        raise HTTPException(status_code=403, detail="This account has been disabled. Contact an administrator.")
+    if status == "locked":
+        mins = max(1, (int(result.get("until", 0)) - int(_time.time())) // 60 + 1)
+        raise HTTPException(status_code=403, detail=f"Account locked after too many failed attempts. Try again in {mins} minute(s).")
+    if status == "unverified":
+        raise HTTPException(status_code=403, detail="Please verify your email address before signing in.")
+    raise HTTPException(status_code=401, detail="Invalid credentials")
 
 
 @router.post("/auth/register")
@@ -69,14 +83,19 @@ async def register(data: RegisterRequest, authorization: Optional[str] = Header(
     if len(data.username) < 3:
         raise HTTPException(status_code=400, detail="Username must be at least 3 characters")
     _validate_password(data.password)
+    from app.core.config import settings
+    requester = None
+    if authorization and authorization.startswith("Bearer "):
+        requester = get_user_from_token(authorization.removeprefix("Bearer "))
+    is_admin = bool(requester and requester.get("role") == "admin")
+    # Self-registration can be turned off; admins can always create accounts.
+    if not settings.allow_self_registration and not is_admin:
+        raise HTTPException(status_code=403, detail="Self-registration is disabled. Ask an administrator for an account.")
     # Only an authenticated admin may grant elevated roles; self-registration
     # is always an editor.
     role = "editor"
     if data.role != "editor":
-        requester = None
-        if authorization and authorization.startswith("Bearer "):
-            requester = get_user_from_token(authorization.removeprefix("Bearer "))
-        if not requester or requester.get("role") != "admin":
+        if not is_admin:
             raise HTTPException(status_code=403, detail="Only admins can assign roles")
         role = data.role
     result = register_user(data.username, data.password, role)
@@ -134,8 +153,17 @@ async def update_profile(data: ProfileUpdateRequest, user: dict = Depends(get_cu
         _validate_password(data.password)
         record["password_hash"] = hash_password(data.password).decode()
         record["token_version"] = record.get("token_version", 0) + 1
-    from app.core.auth import save_users
     save_users(users)
+    return {"ok": True}
+
+
+@router.post("/auth/logout-everywhere")
+async def logout_everywhere(user: dict = Depends(get_current_user)):
+    """Invalidate all of the caller's own sessions across devices."""
+    username = user.get("username", "")
+    if username in ("guest", ""):
+        raise HTTPException(status_code=403, detail="Guests have no sessions")
+    bump_token_version(username)
     return {"ok": True}
 
 
@@ -305,3 +333,179 @@ async def remove_user(username: str, admin: dict = Depends(require_admin)):
         raise HTTPException(status_code=400, detail="Cannot delete the last administrator")
     delete_user(username)
     return {"ok": True}
+
+
+# ── Account status: disable / unlock / force sign-out ─────────────────────────
+
+class DisableRequest(BaseModel):
+    disabled: bool
+
+
+@router.post("/auth/users/{username}/disable")
+async def disable_user(username: str, data: DisableRequest, admin: dict = Depends(require_admin)):
+    users = load_users()
+    if username not in users:
+        raise HTTPException(status_code=404, detail="User not found")
+    if data.disabled and username == admin.get("username"):
+        raise HTTPException(status_code=400, detail="You cannot disable your own account")
+    if data.disabled and users[username].get("role") == "admin" and count_admins(users) <= 1:
+        raise HTTPException(status_code=400, detail="Cannot disable the last administrator")
+    set_user_disabled(username, data.disabled)
+    return {"ok": True, "disabled": data.disabled}
+
+
+@router.post("/auth/users/{username}/unlock")
+async def unlock_account(username: str, admin: dict = Depends(require_admin)):
+    if not unlock_user(username):
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"ok": True}
+
+
+@router.post("/auth/users/{username}/logout")
+async def force_logout(username: str, admin: dict = Depends(require_admin)):
+    """Revoke every active session for a user (force sign-out everywhere)."""
+    if not bump_token_version(username):
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"ok": True}
+
+
+# ── Invitations ───────────────────────────────────────────────────────────────
+
+class InviteRequest(BaseModel):
+    username: str
+    email: str = ""
+    role: str = "editor"
+    full_name: str = ""
+
+
+def _invite_link(token: str) -> str:
+    from app.core.config import settings
+    return f"{settings.base_url.rstrip('/')}/reset-password?token={token}"
+
+
+@router.post("/auth/users/invite", status_code=201)
+async def invite_user(data: InviteRequest, admin: dict = Depends(require_admin)):
+    """Create an account and email a set-password link. When SMTP is not
+    configured the link is returned so the admin can share it manually."""
+    if not USERNAME_RE.match(data.username):
+        raise HTTPException(status_code=400, detail="Username must be 3–32 chars: letters, digits, . _ -")
+    _validate_role(data.role)
+    email = data.email.strip()
+    if email and "@" not in email:
+        raise HTTPException(status_code=400, detail="Invalid email address")
+    token = create_invited_user(data.username, data.role, email, data.full_name.strip())
+    if token is None:
+        raise HTTPException(status_code=409, detail="Username already exists")
+
+    link = _invite_link(token)
+    from app.services.email_service import _send_email, _is_configured
+    emailed = False
+    if email and _is_configured():
+        _send_email(email, "You've been invited to reqmesh",
+            f"<p>An administrator created a reqmesh account for you (<strong>{data.username}</strong>).</p>"
+            f"<p><a href=\"{link}\">Click here to set your password</a></p>"
+            f"<p>This link expires in 1 hour.</p>")
+        emailed = True
+    # Only reveal the link to the admin when it could not be emailed.
+    return {"username": data.username, "role": data.role, "emailed": emailed,
+            "invite_link": None if emailed else link}
+
+
+# ── Bulk operations ───────────────────────────────────────────────────────────
+
+class BulkUserRequest(BaseModel):
+    usernames: list[str]
+    action: str  # disable | enable | delete | set_role
+    role: Optional[str] = None
+
+
+@router.post("/auth/users/bulk")
+async def bulk_user_action(data: BulkUserRequest, admin: dict = Depends(require_admin)):
+    valid = {"disable", "enable", "delete", "set_role"}
+    if data.action not in valid:
+        raise HTTPException(status_code=400, detail=f"Unknown action: {data.action}")
+    if data.action == "set_role":
+        _validate_role(data.role or "")
+    users = load_users()
+    me = admin.get("username")
+    applied, skipped = [], []
+    for username in data.usernames:
+        if username not in users:
+            skipped.append(username)
+            continue
+        is_last_admin = users[username].get("role") == "admin" and count_admins(users) <= 1
+        if data.action == "delete":
+            if username == me or is_last_admin:
+                skipped.append(username)
+                continue
+            delete_user(username)
+        elif data.action == "disable":
+            if username == me or is_last_admin:
+                skipped.append(username)
+                continue
+            set_user_disabled(username, True)
+        elif data.action == "enable":
+            set_user_disabled(username, False)
+        elif data.action == "set_role":
+            if is_last_admin and data.role != "admin":
+                skipped.append(username)
+                continue
+            set_user_role(username, data.role or "editor")
+        applied.append(username)
+        users = load_users()  # refresh admin count after a mutation
+    return {"applied": applied, "skipped": skipped}
+
+
+# ── CSV import / export ───────────────────────────────────────────────────────
+
+@router.get("/auth/users/export")
+async def export_users_csv(admin: dict = Depends(require_admin)):
+    import csv
+    import io
+    from fastapi.responses import Response
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["username", "full_name", "email", "role", "disabled", "email_verified", "created", "last_active"])
+    for u in public_users():
+        writer.writerow([u["username"], u["full_name"], u["email"], u["role"],
+                         u["disabled"], u["email_verified"], u["created"], u["last_active"]])
+    return Response(content=buf.getvalue(), media_type="text/csv",
+                    headers={"Content-Disposition": "attachment; filename=reqmesh-users.csv"})
+
+
+class ImportUsersRequest(BaseModel):
+    csv: str
+
+
+@router.post("/auth/users/import")
+async def import_users_csv(data: ImportUsersRequest, admin: dict = Depends(require_admin)):
+    """Create accounts from CSV rows (username, full_name, email, role). Each new
+    user is invited (set-password link); existing usernames are skipped."""
+    import csv
+    import io
+
+    reader = csv.DictReader(io.StringIO(data.csv))
+    created, skipped, invites = [], [], []
+    for row in reader:
+        username = (row.get("username") or "").strip()
+        if not username or not USERNAME_RE.match(username):
+            skipped.append(username or "(blank)")
+            continue
+        role = (row.get("role") or "editor").strip()
+        if role not in ALLOWED_ROLES:
+            role = "editor"
+        email = (row.get("email") or "").strip()
+        token = create_invited_user(username, role, email, (row.get("full_name") or "").strip())
+        if token is None:
+            skipped.append(username)
+            continue
+        created.append(username)
+        from app.services.email_service import _send_email, _is_configured
+        if email and _is_configured():
+            _send_email(email, "You've been invited to reqmesh",
+                f"<p>An administrator created a reqmesh account for you (<strong>{username}</strong>).</p>"
+                f"<p><a href=\"{_invite_link(token)}\">Click here to set your password</a></p>")
+        else:
+            invites.append({"username": username, "invite_link": _invite_link(token)})
+    return {"created": created, "skipped": skipped, "invites": invites}

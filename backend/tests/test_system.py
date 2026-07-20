@@ -113,6 +113,54 @@ def test_start_update_conflict_when_unsupported(client, monkeypatch):
     assert res.status_code == 409
 
 
+def test_file_update_supported_offline(monkeypatch, tmp_path):
+    """File-based update must work even in offline mode (its whole purpose)."""
+    monkeypatch.setattr(settings, "update_control_dir", str(tmp_path / "control"))
+    monkeypatch.setattr(updater, "is_running_in_docker", lambda: True)
+    monkeypatch.setattr(settings, "self_update_enabled", True)
+    monkeypatch.setattr(settings, "offline_mode", True)
+    assert updater.file_update_supported() is True
+    # Registry-based update stays disabled offline.
+    assert updater.self_update_supported() is False
+
+
+def test_upload_update_stages_image_and_requests(client, tmp_path, monkeypatch):
+    control = tmp_path / "control"
+    monkeypatch.setattr(settings, "update_control_dir", str(control))
+    monkeypatch.setattr(updater, "is_running_in_docker", lambda: True)
+    monkeypatch.setattr(settings, "self_update_enabled", True)
+    monkeypatch.setattr(settings, "offline_mode", True)  # proves offline works
+
+    res = client.post(
+        "/api/system/update/upload",
+        files={"file": ("reqmesh-v0.0.9-image.tar.gz", b"not-a-real-image-but-nonempty", "application/gzip")},
+        data={"target_version": "0.0.9"},
+    )
+    assert res.status_code == 200, res.text
+    assert (control / "update-image.tar").read_bytes() == b"not-a-real-image-but-nonempty"
+    assert (control / "update-mode").read_text().strip() == "image"
+    assert (control / "update-target").read_text().strip() == "0.0.9"
+    status = client.get("/api/system/update/status").json()
+    assert status["state"] in ("requested", "in_progress")
+    assert status["target_version"] == "0.0.9"
+
+
+def test_upload_update_rejects_empty(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "update_control_dir", str(tmp_path / "control"))
+    monkeypatch.setattr(updater, "is_running_in_docker", lambda: True)
+    monkeypatch.setattr(settings, "self_update_enabled", True)
+    res = client.post("/api/system/update/upload",
+                      files={"file": ("empty.tar", b"", "application/x-tar")})
+    assert res.status_code == 400
+
+
+def test_upload_update_conflict_when_unsupported(client, monkeypatch):
+    monkeypatch.setattr(updater, "file_update_supported", lambda: False)
+    res = client.post("/api/system/update/upload",
+                      files={"file": ("x.tar.gz", b"data", "application/gzip")})
+    assert res.status_code == 409
+
+
 def test_supervised_update_flow_writes_control_files(client, tmp_path, monkeypatch):
     """With a writable control dir + docker faked on, an update writes the
     request/target/status files the sidecar consumes."""

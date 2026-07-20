@@ -1,11 +1,27 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, X, Sigma, CheckCircle2, XCircle, HelpCircle, AlertTriangle, MinusCircle, FlaskConical } from 'lucide-react';
+import { Plus, X, Sigma, CheckCircle2, XCircle, HelpCircle, AlertTriangle, MinusCircle, FlaskConical, Ruler, Boxes } from 'lucide-react';
 import type {
-  Parameter, Constraint,
+  Parameter, Constraint, Definition,
   EvaluatedRequirement, EvaluatedConstraint, EvalVerdict, ConstraintStatus,
 } from '../api/client';
+import { KNOWN_UNITS } from '../api/client';
 import { EntityLink } from './entities';
+
+/** Shared <datalist> of known units for parameter-unit autocomplete. */
+const UNITS_LIST_ID = 'rm-known-units';
+export function UnitsDatalist() {
+  return <datalist id={UNITS_LIST_ID}>{KNOWN_UNITS.map((u) => <option key={u} value={u} />)}</datalist>;
+}
+
+/** Small amber warning chip for a dimensional-consistency issue. */
+function UnitWarning({ message }: { message: string }) {
+  return (
+    <span className="inline-flex items-center gap-1 text-[10px] text-amber-400 shrink-0" title={message}>
+      <Ruler size={10} /> units
+    </span>
+  );
+}
 
 export const VERDICT_META: Record<EvalVerdict | ConstraintStatus, { cls: string; icon: typeof CheckCircle2; label: string }> = {
   pass: { cls: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30', icon: CheckCircle2, label: 'pass' },
@@ -45,6 +61,8 @@ interface ParametricsCardProps {
   evaluated?: EvaluatedRequirement;
   editable: boolean;
   onSave: (updates: { parameters?: Parameter[]; constraints?: Constraint[] }) => void;
+  /** Reusable definitions available to bind as constraint/calc usages. */
+  definitions?: Definition[];
 }
 
 /**
@@ -53,9 +71,20 @@ interface ParametricsCardProps {
  * live verdict and margin, and the measured verdict when verification cases
  * have recorded evidence.
  */
-export function ParametricsCard({ reqId, parameters, constraints, evaluated, editable, onSave }: ParametricsCardProps) {
+export function ParametricsCard({ reqId, parameters, constraints, evaluated, editable, onSave, definitions = [] }: ParametricsCardProps) {
   const [draft, setDraft] = useState({ name: '', value: '', expr: '', unit: '' });
   const [newConstraint, setNewConstraint] = useState({ expr: '', assume: '' });
+  const constraintDefs = definitions.filter((d) => d.type === 'constraint');
+  const [defDraft, setDefDraft] = useState<{ id: string; bindings: Record<string, string> }>({ id: '', bindings: {} });
+  const selectedDef = constraintDefs.find((d) => d.id === defDraft.id);
+
+  const addDefConstraint = () => {
+    if (!selectedDef) return;
+    const bindings: Record<string, string> = {};
+    for (const f of selectedDef.parameters) bindings[f] = (defDraft.bindings[f] || '').trim();
+    onSave({ constraints: [...constraints, { constraint_def: selectedDef.id, bindings }] });
+    setDefDraft({ id: '', bindings: {} });
+  };
 
   // Evaluated results keyed for the display rows.
   const evalParams = new Map((evaluated?.parameters ?? []).map((p) => [p.name, p]));
@@ -124,6 +153,7 @@ export function ParametricsCard({ reqId, parameters, constraints, evaluated, edi
                   </span>
                 )}
                 {ev?.error && <span className="text-[10px] text-red-400 shrink-0" title={ev.error}>error</span>}
+                {ev?.unit_warning && <UnitWarning message={ev.unit_warning} />}
                 {editable && (
                   <button onClick={() => removeParameter(i)} className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all">
                     <X size={12} />
@@ -143,11 +173,12 @@ export function ParametricsCard({ reqId, parameters, constraints, evaluated, edi
             onChange={(e) => setDraft({ ...draft, value: e.target.value })} />
           <input className="input flex-1 text-xs font-mono" placeholder="or expr: GROS0001.mass - empty" value={draft.expr}
             onChange={(e) => setDraft({ ...draft, expr: e.target.value })} />
-          <input className="input w-16 text-xs" placeholder="unit" value={draft.unit}
+          <input className="input w-16 text-xs" placeholder="unit" list={UNITS_LIST_ID} value={draft.unit}
             onChange={(e) => setDraft({ ...draft, unit: e.target.value })} />
           <button onClick={addParameter} className="btn-secondary shrink-0 p-2" disabled={!draft.name.trim()}>
             <Plus size={12} />
           </button>
+          <UnitsDatalist />
         </div>
       )}
 
@@ -168,6 +199,7 @@ export function ParametricsCard({ reqId, parameters, constraints, evaluated, edi
                   {ev?.detail && <span className="text-muted-foreground ml-2">({ev.detail})</span>}
                 </div>
                 {ev?.margin && <MarginTag margin={ev.margin} />}
+                {ev?.unit_warning && <UnitWarning message={ev.unit_warning} />}
                 {ev && <VerdictBadge status={ev.status} />}
                 {mev && mev.status !== ev?.status && <VerdictBadge status={mev.status} prefix="measured" />}
                 {editable && (
@@ -190,6 +222,44 @@ export function ParametricsCard({ reqId, parameters, constraints, evaluated, edi
           <button onClick={addConstraint} className="btn-secondary shrink-0 p-2" disabled={!newConstraint.expr.trim()}>
             <Plus size={12} />
           </button>
+        </div>
+      )}
+
+      {/* Add a constraint from a reusable definition, binding its formals. */}
+      {editable && constraintDefs.length > 0 && (
+        <div className="mt-2 p-2 rounded border border-dashed border-border/70 bg-accent/20">
+          <div className="flex items-center gap-1.5 mb-1.5 text-[11px] text-muted-foreground">
+            <Boxes size={12} className="text-cs-teal" /> Use a definition
+            <select
+              className="input text-xs py-0.5 ml-1"
+              value={defDraft.id}
+              onChange={(e) => setDefDraft({ id: e.target.value, bindings: {} })}
+            >
+              <option value="">choose…</option>
+              {constraintDefs.map((d) => (
+                <option key={d.id} value={d.id}>{d.name || d.id} — {d.expr}</option>
+              ))}
+            </select>
+          </div>
+          {selectedDef && (
+            <div className="flex flex-wrap items-end gap-1">
+              {selectedDef.parameters.map((f) => (
+                <div key={f} className="flex flex-col">
+                  <label className="text-[9px] font-mono text-muted-foreground px-1">{f}</label>
+                  <input
+                    className="input w-32 text-xs font-mono"
+                    placeholder="ID.param"
+                    value={defDraft.bindings[f] || ''}
+                    onChange={(e) => setDefDraft({ ...defDraft, bindings: { ...defDraft.bindings, [f]: e.target.value } })}
+                  />
+                </div>
+              ))}
+              <button onClick={addDefConstraint} className="btn-secondary shrink-0 p-2"
+                disabled={selectedDef.parameters.some((f) => !(defDraft.bindings[f] || '').trim())}>
+                <Plus size={12} />
+              </button>
+            </div>
+          )}
         </div>
       )}
 

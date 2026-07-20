@@ -443,7 +443,7 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
         };
       });
       const constraints: BlockConstraint[] = (ev?.constraints ?? req.constraints ?? []).map((c) => ({
-        expr: c.expr,
+        expr: c.expr || (c as { constraint_def?: string }).constraint_def || '',
         status: (c as { status?: string }).status ?? 'none',
       }));
       return {

@@ -5,8 +5,10 @@ import { Plus, Trash2, CheckCircle2, AlertTriangle, Search, TrendingUp, Shield, 
 import { api, type MetricsData, type ImpactResult, type GapItem, type QualityItem, type EvaluationData } from '../api/client';
 import { EntityLink } from '../components/entities';
 import { VerdictBadge } from '../components/parametrics';
+import { DefinitionsManager, AnalysisCasesPanel } from '../components/DefinitionsPanel';
 import { HelpTip } from '../components/HelpTip';
 import LoadingSplash from '../components/LoadingSplash';
+import { useAuthStore } from '../store/auth';
 
 export default function MetricsPage() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -19,6 +21,8 @@ export default function MetricsPage() {
   const [qualityAvg, setQualityAvg] = useState(0);
   const [unreviewedCount, setUnreviewedCount] = useState(0);
   const [evaluation, setEvaluation] = useState<EvaluationData | null>(null);
+  const { user, editMode } = useAuthStore();
+  const editable = user !== null && user.role !== 'viewer' && editMode;
 
   useEffect(() => {
     if (!projectId) return;
@@ -143,6 +147,13 @@ export default function MetricsPage() {
               ))}
           </div>
         </motion.div>
+      )}
+
+      {projectId && (
+        <div className="mt-6 space-y-6">
+          <DefinitionsManager projectId={projectId} editable={editable} />
+          <AnalysisCasesPanel projectId={projectId} editable={editable} />
+        </div>
       )}
 
       {quality.length > 0 && (

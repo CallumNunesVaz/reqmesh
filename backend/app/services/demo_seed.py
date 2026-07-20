@@ -1866,12 +1866,17 @@ def seed_demo_project(data_root: Path, force: bool = False) -> bool:
         {"expr": "full_fuel_payload >= 250", "assume": None},
     ]
     reqs["AFRM0000"]["parameters"] = [
-        {"name": "empty_mass", "value": 767, "unit": "kg", "expr": None}]
+        {"name": "empty_mass", "value": 767, "unit": "kg", "expr": None},
+        {"name": "design_mass", "value": None, "unit": "kg",
+         "expr": "rollup('C172', 'mass')"},
+    ]
+    reqs["AFRM0000"]["subject"] = "C172"
     reqs["AFRM0000"]["constraints"] = [
         {"expr": "empty_mass <= 780", "assume": None},
-        # Budget rollup: everything tracked in the design tree must fit
-        # inside the empty weight.
-        {"expr": "rollup('C172', 'mass') <= empty_mass", "assume": None},
+        # Budget rollup via a reusable MassBudget definition: everything tracked
+        # in the design tree must fit inside the empty weight.
+        {"constraint_def": "MassBudget",
+         "bindings": {"actual": "AFRM0000.design_mass", "limit": "AFRM0000.empty_mass"}},
     ]
 
     # Structure: bound plus measured evidence from the static test.
@@ -1998,5 +2003,28 @@ def seed_demo_project(data_root: Path, force: bool = False) -> bool:
         store.create_item("decisions", {
             **{k: v for k, v in d.items()},
         })
+
+    # Reusable SysML v2-style parametric definitions.
+    store.write_item("definitions", "MassBudget", {
+        "id": "MassBudget", "type": "constraint",
+        "name": "Mass budget", "parameters": ["actual", "limit"],
+        "expr": "actual <= limit", "unit": "",
+        "doc": "A rolled-up mass must fit within its allocated limit.",
+    })
+    store.write_item("definitions", "PowerMargin", {
+        "id": "PowerMargin", "type": "calc",
+        "name": "Continuous power margin", "parameters": ["draw", "capacity"],
+        "expr": "capacity - draw", "unit": "A",
+        "doc": "Headroom between a load draw and its supply capacity.",
+    })
+
+    # A what-if analysis case: does the empty-weight budget still hold if the
+    # avionics upgrade adds 12 kg? Scoped to the mass-budget requirement.
+    store.write_item("analysis_cases", "avionics-upgrade", {
+        "id": "avionics-upgrade", "name": "Avionics upgrade (+12 kg)",
+        "doc": "Explore the empty-weight budget with a heavier avionics fit.",
+        "scope": ["AFRM0000"],
+        "overrides": {"AFRM0000.empty_mass": 779},
+    })
 
     return True

@@ -70,6 +70,7 @@ jobs:
   docker:
     name: Build & push Docker image
     runs-on: ubuntu-latest
+    needs: bundle   # the release must exist before we attach the image archive
     steps:
       - uses: actions/checkout@v4
 
@@ -83,3 +84,16 @@ jobs:
           docker build -f Dockerfile.prod -t "$IMAGE:$VERSION" -t "$IMAGE:latest" .
           docker push "$IMAGE:$VERSION"
           docker push "$IMAGE:latest"
+
+      - name: Save image archive for offline updates
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          IMAGE="ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
+          docker save "$IMAGE:$VERSION" | gzip > "reqmesh-v${VERSION}-image.tar.gz"
+
+      - name: Attach image archive to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          gh release upload "$GITHUB_REF_NAME" "reqmesh-v${VERSION}-image.tar.gz" --clobber

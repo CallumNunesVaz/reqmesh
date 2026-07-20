@@ -474,9 +474,45 @@ Relevant environment variables:
 
 Without the `self-update` profile the app runs normally but reports one-click
 update as unavailable — admins then see the manual `docker compose pull && up -d`
-steps instead. In **offline mode** (`RT_OFFLINE_MODE=true`) update checks are
-disabled. Rolling back is `REQMESH_VERSION=<old> docker compose up -d reqmesh`;
+steps instead. Rolling back is `REQMESH_VERSION=<old> docker compose up -d reqmesh`;
 project data can be restored from the `pre-update-*` git tags.
+
+**Offline / air-gapped updates.** Registry checks are disabled in offline mode
+(`RT_OFFLINE_MODE=true`), but an admin can still update by **uploading an image
+archive** from the System page → *Update from a file*. On a connected machine,
+grab the `reqmesh-vX.Y.Z-image.tar.gz` asset from the GitHub release (or produce
+one with `docker save ghcr.io/callumnunesvaz/reqmesh:X.Y.Z | gzip > reqmesh-vX.Y.Z-image.tar.gz`),
+transfer it to the server, and upload it. reqmesh backs up data, then the updater
+sidecar `docker load`s the archive and recreates the app on it — no network
+needed. This path also requires the `self-update` profile (it uses the same
+sidecar). `RT_MAX_UPDATE_UPLOAD_MB` caps the archive size (default 2048).
+
+---
+
+## 12c. Runtime settings & user administration
+
+Most instance configuration can be managed from the UI by an administrator, so
+you don't have to edit `.env` and restart for routine changes.
+
+**Application Settings** (top bar → *Settings*, admins only) exposes branding,
+feature toggles (self-registration, email verification, offline mode,
+self-update), SMTP (with a **Send test email** button), session length, and
+account-lockout thresholds. Saved values are persisted to
+`~/.reqmesh/settings.yaml` and applied onto the live configuration immediately,
+overriding the env defaults.
+
+> **Env pinning wins.** If a setting's `RT_*` variable is present in the
+> environment, that key is *env-locked*: its UI control is read-only and the
+> stored override is ignored. Use this to hard-pin values in production while
+> leaving the rest UI-configurable.
+
+**User administration** (top bar → *Users*) supports invitations (email a
+set-password link, or copy it when SMTP is off), disable/enable, failed-login
+lockout with admin unlock, force sign-out (session revocation), bulk
+enable/disable/delete/role-change, and CSV import/export. Failed-login lockout
+is governed by `RT_LOCKOUT_MAX_ATTEMPTS` (default 5, 0 disables) and
+`RT_LOCKOUT_WINDOW_MINUTES` (default 15). The last administrator and your own
+account are protected from disable/delete.
 
 ---
 

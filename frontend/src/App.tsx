@@ -17,6 +17,7 @@ import MetricsPage from './pages/MetricsPage';
 import PublishPage from './pages/PublishPage';
 import UsersPage from './pages/UsersPage';
 import SystemPage from './pages/SystemPage';
+import SettingsPage from './pages/SettingsPage';
 
 export default function App() {
   return (
@@ -25,6 +26,7 @@ export default function App() {
         <Route path="/" element={<ProjectsPage />} />
         <Route path="/users" element={<UsersPage />} />
         <Route path="/system" element={<SystemPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
         <Route path="/project/:projectId" element={<ProjectOverview />} />
         <Route path="/project/:projectId/settings" element={<ProjectSettingsPage />} />
         <Route path="/project/:projectId/requirements" element={<RequirementsPage />} />

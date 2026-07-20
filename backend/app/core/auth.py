@@ -92,13 +92,21 @@ def verify_password(password: str, hashed: str) -> bool:
     return bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
 
 
+def _token_ttl() -> int:
+    try:
+        from app.core.config import settings
+        return int(settings.token_ttl_seconds) or TOKEN_TTL
+    except Exception:
+        return TOKEN_TTL
+
+
 def create_token(username: str, role: str, token_version: int = 0) -> str:
     payload = {
         "sub": username,
         "role": role,
         "tv": token_version,
         "iat": int(time.time()),
-        "exp": int(time.time()) + TOKEN_TTL,
+        "exp": int(time.time()) + _token_ttl(),
     }
     return jwt.encode(payload, get_secret(), algorithm="HS256")
 
@@ -110,16 +118,52 @@ def decode_token(token: str) -> dict | None:
         return None
 
 
-def authenticate(username: str, password: str) -> dict | None:
+def authenticate(username: str, password: str) -> dict:
+    """Attempt a login. Returns a dict with a ``status`` of ``ok``, ``invalid``,
+    ``disabled``, ``locked`` (with ``until``), or ``unverified``.
+
+    Enforces account disable, failed-login lockout, and (when configured)
+    email-verification. On success the token carries the user's current
+    ``token_version`` so admin password resets / force-logouts invalidate it.
+    """
+    from app.core.config import settings
+
     users = load_users()
     user = users.get(username)
     if not user:
-        return None
+        return {"status": "invalid"}
+
+    now = int(time.time())
+    locked_until = int(user.get("locked_until", 0) or 0)
+    if locked_until > now:
+        return {"status": "locked", "until": locked_until}
+
+    if user.get("disabled"):
+        return {"status": "disabled"}
+
     if not verify_password(password, user["password_hash"]):
-        return None
+        attempts = int(user.get("failed_attempts", 0)) + 1
+        max_attempts = int(settings.lockout_max_attempts or 0)
+        if max_attempts > 0 and attempts >= max_attempts:
+            user["locked_until"] = now + int(settings.lockout_window_minutes or 0) * 60
+            user["failed_attempts"] = 0
+        else:
+            user["failed_attempts"] = attempts
+        save_users(users)
+        return {"status": "invalid"}
+
+    if (settings.require_email_verification and not user.get("email_verified")
+            and user.get("role") != "admin"):
+        return {"status": "unverified"}
+
+    user["failed_attempts"] = 0
+    user["locked_until"] = 0
     user["last_active"] = time.strftime("%Y-%m-%dT%H:%M:%SZ")
     save_users(users)
-    return {"username": username, "role": user.get("role", "viewer"), "token": create_token(username, user.get("role", "viewer"))}
+    role = user.get("role", "viewer")
+    tv = int(user.get("token_version", 0))
+    return {"status": "ok", "username": username, "role": role,
+            "token": create_token(username, role, tv)}
 
 
 def register_user(username: str, password: str, role: str = "editor") -> dict | None:
@@ -168,15 +212,45 @@ ALLOWED_ROLES = ("viewer", "editor", "admin")
 def public_users() -> list[dict]:
     """All users without their password hashes, sorted by username."""
     users = load_users()
-    out = [
-        {"username": name, "role": u.get("role", "viewer"), "full_name": u.get("full_name", ""),
-         "email": u.get("email", ""), "email_verified": u.get("email_verified", False),
-         "last_active": u.get("last_active", ""),
-         "joined": u.get("created", ""),
-         "created": u.get("created", "")}
-        for name, u in users.items()
-    ]
+    now = int(time.time())
+    out = []
+    for name, u in users.items():
+        locked_until = int(u.get("locked_until", 0) or 0)
+        out.append({
+            "username": name, "role": u.get("role", "viewer"),
+            "full_name": u.get("full_name", ""),
+            "email": u.get("email", ""), "email_verified": u.get("email_verified", False),
+            "last_active": u.get("last_active", ""),
+            "joined": u.get("created", ""),
+            "created": u.get("created", ""),
+            "disabled": bool(u.get("disabled", False)),
+            "locked": locked_until > now,
+            "locked_until": locked_until if locked_until > now else 0,
+            "invited": bool(u.get("invited", False)),
+        })
     return sorted(out, key=lambda x: x["username"].lower())
+
+
+def create_invited_user(username: str, role: str = "editor", email: str = "",
+                        full_name: str = "") -> str | None:
+    """Create an account with a random password that must be set via an invite
+    link. Returns a set-password token, or None if the username is taken."""
+    users = load_users()
+    if username in users:
+        return None
+    users[username] = {
+        "username": username,
+        "password_hash": hash_password(secrets.token_urlsafe(24)).decode(),
+        "role": role,
+        "full_name": full_name,
+        "email": email,
+        "email_verified": False,
+        "token_version": 0,
+        "invited": True,
+        "created": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }
+    save_users(users)
+    return create_reset_token(username)
 
 
 def count_admins(users: dict) -> int:
@@ -192,12 +266,50 @@ def set_user_role(username: str, role: str) -> bool:
     return True
 
 
+def set_user_disabled(username: str, disabled: bool) -> bool:
+    """Enable/disable an account. A disabled account cannot log in; disabling
+    also revokes existing sessions by bumping the token version."""
+    users = load_users()
+    if username not in users:
+        return False
+    users[username]["disabled"] = bool(disabled)
+    if disabled:
+        users[username]["token_version"] = users[username].get("token_version", 0) + 1
+    save_users(users)
+    return True
+
+
+def unlock_user(username: str) -> bool:
+    """Clear a failed-login lockout."""
+    users = load_users()
+    if username not in users:
+        return False
+    users[username]["locked_until"] = 0
+    users[username]["failed_attempts"] = 0
+    save_users(users)
+    return True
+
+
+def bump_token_version(username: str) -> bool:
+    """Invalidate every existing session for a user (force sign-out everywhere)."""
+    users = load_users()
+    if username not in users:
+        return False
+    users[username]["token_version"] = users[username].get("token_version", 0) + 1
+    save_users(users)
+    return True
+
+
 def set_user_password(username: str, password: str) -> bool:
     users = load_users()
     if username not in users:
         return False
     users[username]["password_hash"] = hash_password(password).decode()
     users[username]["token_version"] = users[username].get("token_version", 0) + 1
+    # Setting a password completes an invite and clears any lockout.
+    users[username]["invited"] = False
+    users[username]["locked_until"] = 0
+    users[username]["failed_attempts"] = 0
     save_users(users)
     return True
 

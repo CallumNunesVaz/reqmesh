@@ -1,5 +1,5 @@
 import { Outlet, Link, useParams } from 'react-router-dom';
-import { PanelRight, PanelRightClose, LogIn, LogOut, User, Pencil, Eye, FileDown, FileUp, Users, Search, HelpCircle, BookOpen, Server } from 'lucide-react';
+import { PanelRight, PanelRightClose, LogIn, LogOut, User, Pencil, Eye, FileDown, FileUp, Users, Search, HelpCircle, BookOpen, Server, SlidersHorizontal } from 'lucide-react';
 import { useState, useEffect, useCallback, createContext, useContext, useRef } from 'react';
 import { ThemeToggle } from './ThemeToggle';
 import RequirementNav from './RequirementNav';
@@ -21,6 +21,21 @@ export function useGraphPane() { return useContext(GraphPaneCtx); }
 
 // Fetched once per page load; the version rarely changes within a session.
 let _versionCache: string | null = null;
+let _instanceNameCache: string | null = null;
+
+/** Instance name from public config, falling back to "reqmesh". */
+function InstanceName() {
+  const [name, setName] = useState<string | null>(_instanceNameCache);
+  useEffect(() => {
+    if (_instanceNameCache) return;
+    let alive = true;
+    api.getPublicConfig()
+      .then((c) => { _instanceNameCache = c.instance_name || 'reqmesh'; if (alive) setName(_instanceNameCache); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
+  return <span className="font-semibold text-sm tracking-tight text-foreground hidden sm:inline">{name || 'reqmesh'}</span>;
+}
 
 function VersionBadge() {
   const [version, setVersion] = useState<string | null>(_versionCache);
@@ -204,7 +219,7 @@ export default function Layout() {
         <header className="h-14 border-b bg-card flex items-center px-3 gap-2 shrink-0 z-40">
           <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity shrink-0">
             <img src="/reqmesh-mark.png" alt="reqmesh" className="w-7 h-7" />
-            <span className="font-semibold text-sm tracking-tight text-foreground hidden sm:inline">reqmesh</span>
+            <InstanceName />
           </Link>
           <VersionBadge />
 
@@ -302,6 +317,17 @@ export default function Layout() {
             >
               <Users size={15} />
               <span className="hidden sm:inline">Users</span>
+            </Link>
+          )}
+
+          {user?.role === 'admin' && (
+            <Link
+              to="/settings"
+              className="btn-ghost p-2 rounded-lg gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+              title="Application settings"
+            >
+              <SlidersHorizontal size={15} />
+              <span className="hidden sm:inline">Settings</span>
             </Link>
           )}
 

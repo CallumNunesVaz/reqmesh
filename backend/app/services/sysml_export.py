@@ -7,13 +7,75 @@ into tools like the SysML v2 Pilot Implementation.
 
 from __future__ import annotations
 
+import re
 from textwrap import indent as text_indent
+
+
+def _subst_bindings(expr: str, bindings: dict) -> str:
+    """Substitute a definition's formal names with their bound actual refs, so a
+    reusable constraint/calc usage exports as a concrete (round-trippable) expr."""
+    return re.sub(r"[A-Za-z_]\w*", lambda m: bindings.get(m.group(0), m.group(0)), expr)
+
+
+def _effective(item: dict, def_key: str, defs: dict) -> dict:
+    """Resolve a def-based usage to an inline ``expr`` for export."""
+    def_id = item.get(def_key)
+    if def_id and def_id in defs:
+        expr = _subst_bindings(defs[def_id].get("expr", ""), item.get("bindings") or {})
+        return {**item, "expr": expr}
+    return item
+
+
+def _fmt_num(v) -> str:
+    """Render a parameter value without a trailing .0 for whole numbers."""
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return "0"
+    return str(int(f)) if f.is_integer() else f"{f:g}"
+
+
+def _param_line(p: dict, prefix: str) -> str:
+    """One SysML v2 ``attribute`` line for a reqmesh parameter.
+
+    Derived params bind to their expression (``= expr``); literals bind to a
+    value with an optional ``[unit]``. The measure kind rides along as a
+    reqmesh annotation comment so it round-trips.
+    """
+    name = p.get("name", "")
+    value_type = p.get("value_type")
+    typ = f" : {value_type}" if value_type else ""
+    if p.get("expr"):
+        rhs = p["expr"]
+    else:
+        v = p.get("value")
+        rhs = _fmt_num(v) if v is not None else "0"
+    unit = p.get("unit")
+    unit_s = f" [{unit}]" if unit else ""
+    kind = p.get("kind")
+    kind_s = f"  // @kind={kind}" if kind else ""
+    return f"{prefix}attribute {name}{typ} = {rhs}{unit_s};{kind_s}"
+
+
+def _constraint_lines(c: dict, prefix: str) -> list[str]:
+    """SysML v2 ``assume``/``require constraint`` lines for a reqmesh constraint."""
+    out: list[str] = []
+    if c.get("assume"):
+        out.append(f"{prefix}assume constraint {{ {c['assume']} }}")
+    kind = c.get("kind")
+    kind_s = f"  // @kind={kind}" if kind else ""
+    out.append(f"{prefix}require constraint {{ {c.get('expr', '')} }}{kind_s}")
+    return out
 
 
 def export_sysml_v2(store) -> str:
     """Return a SysML v2 textual notation string for the project."""
     meta = store.read_meta()
     reqs = store.list_requirements()
+    try:
+        defs = {d["id"]: d for d in store.list_items("definitions")}
+    except Exception:
+        defs = {}
     project_name = meta.get("name", store.root.name)
     safe_name = project_name.replace(" ", "_").replace("-", "_")
 
@@ -72,6 +134,15 @@ def export_sysml_v2(store) -> str:
             vc_safe = vc_id.replace("-", "_").replace(".", "_")
             body.append(f"{prefix}  verify requirement {vc_safe};")
 
+        # Parametrics: typed attributes and assume/require constraints.
+        if r.get("subject"):
+            subj = r["subject"].replace("-", "_").replace(".", "_")
+            body.append(f"{prefix}  subject {subj};")
+        for p in r.get("parameters") or []:
+            body.append(_param_line(_effective(p, "calc_def", defs), f"{prefix}  "))
+        for c in r.get("constraints") or []:
+            body.extend(_constraint_lines(_effective(c, "constraint_def", defs), f"{prefix}  "))
+
         # Children
         children = req_by_parent.get(r["id"], [])
         for child in children:
@@ -85,6 +156,37 @@ def export_sysml_v2(store) -> str:
     top_level = req_by_parent.get(None, [])
     for r in top_level:
         lines.extend(render_req(r))
+
+    # --- Components as part defs (so rollup targets round-trip) ---
+    components = store.list_components()
+    if components:
+        comp_by_parent: dict[str | None, list[dict]] = {}
+        for c in components:
+            pid = c.get("parent") if isinstance(c.get("parent"), str) and c["parent"] else None
+            comp_by_parent.setdefault(pid, []).append(c)
+
+        def render_part(c: dict, indent_level: int = 1) -> list[str]:
+            cid = c["id"].replace("-", "_").replace(".", "_")
+            prefix = "  " * indent_level
+            body = [f"{prefix}part def {cid} {{"]
+            body.append(f"{prefix}  doc /* {(c.get('name') or cid)} */")
+            if c.get("quantity", 1) not in (1, None):
+                body.append(f"{prefix}  attribute quantity = {int(c['quantity'])};")
+            for p in c.get("parameters") or []:
+                body.append(_param_line(_effective(p, "calc_def", defs), f"{prefix}  "))
+            for rid in c.get("satisfies") or []:
+                body.append(f"{prefix}  satisfy requirement {rid.replace('-', '_').replace('.', '_')};")
+            for child in comp_by_parent.get(c["id"], []):
+                body.extend(render_part(child, indent_level + 1))
+            body.append(f"{prefix}}}")
+            if indent_level == 1:
+                body.append("")
+            return body
+
+        lines.append("")
+        lines.append("  // Components")
+        for c in comp_by_parent.get(None, []):
+            lines.extend(render_part(c))
 
     # Verification cases as separate defs
     vcs = store.list_verification_cases()

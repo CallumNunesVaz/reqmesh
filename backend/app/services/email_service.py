@@ -65,6 +65,37 @@ def _send_email(to: str | list[str], subject: str, body_html: str, body_text: st
     threading.Thread(target=_do_send, daemon=True).start()
 
 
+def send_test_email(to: str) -> dict:
+    """Send a test email synchronously and report the result (for the settings
+    UI). Unlike _send_email this blocks and surfaces the SMTP error."""
+    from app.core.config import settings
+
+    if settings.offline_mode:
+        return {"ok": False, "error": "Offline mode is enabled — email is disabled."}
+    if not settings.smtp_host:
+        return {"ok": False, "error": "No SMTP host is configured."}
+    if not to or "@" not in to:
+        return {"ok": False, "error": "Enter a valid recipient address."}
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["From"] = settings.smtp_from
+        msg["To"] = to
+        msg["Subject"] = "[reqmesh] Test email"
+        msg.attach(MIMEText("This is a test email from reqmesh. Your SMTP settings work.", "plain", "utf-8"))
+        msg.attach(MIMEText("<p>This is a test email from reqmesh. Your SMTP settings work.</p>", "html", "utf-8"))
+        server = smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=15)
+        if settings.smtp_use_tls:
+            server.starttls()
+        if settings.smtp_username and settings.smtp_password:
+            server.login(settings.smtp_username, settings.smtp_password)
+        server.sendmail(settings.smtp_from, [to], msg.as_string())
+        server.quit()
+        return {"ok": True}
+    except Exception as exc:  # noqa: BLE001 - surface any SMTP failure to the admin
+        logger.warning("test email failed: %s", exc)
+        return {"ok": False, "error": str(exc)}
+
+
 def _user_emails(store, project_id: str) -> list[str]:
     """Collect email addresses of users who have a record and an email set."""
     from app.core.auth import load_users

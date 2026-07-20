@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Users, Plus, Trash2, ShieldCheck, User as UserIcon, KeyRound, X, Loader, Search, Filter, Pencil, Check, Clock } from 'lucide-react';
+import { Users, Plus, Trash2, ShieldCheck, User as UserIcon, KeyRound, X, Loader, Search, Filter, Pencil, Check, Clock, Ban, CircleCheck, Unlock, LogOut, UserPlus, Download, Upload, Copy, Lock } from 'lucide-react';
 import { api, type ManagedUser } from '../api/client';
 import { useAuthStore } from '../store/auth';
 
@@ -10,6 +10,14 @@ const ROLE_BADGE: Record<string, string> = {
   editor: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
   viewer: 'bg-muted text-muted-foreground border-border',
 };
+
+/** Compact account-status badge (disabled / locked / invited / active). */
+function StatusBadge({ u }: { u: ManagedUser }) {
+  if (u.disabled) return <span className="badge border text-[10px] bg-red-500/15 text-red-400 border-red-500/30 gap-1"><Ban size={9} /> Disabled</span>;
+  if (u.locked) return <span className="badge border text-[10px] bg-amber-500/15 text-amber-400 border-amber-500/30 gap-1"><Lock size={9} /> Locked</span>;
+  if (u.invited) return <span className="badge border text-[10px] bg-blue-500/15 text-blue-400 border-blue-500/30 gap-1"><UserPlus size={9} /> Invited</span>;
+  return <span className="badge border text-[10px] bg-emerald-500/10 text-emerald-400 border-emerald-500/30">Active</span>;
+}
 
 export default function UsersPage() {
   const currentUser = useAuthStore((s) => s.user);
@@ -48,6 +56,16 @@ export default function UsersPage() {
   const [editingRow, setEditingRow] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ full_name: '', email: '' });
 
+  // ── Admin: status filter, bulk selection, invite, CSV ────────────────────
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [showInvite, setShowInvite] = useState(false);
+  const [invite, setInvite] = useState({ username: '', email: '', full_name: '', role: 'editor' });
+  const [inviting, setInviting] = useState(false);
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [importText, setImportText] = useState<string | null>(null);
+  const [importResult, setImportResult] = useState<{ created: string[]; skipped: string[]; invites: { username: string; invite_link: string }[] } | null>(null);
+
   const load = () => {
     setLoadError(null);
     api.listUsers().then((u) => {
@@ -70,13 +88,24 @@ export default function UsersPage() {
     if (q) result = result.filter((u) =>
       u.username.toLowerCase().includes(q) || (u.full_name || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q));
     if (roleFilter !== 'all') result = result.filter((u) => u.role === roleFilter);
+    if (statusFilter !== 'all') result = result.filter((u) =>
+      statusFilter === 'disabled' ? u.disabled
+        : statusFilter === 'locked' ? u.locked
+        : statusFilter === 'invited' ? u.invited
+        : !u.disabled && !u.locked && !u.invited);
     result.sort((a, b) => {
       const av = (a[sortBy] || '').toString().toLowerCase();
       const bv = (b[sortBy] || '').toString().toLowerCase();
       return sortAsc ? av.localeCompare(bv) : bv.localeCompare(av);
     });
     return result;
-  }, [users, search, roleFilter, sortBy, sortAsc]);
+  }, [users, search, roleFilter, statusFilter, sortBy, sortAsc]);
+
+  const allSelected = filtered.length > 0 && filtered.every((u) => selected.has(u.username));
+  const toggleSelect = (uname: string) => setSelected((s) => {
+    const n = new Set(s); n.has(uname) ? n.delete(uname) : n.add(uname); return n;
+  });
+  const toggleSelectAll = () => setSelected(allSelected ? new Set() : new Set(filtered.map((u) => u.username)));
 
   // ── Actions ─────────────────────────────────────────────────────────────
 
@@ -118,6 +147,76 @@ export default function UsersPage() {
     catch (err: any) { setError(err.message); }
   };
 
+  const handleDisable = async (uname: string, disabled: boolean) => {
+    setError('');
+    try { await api.setUserDisabled(uname, disabled); load(); }
+    catch (err: any) { setError(err.message); }
+  };
+  const handleUnlock = async (uname: string) => {
+    setError('');
+    try { await api.unlockUser(uname); load(); }
+    catch (err: any) { setError(err.message); }
+  };
+  const handleForceLogout = async (uname: string) => {
+    if (!confirm(`Sign ${uname} out of all sessions?`)) return;
+    setError('');
+    try { await api.forceLogout(uname); }
+    catch (err: any) { setError(err.message); }
+  };
+
+  const handleInvite = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(''); setInviting(true); setInviteLink(null);
+    try {
+      const res = await api.inviteUser({ username: invite.username.trim(), email: invite.email.trim(), role: invite.role, full_name: invite.full_name.trim() });
+      if (res.invite_link) setInviteLink(res.invite_link);
+      else { setShowInvite(false); }
+      setInvite({ username: '', email: '', full_name: '', role: 'editor' });
+      load();
+    } catch (err: any) { setError(err.message); }
+    finally { setInviting(false); }
+  };
+
+  const handleBulk = async (action: 'disable' | 'enable' | 'delete' | 'set_role', role?: string) => {
+    if (selected.size === 0) return;
+    if (action === 'delete' && !confirm(`Delete ${selected.size} user(s)? This cannot be undone.`)) return;
+    setError('');
+    try {
+      const res = await api.bulkUsers([...selected], action, role);
+      if (res.skipped.length) setError(`Skipped (protected): ${res.skipped.join(', ')}`);
+      setSelected(new Set());
+      load();
+    } catch (err: any) { setError(err.message); }
+  };
+
+  const handleImport = async () => {
+    if (!importText?.trim()) return;
+    setError('');
+    try {
+      const res = await api.importUsersCsv(importText);
+      setImportResult(res);
+      load();
+    } catch (err: any) { setError(err.message); }
+  };
+
+  const exportCsv = async () => {
+    try {
+      const token = localStorage.getItem('rt-token');
+      const res = await fetch(api.exportUsersCsvUrl, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'reqmesh-users.csv'; a.click();
+      URL.revokeObjectURL(url);
+    } catch (err: any) { setError(err.message); }
+  };
+
+  const signOutEverywhere = async () => {
+    if (!confirm('Sign out of all your sessions on every device?')) return;
+    try { await api.logoutEverywhere(); }
+    catch (err: any) { setError(err.message); }
+  };
+
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!resetFor) return;
@@ -156,9 +255,14 @@ export default function UsersPage() {
           <p className="text-sm text-muted-foreground mt-1">Manage accounts, roles, and profiles</p>
         </div>
         {isAdmin && (
-          <button onClick={() => { setShowCreate((s) => !s); setError(''); }} className="btn-primary">
-            <Plus size={16} /> New User
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={exportCsv} className="btn-secondary text-xs" title="Export users as CSV"><Download size={14} /> Export</button>
+            <button onClick={() => { setImportText(''); setImportResult(null); setError(''); }} className="btn-secondary text-xs" title="Import users from CSV"><Upload size={14} /> Import</button>
+            <button onClick={() => { setShowInvite(true); setInviteLink(null); setError(''); }} className="btn-secondary text-xs"><UserPlus size={14} /> Invite</button>
+            <button onClick={() => { setShowCreate((s) => !s); setError(''); }} className="btn-primary">
+              <Plus size={16} /> New User
+            </button>
+          </div>
         )}
       </div>
 
@@ -168,9 +272,14 @@ export default function UsersPage() {
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-sm font-semibold text-card-foreground flex items-center gap-2"><UserIcon size={14} /> Your Profile</h2>
             {!editingSelf && (
-              <button onClick={() => { setEditingSelf(true); setError(''); }} className="btn-secondary text-xs">
-                <Pencil size={13} /> Edit
-              </button>
+              <div className="flex items-center gap-2">
+                <button onClick={signOutEverywhere} className="btn-ghost text-xs text-muted-foreground" title="Invalidate all your sessions on every device">
+                  <LogOut size={13} /> Sign out everywhere
+                </button>
+                <button onClick={() => { setEditingSelf(true); setError(''); }} className="btn-secondary text-xs">
+                  <Pencil size={13} /> Edit
+                </button>
+              </div>
             )}
           </div>
 
@@ -266,9 +375,37 @@ export default function UsersPage() {
                 <option value="editor">Standard</option>
                 <option value="viewer">Viewer</option>
               </select>
+              <select className="input text-xs !w-auto !py-1.5" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+                <option value="all">All statuses</option>
+                <option value="active">Active</option>
+                <option value="disabled">Disabled</option>
+                <option value="locked">Locked</option>
+                <option value="invited">Invited</option>
+              </select>
             </div>
             <span className="text-[10px] text-muted-foreground">{filtered.length} of {users.length} users</span>
           </div>
+
+          {/* Bulk action bar */}
+          <AnimatePresence>
+            {selected.size > 0 && (
+              <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
+                className="flex items-center gap-2 mb-4 px-3 py-2 rounded-lg border bg-primary/5 border-primary/30 text-xs">
+                <span className="font-medium">{selected.size} selected</span>
+                <div className="flex-1" />
+                <button onClick={() => handleBulk('disable')} className="btn-ghost text-xs"><Ban size={13} /> Disable</button>
+                <button onClick={() => handleBulk('enable')} className="btn-ghost text-xs"><CircleCheck size={13} /> Enable</button>
+                <select className="input text-xs !w-auto !py-1" defaultValue="" onChange={(e) => { if (e.target.value) { handleBulk('set_role', e.target.value); e.target.value = ''; } }}>
+                  <option value="">Set role…</option>
+                  <option value="editor">Standard</option>
+                  <option value="admin">Administrator</option>
+                  <option value="viewer">Viewer</option>
+                </select>
+                <button onClick={() => handleBulk('delete')} className="btn-ghost text-xs text-destructive"><Trash2 size={13} /> Delete</button>
+                <button onClick={() => setSelected(new Set())} className="btn-ghost text-xs"><X size={13} /></button>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Table */}
           {loadError ? (
@@ -281,10 +418,14 @@ export default function UsersPage() {
               <table className="w-full text-left">
                 <thead>
                   <tr className="border-b bg-muted/30">
+                    <th className="px-3 py-2.5 w-0">
+                      <input type="checkbox" checked={allSelected} onChange={toggleSelectAll} className="w-3.5 h-3.5 rounded border-muted-foreground/30" aria-label="Select all" />
+                    </th>
                     <th className="px-4 py-2.5"><SortHead col="username" label="Username" /></th>
                     <th className="px-4 py-2.5"><SortHead col="full_name" label="Name" /></th>
                     <th className="px-4 py-2.5 hidden md:table-cell"><span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Email</span></th>
                     <th className="px-4 py-2.5"><SortHead col="role" label="Role" /></th>
+                    <th className="px-4 py-2.5"><span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Status</span></th>
                     <th className="px-4 py-2.5 hidden lg:table-cell"><SortHead col="last_active" label="Last active" /></th>
                     <th className="px-4 py-2.5 hidden lg:table-cell"><SortHead col="joined" label="Joined" /></th>
                     <th className="px-4 py-2.5 w-0" />
@@ -295,7 +436,10 @@ export default function UsersPage() {
                     const isSelf = u.username === username;
                     const isEditing = editingRow === u.username;
                     return (
-                      <tr key={u.username} className={`hover:bg-accent/30 transition-colors ${isSelf ? 'bg-primary/[0.02]' : ''}`}>
+                      <tr key={u.username} className={`hover:bg-accent/30 transition-colors ${isSelf ? 'bg-primary/[0.02]' : ''} ${u.disabled ? 'opacity-60' : ''}`}>
+                        <td className="px-3 py-2.5">
+                          <input type="checkbox" checked={selected.has(u.username)} onChange={() => toggleSelect(u.username)} className="w-3.5 h-3.5 rounded border-muted-foreground/30" aria-label={`Select ${u.username}`} />
+                        </td>
                         <td className="px-4 py-2.5">
                           <div className="flex items-center gap-2">
                             <div className={`w-7 h-7 rounded-md flex items-center justify-center shrink-0 ${u.role === 'admin' ? 'bg-amber-500/10 text-amber-400' : 'bg-muted text-muted-foreground'}`}>
@@ -330,6 +474,7 @@ export default function UsersPage() {
                             <option value="viewer">Viewer (read-only)</option>
                           </select>
                         </td>
+                        <td className="px-4 py-2.5"><StatusBadge u={u} /></td>
                         <td className="px-4 py-2.5 text-[11px] text-muted-foreground hidden lg:table-cell">
                           {u.last_active ? <span className="flex items-center gap-1"><Clock size={10} />{fmtLast(u.last_active)}</span> : <span className="text-muted-foreground/40 italic">—</span>}
                         </td>
@@ -345,6 +490,13 @@ export default function UsersPage() {
                               <button onClick={() => startEditRow(u)} className="p-1 rounded-md text-muted-foreground hover:text-foreground" title="Edit name & email"><Pencil size={13} /></button>
                             )}
                             <button onClick={() => { setResetFor(u.username); setResetPassword(''); setError(''); }} className="p-1 rounded-md text-muted-foreground hover:text-foreground" title="Reset password"><KeyRound size={13} /></button>
+                            {u.locked && (
+                              <button onClick={() => handleUnlock(u.username)} className="p-1 rounded-md text-amber-400 hover:bg-amber-500/10" title="Unlock account"><Unlock size={13} /></button>
+                            )}
+                            <button onClick={() => handleDisable(u.username, !u.disabled)} disabled={isSelf} className="p-1 rounded-md text-muted-foreground hover:text-foreground disabled:opacity-30" title={isSelf ? "Can't disable yourself" : u.disabled ? 'Enable account' : 'Disable account'}>
+                              {u.disabled ? <CircleCheck size={13} /> : <Ban size={13} />}
+                            </button>
+                            <button onClick={() => handleForceLogout(u.username)} className="p-1 rounded-md text-muted-foreground hover:text-foreground" title="Force sign-out (revoke sessions)"><LogOut size={13} /></button>
                             <button onClick={() => handleDelete(u.username)} disabled={isSelf} className="p-1 rounded-md text-muted-foreground hover:text-destructive disabled:opacity-30" title={isSelf ? "Can't delete yourself" : 'Delete'}><Trash2 size={13} /></button>
                           </div>
                         </td>
@@ -352,7 +504,7 @@ export default function UsersPage() {
                     );
                   })}
                   {filtered.length === 0 && (
-                    <tr><td colSpan={7} className="px-4 py-8 text-center text-sm text-muted-foreground">No users match your filters.</td></tr>
+                    <tr><td colSpan={9} className="px-4 py-8 text-center text-sm text-muted-foreground">No users match your filters.</td></tr>
                   )}
                 </tbody>
               </table>
@@ -360,6 +512,78 @@ export default function UsersPage() {
           )}
         </>
       )}
+
+      {/* Invite modal */}
+      <AnimatePresence>
+        {showInvite && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={() => setShowInvite(false)} />
+            <motion.form initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 10 }} onSubmit={handleInvite} className="relative bg-card border rounded-xl shadow-2xl w-full max-w-md p-6 mx-4">
+              <button type="button" onClick={() => setShowInvite(false)} className="absolute right-4 top-4 text-muted-foreground hover:text-foreground"><X size={18} /></button>
+              <h2 className="text-lg font-bold text-foreground mb-1 flex items-center gap-2"><UserPlus size={18} /> Invite a user</h2>
+              <p className="text-xs text-muted-foreground mb-4">Creates an account and emails a set-password link (shown here if email isn't configured).</p>
+              {inviteLink ? (
+                <div className="space-y-3">
+                  <p className="text-xs text-emerald-500 flex items-center gap-1"><Check size={13} /> Account created. Share this set-password link:</p>
+                  <div className="flex gap-1">
+                    <input readOnly className="input text-xs font-mono flex-1" value={inviteLink} onFocus={(e) => e.target.select()} />
+                    <button type="button" onClick={() => navigator.clipboard?.writeText(inviteLink)} className="btn-secondary shrink-0 p-2" title="Copy"><Copy size={13} /></button>
+                  </div>
+                  <button type="button" onClick={() => { setShowInvite(false); setInviteLink(null); }} className="btn-primary w-full justify-center">Done</button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div><label className="label text-[10px]">Username *</label><input className="input text-sm" value={invite.username} onChange={(e) => setInvite({ ...invite, username: e.target.value })} placeholder="jdoe" autoFocus /></div>
+                  <div><label className="label text-[10px]">Email</label><input className="input text-sm" value={invite.email} onChange={(e) => setInvite({ ...invite, email: e.target.value })} placeholder="jane@example.com" /></div>
+                  <div><label className="label text-[10px]">Full name</label><input className="input text-sm" value={invite.full_name} onChange={(e) => setInvite({ ...invite, full_name: e.target.value })} placeholder="Jane Doe" /></div>
+                  <div><label className="label text-[10px]">Role</label>
+                    <select className="input text-sm" value={invite.role} onChange={(e) => setInvite({ ...invite, role: e.target.value })}>
+                      <option value="editor">Standard</option><option value="admin">Administrator</option><option value="viewer">Viewer</option>
+                    </select>
+                  </div>
+                  <button type="submit" className="btn-primary w-full justify-center" disabled={inviting || !invite.username.trim()}>
+                    {inviting ? <><Loader size={14} className="animate-spin" /> Inviting</> : 'Send invite'}
+                  </button>
+                </div>
+              )}
+            </motion.form>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* CSV import modal */}
+      <AnimatePresence>
+        {importText !== null && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={() => setImportText(null)} />
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 10 }} className="relative bg-card border rounded-xl shadow-2xl w-full max-w-lg p-6 mx-4">
+              <button type="button" onClick={() => setImportText(null)} className="absolute right-4 top-4 text-muted-foreground hover:text-foreground"><X size={18} /></button>
+              <h2 className="text-lg font-bold text-foreground mb-1 flex items-center gap-2"><Upload size={18} /> Import users (CSV)</h2>
+              <p className="text-xs text-muted-foreground mb-3">Columns: <code className="bg-muted px-1 rounded">username,full_name,email,role</code>. Each new user is invited to set a password.</p>
+              {importResult ? (
+                <div className="space-y-2 text-xs">
+                  <p className="text-emerald-500">Created {importResult.created.length}: {importResult.created.join(', ') || '—'}</p>
+                  {importResult.skipped.length > 0 && <p className="text-amber-500">Skipped: {importResult.skipped.join(', ')}</p>}
+                  {importResult.invites.length > 0 && (
+                    <div className="max-h-40 overflow-auto border rounded p-2 bg-muted/30 font-mono">
+                      {importResult.invites.map((iv) => <div key={iv.username} className="truncate">{iv.username}: {iv.invite_link}</div>)}
+                    </div>
+                  )}
+                  <button onClick={() => setImportText(null)} className="btn-primary w-full justify-center mt-2">Done</button>
+                </div>
+              ) : (
+                <>
+                  <textarea className="input font-mono text-xs h-40 resize-none w-full" placeholder={'username,full_name,email,role\njdoe,Jane Doe,jane@example.com,editor'} value={importText} onChange={(e) => setImportText(e.target.value)} autoFocus />
+                  <div className="flex gap-2 mt-3">
+                    <button onClick={handleImport} className="btn-primary flex-1 justify-center" disabled={!importText.trim()}>Import</button>
+                    <button onClick={() => setImportText(null)} className="btn-secondary">Cancel</button>
+                  </div>
+                </>
+              )}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Reset password modal */}
       <AnimatePresence>

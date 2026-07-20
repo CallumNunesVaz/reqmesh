@@ -15,7 +15,11 @@ def workspace(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "seed_demo", False)
     monkeypatch.setattr(auth, "USERS_FILE", tmp_path / "users.yaml")
     monkeypatch.setattr(auth, "SECRET_FILE", tmp_path / "secret")
+    monkeypatch.setattr(auth, "RESET_TOKENS_FILE", tmp_path / "reset_tokens.yaml")
+    monkeypatch.setattr(auth, "VERIFY_TOKENS_FILE", tmp_path / "verify_tokens.yaml")
     monkeypatch.setattr(auth, "_secret_cache", None)
+    from app.core import settings_store
+    monkeypatch.setattr(settings_store, "SETTINGS_FILE", tmp_path / "settings.yaml")
     return tmp_path
 
 

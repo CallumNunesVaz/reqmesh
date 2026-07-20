@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Trash2, ArrowLeft, Plus, X, ArrowRight, ArrowLeftRight, Sparkles, ShieldCheck, ExternalLink, ChevronRight, Waypoints, AlertTriangle, CheckCircle2 } from 'lucide-react';
-import { api, type Requirement, type VerificationCase, type QualityItem, type Component, type Specification, type ChangeRequest, type Risk, type EvaluatedRequirement } from '../api/client';
+import { api, type Requirement, type VerificationCase, type QualityItem, type Component, type Specification, type ChangeRequest, type Risk, type EvaluatedRequirement, type Definition } from '../api/client';
 import { ParametricsCard } from '../components/parametrics';
 import RichTextEditor from '../components/RichTextEditor';
 import AutocompleteInput from '../components/AutocompleteInput';
@@ -32,6 +32,7 @@ export default function RequirementDetailPage() {
   const [satisfiedBy, setSatisfiedBy] = useState<Component[]>([]);
   const [inSpecs, setInSpecs] = useState<Specification[]>([]);
   const [evaluated, setEvaluated] = useState<EvaluatedRequirement | undefined>();
+  const [definitions, setDefinitions] = useState<Definition[]>([]);
   const [affectingCrs, setAffectingCrs] = useState<ChangeRequest[]>([]);
   const [linkedRisks, setLinkedRisks] = useState<Risk[]>([]);
   const entityKinds = useEntityKinds(projectId);
@@ -131,6 +132,7 @@ export default function RequirementDetailPage() {
     api.getEvaluation(projectId)
       .then((ev) => setEvaluated(ev.requirements.find((r) => r.id === reqId)))
       .catch(() => setEvaluated(undefined));
+    api.listDefinitions(projectId).then(setDefinitions).catch(() => setDefinitions([]));
     api.getWorkflow(projectId).then((wf) => setWorkflow(wf)).catch(() => {});
     api.getQuality(projectId).then((q) => {
       const match = q.per_requirement.find((r) => r.id === reqId);
@@ -481,6 +483,7 @@ export default function RequirementDetailPage() {
             evaluated={evaluated}
             editable={editable}
             onSave={save}
+            definitions={definitions}
           />
 
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="card p-5">
@@ -671,6 +674,17 @@ export default function RequirementDetailPage() {
                   disabled={!editable}
                 />
                 <div className="text-[10px] text-muted-foreground mt-0.5">Artifact types that must cover this requirement</div>
+              </div>
+              <div>
+                <label className="label">Subject</label>
+                <input
+                  className="input font-mono text-xs"
+                  placeholder="e.g. WING (the part this requirement constrains)"
+                  value={req.subject || ''}
+                  onChange={(e) => save({ subject: e.target.value || null } as Partial<Requirement>)}
+                  disabled={!editable}
+                />
+                <div className="text-[10px] text-muted-foreground mt-0.5">SysML v2 subject — the component this requirement is about</div>
               </div>
               <div>
                 <label className="label">Stakeholder Priorities</label>

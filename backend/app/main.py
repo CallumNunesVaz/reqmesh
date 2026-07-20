@@ -23,6 +23,13 @@ from app.api.system_routes import router as system_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Apply admin-saved runtime setting overrides onto the live config first, so
+    # everything downstream (email, features, limits) sees the effective values.
+    try:
+        from app.core.settings_store import apply_overrides
+        apply_overrides(settings)
+    except Exception:
+        logging.getLogger(__name__).exception("failed to apply runtime settings overrides")
     root = Path(settings.data_root)
     root.mkdir(parents=True, exist_ok=True)
     # Bring existing data forward to the current schema before serving — this is

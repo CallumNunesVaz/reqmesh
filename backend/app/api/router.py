@@ -14,6 +14,8 @@ from app.core.dependencies import get_store, require_edit, require_admin
 from app.core.ids import safe_id
 from app.models.requirement import RequirementCreate, RequirementUpdate
 from app.models.specification import SpecificationCreate, SpecificationUpdate
+from app.models.definition import DefinitionCreate, DefinitionUpdate
+from app.models.analysis import AnalysisCaseCreate, AnalysisCaseUpdate
 from app.models.trace import TraceMatrix
 from app.models.verification import VerificationCaseCreate, VerificationCaseUpdate
 from app.services.yaml_store import YamlStore
@@ -450,6 +452,88 @@ async def delete_baseline(project_id: str, name: str, user: dict = Depends(requi
             store.update_requirement(r["id"], {"baseline": None})
             updated += 1
     return {"name": name, "requirements_cleared": updated}
+
+
+# ── Parametric definitions (reusable constraint / calc defs) ─────────────────
+
+@router.get("/projects/{project_id}/definitions")
+async def list_definitions(project_id: str):
+    store = get_store(project_id)
+    return store.list_items("definitions")
+
+
+@router.post("/projects/{project_id}/definitions", status_code=201)
+async def create_definition(project_id: str, data: DefinitionCreate, user: dict = Depends(require_edit)):
+    store = get_store(project_id)
+    def_id = safe_id(data.id, "definition id")
+    if store.get_item("definitions", def_id) is not None:
+        raise HTTPException(status_code=409, detail="A definition with that id already exists")
+    item = data.model_dump()
+    item["id"] = def_id
+    return store.write_item("definitions", def_id, item)
+
+
+@router.put("/projects/{project_id}/definitions/{def_id}")
+async def update_definition(project_id: str, def_id: str, data: DefinitionUpdate, user: dict = Depends(require_edit)):
+    store = get_store(project_id)
+    existing = store.get_item("definitions", def_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Definition not found")
+    existing.update({k: v for k, v in data.model_dump().items() if v is not None})
+    return store.write_item("definitions", def_id, existing)
+
+
+@router.delete("/projects/{project_id}/definitions/{def_id}")
+async def delete_definition(project_id: str, def_id: str, user: dict = Depends(require_edit)):
+    store = get_store(project_id)
+    store.delete_item("definitions", def_id)
+    return {"ok": True}
+
+
+# ── Analysis cases (scoped, parameterised evaluation) ────────────────────────
+
+@router.get("/projects/{project_id}/analysis")
+async def list_analysis_cases(project_id: str):
+    store = get_store(project_id)
+    return store.list_items("analysis_cases")
+
+
+@router.post("/projects/{project_id}/analysis", status_code=201)
+async def create_analysis_case(project_id: str, data: AnalysisCaseCreate, user: dict = Depends(require_edit)):
+    store = get_store(project_id)
+    case_id = safe_id(data.id, "analysis case id")
+    if store.get_item("analysis_cases", case_id) is not None:
+        raise HTTPException(status_code=409, detail="An analysis case with that id already exists")
+    item = data.model_dump()
+    item["id"] = case_id
+    return store.write_item("analysis_cases", case_id, item)
+
+
+@router.put("/projects/{project_id}/analysis/{case_id}")
+async def update_analysis_case(project_id: str, case_id: str, data: AnalysisCaseUpdate, user: dict = Depends(require_edit)):
+    store = get_store(project_id)
+    existing = store.get_item("analysis_cases", case_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Analysis case not found")
+    existing.update({k: v for k, v in data.model_dump().items() if v is not None})
+    return store.write_item("analysis_cases", case_id, existing)
+
+
+@router.delete("/projects/{project_id}/analysis/{case_id}")
+async def delete_analysis_case(project_id: str, case_id: str, user: dict = Depends(require_edit)):
+    store = get_store(project_id)
+    store.delete_item("analysis_cases", case_id)
+    return {"ok": True}
+
+
+@router.get("/projects/{project_id}/analysis/{case_id}/run")
+async def run_analysis_case_endpoint(project_id: str, case_id: str):
+    store = get_store(project_id)
+    case = store.get_item("analysis_cases", case_id)
+    if case is None:
+        raise HTTPException(status_code=404, detail="Analysis case not found")
+    from app.services.evaluation import run_analysis_case
+    return run_analysis_case(store, case)
 
 
 # ── Verification Cases ───────────────────────────────────────────────────────

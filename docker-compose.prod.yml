@@ -78,6 +78,7 @@ services:
       - CONTROL_DIR=/control
       - DEPLOY_DIR=/deploy
       - COMPOSE_FILE=docker-compose.prod.yml
+      - IMAGE_REPO=ghcr.io/callumnunesvaz/reqmesh
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - reqmesh-control:/control

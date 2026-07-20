@@ -284,7 +284,7 @@ const DOCS: DocSection[] = [
   },
   {
     id: 'parametrics', icon: Sigma, title: 'Parametrics & Constraints',
-    keywords: 'parameter constraint expression derived margin verdict pass fail unknown rollup evaluate sysml units',
+    keywords: 'parameter constraint expression derived margin verdict pass fail unknown rollup evaluate sysml units dimension value type constraint def calc def definition binding analysis case what-if subject interchange round-trip',
     render: () => (
       <>
         <H2>Parametric Evaluation</H2>
@@ -320,6 +320,24 @@ const DOCS: DocSection[] = [
         <P>References: <InlineCode>REQ_ID.param_name</InlineCode>  ·  Rollups: <InlineCode>rollup('COMP_ID', 'param')</InlineCode></P>
 
         <Callout variant="info">All expressions are parsed against a strict whitelist — YAML content can never execute arbitrary code.</Callout>
+
+        <H3>Units &amp; Dimensional Checking</H3>
+        <P>Units are more than labels. reqmesh recognises common SI and aerospace units (<InlineCode>kg, m, N, W, A, kt, psi…</InlineCode>) and their dimensions. If a derived parameter or comparison mixes incompatible quantities (say a mass plus a length), an amber <strong className="text-card-foreground">units</strong> warning appears next to it.</P>
+        <Callout variant="info">Dimensional checks are advisory — they never change a pass/fail verdict, and unknown or blank units are simply not checked (so ad-hoc units never warn).</Callout>
+
+        <H3>Reusable Definitions (SysML v2 constraint / calc def)</H3>
+        <P>Write a rule once and reuse it. A <strong className="text-card-foreground">constraint def</strong> declares formal parameters and an expression; requirements apply it by <strong className="text-card-foreground">binding</strong> each formal to a real parameter reference:</P>
+        <Code>{'MassBudget(actual, limit) = actual <= limit\n→ bind: actual = AFRM0000.design_mass, limit = AFRM0000.empty_mass'}</Code>
+        <P>A <strong className="text-card-foreground">calc def</strong> (e.g. <InlineCode>Area(w, h) = w * h</InlineCode>) derives a parameter's value the same way. Manage definitions on the <strong className="text-card-foreground">Metrics &amp; Analysis</strong> page; bind them on a requirement under "Use a definition".</P>
+
+        <H3>Analysis Cases (what-if)</H3>
+        <P>An analysis case runs the evaluation over a chosen <strong className="text-card-foreground">scope</strong> with hypothetical parameter <strong className="text-card-foreground">overrides</strong>, without touching the model — e.g. "does the mass budget still hold at <InlineCode>empty_mass = 779</InlineCode>?". Create and run them on the Metrics &amp; Analysis page.</P>
+
+        <H3>Requirement Subject</H3>
+        <P>A requirement can name the component it constrains via its <strong className="text-card-foreground">subject</strong> (a SysML v2 concept), set in the requirement's properties panel.</P>
+
+        <H3>SysML v2 Interchange</H3>
+        <P>Parameters, constraints (with assume/require), measure kinds, subjects, and the component tree all <strong className="text-card-foreground">round-trip</strong> through SysML v2 export and import — so the parametric model survives a trip to and from other SysML v2 tooling.</P>
       </>
     ),
   },
@@ -677,9 +695,43 @@ const DOCS: DocSection[] = [
           <LI>A pre-update backup tag per project allows rollback if a migration misbehaves.</LI>
         </UL>
 
+        <H3>Offline / air-gapped (update from a file)</H3>
+        <P>When the server can't reach GitHub, an admin can upload an image archive instead (System &rarr; <InlineCode>Update from a file</InlineCode>). Download the <InlineCode>reqmesh-v&lt;version&gt;-image.tar.gz</InlineCode> asset from a release on a connected machine, transfer it across, and upload it &mdash; reqmesh backs up data and the sidecar loads the image and recreates the app, with no network access. This still uses the self-update sidecar.</P>
+
         <H3>Other deployments</H3>
-        <P>Without the self-update profile (or on bare-metal), the System page shows the exact manual commands instead &mdash; typically <InlineCode>docker compose pull &amp;&amp; up -d</InlineCode>, or downloading the new release tarball and re-running <InlineCode>install.sh</InlineCode>. In offline mode, update checks are disabled.</P>
+        <P>Without the self-update profile (or on bare-metal), the System page shows the exact manual commands instead &mdash; typically <InlineCode>docker compose pull &amp;&amp; up -d</InlineCode>, or downloading the new release tarball and re-running <InlineCode>install.sh</InlineCode>.</P>
         <Callout variant="info">See <InlineCode>DEPLOYMENT.md</InlineCode> &sect;12b for enabling self-update and the related environment variables.</Callout>
+      </>
+    ),
+  },
+  {
+    id: 'administration', icon: ShieldCheck, title: 'Administration',
+    keywords: 'admin settings application settings smtp email test feature toggle self-registration email verification offline branding instance name lockout disable suspend invite session force logout bulk csv import export users roles security',
+    render: () => (
+      <>
+        <H2>Administration</H2>
+        <P>Administrators get three admin surfaces in the top bar: <strong className="text-card-foreground">Settings</strong> (instance configuration), <strong className="text-card-foreground">Users</strong> (accounts), and <strong className="text-card-foreground">System</strong> (version &amp; updates).</P>
+
+        <H3>Application Settings</H3>
+        <P>Instance-wide configuration you can change at runtime without editing <InlineCode>.env</InlineCode> or restarting — grouped into branding, features, email, security, limits, and updates. Saved values override the environment defaults and apply immediately.</P>
+        <UL>
+          <LI><strong className="text-card-foreground">Branding</strong> — instance name (shown by the logo) and support email.</LI>
+          <LI><strong className="text-card-foreground">Features</strong> — allow self-registration, require email verification, offline mode, self-update.</LI>
+          <LI><strong className="text-card-foreground">Email</strong> — SMTP host/port/credentials plus a <strong className="text-card-foreground">Send test email</strong> button that reports success or the exact SMTP error.</LI>
+          <LI><strong className="text-card-foreground">Security</strong> — session length and failed-login lockout threshold/duration.</LI>
+        </UL>
+        <Callout variant="info">A setting pinned by an environment variable (<InlineCode>RT_*</InlineCode>) shows a lock icon and is read-only in the UI — deployment config always wins.</Callout>
+
+        <H3>User Management</H3>
+        <UL>
+          <LI><strong className="text-card-foreground">Invite</strong> — create an account and email a set-password link (the link is shown to copy when email isn't configured).</LI>
+          <LI><strong className="text-card-foreground">Disable / enable</strong> — block sign-in without deleting the account (attribution and data are kept).</LI>
+          <LI><strong className="text-card-foreground">Lockout</strong> — accounts auto-lock after too many failed logins; an admin can unlock early.</LI>
+          <LI><strong className="text-card-foreground">Force sign-out</strong> — revoke every active session for a user; you can also sign yourself out everywhere.</LI>
+          <LI><strong className="text-card-foreground">Bulk actions</strong> — select rows to disable, enable, delete, or set the role in one go.</LI>
+          <LI><strong className="text-card-foreground">CSV</strong> — export all users, or import <InlineCode>username,full_name,email,role</InlineCode> rows as invitations.</LI>
+        </UL>
+        <Callout variant="info">Guard rails prevent disabling/deleting the last administrator or your own account.</Callout>
       </>
     ),
   },

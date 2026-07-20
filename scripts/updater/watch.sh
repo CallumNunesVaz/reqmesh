@@ -20,8 +20,11 @@ CONTROL_DIR="${CONTROL_DIR:-/control}"
 DEPLOY_DIR="${DEPLOY_DIR:-/deploy}"
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
 POLL_SECONDS="${POLL_SECONDS:-5}"
+IMAGE_REPO="${IMAGE_REPO:-ghcr.io/callumnunesvaz/reqmesh}"
 
 TARGET_FILE="$CONTROL_DIR/update-target"
+MODE_FILE="$CONTROL_DIR/update-mode"
+IMAGE_FILE="$CONTROL_DIR/update-image.tar"
 STATUS_FILE="$CONTROL_DIR/update-status.json"
 VERSION_ENV="$CONTROL_DIR/version.env"
 
@@ -44,30 +47,69 @@ compose() {
   fi
 }
 
+handle_pull() {
+  # $1 = target version
+  target="$1"
+  echo "[updater] pulling reqmesh $target"
+  write_status in_progress "Pulling image for $target." "$target"
+  echo "REQMESH_VERSION=$target" > "$VERSION_ENV"
+  if compose pull reqmesh; then
+    write_status in_progress "Recreating the app on $target." "$target"
+    if compose up -d reqmesh; then
+      write_status in_progress "Waiting for the new version to come up." "$target"
+    else
+      write_status failed "Failed to recreate the container." "$target"
+    fi
+  else
+    write_status failed "Failed to pull image for $target." "$target"
+  fi
+}
+
+handle_image() {
+  # Load an uploaded image archive and recreate the app on it (offline path).
+  if [ ! -s "$IMAGE_FILE" ]; then
+    write_status failed "No uploaded image archive found." ""
+    return
+  fi
+  echo "[updater] loading uploaded image archive"
+  write_status in_progress "Loading uploaded image…" ""
+  loaded="$(docker load -i "$IMAGE_FILE" 2>&1 || true)"
+  echo "[updater] $loaded"
+  # Parse "Loaded image: <ref>" (or "Loaded image ID: ...").
+  ref="$(echo "$loaded" | sed -n 's/^Loaded image: *//p' | head -n1)"
+  rm -f "$IMAGE_FILE"
+  if [ -z "$ref" ]; then
+    write_status failed "Could not read image from the uploaded archive." ""
+    return
+  fi
+  tag="${ref##*:}"
+  case "$tag" in */*|"") tag="uploaded" ;; esac   # ref had no tag
+  echo "[updater] loaded $ref (tag $tag); retagging to $IMAGE_REPO:$tag"
+  docker tag "$ref" "$IMAGE_REPO:$tag" 2>/dev/null || true
+  echo "REQMESH_VERSION=$tag" > "$VERSION_ENV"
+  write_status in_progress "Recreating the app on $tag." "$tag"
+  if compose up -d --force-recreate reqmesh; then
+    write_status in_progress "Waiting for the new version to come up." "$tag"
+  else
+    write_status failed "Failed to recreate the container." "$tag"
+  fi
+}
+
 echo "[updater] watching $CONTROL_DIR (compose: $DEPLOY_DIR/$COMPOSE_FILE)"
 
 while true; do
   if [ -f "$TARGET_FILE" ]; then
     TARGET="$(head -n1 "$TARGET_FILE" | tr -d ' \t\r\n')"
-    rm -f "$TARGET_FILE"
-    if [ -z "$TARGET" ]; then
+    MODE="pull"
+    [ -f "$MODE_FILE" ] && MODE="$(head -n1 "$MODE_FILE" | tr -d ' \t\r\n')"
+    rm -f "$TARGET_FILE" "$MODE_FILE"
+
+    if [ "$MODE" = "image" ]; then
+      handle_image
+    elif [ -z "$TARGET" ]; then
       write_status failed "No target version in request." ""
     else
-      echo "[updater] updating reqmesh to $TARGET"
-      write_status in_progress "Pulling image for $TARGET." "$TARGET"
-      echo "REQMESH_VERSION=$TARGET" > "$VERSION_ENV"
-      if compose pull reqmesh; then
-        write_status in_progress "Recreating the app on $TARGET." "$TARGET"
-        if compose up -d reqmesh; then
-          # The new app container reports the final "completed" itself, by virtue
-          # of its running version matching the target.
-          write_status in_progress "Waiting for the new version to come up." "$TARGET"
-        else
-          write_status failed "Failed to recreate the container." "$TARGET"
-        fi
-      else
-        write_status failed "Failed to pull image for $TARGET." "$TARGET"
-      fi
+      handle_pull "$TARGET"
     fi
   fi
   sleep "$POLL_SECONDS"

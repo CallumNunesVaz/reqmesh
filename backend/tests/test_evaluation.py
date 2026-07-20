@@ -277,11 +277,14 @@ def test_demo_seed_parametrics(tmp_path):
     assert acft["verdict"] == "fail"
     assert params["full_fuel_payload"]["value"] == pytest.approx(245.28)
 
-    # Mass rollup over the design tree fits inside the empty weight.
+    # Mass rollup over the design tree fits inside the empty weight. The rollup
+    # now lives on a derived `design_mass` parameter, and the budget check reuses
+    # the MassBudget constraint definition (bound to design_mass <= empty_mass).
     afrm = by_id["AFRM0000"]
-    rollup_c = next(c for c in afrm["constraints"] if "rollup" in c["expr"])
-    assert rollup_c["status"] == "pass"
-    assert rollup_c["margin"]["value"] > 0  # positive margin
+    afrm_params = {p["name"]: p for p in afrm["parameters"]}
+    assert afrm_params["design_mass"]["value"] < afrm_params["empty_mass"]["value"]
+    budget_c = next(c for c in afrm["constraints"] if "MassBudget" in c["expr"])
+    assert budget_c["status"] == "pass"
 
     # Current rollup: avionics + electrical loads < 48 A limit.
     elec = by_id["ELEC0001"]

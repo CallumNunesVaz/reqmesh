@@ -49,21 +49,53 @@ export interface Paged<T> {
   limit: number;
 }
 
-/** A typed numeric quantity; `expr` derives it from other parameters. */
+/** A typed numeric quantity; `expr` derives it, or a `calc_def` usage does. */
 export interface Parameter {
   name: string;
   value?: number | null;
   unit?: string;
   expr?: string | null;
   kind?: 'MOE' | 'MOP' | 'TPM' | null;
+  value_type?: string | null;
+  calc_def?: string | null;
+  bindings?: Record<string, string>;
 }
 
-/** A boolean expression over parameters; `assume` gates its applicability. */
+/** A boolean constraint: an inline `expr`, or a `constraint_def` usage bound to refs. */
 export interface Constraint {
-  expr: string;
+  expr?: string;
   assume?: string | null;
   kind?: 'MOE' | 'MOP' | 'TPM' | null;
+  constraint_def?: string | null;
+  bindings?: Record<string, string>;
 }
+
+/** A reusable SysML v2-style constraint/calc definition over formal parameters. */
+export interface Definition {
+  id: string;
+  type: 'constraint' | 'calc';
+  name?: string;
+  parameters: string[];
+  expr: string;
+  unit?: string;
+  doc?: string;
+}
+
+/** A scoped, parameterised evaluation (what-if analysis) over the model. */
+export interface AnalysisCase {
+  id: string;
+  name?: string;
+  doc?: string;
+  scope: string[];
+  overrides: Record<string, number>;
+}
+
+/** Registered units offered for autocomplete when entering a parameter. */
+export const KNOWN_UNITS = [
+  'kg', 'g', 'lb', 't', 'm', 'mm', 'cm', 'km', 'in', 'ft', 'm2', 'm3', 'L',
+  's', 'min', 'h', 'A', 'mA', 'K', 'N', 'kN', 'Pa', 'kPa', 'MPa', 'bar', 'psi',
+  'J', 'W', 'kW', 'hp', 'V', 'Hz', 'm/s', 'km/h', 'kt', '%', 'each', 'deg',
+] as const;
 
 /** A measured value recorded against a fully-qualified parameter ref. */
 export interface Measurement {
@@ -101,6 +133,7 @@ export interface Requirement {
   needs: string[];
   requirement_kind: 'stakeholder_need' | 'system_requirement';
   system_states: string[];
+  subject?: string | null;
   created: string;
   modified: string;
 }
@@ -281,6 +314,7 @@ export interface EvaluatedParameter {
   error?: string;
   measured?: number;
   measured_by?: string;
+  unit_warning?: string;
 }
 export interface EvaluatedConstraint {
   expr: string;
@@ -288,6 +322,7 @@ export interface EvaluatedConstraint {
   status: ConstraintStatus;
   detail?: string;
   margin?: { value: number; pct?: number };
+  unit_warning?: string;
 }
 export interface EvaluatedRequirement {
   id: string;
@@ -338,6 +373,31 @@ export interface ManagedUser {
   last_active: string;
   joined: string;
   created: string;
+  disabled: boolean;
+  locked: boolean;
+  locked_until: number;
+  invited: boolean;
+}
+
+/** One admin-editable runtime setting, as returned by GET /system/settings. */
+export interface AppSetting {
+  key: string;
+  value: string | number | boolean;
+  type: 'str' | 'int' | 'bool';
+  category: string;
+  label: string;
+  help: string;
+  secret: boolean;
+  env_locked: boolean;
+  has_value: boolean | null;
+}
+
+/** Non-sensitive instance info available without auth. */
+export interface PublicConfig {
+  instance_name: string;
+  support_email: string;
+  allow_self_registration: boolean;
+  require_email_verification: boolean;
 }
 
 export interface BuildInfo {
@@ -355,6 +415,7 @@ export interface SystemInfo {
   self_update_enabled: boolean;
   control_dir_writable: boolean;
   self_update_supported: boolean;
+  file_update_supported: boolean;
   github_repo: string;
 }
 
@@ -391,6 +452,13 @@ export const api = {
   startUpdate: (targetVersion?: string) =>
     request<{ state: string; target_version: string; backup: { tag: string; projects: string[] } }>(
       '/system/update', { method: 'POST', body: { target_version: targetVersion ?? null } }),
+  uploadUpdate: (file: File, targetVersion?: string) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    if (targetVersion) fd.append('target_version', targetVersion);
+    return request<{ state: string; target_version: string; backup: { tag: string; projects: string[] }; archive_bytes: number }>(
+      '/system/update/upload', { method: 'POST', body: fd });
+  },
   dismissUpdate: () => request<{ ok: boolean }>('/system/update/dismiss', { method: 'POST' }),
 
   // Auth
@@ -413,6 +481,29 @@ export const api = {
     request<void>(`/auth/users/${encodeURIComponent(username)}`, { method: 'DELETE' }),
   updateProfile: (data: { full_name?: string; email?: string; password?: string }) =>
     request<{ ok: boolean }>('/auth/profile', { method: 'PATCH', body: data }),
+  // Account status & lifecycle
+  setUserDisabled: (username: string, disabled: boolean) =>
+    request<{ ok: boolean; disabled: boolean }>(`/auth/users/${encodeURIComponent(username)}/disable`, { method: 'POST', body: { disabled } }),
+  unlockUser: (username: string) =>
+    request<{ ok: boolean }>(`/auth/users/${encodeURIComponent(username)}/unlock`, { method: 'POST' }),
+  forceLogout: (username: string) =>
+    request<{ ok: boolean }>(`/auth/users/${encodeURIComponent(username)}/logout`, { method: 'POST' }),
+  inviteUser: (data: { username: string; email?: string; role?: string; full_name?: string }) =>
+    request<{ username: string; role: string; emailed: boolean; invite_link: string | null }>('/auth/users/invite', { method: 'POST', body: data }),
+  bulkUsers: (usernames: string[], action: 'disable' | 'enable' | 'delete' | 'set_role', role?: string) =>
+    request<{ applied: string[]; skipped: string[] }>('/auth/users/bulk', { method: 'POST', body: { usernames, action, role } }),
+  importUsersCsv: (csv: string) =>
+    request<{ created: string[]; skipped: string[]; invites: { username: string; invite_link: string }[] }>('/auth/users/import', { method: 'POST', body: { csv } }),
+  exportUsersCsvUrl: '/api/auth/users/export',
+  logoutEverywhere: () => request<{ ok: boolean }>('/auth/logout-everywhere', { method: 'POST' }),
+
+  // Application settings (admin) + public instance config
+  getSettings: () => request<{ settings: AppSetting[] }>('/system/settings'),
+  patchSettings: (patch: Record<string, string | number | boolean>) =>
+    request<{ settings: AppSetting[] }>('/system/settings', { method: 'PATCH', body: patch }),
+  testEmail: (to: string) =>
+    request<{ ok: boolean; error?: string }>('/system/settings/test-email', { method: 'POST', body: { to } }),
+  getPublicConfig: () => request<PublicConfig>('/system/public-config'),
 
   // Projects
   listProjects: () => request<Project[]>('/projects'),
@@ -565,6 +656,28 @@ export const api = {
     request<QualityData>(`/projects/${projectId}/quality`),
   getEvaluation: (projectId: string) =>
     request<EvaluationData>(`/projects/${projectId}/evaluation`),
+
+  // Reusable parametric definitions (constraint def / calc def)
+  listDefinitions: (projectId: string) =>
+    request<Definition[]>(`/projects/${projectId}/definitions`),
+  createDefinition: (projectId: string, data: Definition) =>
+    request<Definition>(`/projects/${projectId}/definitions`, { method: 'POST', body: data }),
+  updateDefinition: (projectId: string, defId: string, data: Partial<Definition>) =>
+    request<Definition>(`/projects/${projectId}/definitions/${encodeURIComponent(defId)}`, { method: 'PUT', body: data }),
+  deleteDefinition: (projectId: string, defId: string) =>
+    request<{ ok: boolean }>(`/projects/${projectId}/definitions/${encodeURIComponent(defId)}`, { method: 'DELETE' }),
+
+  // Analysis cases (scoped, parameterised what-if evaluation)
+  listAnalysisCases: (projectId: string) =>
+    request<AnalysisCase[]>(`/projects/${projectId}/analysis`),
+  createAnalysisCase: (projectId: string, data: AnalysisCase) =>
+    request<AnalysisCase>(`/projects/${projectId}/analysis`, { method: 'POST', body: data }),
+  updateAnalysisCase: (projectId: string, caseId: string, data: Partial<AnalysisCase>) =>
+    request<AnalysisCase>(`/projects/${projectId}/analysis/${encodeURIComponent(caseId)}`, { method: 'PUT', body: data }),
+  deleteAnalysisCase: (projectId: string, caseId: string) =>
+    request<{ ok: boolean }>(`/projects/${projectId}/analysis/${encodeURIComponent(caseId)}`, { method: 'DELETE' }),
+  runAnalysisCase: (projectId: string, caseId: string) =>
+    request<EvaluationData & { case: AnalysisCase }>(`/projects/${projectId}/analysis/${encodeURIComponent(caseId)}/run`),
 
   // Metrics & Compliance
   getMetrics: (projectId: string) => request<MetricsData>(`/projects/${projectId}/metrics`),

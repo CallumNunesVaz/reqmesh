@@ -40,10 +40,17 @@ class Settings(BaseSettings):
     rate_limit_auth: str = "5/minute"
     # Max upload size in megabytes.
     max_upload_size_mb: int = 50
+    # Branding / instance identity (shown in the UI).
+    instance_name: str = "reqmesh"
+    support_email: str = ""
     # Auth
     token_ttl_seconds: int = 604800
     allow_self_registration: bool = True
     require_email_verification: bool = False
+    # Account lockout: lock an account for N minutes after this many failed
+    # logins (0 disables lockout).
+    lockout_max_attempts: int = 5
+    lockout_window_minutes: int = 15
     # Self-update: check the GitHub repo for newer releases and let an admin
     # update the running instance. github_repo is "owner/name"; a token is only
     # needed for private repos or to raise the API rate limit. self_update_enabled
@@ -54,6 +61,8 @@ class Settings(BaseSettings):
     self_update_enabled: bool = True
     update_control_dir: str = "/control"
     update_check_ttl_seconds: int = 3600
+    # Max size (MB) for an uploaded update image archive (offline updates).
+    max_update_upload_mb: int = 2048
     # Logging
     log_level: str = "INFO"
     debug: bool = False

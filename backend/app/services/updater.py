@@ -41,6 +41,8 @@ UNSUPPORTED = "unsupported"
 _REQUEST_FILE = "update-request.json"
 _STATUS_FILE = "update-status.json"
 _TARGET_FILE = "update-target"  # plain version string; the sidecar's trigger
+_MODE_FILE = "update-mode"      # "pull" (from registry) or "image" (uploaded archive)
+_IMAGE_FILE = "update-image.tar"  # uploaded Docker image archive staged for the sidecar
 
 # Cached GitHub check: (timestamp, payload)
 _check_cache: tuple[float, dict] | None = None
@@ -154,15 +156,24 @@ def control_dir_writable() -> bool:
         return False
 
 
-def self_update_supported() -> bool:
-    """A supervised in-app update is possible only under Docker with a writable
-    control directory (the updater sidecar), self-update enabled, and online."""
+def _infra_ready() -> bool:
+    """The supervised-update infrastructure is present: Docker + updater sidecar
+    (writable control dir) + the feature enabled. Independent of connectivity."""
     return (
         settings.self_update_enabled
-        and not settings.offline_mode
         and is_running_in_docker()
         and control_dir_writable()
     )
+
+
+def self_update_supported() -> bool:
+    """Registry-based update (pull the latest ghcr image) — needs connectivity."""
+    return _infra_ready() and not settings.offline_mode
+
+
+def file_update_supported() -> bool:
+    """Update from an uploaded image archive — works offline / air-gapped."""
+    return _infra_ready()
 
 
 def runtime_info() -> dict:
@@ -174,6 +185,7 @@ def runtime_info() -> dict:
         "self_update_enabled": settings.self_update_enabled,
         "control_dir_writable": control_dir_writable() if (docker and settings.self_update_enabled) else False,
         "self_update_supported": self_update_supported(),
+        "file_update_supported": file_update_supported(),
         "github_repo": settings.github_repo,
     }
 
@@ -245,10 +257,52 @@ def request_update(target_version: str, requested_by: str) -> dict:
         "message": "Update requested; waiting for the updater.", "updated_at": _now_iso(),
     })
     _write_json_atomic(control / _REQUEST_FILE, request)
+    (control / _MODE_FILE).write_text("pull\n")
     # Plain trigger the shell sidecar reads without parsing JSON. Written last so
-    # the sidecar never sees a target before the request/status are in place.
+    # the sidecar never sees a target before the request/status/mode are in place.
     (control / _TARGET_FILE).write_text(target_version + "\n")
     logger.info("update requested: %s -> %s by %s", current, target_version, requested_by)
+    return {"state": REQUESTED, "target_version": target_version, "backup": backup}
+
+
+def staged_image_path() -> Path:
+    """Where an uploaded image archive is staged for the sidecar to load."""
+    return _control_dir() / _IMAGE_FILE
+
+
+def request_file_update(target_version: str, requested_by: str) -> dict:
+    """Back up data and signal the sidecar to load a previously-uploaded image
+    archive and recreate the app on it. Works offline (air-gapped)."""
+    if not file_update_supported():
+        raise RuntimeError("File-based update is not available in this deployment.")
+
+    image_path = staged_image_path()
+    if not image_path.exists() or image_path.stat().st_size == 0:
+        raise RuntimeError("No uploaded image archive was staged.")
+
+    current = get_version()
+    label = target_version or "uploaded image"
+    backup = create_backup(current)
+
+    request = {
+        "source": "file",
+        "target_version": target_version,
+        "from_version": current,
+        "requested_by": requested_by,
+        "requested_at": _now_iso(),
+        "archive_bytes": image_path.stat().st_size,
+        "backup": backup,
+    }
+    control = _control_dir()
+    _write_json_atomic(control / _STATUS_FILE, {
+        "state": REQUESTED, "target_version": target_version,
+        "message": f"Update from {label} requested; waiting for the updater.",
+        "updated_at": _now_iso(),
+    })
+    _write_json_atomic(control / _REQUEST_FILE, request)
+    (control / _MODE_FILE).write_text("image\n")
+    (control / _TARGET_FILE).write_text((target_version or "") + "\n")
+    logger.info("file update requested from %s (%s) by %s", current, label, requested_by)
     return {"state": REQUESTED, "target_version": target_version, "backup": backup}
 
 
@@ -256,7 +310,7 @@ def get_update_status() -> dict:
     """Current update state, combining the sidecar's status file with the fact
     that a completed update manifests as the running version having changed."""
     current = get_version()
-    if not self_update_supported():
+    if not _infra_ready():
         return {"state": UNSUPPORTED, "current": current, "target_version": None,
                 "message": "Self-update is not available in this deployment.", "updated_at": _now_iso()}
 
@@ -285,7 +339,7 @@ def get_update_status() -> dict:
 def clear_update_state() -> None:
     """Reset the control files (e.g. to dismiss a completed/failed update)."""
     control = _control_dir()
-    for name in (_REQUEST_FILE, _STATUS_FILE, _TARGET_FILE):
+    for name in (_REQUEST_FILE, _STATUS_FILE, _TARGET_FILE, _MODE_FILE, _IMAGE_FILE):
         try:
             (control / name).unlink()
         except OSError:

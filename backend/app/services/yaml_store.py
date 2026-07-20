@@ -27,6 +27,8 @@ COLLECTIONS = (
     "comments",
     "decisions",
     "baselines",
+    "definitions",
+    "analysis_cases",
 )
 
 # Created eagerly so an empty project has a recognizable shape.

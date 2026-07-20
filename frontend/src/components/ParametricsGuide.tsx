@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { BookOpen, ChevronDown, ChevronRight, Sigma, CheckCircle2, XCircle, HelpCircle, AlertTriangle, FlaskConical, Layers, ArrowRightLeft } from 'lucide-react';
+import { BookOpen, ChevronDown, ChevronRight, Sigma, CheckCircle2, XCircle, HelpCircle, AlertTriangle, FlaskConical, Layers, ArrowRightLeft, Ruler, Boxes } from 'lucide-react';
 import { useStore } from '../store';
 
 const sections = [
@@ -41,6 +41,39 @@ const sections = [
         a: 'A precondition. `OAT >= -20` means "this constraint only applies when outside air temp is −20°C or warmer". If the assumption fails, the constraint gets "n/a" instead of "fail". Useful for weather-dependent or configuration-dependent rules.' },
       { q: 'What is the margin?',
         a: 'How close you are to the boundary. If `max_load >= 5.7` and your value is 5.92, the margin is `+0.22 (+3.8%)`. Positive = safe. Negative = violated.' },
+    ],
+  },
+  {
+    id: 'units',
+    icon: Ruler,
+    title: 'Units',
+    questions: [
+      { q: 'Do units do anything?',
+        a: 'Yes. reqmesh knows common SI/aero units (kg, m, N, W, A, kt, psi…) and their dimensions. When a derived parameter or a comparison mixes incompatible quantities — like adding a mass to a length — it shows an amber "units" warning. Type a unit and pick from the suggestions.' },
+      { q: 'Does a units warning fail my constraint?',
+        a: 'No. Dimensional checks are advisory only — the pass/fail verdict is unchanged. Unknown or blank units are simply not checked, so ad-hoc units (like "passengers") never warn.' },
+    ],
+  },
+  {
+    id: 'definitions',
+    icon: Boxes,
+    title: 'Reusable Definitions',
+    questions: [
+      { q: 'What is a definition?',
+        a: 'A rule written once and reused. A constraint def like `MassBudget(actual, limit) = actual <= limit` can be applied on any requirement by binding its formals to real parameters. A calc def (e.g. `Area(w, h) = w * h`) derives a parameter value the same way.' },
+      { q: 'How do I use one?',
+        a: 'Create definitions on the Metrics & Analysis page. Then on a requirement, under "Use a definition", pick it and bind each formal to a parameter ref (like `AFRM0000.design_mass`). This is the SysML v2 constraint/calc usage with binding.' },
+    ],
+  },
+  {
+    id: 'analysis',
+    icon: FlaskConical,
+    title: 'Analysis Cases',
+    questions: [
+      { q: 'What is an analysis case?',
+        a: 'A saved what-if run. You give it a scope (which requirements) and hypothetical parameter overrides (like `AFRM0000.empty_mass = 779`), then hit Run to see how verdicts change — without editing the model. It reuses the same solver as the live evaluation.' },
+      { q: 'Where do I create them?',
+        a: 'On the Metrics & Analysis page, under "Analysis Cases". Enter overrides one per line as `ENTITY.param = value`.' },
     ],
   },
   {

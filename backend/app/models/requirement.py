@@ -92,6 +92,12 @@ class Parameter(BaseModel):
     unit: str = ""
     expr: Optional[str] = None
     kind: Optional[MeasureKind] = None
+    # Optional SysML v2 value-type name (e.g. "MassValue") for typed export.
+    value_type: Optional[str] = None
+    # Reusable calc-definition usage: reference a CalcDef and bind its formals
+    # to actual parameter refs. Value derives from the definition's expression.
+    calc_def: Optional[str] = None
+    bindings: dict[str, str] = Field(default_factory=dict)
 
 
 class Constraint(BaseModel):
@@ -101,9 +107,14 @@ class Constraint(BaseModel):
     constraint is out of scope rather than failed (SysML assume/require).
     """
 
-    expr: str
+    expr: str = ""
     assume: Optional[str] = None
     kind: Optional[MeasureKind] = None
+    # Reusable constraint-definition usage: reference a ConstraintDef and bind
+    # its formals to actual parameter refs. When set, ``expr`` is derived from
+    # the definition and may be left blank.
+    constraint_def: Optional[str] = None
+    bindings: dict[str, str] = Field(default_factory=dict)
 
 
 class Requirement(BaseModel):
@@ -135,6 +146,8 @@ class Requirement(BaseModel):
     references: list[Reference] = Field(default_factory=list)
     requirement_kind: RequirementKind = RequirementKind.SYSTEM_REQUIREMENT
     system_states: list[str] = Field(default_factory=list)
+    # SysML v2 requirement subject: the part/component this requirement constrains.
+    subject: Optional[str] = None
     created: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     modified: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
@@ -167,6 +180,7 @@ class RequirementCreate(BaseModel):
     references: list[Reference] = Field(default_factory=list)
     requirement_kind: RequirementKind = RequirementKind.SYSTEM_REQUIREMENT
     system_states: list[str] = Field(default_factory=list)
+    subject: Optional[str] = None
 
 
 class RequirementUpdate(BaseModel):
@@ -197,6 +211,7 @@ class RequirementUpdate(BaseModel):
     references: Optional[list[Reference]] = None
     requirement_kind: Optional[RequirementKind] = None
     system_states: Optional[list[str]] = None
+    subject: Optional[str] = None
 
 
 class RequirementTreeNode(BaseModel):

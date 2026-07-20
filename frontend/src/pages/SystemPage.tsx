@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   ShieldCheck, RefreshCw, Download, CheckCircle2, AlertTriangle, Loader,
-  ArrowUpCircle, GitBranch, Server, ExternalLink, Terminal, X,
+  ArrowUpCircle, GitBranch, Server, ExternalLink, Terminal, X, Upload,
 } from 'lucide-react';
 import { api, type SystemInfo, type UpdateCheck, type UpdateStatus, type BuildInfo } from '../api/client';
 import { useAuthStore } from '../store/auth';
@@ -21,6 +21,8 @@ export default function SystemPage() {
   const [error, setError] = useState('');
   const [confirming, setConfirming] = useState(false);
   const [starting, setStarting] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const runCheck = useCallback(async (force: boolean) => {
@@ -92,6 +94,26 @@ export default function SystemPage() {
       setError(e instanceof Error ? e.message : 'Failed to start update');
     } finally {
       setStarting(false);
+    }
+  };
+
+  const uploadUpdate = async () => {
+    if (!uploadFile) return;
+    setUploading(true);
+    setError('');
+    try {
+      const m = uploadFile.name.match(/v?(\d+\.\d+\.\d+)/);
+      const res = await api.uploadUpdate(uploadFile, m?.[1]);
+      setUploadFile(null);
+      setStatus({
+        state: 'requested', target_version: res.target_version || (m?.[1] ?? null),
+        message: 'Image uploaded; backing up and handing off to the updater…',
+        updated_at: new Date().toISOString(), backup: res.backup,
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Upload failed');
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -224,6 +246,39 @@ export default function SystemPage() {
           </>
         )}
       </section>
+
+      {/* ── Update from file (offline / air-gapped) ──────────────── */}
+      {info?.file_update_supported && !active && !completed && (
+        <section className="card p-5">
+          <h2 className="font-medium mb-1 flex items-center gap-2"><Upload size={16} /> Update from a file</h2>
+          <p className="text-sm text-muted-foreground mb-3">
+            For air-gapped servers. Upload a reqmesh image archive
+            (<span className="font-mono text-xs">reqmesh-v&lt;version&gt;-image.tar.gz</span> from a release);
+            it's loaded and applied without contacting GitHub.
+          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="btn-secondary cursor-pointer">
+              <Upload size={15} /> Choose file
+              <input
+                type="file"
+                accept=".tar,.tar.gz,.tgz,application/gzip,application/x-tar"
+                className="hidden"
+                onChange={(e) => setUploadFile(e.target.files?.[0] ?? null)}
+              />
+            </label>
+            {uploadFile && (
+              <span className="text-sm text-muted-foreground truncate max-w-[16rem]">
+                {uploadFile.name} <span className="text-xs">({(uploadFile.size / 1048576).toFixed(0)} MB)</span>
+              </span>
+            )}
+            <button className="btn-primary" onClick={uploadUpdate} disabled={!uploadFile || uploading}>
+              {uploading ? <Loader size={15} className="animate-spin" /> : <Upload size={15} />}
+              {uploading ? 'Uploading…' : 'Upload & update'}
+            </button>
+          </div>
+          <p className="text-xs text-muted-foreground mt-2">Project data is backed up first, exactly as with an online update.</p>
+        </section>
+      )}
 
       {/* ── Confirm dialog ───────────────────────────────────────── */}
       {confirming && (

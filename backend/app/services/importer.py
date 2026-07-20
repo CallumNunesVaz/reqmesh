@@ -56,8 +56,28 @@ def _normalise_requirement(raw: dict) -> dict | None:
         "rationale": str(raw.get("rationale") or ""),
         "source": str(raw.get("source") or ""),
         "parent": _clean_id(raw.get("parent", "")) if raw.get("parent") else None,
+        # Parametrics carried through the SysML interchange.
+        "parameters": raw.get("parameters") or [],
+        "constraints": raw.get("constraints") or [],
     }
+    if raw.get("subject"):
+        req["subject"] = raw["subject"]
     return req
+
+
+def _normalise_component(raw: dict) -> dict | None:
+    cid = _clean_id(raw.get("id", ""))
+    if cid is None:
+        return None
+    return {
+        "id": cid,
+        "name": str(raw.get("name") or cid),
+        "description": str(raw.get("description") or ""),
+        "parent": _clean_id(raw.get("parent", "")) if raw.get("parent") else None,
+        "quantity": int(raw.get("quantity") or 1),
+        "satisfies": raw.get("satisfies") or [],
+        "parameters": raw.get("parameters") or [],
+    }
 
 
 # Fields the import formats don't carry; seeded on create so imported records
@@ -81,6 +101,8 @@ def import_into_store(store, parsed: dict, mode: str = "merge") -> dict:
             store.delete_requirement(r["id"])
         for vc in store.list_verification_cases():
             store.delete_verification_case(vc["id"])
+        for c in store.list_components():
+            store.delete_component(c["id"])
 
     for raw in parsed.get("requirements", []):
         req = _normalise_requirement(raw)
@@ -113,6 +135,18 @@ def import_into_store(store, parsed: dict, mode: str = "merge") -> dict:
         else:
             store.create_verification_case(vc)
         summary["verification_cases"] += 1
+
+    # Components (SysML part defs) — carry the design tree that rollups sum over.
+    for raw in parsed.get("components", []):
+        comp = _normalise_component(raw)
+        if comp is None:
+            summary["skipped"] += 1
+            continue
+        if store.get_component(comp["id"]):
+            store.update_component(comp["id"], comp)
+        else:
+            store.create_component(comp)
+        summary["components"] = summary.get("components", 0) + 1
 
     # Merge traces, de-duplicating against what's already stored.
     incoming = parsed.get("traces", [])
