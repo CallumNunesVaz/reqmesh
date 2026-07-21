@@ -636,6 +636,23 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
     return visible;
   }, [reqs, collapsed]);
 
+  // Track which nodes were visible *before* the current collapsed state, so we
+  // can detect newly-appearing children and give them an entrance animation.
+  // Skip on the very first mount (all nodes are "new" then).
+  const prevVisibleIdsRef = useRef<Set<string>>(new Set());
+  const hasLaidOutOnceRef = useRef(false);
+  const newChildrenIds = useMemo(() => {
+    if (!hasLaidOutOnceRef.current) return new Set<string>();
+    const fresh = new Set<string>();
+    for (const id of visibleNodeIds) {
+      if (!prevVisibleIdsRef.current.has(id)) fresh.add(id);
+    }
+    return fresh;
+  }, [visibleNodeIds]);
+  useEffect(() => {
+    prevVisibleIdsRef.current = visibleNodeIds;
+  }, [visibleNodeIds]);
+
   const { initialNodes, initialEdges } = useMemo(() => {
     const filteredIds = new Set(filteredReqs.map(r => r.id));
     const visIds = new Set([...visibleNodeIds].filter(id => filteredIds.has(id)));
@@ -762,8 +779,8 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
     const refit = () => {
       if (!shouldRefit) return;
       selectReq(null);
-      return setTimeout(() => rfRef.current?.fitView({ padding: 0.12, maxZoom: gs.maxZoom }), 250);
-    };
+      return { duration: 300 };
+    }; // fitView called inline below with correct duration
 
     // UML mode: ELK lays out (over composition + relations) AND routes the
     // edges orthogonally. It's async, so guard against stale results.
@@ -772,27 +789,108 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
       let fitTimer: ReturnType<typeof setTimeout> | undefined;
       elkLayout(initialNodes, initialEdges, gs).then(({ positions, edgePoints, heights }) => {
         if (reqId !== layoutReqIdRef.current) return; // superseded — discard
-        setNodes(initialNodes.map((n) => {
-          const p = positions.get(n.id);
-          return p ? { ...n, position: { x: p.x, y: p.y }, data: { ...n.data, elkHeight: heights.get(n.id) ?? BASE_NODE_H } } : n;
-        }));
-        setEdges(initialEdges.map((e) => {
-          // Composition (parent) edges carry the diagram's structure, so in
-          // block-diagram mode they read stronger than the relation overlays.
-          const isParent = e.id.endsWith('-parent');
-          return {
+
+        const expanding = newChildrenIds.size > 0;
+        const newIds = new Set(newChildrenIds);
+        const r = refit();
+
+        if (expanding) {
+          // 1. Fade existing edges out instantly, then set new nodes + blank edges.
+          setEdges((eds) => eds.map((e) => ({
             ...e,
-            type: 'ortho',
-            data: { ...e.data, points: edgePoints.get(e.id) },
-            style: {
-              ...(e.style as Record<string, unknown>),
-              ...(isParent
-                ? { stroke: 'hsl(var(--muted-foreground) / 0.55)', strokeWidth: 1.4, opacity: 0.7 }
-                : { opacity: 0.55 }),
-            },
-          };
-        }));
-        fitTimer = refit();
+            style: { ...(e.style as any), opacity: 0, transition: 'opacity 0.4s ease-out' },
+          })));
+          setNodes(initialNodes.map((n) => {
+            const p = positions.get(n.id);
+            const isNew = newIds.has(n.id);
+            return p ? {
+              ...n,
+              position: { x: p.x, y: p.y },
+              data: { ...n.data, elkHeight: heights.get(n.id) ?? BASE_NODE_H },
+              style: {
+                ...(n.style as any || {}),
+                opacity: isNew ? 0 : undefined,
+              },
+            } : n;
+          }));
+          // 2. After edges are invisible, swap in new ortho edges (still hidden).
+          const newEdges = initialEdges.map((e) => {
+            const isParent = e.id.endsWith('-parent');
+            return {
+              ...e,
+              type: 'ortho' as const,
+              data: { ...e.data, points: edgePoints.get(e.id) },
+              style: {
+                ...(e.style as any),
+                ...(isParent
+                  ? { stroke: 'hsl(var(--muted-foreground) / 0.55)', strokeWidth: 1.4, opacity: 0 }
+                  : { opacity: 0 }),
+              },
+            };
+          });
+          setTimeout(() => {
+            setEdges(newEdges);
+            // 3. Fade nodes and edges back in together.
+            requestAnimationFrame(() => {
+              setNodes((nds) => nds.map((n) => {
+                const isNew = newIds.has(n.id);
+                return {
+                  ...n,
+                  style: {
+                    ...(n.style as any)!,
+                    opacity: 1,
+                    transition: `opacity 0.5s ease-out${isNew ? ' 0.1s' : ''}`,
+                  },
+                };
+              }));
+              setEdges((eds) => eds.map((e) => {
+                const isParent = e.id.endsWith('-parent');
+                return {
+                  ...e,
+                  style: {
+                    ...(e.style as any)!,
+                    ...(isParent
+                      ? { opacity: 0.7, transition: 'opacity 0.5s ease-out 0.05s' }
+                      : { opacity: 0.55, transition: 'opacity 0.5s ease-out 0.05s' }),
+                  },
+                };
+              }));
+            });
+          }, 400);
+        } else {
+          setNodes(initialNodes.map((n) => {
+            const p = positions.get(n.id);
+            return p ? {
+              ...n,
+              position: { x: p.x, y: p.y },
+              data: { ...n.data, elkHeight: heights.get(n.id) ?? BASE_NODE_H },
+            } : n;
+          }));
+        }
+        if (r) {
+          fitTimer = setTimeout(() => rfRef.current?.fitView({
+            padding: 0.12,
+            maxZoom: gs.maxZoom,
+            duration: expanding ? 700 : 300,
+          }), expanding ? 200 : 250);
+        }
+        if (!expanding) {
+          setEdges(initialEdges.map((e) => {
+            const isParent = e.id.endsWith('-parent');
+            return {
+              ...e,
+              type: 'ortho',
+              data: { ...e.data, points: edgePoints.get(e.id) },
+              style: {
+                ...(e.style as Record<string, unknown>),
+                ...(isParent
+                  ? { stroke: 'hsl(var(--muted-foreground) / 0.55)', strokeWidth: 1.4, opacity: 0.7 }
+                  : { opacity: 0.55 }),
+              },
+            };
+          }));
+        }
+        hasLaidOutOnceRef.current = true;
       }).catch((err) => console.error('ELK layout failed', err));
       return () => { if (fitTimer) clearTimeout(fitTimer); };
     }
@@ -800,8 +898,13 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
     // Force mode: synchronous d3-force + floating centre-to-centre edges.
     setNodes(forceLayout(initialNodes, initialEdges));
     setEdges(initialEdges);
-    const t = refit();
-    return () => { if (t) clearTimeout(t); };
+    const r = refit();
+    if (r) {
+      const t = setTimeout(() => rfRef.current?.fitView({
+        padding: 0.12, maxZoom: gs.maxZoom, duration: r.duration,
+      }), 250);
+      return () => clearTimeout(t);
+    };
   }, [initialNodes, initialEdges, layoutMode, gs.nodesep, gs.ranksep, gs.rankdir, gs.margin, gs.maxZoom, setNodes, setEdges]);
 
   useEffect(() => {
@@ -1165,7 +1268,7 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
       {splash && <LoadingSplash label="Loading graph…" leaving={splash === 'leaving'} />}
 
       <style>{`
-        .react-flow__node { font-family: var(--font-sans); }
+        .react-flow__node { font-family: var(--font-sans); transition: transform 0.35s ease-out; }
         .react-flow__edge-path { transition: stroke-opacity 0.2s, opacity 0.25s ease, filter 0.25s ease; }
         .react-flow__edge.rt-drift .react-flow__edge-path {
           animation: rt-dash-drift 22s linear infinite;
