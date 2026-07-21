@@ -81,10 +81,14 @@ const statusMinimapColors: Record<string, string> = {
   deprecated: '#95a5a6',
 };
 
-// Reserved footprint per block for the layered layout. Height covers the
-// tallest semantic-zoom state so compartments never overlap the row below.
+// Reserved footprint per block for the layered layout.  Height is enlarged
+// dynamically when a node has many edges entering or leaving its left/right
+// faces so the orthogonal router's bend points never land outside the node.
 const NODE_W = BLOCK_W;
-const NODE_H = 118;
+const BASE_NODE_H = 118;
+const MIN_EDGE_GAP = 8;  // vertical px between adjacent edge terminals — ELK's
+                          // practical minimum with markers is wider than the
+                          // spacing option suggests, so set this generously.
 
 const edgeMarkers: Record<string, { markerEnd: MarkerType; strokeDasharray: string; strokeWidth: number }> = {
   refines: { markerEnd: MarkerType.ArrowClosed, strokeDasharray: 'none', strokeWidth: 1.4 },
@@ -197,6 +201,7 @@ const ELK_DIRECTION: Record<string, string> = { LR: 'RIGHT', RL: 'LEFT', TB: 'DO
 interface ElkResult {
   positions: Map<string, { x: number; y: number }>;
   edgePoints: Map<string, { x: number; y: number }[]>;
+  heights: Map<string, number>;
 }
 
 // Layered (Sugiyama) layout via ELK, the algorithm behind Eclipse/SysML
@@ -227,6 +232,25 @@ async function elkLayout(
       layoutOptions: e.id.endsWith('-parent') ? { 'elk.layered.priority.straightness': '10' } : {},
     });
   }
+
+  // Compute per-node heights so nodes with many edges get enough vertical
+  // face real-estate for ELK's orthogonal router to place all terminals.
+  const fanIn = new Map<string, number>();
+  const fanOut = new Map<string, number>();
+  for (const e of elkEdges) {
+    fanIn.set(e.targets[0], (fanIn.get(e.targets[0]) || 0) + 1);
+    fanOut.set(e.sources[0], (fanOut.get(e.sources[0]) || 0) + 1);
+  }
+  const edgePad = 52; // ample top+bottom clearance so edge terminals stay
+                        // well inside the rounded-rect boundary at every zoom
+  const getNodeHeight = (nid: string) => {
+    const maxFan = Math.max(fanIn.get(nid) || 0, fanOut.get(nid) || 0);
+    return Math.max(
+      BASE_NODE_H,
+      Math.round(maxFan * MIN_EDGE_GAP + edgePad),
+    );
+  };
+
   const graph = {
     id: 'root',
     layoutOptions: {
@@ -236,18 +260,27 @@ async function elkLayout(
       'elk.spacing.nodeNode': String(gs.nodesep),
       'elk.layered.spacing.nodeNodeBetweenLayers': String(gs.ranksep),
       'elk.spacing.edgeNode': String(Math.max(12, Math.round(gs.nodesep / 2))),
-      'elk.spacing.edgeEdge': String(Math.max(8, Math.round(gs.nodesep / 3))),
+      'elk.spacing.edgeEdge': String(Math.min(4, Math.max(2, Math.round(gs.nodesep / 10)))),
+      'elk.spacing.portPort': '4',
       'elk.padding': `[top=${gs.margin},left=${gs.margin},bottom=${gs.margin},right=${gs.margin}]`,
       'elk.layered.cycleBreaking.strategy': 'GREEDY',
       'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
       'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',
     },
-    children: nodes.map((n) => ({ id: n.id, width: NODE_W, height: NODE_H })),
+    children: nodes.map((n) => ({
+      id: n.id,
+      width: NODE_W,
+      height: getNodeHeight(n.id),
+    })),
     edges: elkEdges,
   };
   const res = await elk.layout(graph);
   const positions = new Map<string, { x: number; y: number }>();
-  for (const c of res.children || []) positions.set(c.id, { x: c.x ?? 0, y: c.y ?? 0 });
+  const heights = new Map<string, number>();
+  for (const c of res.children || []) {
+    positions.set(c.id, { x: c.x ?? 0, y: c.y ?? 0 });
+    heights.set(c.id, Number(c.height) || BASE_NODE_H);
+  }
   const edgePoints = new Map<string, { x: number; y: number }[]>();
   for (const e of res.edges || []) {
     const pts: { x: number; y: number }[] = [];
@@ -258,7 +291,7 @@ async function elkLayout(
     }
     if (pts.length) edgePoints.set(e.id, pts);
   }
-  return { positions, edgePoints };
+  return { positions, edgePoints, heights };
 }
 
 // Floating edge: connects the two node circles along the straight line
@@ -737,11 +770,11 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
     if (layoutMode === 'uml') {
       const reqId = ++layoutReqIdRef.current;
       let fitTimer: ReturnType<typeof setTimeout> | undefined;
-      elkLayout(initialNodes, initialEdges, gs).then(({ positions, edgePoints }) => {
+      elkLayout(initialNodes, initialEdges, gs).then(({ positions, edgePoints, heights }) => {
         if (reqId !== layoutReqIdRef.current) return; // superseded — discard
         setNodes(initialNodes.map((n) => {
           const p = positions.get(n.id);
-          return p ? { ...n, position: { x: p.x, y: p.y } } : n;
+          return p ? { ...n, position: { x: p.x, y: p.y }, data: { ...n.data, elkHeight: heights.get(n.id) ?? BASE_NODE_H } } : n;
         }));
         setEdges(initialEdges.map((e) => {
           // Composition (parent) edges carry the diagram's structure, so in

@@ -49,6 +49,7 @@ export interface BlockNodeData {
   collapsed: boolean;
   childCount?: number;
   onExpandCollapse?: () => void;
+  elkHeight?: number;
   params: BlockParam[];
   constraints: BlockConstraint[];
   verdict: string | null;
@@ -121,6 +122,7 @@ function BlockNode({ data }: NodeProps) {
         className={`relative rounded-md border bg-card ${clip ? 'overflow-hidden' : ''}`}
         style={{
           width: BLOCK_W,
+          minHeight: minNodeH,
           opacity: dimmed ? 0.18 : 1,
           filter: glowFilter,
           borderColor: isSelected ? colors.fill : hover ? 'hsl(var(--foreground) / 0.3)' : 'hsl(var(--border))',
@@ -140,13 +142,15 @@ function BlockNode({ data }: NodeProps) {
     return n.length > max ? n.slice(0, max - 1) + '…' : n;
   };
 
+  const minNodeH = Math.max(d.elkHeight ?? 118, 56);
+
   // L1 — structure: a status-tinted slab whose label overflows the block like
   // a map label, so far-out still reads as named structure.
   if (level === 1) {
     return frame(
       <div
         className="relative flex items-center justify-center"
-        style={{ height: 56, background: glow(colors.fill, 0.2), borderRadius: 5 }}
+        style={{ height: minNodeH, background: glow(colors.fill, 0.2), borderRadius: 5 }}
       >
         <span
           className="absolute font-semibold text-center pointer-events-none"
@@ -168,7 +172,7 @@ function BlockNode({ data }: NodeProps) {
   // L2 — blocks: id + name, gently scaled against the remaining distance.
   if (level === 2) {
     return frame(
-      <div className="px-3 py-2.5 flex items-center gap-2.5" style={{ minHeight: 56, background: glow(colors.fill, 0.08) }}>
+      <div className="px-3 py-2.5 flex items-center gap-2.5" style={{ minHeight: minNodeH, background: glow(colors.fill, 0.08) }}>
         <span className="w-1.5 self-stretch rounded-full shrink-0" style={{ backgroundColor: colors.fill, opacity: 0.85 }} />
         <div className="min-w-0" style={{ transform: `scale(${textScale})`, transformOrigin: 'left center' }}>
           <div className="font-mono text-[10px] whitespace-nowrap" style={{ color: colors.text }}>{d.label}</div>
