@@ -366,17 +366,13 @@
       "title": "Allocated To",
       "type": "string"
     },
-    "baseline": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Baseline"
+    "baselines": {
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "title": "Baselines",
+      "type": "array"
     },
     "reviewed": {
       "anyOf": [

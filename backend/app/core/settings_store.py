@@ -60,6 +60,20 @@ OVERRIDABLE: dict[str, dict] = {
     # Updates
     "github_repo": {"type": "str", "category": "updates", "label": "Update source repo (owner/name)"},
     "github_token": {"type": "str", "category": "updates", "label": "GitHub token", "secret": True},
+    # Teams
+    "teams": {"type": "list", "category": "teams", "label": "Teams",
+              "help": "Organisational units that can be assigned to requirements. One per line."},
+    # Reporting
+    "report_company_name": {"type": "str", "category": "reporting", "label": "Company name",
+                            "help": "Shown on the report cover page and page headers."},
+    "report_department": {"type": "str", "category": "reporting", "label": "Department name",
+                          "help": "Shown below the company name on the cover page."},
+    "report_document_title": {"type": "str", "category": "reporting", "label": "Default document title",
+                              "help": "Overrides 'Requirements Specification Report' when set."},
+    "report_logo_url": {"type": "str", "category": "reporting", "label": "Company logo (URL or data: URI)",
+                        "help": "Paste a URL or upload a PNG below."},
+    "report_show_git_commit": {"type": "bool", "category": "reporting", "label": "Show git commit on each page",
+                               "help": "Includes the short commit SHA in the page footer."},
 }
 
 _SECRET_MASK = "********"
@@ -82,6 +96,12 @@ def _coerce(key: str, value):
         return str(value).strip().lower() in ("1", "true", "yes", "on")
     if typ == "int":
         return int(value)
+    if typ == "list":
+        if isinstance(value, list):
+            return [str(v).strip() for v in value if str(v).strip()]
+        if isinstance(value, str):
+            return [v.strip() for v in value.replace("\r\n", "\n").split("\n") if v.strip()]
+        return []
     return "" if value is None else str(value)
 
 
@@ -119,7 +139,8 @@ def apply_overrides(settings=None) -> None:
         if key not in OVERRIDABLE or is_env_locked(key):
             continue
         try:
-            setattr(settings, key, _coerce(key, value))
+            coerced = _coerce(key, value)
+            setattr(settings, key, coerced)
         except (ValueError, TypeError):
             continue
 
@@ -152,10 +173,11 @@ def effective_settings() -> dict:
     for key, meta in OVERRIDABLE.items():
         raw = getattr(settings, key, None)
         secret = meta.get("secret", False)
+        value = raw
+        if meta["type"] == "list":
+            value = raw if isinstance(raw, list) else []
         if secret:
             value = _SECRET_MASK if raw else ""
-        else:
-            value = raw
         items.append({
             "key": key,
             "value": value,

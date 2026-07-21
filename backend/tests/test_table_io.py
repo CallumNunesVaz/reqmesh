@@ -10,7 +10,7 @@ def test_row_to_req_roundtrip():
         "priority": "high", "verification_method": "test", "parent": None,
         "relations": [{"type": "refines", "target": "FEAT-001"}],
         "verification_cases": ["VC-001"], "rationale": "Security requirement",
-        "source": "ISO 27001", "allocated_to": "auth-module", "baseline": None,
+        "source": "ISO 27001", "allocated_to": "auth-module", "baselines": [],
     }
     row = _req_to_row(req)
     back = _row_to_req(row)
@@ -60,7 +60,7 @@ def test_import_csv_merge(client, project):
     from pathlib import Path
 
     store = YamlStore(Path(settings.data_root) / project)
-    csv_data = '"id","type","name","description","status","priority","verification_method","parent","relations","verification_cases","rationale","source","allocated_to","baseline"\n"REQ-IMP","functional","Import Test","Do import stuff","proposed","medium","test","","","","","","",""'
+    csv_data = '"id","type","name","description","status","priority","verification_method","parent","relations","verification_cases","rationale","source","allocated_to","baselines"\n"REQ-IMP","functional","Import Test","Do import stuff","proposed","medium","test","","","","","","",""'
     summary = import_table(store, csv_data, fmt="csv", mode="merge")
     assert summary["created"] == 1
     req = store.get_requirement("REQ-IMP")
@@ -76,7 +76,7 @@ def test_import_csv_update_existing(client, project):
     store = YamlStore(Path(settings.data_root) / project)
     store.create_requirement({"id": "REQ-EX", "name": "Old Name"})
 
-    csv_data = '"id","type","name","description","status","priority","verification_method","parent","relations","verification_cases","rationale","source","allocated_to","baseline"\n"REQ-EX","functional","New Name","Updated","approved","high","test","","","","","","",""'
+    csv_data = '"id","type","name","description","status","priority","verification_method","parent","relations","verification_cases","rationale","source","allocated_to","baselines"\n"REQ-EX","functional","New Name","Updated","approved","high","test","","","","","","",""'
     summary = import_table(store, csv_data, fmt="csv", mode="merge")
     assert summary["updated"] == 1
     req = store.get_requirement("REQ-EX")
@@ -92,7 +92,7 @@ def test_import_csv_replace(client, project):
     store.create_requirement({"id": "REQ-OLD", "name": "Old"})
     assert len(store.list_requirements()) == 1
 
-    csv_data = '"id","type","name","description","status","priority","verification_method","parent","relations","verification_cases","rationale","source","allocated_to","baseline"\n"REQ-NEW","functional","New Only","New desc","proposed","medium","test","","","","","","",""'
+    csv_data = '"id","type","name","description","status","priority","verification_method","parent","relations","verification_cases","rationale","source","allocated_to","baselines"\n"REQ-NEW","functional","New Only","New desc","proposed","medium","test","","","","","","",""'
     summary = import_table(store, csv_data, fmt="csv", mode="replace")
     reqs = store.list_requirements()
     assert len(reqs) == 1
@@ -112,7 +112,7 @@ def test_import_skips_empty_id(client, project):
 
 def test_api_import_csv_endpoint(client, project):
     import io
-    csv_content = '"id","type","name","description","status","priority","verification_method","parent","relations","verification_cases","rationale","source","allocated_to","baseline"\n"REQ-API","functional","API Import","Imported via API","proposed","medium","test","","","","","","",""'
+    csv_content = '"id","type","name","description","status","priority","verification_method","parent","relations","verification_cases","rationale","source","allocated_to","baselines"\n"REQ-API","functional","API Import","Imported via API","proposed","medium","test","","","","","","",""'
     res = client.post(
         f"/api/projects/{project}/import",
         data={"format": "csv", "mode": "merge"},

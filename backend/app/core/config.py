@@ -69,6 +69,18 @@ class Settings(BaseSettings):
     # Production safeguards
     allowed_hosts: list[str] = ["*"]
 
+    # Teams — the organisational units that requirements and work can be
+    # allocated to. Defined centrally so the UI offers a picker rather than
+    # free-text entry. Default matches ISO 15288 technical process ownership.
+    teams: list[str] = ["Systems Engineering"]
+
+    # Report generation configuration (shown on cover page and page headers).
+    report_company_name: str = ""
+    report_department: str = ""
+    report_document_title: str = ""
+    report_logo_url: str = ""
+    report_show_git_commit: bool = False
+
     model_config = {"env_prefix": "RT_", "env_file": ".env"}
 
 

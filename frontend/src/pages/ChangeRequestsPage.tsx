@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Trash2, GitPullRequest } from 'lucide-react';
+import { Plus, Trash2, GitPullRequest, Square, CheckSquare, X } from 'lucide-react';
 import { api, type ChangeRequest } from '../api/client';
 import { useAuthStore } from '../store/auth';
+import { useStore } from '../store';
 import { CopyLinkButton, EntityLink } from '../components/entities';
 import { useFocusedEntity } from '../components/useFocusedEntity';
 import { AutoLinkText } from '../components/autoLink';
@@ -25,13 +26,15 @@ export default function ChangeRequestsPage() {
   const [error, setError] = useState('');
   const [form, setForm] = useState({ id: '', title: '', description: '' });
   const editable = useAuthStore((s) => s.editMode && s.user !== null && s.user.role !== 'viewer');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const dataVersion = useStore((s) => s.dataVersion);
   const entityKinds = useEntityKinds(projectId);
 
   const load = () => {
     if (!projectId) return;
     api.listChangeRequests(projectId).then(setCrs).catch(console.error);
   };
-  useEffect(load, [projectId]);
+  useEffect(load, [projectId, dataVersion]);
 
   // Arriving from a link elsewhere (?focus=CR-001).
   const focusId = useFocusedEntity(crs.length > 0);
@@ -61,6 +64,25 @@ export default function ChangeRequestsPage() {
       await api.deleteChangeRequest(projectId, crId);
       setCrs(crs.filter((c) => c.id !== crId));
     } catch (err: any) { setError(err.message || 'Failed to delete'); }
+  };
+
+  const toggleCR = (id: string) => setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const clearCRSelection = () => setSelectedIds(new Set());
+  const selectAllCRs = () => setSelectedIds(new Set(crs.map(c => c.id)));
+
+  const handleBulkCRStatus = async (status: string) => {
+    if (!projectId) return;
+    await api.bulkUpdateChangeRequests(projectId, [...selectedIds], { status });
+    clearCRSelection();
+    load();
+  };
+
+  const handleBulkCRDelete = async () => {
+    if (!projectId) return;
+    if (!confirm(`Delete ${selectedIds.size} change request(s)?`)) return;
+    await api.bulkDeleteChangeRequests(projectId, [...selectedIds]);
+    clearCRSelection();
+    load();
   };
 
   return (
@@ -97,6 +119,15 @@ export default function ChangeRequestsPage() {
           <motion.div key={cr.id} id={`entity-${cr.id}`} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.03 }}
             className={`card p-4 hover:shadow-md transition-shadow group ${focusId === cr.id ? 'ring-2 ring-primary/50' : ''}`}>
             <div className="flex items-center gap-3">
+              {editable && (
+                <span className="shrink-0">
+                  {selectedIds.has(cr.id) ? (
+                    <CheckSquare size={14} className="text-primary cursor-pointer" onClick={() => toggleCR(cr.id)} />
+                  ) : (
+                    <Square size={14} className="text-muted-foreground/40 cursor-pointer hover:text-muted-foreground" onClick={() => toggleCR(cr.id)} />
+                  )}
+                </span>
+              )}
               <div className="w-9 h-9 bg-purple-500/10 text-purple-400 rounded-lg flex items-center justify-center"><GitPullRequest size={18} /></div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2"><span className="font-mono text-xs text-muted-foreground">{cr.id}</span><h3 className="font-medium text-card-foreground">{cr.title || 'Untitled'}</h3><span className={`badge border ${statusBadges[cr.status] || ''}`}>{cr.status}</span><CopyLinkButton kind="change" id={cr.id} className="opacity-0 group-hover:opacity-100" /></div>
@@ -124,6 +155,25 @@ export default function ChangeRequestsPage() {
           </motion.div>
         ))}
       </div>
+      {selectedIds.size > 0 && editable && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-card border rounded-xl shadow-2xl px-4 py-3">
+          <span className="text-xs font-medium text-foreground">{selectedIds.size} selected</span>
+          <select
+            className="select text-xs py-1 w-32"
+            onChange={(e) => { if (e.target.value) { handleBulkCRStatus(e.target.value); e.target.value = ''; } }}
+            value=""
+          >
+            <option value="">Set status...</option>
+            <option value="open">Open</option>
+            <option value="in_review">In Review</option>
+            <option value="approved">Approved</option>
+            <option value="rejected">Rejected</option>
+          </select>
+          <button onClick={handleBulkCRDelete} className="btn-danger text-xs"><Trash2 size={13} /> Delete</button>
+          <button onClick={selectAllCRs} className="text-[10px] text-muted-foreground hover:text-foreground">Select all</button>
+          <button onClick={clearCRSelection} className="text-[10px] text-muted-foreground hover:text-foreground"><X size={13} /></button>
+        </div>
+      )}
     </div>
   );
 }

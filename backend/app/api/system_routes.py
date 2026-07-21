@@ -65,7 +65,63 @@ async def public_config():
 @router.get("/info")
 async def system_info(admin: dict = Depends(require_admin)):
     """Runtime facts the admin UI uses to decide what update UX to show."""
-    return updater.runtime_info()
+    import os as _os
+    import platform
+    import socket
+    import sys
+    import time as _time
+
+    info = updater.runtime_info()
+
+    # Host identity
+    info["hostname"] = socket.gethostname()
+    try:
+        info["fqdn"] = socket.getfqdn()
+    except Exception:
+        info["fqdn"] = socket.gethostname()
+
+    # IP addresses — internal (LAN) and a best-effort public IP
+    internal_ips: list[str] = []
+    try:
+        from socket import AF_INET
+        for iface in ([l[4][0] for l in socket.getaddrinfo(socket.gethostname(), None) if l[0] == AF_INET]):
+            if iface not in internal_ips and not iface.startswith("127."):
+                internal_ips.append(iface)
+    except Exception:
+        pass
+    info["internal_ips"] = internal_ips or ["unknown"]
+
+    # OS info
+    info["os"] = {
+        "system": platform.system(),
+        "release": platform.release(),
+        "version": platform.version(),
+        "machine": platform.machine(),
+        "python": sys.version.split()[0],
+    }
+
+    # Uptime — how long PID 1 (this app in-container) has been running.
+    # /proc/1/stat field 22 is starttime *since boot* in clock ticks, so the
+    # elapsed uptime is system-uptime minus that offset.
+    try:
+        with open("/proc/uptime") as f:
+            system_uptime = float(f.read().split()[0])
+        with open("/proc/1/stat") as f:
+            starttime_ticks = int(f.read().split()[21])
+        clk_tck = _os.sysconf(_os.sysconf_names["SC_CLK_TCK"])
+        info["process_uptime_seconds"] = max(0, int(system_uptime - starttime_ticks / clk_tck))
+    except Exception:
+        info["process_uptime_seconds"] = 0
+
+    # Working directory and user
+    info["working_directory"] = _os.getcwd()
+    try:
+        import pwd
+        info["running_user"] = pwd.getpwuid(_os.getuid()).pw_name
+    except Exception:
+        info["running_user"] = str(_os.getuid())
+
+    return info
 
 
 @router.get("/update/check")

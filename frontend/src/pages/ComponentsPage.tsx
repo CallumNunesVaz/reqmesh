@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, ChevronRight, Boxes } from 'lucide-react';
+import { Plus, ChevronRight, Boxes, Square, CheckSquare, Trash2, X } from 'lucide-react';
 import { api, COMPONENT_TYPES, type Component, type ComponentTreeNode } from '../api/client';
 import { useStore } from '../store';
 import { useAuthStore } from '../store/auth';
@@ -14,6 +14,8 @@ export default function ComponentsPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
   const editable = useAuthStore((s) => s.editMode && s.user !== null && s.user.role !== 'viewer');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkParent, setBulkParent] = useState('');
   const dataVersion = useStore((s) => s.dataVersion);
 
   const [components, setComponents] = useState<Component[]>([]);
@@ -58,6 +60,32 @@ export default function ComponentsPage() {
       return next;
     });
 
+  const toggleComponent = (id: string) =>
+    setSelectedIds((prev) => {
+      const n = new Set(prev);
+      n.has(id) ? n.delete(id) : n.add(id);
+      return n;
+    });
+
+  const clearComponentSelection = () => setSelectedIds(new Set());
+  const selectAllComponents = () => setSelectedIds(new Set(components.map((c) => c.id)));
+
+  const handleBulkReparent = async () => {
+    if (!bulkParent.trim()) return;
+    await api.bulkReparentComponents(projectId!, [...selectedIds], bulkParent.trim());
+    clearComponentSelection();
+    load();
+    setBulkParent('');
+  };
+
+  const handleBulkDelete = async () => {
+    if (!projectId) return;
+    if (!confirm(`Delete ${selectedIds.size} component(s)?`)) return;
+    await api.bulkDeleteComponents(projectId, [...selectedIds]);
+    clearComponentSelection();
+    load();
+  };
+
   const renderNode = (node: ComponentTreeNode, depth: number): React.ReactNode => {
     const hasKids = node.children.length > 0;
     const isCollapsed = collapsed.has(node.id);
@@ -71,6 +99,15 @@ export default function ComponentsPage() {
           className="flex items-center gap-2 px-2 py-2 rounded-lg cursor-pointer transition-colors hover:bg-accent"
           style={{ paddingLeft: depth * 20 + 8 }}
         >
+          {editable && (
+            <span className="shrink-0" onClick={(e) => e.stopPropagation()}>
+              {selectedIds.has(node.id) ? (
+                <CheckSquare size={13} className="text-primary cursor-pointer" onClick={() => toggleComponent(node.id)} />
+              ) : (
+                <Square size={13} className="text-muted-foreground/40 cursor-pointer hover:text-muted-foreground" onClick={() => toggleComponent(node.id)} />
+              )}
+            </span>
+          )}
           {hasKids ? (
             <button
               onClick={(e) => { e.stopPropagation(); toggle(node.id); }}
@@ -111,9 +148,27 @@ export default function ComponentsPage() {
           <button onClick={() => { setShowCreate((s) => !s); setError(''); }} className="btn-primary">
             <Plus size={16} /> New Component
           </button>
-        )}
-      </div>
+      )}
 
+      {selectedIds.size > 0 && editable && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-card border rounded-xl shadow-2xl px-4 py-3">
+          <span className="text-xs font-medium text-foreground">{selectedIds.size} selected</span>
+          <select
+            className="select text-xs py-1 w-32"
+            onChange={async (e) => { if (e.target.value) { await api.bulkUpdateComponents(projectId!, [...selectedIds], { type: e.target.value }); clearComponentSelection(); load(); } }}
+            value=""
+          >
+            <option value="">Set type...</option>
+            {COMPONENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+          <input className="input text-xs w-20" placeholder="Parent ID" value={bulkParent} onChange={(e) => setBulkParent(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleBulkReparent(); }} />
+          <button onClick={handleBulkReparent} className="btn-secondary text-xs" disabled={!bulkParent.trim()}>Move</button>
+          <button onClick={handleBulkDelete} className="btn-danger text-xs"><Trash2 size={13} /> Delete</button>
+          <button onClick={selectAllComponents} className="text-[10px] text-muted-foreground hover:text-foreground">Select all</button>
+          <button onClick={clearComponentSelection} className="text-[10px] text-muted-foreground hover:text-foreground"><X size={13} /></button>
+        </div>
+      )}
+    </div>
       <AnimatePresence>
         {showCreate && (
           <motion.form

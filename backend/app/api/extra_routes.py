@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -11,8 +12,11 @@ from pydantic import ValidationError
 from app.core.dependencies import get_store, require_edit, get_current_user
 from app.core.ids import safe_id
 from app.models.change_request import ChangeRequestCreate, ChangeRequestUpdate
+from app.models.component import ComponentCreate, ComponentUpdate
 from app.models.requirement import RequirementUpdate
 from app.models.risk import RiskCreate, RiskUpdate, CommentCreate, DecisionRecordCreate, DecisionRecordUpdate
+from app.models.verification import VerificationCaseCreate, VerificationCaseUpdate
+from app.models.specification import SpecificationCreate, SpecificationUpdate
 from app.services.publisher import Publisher
 from app.services.integrity import IntegrityChecker, clear_suspect_links
 from app.services.git_hooks import install_hook, uninstall_hook
@@ -272,6 +276,289 @@ async def bulk_delete_requirements(project_id: str, data: dict, user: dict = Dep
     return {"deleted": deleted}
 
 
+# ── Bulk operations for other entity types ─────────────────────────────────────
+
+def _bulk_delete(store, ids: list[str], get_fn, delete_fn, record_type: str, username: str) -> int:
+    deleted = 0
+    for item_id in ids:
+        before = get_fn(item_id)
+        if before is None:
+            continue
+        if delete_fn(item_id):
+            record_change(store, item_id, "delete", before, None, username)
+            deleted += 1
+    return deleted
+
+
+@router.post("/projects/{project_id}/components/bulk")
+async def bulk_update_components(project_id: str, data: dict, user: dict = Depends(require_edit)):
+    store = get_store(project_id)
+    ids = data.get("ids", [])
+    try:
+        updates = ComponentUpdate.model_validate(data.get("updates", {})).model_dump(mode="json", exclude_unset=True)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors())
+    if not ids or not updates:
+        raise HTTPException(status_code=400, detail="ids and updates required")
+    updated = 0
+    for comp_id in ids:
+        if store.update_component(comp_id, updates):
+            updated += 1
+    return {"updated": updated}
+
+
+@router.post("/projects/{project_id}/components/bulk-delete")
+async def bulk_delete_components(project_id: str, data: dict, user: dict = Depends(require_edit)):
+    store = get_store(project_id)
+    deleted = 0
+    for comp_id in data.get("ids", []):
+        before = store.get_component(comp_id)
+        if before is None:
+            continue
+        promoted = []
+        for child in store.list_components():
+            if child.get("parent") == comp_id:
+                store.update_component(child["id"], {"parent": before.get("parent")})
+                promoted.append(child["id"])
+        if store.delete_component(comp_id):
+            record_change(store, comp_id, "delete", before, None, user.get("username", ""))
+            deleted += 1
+    return {"deleted": deleted}
+
+
+@router.post("/projects/{project_id}/components/bulk-reparent")
+async def bulk_reparent_components(project_id: str, data: dict, user: dict = Depends(require_edit)):
+    """Assign multiple components to a new parent (set parent=None to detach)."""
+    store = get_store(project_id)
+    ids = data.get("ids", [])
+    parent = data.get("parent", None)
+    updated = 0
+    for comp_id in ids:
+        if store.update_component(comp_id, {"parent": parent or None}):
+            updated += 1
+    return {"updated": updated}
+
+
+@router.post("/projects/{project_id}/verification/bulk")
+async def bulk_update_verification_cases(project_id: str, data: dict, user: dict = Depends(require_edit)):
+    store = get_store(project_id)
+    ids = data.get("ids", [])
+    try:
+        updates = VerificationCaseUpdate.model_validate(data.get("updates", {})).model_dump(mode="json", exclude_unset=True)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors())
+    if not ids or not updates:
+        raise HTTPException(status_code=400, detail="ids and updates required")
+    updated = 0
+    for vc_id in ids:
+        if store.update_verification_case(vc_id, updates):
+            updated += 1
+    return {"updated": updated}
+
+
+@router.post("/projects/{project_id}/verification/bulk-delete")
+async def bulk_delete_verification_cases(project_id: str, data: dict, user: dict = Depends(require_edit)):
+    store = get_store(project_id)
+    deleted = _bulk_delete(store, data.get("ids", []), store.get_verification_case, store.delete_verification_case, "verification", user.get("username", ""))
+    return {"deleted": deleted}
+
+
+@router.post("/projects/{project_id}/specifications/bulk")
+async def bulk_update_specifications(project_id: str, data: dict, user: dict = Depends(require_edit)):
+    store = get_store(project_id)
+    ids = data.get("ids", [])
+    try:
+        updates = SpecificationUpdate.model_validate(data.get("updates", {})).model_dump(mode="json", exclude_unset=True)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors())
+    if not ids or not updates:
+        raise HTTPException(status_code=400, detail="ids and updates required")
+    updated = 0
+    for spec_id in ids:
+        if store.update_specification(spec_id, updates):
+            updated += 1
+    return {"updated": updated}
+
+
+@router.post("/projects/{project_id}/specifications/bulk-delete")
+async def bulk_delete_specifications(project_id: str, data: dict, user: dict = Depends(require_edit)):
+    store = get_store(project_id)
+    deleted = _bulk_delete(store, data.get("ids", []), store.get_specification, store.delete_specification, "specification", user.get("username", ""))
+    return {"deleted": deleted}
+
+
+@router.post("/projects/{project_id}/risks/bulk")
+async def bulk_update_risks(project_id: str, data: dict, user: dict = Depends(require_edit)):
+    store = get_store(project_id)
+    ids = data.get("ids", [])
+    try:
+        updates = RiskUpdate.model_validate(data.get("updates", {})).model_dump(mode="json", exclude_unset=True)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors())
+    if not ids or not updates:
+        raise HTTPException(status_code=400, detail="ids and updates required")
+    updated = 0
+    for risk_id in ids:
+        if store.update_item("risks", risk_id, updates):
+            updated += 1
+    return {"updated": updated}
+
+
+@router.post("/projects/{project_id}/risks/bulk-delete")
+async def bulk_delete_risks(project_id: str, data: dict, user: dict = Depends(require_edit)):
+    store = get_store(project_id)
+    deleted = 0
+    for risk_id in data.get("ids", []):
+        before = store.get_item("risks", risk_id)
+        if before is None:
+            continue
+        if store.delete_item("risks", risk_id):
+            record_change(store, risk_id, "delete", before, None, user.get("username", ""))
+            deleted += 1
+    return {"deleted": deleted}
+
+
+@router.post("/projects/{project_id}/change-requests/bulk")
+async def bulk_update_change_requests(project_id: str, data: dict, user: dict = Depends(require_edit)):
+    store = get_store(project_id)
+    ids = data.get("ids", [])
+    try:
+        updates = ChangeRequestUpdate.model_validate(data.get("updates", {})).model_dump(mode="json", exclude_unset=True)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors())
+    if not ids or not updates:
+        raise HTTPException(status_code=400, detail="ids and updates required")
+    updated = 0
+    for cr_id in ids:
+        if store.update_item("change-requests", cr_id, updates):
+            updated += 1
+    return {"updated": updated}
+
+
+@router.post("/projects/{project_id}/change-requests/bulk-delete")
+async def bulk_delete_change_requests(project_id: str, data: dict, user: dict = Depends(require_edit)):
+    store = get_store(project_id)
+    deleted = 0
+    for cr_id in data.get("ids", []):
+        before = store.get_item("change-requests", cr_id)
+        if before is None:
+            continue
+        if store.delete_item("change-requests", cr_id):
+            record_change(store, cr_id, "delete", before, None, user.get("username", ""))
+            deleted += 1
+    return {"deleted": deleted}
+
+
+# ── Bulk reparent + re-prefix for requirements ─────────────────────────────────
+
+def _collect_subtree(children_by_parent: dict[str, list[str]], root_id: str) -> list[str]:
+    """Return root_id followed by all transitive descendant ids (pre-order)."""
+    out = [root_id]
+    for child_id in children_by_parent.get(root_id, []):
+        out.extend(_collect_subtree(children_by_parent, child_id))
+    return out
+
+
+def _leading_prefix(item_id: str) -> str:
+    """The leading alphabetic run of an ID, e.g. 'REQ' from 'REQ-0001'."""
+    m = re.match(r"^([A-Za-z]+)", item_id or "")
+    return m.group(1) if m else ""
+
+
+@router.post("/projects/{project_id}/requirements/bulk-reparent")
+async def bulk_reparent_requirements(project_id: str, data: dict, user: dict = Depends(require_edit)):
+    """Move selected requirements under a new parent and optionally re-prefix IDs.
+
+    With ``re_prefix`` set and the new parent's prefix differing from a moved
+    requirement's, that requirement and its entire descendant subtree are
+    renamed to the new prefix. Parent pointers and relation targets — both
+    inside the subtree and elsewhere in the project — are rewritten to the new
+    IDs so nothing is left dangling.
+    """
+    store = get_store(project_id)
+    ids = data.get("ids", [])
+    new_parent = data.get("parent", None) or None
+    re_prefix = data.get("re_prefix", False)
+
+    # Snapshot the hierarchy before any mutation so subtree collection is stable.
+    children_by_parent: dict[str, list[str]] = {}
+    for r in store.list_requirements():
+        children_by_parent.setdefault(r.get("parent"), []).append(r["id"])
+
+    new_prefix = _leading_prefix(new_parent) if new_parent else ""
+
+    updated: list[str] = []
+    id_map: dict[str, str] = {}  # old_id -> new_id, across every moved subtree
+
+    for req_id in ids:
+        req = store.get_requirement(req_id)
+        if req is None:
+            continue
+        old_prefix = _leading_prefix(req_id)
+        if re_prefix and new_parent and new_prefix and old_prefix and old_prefix != new_prefix:
+            subtree = _collect_subtree(children_by_parent, req_id)
+            subtree_set = set(subtree)
+            # Mirror the new parent's ID shape (separator + zero-padded width)
+            # so re-prefixed IDs match the destination namespace's convention.
+            pm = re.match(r"^[A-Za-z]+(\D*)(\d+)$", new_parent)
+            sep, width = (pm.group(1), len(pm.group(2))) if pm else ("", 4)
+            # Allocate fresh suffixes past whatever the new prefix already uses,
+            # so a moved item never overwrites an existing ID (e.g. the parent).
+            used_nums = set()
+            for r in store.list_requirements():
+                if r["id"] in subtree_set:
+                    continue
+                mm = re.match(r"^" + re.escape(new_prefix) + r"\D*(\d+)$", r["id"])
+                if mm:
+                    used_nums.add(int(mm.group(1)))
+            next_num = (max(used_nums) + 1) if used_nums else 1
+            # Only nodes that share the moved group's prefix are renamed; other
+            # descendants keep their ID but still get their parent pointer fixed.
+            local_map = {old_id: old_id for old_id in subtree}
+            for old_id in subtree:
+                if old_id.startswith(old_prefix):
+                    local_map[old_id] = f"{new_prefix}{sep}{str(next_num).zfill(width)}"
+                    next_num += 1
+            for old_id in subtree:
+                node = store.get_requirement(old_id)
+                if node is None:
+                    continue
+                node = dict(node)
+                node["id"] = local_map[old_id]
+                if old_id == req_id:
+                    node["parent"] = new_parent
+                else:
+                    node["parent"] = local_map.get(node.get("parent"), node.get("parent"))
+                for rel in node.get("relations", []):
+                    if rel.get("target") in local_map:
+                        rel["target"] = local_map[rel["target"]]
+                store.delete_requirement(old_id)
+                store.create_requirement(node)
+                updated.append(node["id"])
+            id_map.update({k: v for k, v in local_map.items() if k != v})
+            continue
+        if store.update_requirement(req_id, {"parent": new_parent}):
+            updated.append(req_id)
+
+    # Rewrite relation targets that point at renamed IDs from outside the moves.
+    if id_map:
+        renamed_new_ids = set(id_map.values())
+        for r in store.list_requirements():
+            if r["id"] in renamed_new_ids:
+                continue  # its internal relations were already remapped above
+            rels = r.get("relations", [])
+            changed = False
+            for rel in rels:
+                tgt = rel.get("target")
+                if tgt in id_map:
+                    rel["target"] = id_map[tgt]
+                    changed = True
+            if changed:
+                store.update_requirement(r["id"], {"relations": rels})
+
+    return {"updated": len(updated), "ids": updated}
+
+
 # ── Impact Analysis ───────────────────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/requirements/{req_id}/impact")
@@ -417,7 +704,8 @@ async def project_metrics(project_id: str):
     with_desc = with_rationale = with_source = with_alloc = with_trace = with_cascade = 0
     for r in reqs:
         statuses[r.get("status", "proposed")] = statuses.get(r.get("status", "proposed"), 0) + 1
-        if r.get("baseline"): baselines.add(r["baseline"])
+        for b in (r.get("baselines") or []):
+            if b: baselines.add(b)
         if r.get("description", "").strip(): with_desc += 1
         if r.get("rationale", "").strip(): with_rationale += 1
         if r.get("source", "").strip(): with_source += 1
@@ -703,7 +991,10 @@ async def freeze_baseline(project_id: str, name: str, user: dict = Depends(requi
     data = {"name": name, "frozen_at": datetime.now(timezone.utc).isoformat(), "frozen": True, "snapshot": snapshot}
     store.write_item("baselines", name, data)
     for r in reqs:
-        store.update_requirement(r["id"], {"baseline": name})
+        existing = list(r.get("baselines") or [])
+        if name not in existing:
+            existing.append(name)
+            store.update_requirement(r["id"], {"baselines": existing})
     return {"name": name, "requirements": len(snapshot)}
 
 

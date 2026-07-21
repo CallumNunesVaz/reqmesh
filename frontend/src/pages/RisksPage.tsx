@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Trash2, AlertTriangle } from 'lucide-react';
+import { Plus, Trash2, AlertTriangle, Square, CheckSquare, X } from 'lucide-react';
 import { api, type Risk } from '../api/client';
 import { useAuthStore } from '../store/auth';
+import { useStore } from '../store';
 import { CopyLinkButton, EntityLink } from '../components/entities';
 import { useFocusedEntity } from '../components/useFocusedEntity';
 import { AutoLinkText } from '../components/autoLink';
@@ -23,10 +24,12 @@ export default function RisksPage() {
   const [error, setError] = useState('');
   const [form, setForm] = useState({ id: '', title: '', description: '', severity: 'medium', probability: 'medium' });
   const editable = useAuthStore((s) => s.editMode && s.user !== null && s.user.role !== 'viewer');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const dataVersion = useStore((s) => s.dataVersion);
   const entityKinds = useEntityKinds(projectId);
 
   const load = () => { if (!projectId) return; api.listRisks(projectId).then(setRisks).catch(console.error); };
-  useEffect(load, [projectId]);
+  useEffect(load, [projectId, dataVersion]);
 
   // Arriving from a link elsewhere (?focus=RSK-001).
   const focusId = useFocusedEntity(risks.length > 0);
@@ -47,6 +50,25 @@ export default function RisksPage() {
       await api.deleteRisk(projectId, id);
       setRisks(risks.filter(r => r.id !== id));
     } catch (err: any) { setError(err.message || 'Failed to delete'); }
+  };
+
+  const toggleRisk = (id: string) => setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const clearRiskSelection = () => setSelectedIds(new Set());
+  const selectAllRisks = () => setSelectedIds(new Set(risks.map(r => r.id)));
+
+  const handleBulkRiskStatus = async (status: string) => {
+    if (!projectId) return;
+    await api.bulkUpdateRisks(projectId, [...selectedIds], { status });
+    clearRiskSelection();
+    load();
+  };
+
+  const handleBulkRiskDelete = async () => {
+    if (!projectId) return;
+    if (!confirm(`Delete ${selectedIds.size} risk(s)?`)) return;
+    await api.bulkDeleteRisks(projectId, [...selectedIds]);
+    clearRiskSelection();
+    load();
   };
 
   return (
@@ -78,6 +100,15 @@ export default function RisksPage() {
           <motion.div key={r.id} id={`entity-${r.id}`} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.03 }}
             className={`card p-4 hover:shadow-md transition-shadow group ${focusId === r.id ? 'ring-2 ring-primary/50' : ''}`}>
             <div className="flex items-center gap-3">
+              {editable && (
+                <span className="shrink-0">
+                  {selectedIds.has(r.id) ? (
+                    <CheckSquare size={14} className="text-primary cursor-pointer" onClick={() => toggleRisk(r.id)} />
+                  ) : (
+                    <Square size={14} className="text-muted-foreground/40 cursor-pointer hover:text-muted-foreground" onClick={() => toggleRisk(r.id)} />
+                  )}
+                </span>
+              )}
               <div className="w-9 h-9 bg-red-500/10 text-red-400 rounded-lg flex items-center justify-center"><AlertTriangle size={18} /></div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2"><span className="font-mono text-xs text-muted-foreground">{r.id}</span><h3 className="font-medium text-card-foreground">{r.title}</h3><span className={`badge border ${sevColors[r.severity] || ''}`}>{r.severity}</span><span className="text-xs text-muted-foreground">prob: {r.probability}</span><CopyLinkButton kind="risk" id={r.id} className="opacity-0 group-hover:opacity-100" /></div>
@@ -100,6 +131,24 @@ export default function RisksPage() {
           </motion.div>
         ))}
       </div>
+      {selectedIds.size > 0 && editable && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-card border rounded-xl shadow-2xl px-4 py-3">
+          <span className="text-xs font-medium text-foreground">{selectedIds.size} selected</span>
+          <select
+            className="select text-xs py-1 w-32"
+            onChange={(e) => { if (e.target.value) { handleBulkRiskStatus(e.target.value); e.target.value = ''; } }}
+            value=""
+          >
+            <option value="">Set status...</option>
+            <option value="open">Open</option>
+            <option value="closed">Closed</option>
+            <option value="mitigated">Mitigated</option>
+          </select>
+          <button onClick={handleBulkRiskDelete} className="btn-danger text-xs"><Trash2 size={13} /> Delete</button>
+          <button onClick={selectAllRisks} className="text-[10px] text-muted-foreground hover:text-foreground">Select all</button>
+          <button onClick={clearRiskSelection} className="text-[10px] text-muted-foreground hover:text-foreground"><X size={13} /></button>
+        </div>
+      )}
     </div>
   );
 }

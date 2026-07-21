@@ -20,8 +20,8 @@ def test_different_descriptions_yield_different_fingerprints():
 
 
 def test_non_normative_fields_do_not_affect_fingerprint():
-    r1 = {"type": "functional", "name": "Login", "description": "Auth", "rationale": "", "priority": "medium", "verification_method": "test", "verification_cases": [], "parent": None, "source": "", "allocated_to": "team-a", "baseline": "v1", "modified": "2023-01-01"}
-    r2 = {"type": "functional", "name": "Login", "description": "Auth", "rationale": "", "priority": "medium", "verification_method": "test", "verification_cases": [], "parent": None, "source": "", "allocated_to": "team-b", "baseline": "v2", "modified": "2024-06-15"}
+    r1 = {"type": "functional", "name": "Login", "description": "Auth", "rationale": "", "priority": "medium", "verification_method": "test", "verification_cases": [], "parent": None, "source": "", "allocated_to": "team-a", "baselines": ["v1"], "modified": "2023-01-01"}
+    r2 = {"type": "functional", "name": "Login", "description": "Auth", "rationale": "", "priority": "medium", "verification_method": "test", "verification_cases": [], "parent": None, "source": "", "allocated_to": "team-b", "baselines": ["v2"], "modified": "2024-06-15"}
     assert compute_fingerprint(r1) == compute_fingerprint(r2)
 
 

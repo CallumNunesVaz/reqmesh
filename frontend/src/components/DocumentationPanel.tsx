@@ -405,7 +405,7 @@ const DOCS: DocSection[] = [
           <LI>Each relation stores the target's fingerprint at review time. If the target changes, the link becomes <strong className="text-amber-400">suspect</strong></LI>
         </OL>
 
-        <Callout variant="warning">Changing the description, type, priority, source, or rationale triggers re-review. Changing <InlineCode>allocated_to</InlineCode> or <InlineCode>baseline</InlineCode> does not.</Callout>
+        <Callout variant="warning">Changing the description, type, priority, source, or rationale triggers re-review. Changing <InlineCode>allocated_to</InlineCode> or <InlineCode>baselines</InlineCode> does not.</Callout>
 
         <H3>Derived & Non-normative</H3>
         <UL>

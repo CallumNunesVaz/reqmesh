@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   ShieldCheck, RefreshCw, Download, CheckCircle2, AlertTriangle, Loader,
   ArrowUpCircle, GitBranch, Server, ExternalLink, Terminal, X, Upload,
+  Monitor, Globe, Network, Clock,
 } from 'lucide-react';
 import { api, type SystemInfo, type UpdateCheck, type UpdateStatus, type BuildInfo } from '../api/client';
 import { useAuthStore } from '../store/auth';
@@ -164,6 +165,29 @@ export default function SystemPage() {
         </dl>
       </section>
 
+      {/* ── System info card ─────────────────────────────────────── */}
+      <section className="card p-5">
+        <h2 className="font-medium mb-3 flex items-center gap-2"><Monitor size={16} /> Environment</h2>
+        <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+          <dt className="text-muted-foreground col-span-2 sm:col-span-1"><Globe size={13} className="inline mr-1" /> Hostname</dt>
+          <dd className="col-span-2 sm:col-span-1 font-mono text-xs">{info?.fqdn ?? '…'}{info?.hostname !== info?.fqdn ? ` (${info?.hostname})` : ''}</dd>
+          <dt className="text-muted-foreground col-span-2 sm:col-span-1"><Network size={13} className="inline mr-1" /> IP addresses</dt>
+          <dd className="col-span-2 sm:col-span-1 font-mono text-xs">{(info?.internal_ips ?? []).join(', ') || '…'}</dd>
+          <dt className="text-muted-foreground col-span-2 sm:col-span-1"><Monitor size={13} className="inline mr-1" /> OS</dt>
+          <dd className="col-span-2 sm:col-span-1 font-mono text-xs">{info?.os ? `${info.os.system} ${info.os.release} (${info.os.machine})` : '…'}</dd>
+          <dt className="text-muted-foreground col-span-2 sm:col-span-1"><Terminal size={13} className="inline mr-1" /> Python</dt>
+          <dd className="col-span-2 sm:col-span-1 font-mono text-xs">{info?.os?.python ?? '…'}</dd>
+          <dt className="text-muted-foreground col-span-2 sm:col-span-1"><Clock size={13} className="inline mr-1" /> App uptime</dt>
+          <dd className="col-span-2 sm:col-span-1 font-mono text-xs">
+            {info ? formatUptime(info.process_uptime_seconds) : '…'}
+          </dd>
+          <dt className="text-muted-foreground col-span-2 sm:col-span-1"><Server size={13} className="inline mr-1" /> Working directory</dt>
+          <dd className="col-span-2 sm:col-span-1 font-mono text-xs truncate">{info?.working_directory ?? '…'}</dd>
+          <dt className="text-muted-foreground col-span-2 sm:col-span-1"><ShieldCheck size={13} className="inline mr-1" /> Running as</dt>
+          <dd className="col-span-2 sm:col-span-1 font-mono text-xs">{info?.running_user ?? '…'}{info?.docker ? ' (Docker)' : ''}</dd>
+        </dl>
+      </section>
+
       {/* ── Updates card ─────────────────────────────────────────── */}
       <section className="card p-5">
         <div className="flex items-center justify-between mb-3">
@@ -303,7 +327,18 @@ export default function SystemPage() {
   );
 }
 
-/** Copy-paste steps for deployments where the app can't self-update. */
+function formatUptime(seconds: number): string {
+  if (seconds <= 0) return '—';
+  const d = Math.floor(seconds / 86400);
+  const h = Math.floor((seconds % 86400) / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const parts: string[] = [];
+  if (d > 0) parts.push(`${d}d`);
+  if (h > 0) parts.push(`${h}h`);
+  if (m > 0) parts.push(`${m}m`);
+  return parts.length > 0 ? parts.join(' ') : '< 1m';
+}
+
 function GuidedInstructions({ info, check }: { info: SystemInfo | null; check: UpdateCheck | null }) {
   const docker = info?.docker;
   const cmd = docker

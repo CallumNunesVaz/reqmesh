@@ -369,7 +369,7 @@ def test_baseline_rename_carries_snapshot_and_labels(client, project):
 
     # The requirement label moved and the frozen snapshot moved with it.
     req = client.get(f"/api/projects/{project}/requirements/SYST0001").json()
-    assert req["baseline"] == "BL2"
+    assert "BL2" in req["baselines"]
     assert client.get(f"/api/projects/{project}/baselines/BL2/diff").status_code == 200
     assert client.get(f"/api/projects/{project}/baselines/BL1/diff").status_code == 404
 

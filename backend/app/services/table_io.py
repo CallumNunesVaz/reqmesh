@@ -25,7 +25,7 @@ def _flat_columns(meta: dict | None = None) -> list[str]:
     cols = [
         "id", "type", "name", "description", "status", "priority",
         "verification_method", "parent", "relations", "verification_cases",
-        "rationale", "source", "allocated_to", "baseline",
+        "rationale", "source", "allocated_to", "baselines",
     ]
     if meta and "attributes" in meta and "publish" in meta["attributes"]:
         for attr in meta["attributes"]["publish"]:
@@ -51,7 +51,7 @@ def _req_to_row(req: dict, meta: dict | None = None) -> dict:
         "rationale": req.get("rationale", ""),
         "source": req.get("source", ""),
         "allocated_to": req.get("allocated_to", ""),
-        "baseline": req.get("baseline", ""),
+        "baselines": ", ".join(req.get("baselines", [])),
     }
     for attr in req.get("attributes", []):
         row[attr["key"]] = attr["value"]
@@ -75,6 +75,7 @@ _HEADER_ALIASES: dict[str, str] = {
     "allocated_to": "allocated_to",
     "allocated": "allocated_to",
     "system_element": "allocated_to",
+    "baseline": "baselines",
 }
 
 
@@ -100,7 +101,7 @@ def _row_to_req(row: dict) -> dict:
         if col_key in {
             "id", "type", "name", "description", "status", "priority",
             "verification_method", "parent", "relations", "verification_cases",
-            "rationale", "source", "allocated_to", "baseline", "created", "modified",
+            "rationale", "source", "allocated_to", "baselines", "created", "modified",
         }:
             continue
         val = row.get(col_name, "")
@@ -121,7 +122,7 @@ def _row_to_req(row: dict) -> dict:
         "rationale": get("rationale", ""),
         "source": get("source", ""),
         "allocated_to": get("allocated_to", ""),
-        "baseline": get("baseline", "") or None,
+        "baselines": [b.strip() for b in get("baselines", "").split(",") if b.strip()] or [],
         "attributes": attributes,
     }
     return req

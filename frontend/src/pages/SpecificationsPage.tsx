@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, FileText, Trash2, ChevronDown } from 'lucide-react';
+import { Plus, FileText, Trash2, ChevronDown, Square, CheckSquare, X } from 'lucide-react';
 import { api, type Requirement } from '../api/client';
 import { useStore } from '../store';
 import { useAuthStore } from '../store/auth';
@@ -14,6 +14,8 @@ export default function SpecificationsPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const { specifications, setSpecifications } = useStore();
   const editable = useAuthStore((s) => s.editMode && s.user !== null && s.user.role !== 'viewer');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const dataVersion = useStore((s) => s.dataVersion);
   const [showCreate, setShowCreate] = useState(false);
   const [newSpec, setNewSpec] = useState({ id: '', name: '', description: '' });
   const [requirements, setRequirements] = useState<Requirement[]>([]);
@@ -26,7 +28,7 @@ export default function SpecificationsPage() {
     api.listRequirements(projectId).then(setRequirements).catch(() => {});
   };
 
-  useEffect(load, [projectId]);
+  useEffect(load, [projectId, dataVersion]);
 
   const reqNames = useMemo(() => new Map(requirements.map((r) => [r.id, r.name])), [requirements]);
   const specNames = useMemo(() => new Map(specifications.map((s) => [s.id, s.name])), [specifications]);
@@ -63,6 +65,18 @@ export default function SpecificationsPage() {
     if (!confirm(`Delete specification ${specId}?`)) return;
     await api.deleteSpecification(projectId, specId);
     setSpecifications(specifications.filter((s) => s.id !== specId));
+  };
+
+  const toggleSpec = (id: string) => setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const clearSpecSelection = () => setSelectedIds(new Set());
+  const selectAllSpecs = () => setSelectedIds(new Set(specifications.map(s => s.id)));
+
+  const handleBulkSpecDelete = async () => {
+    if (!projectId) return;
+    if (!confirm(`Delete ${selectedIds.size} specification(s)?`)) return;
+    await api.bulkDeleteSpecifications(projectId, [...selectedIds]);
+    clearSpecSelection();
+    load();
   };
 
   return (
@@ -126,6 +140,15 @@ export default function SpecificationsPage() {
               }`}
             >
               <div className="flex items-center gap-3 p-4 cursor-pointer" onClick={() => toggleExpand(spec.id)}>
+                {editable && (
+                  <span className="shrink-0" onClick={(e) => e.stopPropagation()}>
+                    {selectedIds.has(spec.id) ? (
+                      <CheckSquare size={14} className="text-primary cursor-pointer" onClick={() => toggleSpec(spec.id)} />
+                    ) : (
+                      <Square size={14} className="text-muted-foreground/40 cursor-pointer hover:text-muted-foreground" onClick={() => toggleSpec(spec.id)} />
+                    )}
+                  </span>
+                )}
                 <div className="w-9 h-9 bg-amber-500/10 text-amber-400 rounded-lg flex items-center justify-center">
                   <FileText size={18} />
                 </div>
@@ -202,6 +225,14 @@ export default function SpecificationsPage() {
             </motion.div>
             );
           })}
+        </div>
+      )}
+      {selectedIds.size > 0 && editable && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-card border rounded-xl shadow-2xl px-4 py-3">
+          <span className="text-xs font-medium text-foreground">{selectedIds.size} selected</span>
+          <button onClick={handleBulkSpecDelete} className="btn-danger text-xs"><Trash2 size={13} /> Delete</button>
+          <button onClick={selectAllSpecs} className="text-[10px] text-muted-foreground hover:text-foreground">Select all</button>
+          <button onClick={clearSpecSelection} className="text-[10px] text-muted-foreground hover:text-foreground"><X size={13} /></button>
         </div>
       )}
     </div>

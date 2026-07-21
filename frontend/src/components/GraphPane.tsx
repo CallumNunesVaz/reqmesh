@@ -22,10 +22,11 @@ import {
 import '@xyflow/react/dist/style.css';
 import dagre from '@dagrejs/dagre';
 import { forceSimulation, forceLink, forceManyBody, forceCollide, forceX, forceY } from 'd3-force';
-import { Search, RotateCw, ListTree, Orbit, Boxes, SlidersHorizontal } from 'lucide-react';
+import { Search, RotateCw, ListTree, Orbit, SlidersHorizontal, ChevronsUpDown, ChevronsDownUp, Filter } from 'lucide-react';
 import { api, type Requirement, type TraceLink, type EvaluatedRequirement, type EvaluatedParameter, type Component } from '../api/client';
 import CircularNode from './CircularNode';
 import BlockNode, { BLOCK_W, type BlockParam, type BlockConstraint } from './BlockNode';
+import { statusColors } from './RequirementNode';
 import OrthoEdge from './OrthoEdge';
 import { routeEdges, type NodeRect } from './orthoRoute';
 import LoadingSplash from './LoadingSplash';
@@ -44,14 +45,34 @@ const edgeColors: Record<string, string> = {
   cascades: 'hsl(300,60%,64%)',
 };
 
-const componentColors: Record<string, string> = {
-  system:    'hsl(207,70%,58%)',
-  subsystem: 'hsl(260,55%,62%)',
-  assembly:  'hsl(28,65%,58%)',
-  part:      'hsl(145,40%,50%)',
-  software:  'hsl(180,50%,48%)',
-  interface: 'hsl(330,50%,58%)',
+// ── Filter-option colours ─────────────────────────────────────────────────
+// Match the colour language used elsewhere: statuses reuse the canvas node
+// status palette; priorities reuse the block priority indicators; types reuse
+// the same `cs` palette tokens as the Requirements list (RequirementsPage).
+const priorityFilterColors: Record<string, string> = {
+  low: 'hsl(195,6%,62%)',
+  medium: 'hsl(207,90%,64%)',
+  high: 'hsl(28,100%,53%)',
+  critical: 'hsl(0,84%,68%)',
 };
+const verifStatusFilterColors: Record<string, string> = {
+  passed: 'hsl(145,55%,42%)',
+  failed: 'hsl(0,84%,68%)',
+  pending: 'hsl(195,6%,62%)',
+  na: 'hsl(195,6%,62%)',
+};
+const typeCsToken: Record<string, string> = {
+  functional: 'blue', interface: 'purple', user: 'yellow', system: 'pink',
+  business: 'blue', regulatory_compliance: 'red', safety: 'orange',
+  environmental: 'green', verification: 'teal',
+  design: 'pink', constraint: 'orange', // legacy demo types
+};
+const statusOptionColor = (s: string) => statusColors[s]?.text;
+const priorityOptionColor = (p: string) => priorityFilterColors[p];
+const verifStatusOptionColor = (v: string) => verifStatusFilterColors[v];
+const typeOptionColor = (t: string) =>
+  t.startsWith('non_functional') ? 'hsl(var(--cs-teal))'
+    : typeCsToken[t] ? `hsl(var(--cs-${typeCsToken[t]}))` : undefined;
 
 const statusMinimapColors: Record<string, string> = {
   proposed: '#539fe6',
@@ -291,7 +312,6 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
   const [reqs, setReqs] = useState<Requirement[]>([]);
   const [traces, setTraces] = useState<TraceLink[]>([]);
   const [components, setComponents] = useState<Component[]>([]);
-  const [showComponents, setShowComponents] = useState(false);
   const [evaluated, setEvaluated] = useState<Map<string, EvaluatedRequirement>>(new Map());
 
   // Reload choreography: a data reload or layout switch hard-remounts the
@@ -315,10 +335,20 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
   }, []);
   useEffect(() => () => splashTimers.current.forEach(clearTimeout), []);
   const [search, setSearch] = useState('');
-  const [key, setKey] = useState(0);
+  const [filterStatus, setFilterStatus] = useState('');
+  const [filterPriority, setFilterPriority] = useState('');
+  const [filterBaseline, setFilterBaseline] = useState('');
+  const [filterType, setFilterType] = useState('');
+  const [filterVerStatus, setFilterVerStatus] = useState('');
+  const [filterVerMethod, setFilterVerMethod] = useState('');
+  const [filterAllocated, setFilterAllocated] = useState('');
+  const [filterComponent, setFilterComponent] = useState('');
+  const [filterKind, setFilterKind] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
   const { selectedReqId, selectReq } = useSelectedReq();
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [autoCollapsed, setAutoCollapsed] = useState(false);
   const [entranceDone, setEntranceDone] = useState(false);
   // Fresh storage key: the UML block diagram is the default view for
   // everyone — older sessions' saved 'force'/'tree' preference doesn't carry.
@@ -358,17 +388,23 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
   };
 
   const loadData = useCallback(() => {
+    const vp = rfRef.current?.getViewport() ?? null;
     holdSplash();
     Promise.all([
       api.listRequirements(projectId),
       api.getTraces(projectId),
       api.getEvaluation(projectId).catch(() => null),
-      api.listComponents(projectId).catch(() => ({ items: [], total: 0 })),
+      api.listComponents(projectId).catch(() => []),
     ]).then(([requirements, traceData, evaluation, compData]) => {
       setReqs(requirements); setTraces(traceData.links || []);
-      setComponents((compData as any).items || []);
+      setComponents(compData || []);
       setEvaluated(new Map((evaluation?.requirements ?? []).map((er) => [er.id, er])));
-      setKey(k => k + 1); setEntranceDone(false);
+      setEntranceDone(false);
+      if (vp) {
+        setTimeout(() => {
+          rfRef.current?.setViewport(vp, { duration: 0 });
+        }, 50);
+      }
       releaseSplash();
     }).catch((err) => {
       console.error(err);
@@ -388,11 +424,76 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
     }
   }, [graphVersion, loadData]);
 
+  // The set of requirement ids satisfied by the currently-selected component,
+  // for O(1) membership tests in the filter below.
+  const componentReqIds = useMemo(
+    () => new Set(components.find(c => c.id === filterComponent)?.satisfies ?? []),
+    [components, filterComponent],
+  );
+
   const filteredReqs = useMemo(() => {
-    if (!search) return reqs;
-    const q = search.toLowerCase();
-    return reqs.filter(r => r.id.toLowerCase().includes(q) || r.name.toLowerCase().includes(q));
-  }, [reqs, search]);
+    let out = reqs;
+    if (search) {
+      const q = search.toLowerCase();
+      out = out.filter(r => r.id.toLowerCase().includes(q) || r.name.toLowerCase().includes(q));
+    }
+    if (filterStatus) out = out.filter(r => r.status === filterStatus);
+    if (filterPriority) out = out.filter(r => r.priority === filterPriority);
+    if (filterBaseline) out = out.filter(r => r.baselines?.includes(filterBaseline));
+    if (filterType) out = out.filter(r => r.type === filterType);
+    if (filterVerStatus) out = out.filter(r => r.verification_status === filterVerStatus);
+    if (filterVerMethod) out = out.filter(r => r.verification_method === filterVerMethod);
+    if (filterAllocated) out = out.filter(r => r.allocated_to === filterAllocated);
+    if (filterKind) out = out.filter(r => r.requirement_kind === filterKind);
+    if (filterComponent) out = out.filter(r => componentReqIds.has(r.id));
+    return out;
+  }, [reqs, search, filterStatus, filterPriority, filterBaseline, filterType,
+      filterVerStatus, filterVerMethod, filterAllocated, filterKind, filterComponent, componentReqIds]);
+
+  const distinct = (pick: (r: typeof reqs[number]) => string) =>
+    [...new Set(reqs.map(pick).filter(Boolean))].sort();
+  const availableStatuses = useMemo(() => distinct(r => r.status), [reqs]);
+  const availablePriorities = useMemo(() => distinct(r => r.priority), [reqs]);
+  const availableTypes = useMemo(() => distinct(r => r.type), [reqs]);
+  const availableVerStatuses = useMemo(() => distinct(r => r.verification_status), [reqs]);
+  const availableVerMethods = useMemo(() => distinct(r => r.verification_method), [reqs]);
+  const availableAllocations = useMemo(() => distinct(r => r.allocated_to), [reqs]);
+  const availableKinds = useMemo(() => distinct(r => r.requirement_kind), [reqs]);
+  const availableBaselines = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of reqs) {
+      for (const b of r.baselines || []) {
+        if (b) set.add(b);
+      }
+    }
+    return [...set].sort();
+  }, [reqs]);
+  const availableComponents = useMemo(
+    () => components.filter(c => c.satisfies?.length).map(c => c.id).sort(),
+    [components],
+  );
+  const componentLabels = useMemo(
+    () => new Map(components.map(c => [c.id, `${c.id}${c.name ? ` — ${c.name}` : ''}`])),
+    [components],
+  );
+
+  const clearFilters = () => {
+    setSearch('');
+    setFilterStatus('');
+    setFilterPriority('');
+    setFilterBaseline('');
+    setFilterType('');
+    setFilterVerStatus('');
+    setFilterVerMethod('');
+    setFilterAllocated('');
+    setFilterComponent('');
+    setFilterKind('');
+  };
+  const activeFilterCount = [
+    search, filterStatus, filterPriority, filterBaseline, filterType,
+    filterVerStatus, filterVerMethod, filterAllocated, filterComponent, filterKind,
+  ].filter(Boolean).length;
+  const hasActiveFilters = activeFilterCount > 0;
 
   const childCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -408,11 +509,37 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
     return counts;
   }, [reqs]);
 
+  // Auto-collapse: on first load, fold every non-root group so the graph opens
+  // as a groups overview — top-level roots stay expanded (showing their direct
+  // child groups), and everything deeper is collapsed behind an expand button.
+  useEffect(() => {
+    if (autoCollapsed || reqs.length === 0) return;
+    const toFold = new Set<string>();
+    for (const r of reqs) {
+      const isParent = reqs.some(c => c.parent === r.id);
+      const isRoot = !r.parent;
+      if (isParent && !isRoot) toFold.add(r.id);
+    }
+    if (toFold.size > 0) setCollapsed(toFold);
+    setAutoCollapsed(true);
+  }, [reqs, autoCollapsed]);
+
+  const expandAll = () => setCollapsed(new Set());
+  const collapseAll = () => {
+    const all = new Set<string>();
+    for (const r of reqs) {
+      if (reqs.some(c => c.parent === r.id)) all.add(r.id);
+    }
+    setCollapsed(all);
+  };
+
   const visibleNodeIds = useMemo(() => {
     const visible = new Set<string>();
     function collect(id: string) {
-      if (collapsed.has(id)) return;
+      // A collapsed node is still shown (with its expand button); only its
+      // descendants are hidden. So add it first, then stop recursing.
       visible.add(id);
+      if (collapsed.has(id)) return;
       for (const r of reqs) { if (r.parent === id) collect(r.id); }
     }
     for (const r of reqs) { if (!r.parent) collect(r.id); }
@@ -456,6 +583,13 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
           hasChildren: reqs.some(r => r.parent === req.id),
           collapsed: collapsed.has(req.id),
           childCount: childCounts.get(req.id) || 0,
+          onExpandCollapse: () => {
+            setCollapsed(prev => {
+              const next = new Set(prev);
+              if (next.has(req.id)) next.delete(req.id); else next.add(req.id);
+              return next;
+            });
+          },
           params, constraints,
           verdict: ev && ev.verdict !== 'none' ? ev.verdict : null,
           vcCount: (req.verification_cases ?? []).length,
@@ -506,81 +640,31 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
       });
     }
 
-    // ── Component nodes & edges (when toggled on) ──────────────────────────
-    if (showComponents) {
-      const compColor = (type: string) => componentColors[type] || 'hsl(var(--muted-foreground))';
-      const filteredComps = search
-        ? components.filter(c => c.id.toLowerCase().includes(search.toLowerCase()) || c.name.toLowerCase().includes(search.toLowerCase()))
-        : components;
-
-      for (const comp of filteredComps) {
-        nodes.push({
-          id: `comp:${comp.id}`, type: 'requirementNode', position: { x: 0, y: 0 },
-          data: {
-            label: comp.id, name: comp.name || 'Untitled', status: 'component',
-            priority: 'medium', type: comp.type,
-            verified: false, parent: comp.parent ? `comp:${comp.parent}` : null,
-            hasChildren: false, collapsed: false, childCount: 0,
-            params: (comp.parameters || []).map((p: any) => ({
-              name: p.name, display: p.value != null ? `= ${p.value} ${p.unit || ''}` : '= ?',
-              derived: !!p.expr, measured: false,
-            })),
-            constraints: [], verdict: null, vcCount: 0,
-            desc: comp.description || '',
-            isComponent: true, compColor: compColor(comp.type),
-          },
-          style: entranceDone ? {} : { opacity: 0, transform: 'scale(0)' },
-        });
-      }
-
-      for (const comp of components) {
-        const srcId = `comp:${comp.id}`;
-        // Parent edges
-        if (comp.parent) {
-          const pk = `${comp.parent}-${comp.id}-comp-parent`;
-          if (!visIds.has(comp.parent) || seen.has(pk)) continue;
-          seen.add(pk);
-          edges.push({
-            id: pk, source: `comp:${comp.parent}`, target: srcId, type: 'floating',
-            data: { color: 'hsl(var(--muted-foreground) / 0.25)', label: '' },
-            style: { stroke: 'hsl(var(--muted-foreground) / 0.25)', strokeWidth: 0.6, strokeDasharray: '3,3', opacity: 0.25 },
-            markerEnd: { type: MarkerType.ArrowClosed, color: 'hsl(var(--muted-foreground) / 0.25)', width: 10, height: 10 },
-          });
-        }
-        // Satisfies edges: component → requirement
-        for (const rid of comp.satisfies || []) {
-          if (!visIds.has(rid)) continue;
-          const sk = `${comp.id}-${rid}-comp-satisfies`;
-          if (seen.has(sk)) continue; seen.add(sk);
-          edges.push({
-            id: sk, source: srcId, target: rid, type: 'floating',
-            data: { color: edgeColors.satisfies, label: 'satisfies' },
-            style: { stroke: edgeColors.satisfies, strokeWidth: 1.2, strokeDasharray: '6,3', opacity: 0.40 },
-            markerEnd: { type: MarkerType.ArrowClosed, color: edgeColors.satisfies, width: 14, height: 14 },
-          });
-        }
-        // Component-to-component relations
-        for (const rel of comp.relations || []) {
-          const rk = `${comp.id}-${rel.target}-comp-rel-${rel.type}`;
-          if (seen.has(rk)) continue; seen.add(rk);
-          edges.push({
-            id: rk, source: srcId, target: `comp:${rel.target}`, type: 'floating',
-            data: { color: edgeColors[rel.type] || '#64748b', label: rel.type },
-            style: { stroke: edgeColors[rel.type] || '#64748b', strokeWidth: 1, strokeDasharray: '4,3', opacity: 0.35 },
-            markerEnd: { type: MarkerType.ArrowClosed, color: edgeColors[rel.type] || '#64748b', width: 12, height: 12 },
-          });
-        }
-      }
-    }
-
     return { initialNodes: nodes, initialEdges: edges };
-  }, [reqs, filteredReqs, traces, visibleNodeIds, childCounts, collapsed, entranceDone, evaluated, components, showComponents, search]);
+  }, [reqs, filteredReqs, traces, visibleNodeIds, childCounts, collapsed, entranceDone, evaluated]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const rfRef = useRef<ReactFlowInstance | null>(null);
+  // The "Reset view" action: frame all currently-visible nodes.
+  const resetView = useCallback(() => {
+    rfRef.current?.fitView({ padding: 0.12, maxZoom: gs.maxZoom, duration: 400 });
+  }, [gs.maxZoom]);
+  // Distinguish a structural relayout (mode/settings change, first mount) from
+  // an incremental data refresh. Only the former should re-fit the camera and
+  // clear the selection; a live data update must preserve position and focus.
+  const layoutSigRef = useRef<string | null>(null);
+  const hasLaidOutRef = useRef(false);
+  // Guards the one-shot startup fit (effect lives after `nodes` is declared).
+  const didInitialFit = useRef(false);
 
   useEffect(() => {
+    const layoutSig = `${layoutMode}|${gs.nodesep}|${gs.ranksep}|${gs.rankdir}|${gs.margin}|${gs.maxZoom}`;
+    const firstRun = !hasLaidOutRef.current;
+    const layoutChanged = layoutSigRef.current !== layoutSig;
+    layoutSigRef.current = layoutSig;
+    hasLaidOutRef.current = true;
+    const shouldRefit = firstRun || layoutChanged;
     const laid = layoutMode === 'uml'
       ? hierarchyLayout(initialNodes, initialEdges, gs)
       : forceLayout(initialNodes, initialEdges);
@@ -623,10 +707,14 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
     } else {
       setEdges(initialEdges);
     }
-    selectReq(null);
-    // Re-fit once the laid-out nodes have rendered and been measured.
-    const t = setTimeout(() => rfRef.current?.fitView({ padding: 0.12, maxZoom: gs.maxZoom }), 250);
-    return () => clearTimeout(t);
+    // Only reset focus/camera on a structural relayout — a live data refresh
+    // keeps the user's current selection and viewport intact.
+    if (shouldRefit) {
+      selectReq(null);
+      // Re-fit once the laid-out nodes have rendered and been measured.
+      const t = setTimeout(() => rfRef.current?.fitView({ padding: 0.12, maxZoom: gs.maxZoom }), 250);
+      return () => clearTimeout(t);
+    }
   }, [initialNodes, initialEdges, layoutMode, gs.nodesep, gs.ranksep, gs.rankdir, gs.margin, gs.maxZoom, setNodes, setEdges]);
 
   useEffect(() => {
@@ -641,6 +729,17 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
       return () => clearTimeout(timer);
     }
   }, [entranceDone, nodes.length]);
+
+  // Run "Reset view" once on startup. The layout effect's first-run fit is
+  // invalidated by the initial auto-collapse pass (its timer is cleared when
+  // the collapsed node set re-lays out), so without this the canvas opens
+  // unfitted. Firing after the entrance settles guarantees the collapsed set is
+  // laid out and measured; the ref stops live reloads from re-framing.
+  useEffect(() => {
+    if (didInitialFit.current || !entranceDone || nodes.length === 0) return;
+    didInitialFit.current = true;
+    requestAnimationFrame(resetView);
+  }, [entranceDone, nodes.length, resetView]);
 
   // When selection changes externally (nav click, etc.), smoothly fit view.
   const prevSelectedRef = useRef<string | null>(null);
@@ -721,16 +820,11 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
 
   const onNodeDoubleClick = useCallback(
     (_: React.MouseEvent, node: Node) => {
-      if ((node.data as any).isComponent) {
-        const compId = node.id.startsWith('comp:') ? node.id.slice(5) : node.id;
-        navigate(`/project/${projectId}/components/${compId}`);
-        return;
-      }
       if ((node.data as any).hasChildren) {
         setCollapsed(prev => { const next = new Set(prev); if (next.has(node.id)) next.delete(node.id); else next.add(node.id); return next; });
       }
     },
-    [navigate, projectId],
+    [],
   );
 
   const onPaneClick = useCallback(() => { selectReq(null); setHoveredNodeId(null); }, [selectReq]);
@@ -749,7 +843,7 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
     {/* The remount key lives on this inner wrapper, NOT the outer div: the
         splash must survive the swap so the old diagram fades straight into
         the new one with no uncovered frame in between. */}
-    <div className="w-full h-full" key={`${key}-${layoutMode}`}>
+    <div className="w-full h-full">
     <GraphSelectionCtx.Provider value={{ connectedIds, selectedReqId, hasSelection }}>
       <ReactFlow
         nodes={nodes}
@@ -801,6 +895,53 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
               className="pl-7 pr-2.5 py-1.5 w-44 rounded-lg bg-graph-panel border border-graph-border text-xs text-graph-text placeholder:text-graph-muted outline-none focus:ring-1 focus:ring-ring/20 transition-all shadow-sm"
               placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)}
             />
+          </div>
+          <div className="relative">
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className={`relative p-1.5 rounded-lg border shadow-sm transition-all ${
+                showFilters || hasActiveFilters
+                  ? 'bg-accent text-foreground border-graph-border'
+                  : 'bg-graph-panel border-graph-border text-graph-text hover:bg-graph-control-hover'
+              }`}
+              title="Filters"
+            >
+              <Filter size={13} />
+              {activeFilterCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 min-w-[15px] h-[15px] px-1 rounded-full bg-primary text-primary-foreground text-[9px] font-semibold flex items-center justify-center">
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
+            {showFilters && (
+              <div className="absolute top-full left-0 mt-1.5 z-50 w-60 rounded-xl bg-graph-panel border border-graph-border shadow-2xl p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-[11px] font-semibold text-graph-text uppercase tracking-wider">Filters</span>
+                  <button onClick={() => setShowFilters(false)} className="text-graph-muted hover:text-graph-text">
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+                  </button>
+                </div>
+                <div className="space-y-2.5 max-h-[60vh] overflow-y-auto pr-0.5">
+                  <FilterField label="Status" options={availableStatuses} value={filterStatus} onChange={setFilterStatus} colorOf={statusOptionColor} />
+                  <FilterField label="Priority" options={availablePriorities} value={filterPriority} onChange={setFilterPriority} colorOf={priorityOptionColor} />
+                  <FilterField label="Baseline" options={availableBaselines} value={filterBaseline} onChange={setFilterBaseline} />
+                  <FilterField label="Type" options={availableTypes} value={filterType} onChange={setFilterType} format={formatReqType} colorOf={typeOptionColor} />
+                  <FilterField label="Requirement kind" options={availableKinds} value={filterKind} onChange={setFilterKind} format={formatUnderscored} />
+                  <FilterField label="Verification status" options={availableVerStatuses} value={filterVerStatus} onChange={setFilterVerStatus} colorOf={verifStatusOptionColor} />
+                  <FilterField label="Verification method" options={availableVerMethods} value={filterVerMethod} onChange={setFilterVerMethod} />
+                  <FilterField label="Allocated team" options={availableAllocations} value={filterAllocated} onChange={setFilterAllocated} />
+                  <FilterField label="Component" options={availableComponents} value={filterComponent} onChange={setFilterComponent} format={(id) => componentLabels.get(id) || id} />
+                </div>
+                {hasActiveFilters && (
+                  <div className="mt-3 pt-3 border-t border-graph-border">
+                    <button onClick={clearFilters}
+                      className="w-full text-[10px] text-graph-muted hover:text-graph-text hover:bg-graph-control-hover rounded py-1 transition-colors">
+                      Clear all filters ({filteredReqs.length}/{reqs.length} visible)
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           <div className="flex rounded-lg bg-graph-panel border border-graph-border shadow-sm overflow-hidden">
             <button
@@ -881,19 +1022,27 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
               </div>
             )}
           </div>
-          <button
-            onClick={() => setShowComponents(!showComponents)}
-            className={`p-1.5 rounded-lg border shadow-sm transition-all ${
-              showComponents
-                ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-                : 'bg-graph-panel border-graph-border text-graph-text hover:bg-graph-control-hover'
-            }`}
-            title={showComponents ? 'Components visible — click to hide' : 'Show components in graph'}
-          >
-            <Boxes size={13} />
-          </button>
+          <div className="flex rounded-lg bg-graph-panel border border-graph-border shadow-sm overflow-hidden">
+            <button
+              onClick={expandAll}
+              className="p-1.5 text-graph-text hover:text-foreground hover:bg-graph-control-hover transition-colors"
+              title="Expand all"
+            >
+              <ChevronsUpDown size={13} />
+            </button>
+            <button
+              onClick={collapseAll}
+              className="p-1.5 text-graph-text hover:text-foreground hover:bg-graph-control-hover transition-colors border-l border-graph-border"
+              title="Collapse all"
+            >
+              <ChevronsDownUp size={13} />
+            </button>
+          </div>
           <button onClick={loadData} className="p-1.5 rounded-lg bg-graph-panel border border-graph-border text-graph-text hover:text-foreground hover:bg-graph-control-hover transition-colors shadow-sm" title="Refresh">
             <RotateCw size={13} />
+          </button>
+          <button onClick={resetView} className="p-1.5 rounded-lg bg-graph-panel border border-graph-border text-graph-text hover:text-foreground hover:bg-graph-control-hover transition-colors shadow-sm" title="Reset view">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
           </button>
         </Panel>
 
@@ -919,7 +1068,7 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
                 <span className="opacity-40">|</span>
               </>
             )}
-            <span>{reqs.length} requirements{showComponents ? `, ${components.length} components` : ''} · {initialEdges.length} edges · click to select · dbl-click expand</span>
+            <span>{filteredReqs.length}{filteredReqs.length !== reqs.length ? ` / ${reqs.length}` : ''} requirements · {initialEdges.length} edges · click to select · dbl-click expand</span>
           </div>
         </Panel>
       </ReactFlow>
@@ -943,6 +1092,61 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
           100% { transform: scale(2.5); opacity: 0; }
         }
       `}</style>
+    </div>
+  );
+}
+
+/** Title-case a snake_case value, e.g. system_requirement → System Requirement. */
+function formatUnderscored(v: string): string {
+  return v.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/** Humanise a requirement type, keeping the "Non-Functional – X" shape. */
+function formatReqType(t: string): string {
+  if (t.startsWith('non_functional_')) {
+    return 'Non-Functional – ' + formatUnderscored(t.slice('non_functional_'.length));
+  }
+  return formatUnderscored(t);
+}
+
+/** A labelled full-width dropdown for the Filters popover. Hides itself when
+ *  there are no options (e.g. a project with no components or teams). */
+function FilterField({ label, options, value, onChange, format, colorOf }: {
+  label: string;
+  options: string[];
+  value: string;
+  onChange: (v: string) => void;
+  format?: (v: string) => string;
+  colorOf?: (v: string) => string | undefined;
+}) {
+  if (options.length === 0) return null;
+  const selectedColor = value ? colorOf?.(value) : undefined;
+  return (
+    <div>
+      <div className="text-[9px] text-graph-muted mb-1">{label}</div>
+      <select
+        className="w-full appearance-none pl-2 pr-6 py-1.5 rounded-lg bg-graph-panel border border-graph-border text-[11px] text-graph-text outline-none focus:ring-1 focus:ring-ring/20 transition-all cursor-pointer hover:bg-graph-control-hover"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%236b7280'/%3E%3C/svg%3E")`,
+          backgroundRepeat: 'no-repeat',
+          backgroundPosition: 'right 6px center',
+          color: selectedColor,
+          fontWeight: selectedColor ? 600 : undefined,
+        }}
+        aria-label={label}
+      >
+        <option value="" style={{ color: 'hsl(var(--graph-panel-text))' }}>All</option>
+        {options.map((o) => {
+          const c = colorOf?.(o);
+          return (
+            <option key={o} value={o} style={c ? { color: c } : undefined}>
+              {format ? format(o) : o}
+            </option>
+          );
+        })}
+      </select>
     </div>
   );
 }

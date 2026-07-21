@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Save, CheckCircle2, Settings, Trash2, Pencil, X, Check } from 'lucide-react';
+import { ArrowLeft, Save, CheckCircle2, Settings, Trash2, Pencil, X, Check, Plus } from 'lucide-react';
 import { api } from '../api/client';
 import { useAuthStore } from '../store/auth';
 
@@ -55,6 +55,8 @@ export default function ProjectSettingsPage() {
 
   // Baselines
   const [baselines, setBaselines] = useState<{ name: string; count: number }[]>([]);
+  const [baselineDefs, setBaselineDefs] = useState<string[]>([]);
+  const [newBaselineDef, setNewBaselineDef] = useState('');
   const [editingBaseline, setEditingBaseline] = useState<string | null>(null);
   const [editBaselineName, setEditBaselineName] = useState('');
 
@@ -81,6 +83,7 @@ export default function ProjectSettingsPage() {
       setGitAutocommit(git.auto_commit !== false);
       setGitPushOnCommit(git.push_on_commit || false);
       setGitPushInterval(git.push_interval_minutes || 0);
+      setBaselineDefs(p.baselines || []);
     }).catch((err: any) => setError(err.message));
     loadBaselines();
   }, [projectId]);
@@ -105,6 +108,7 @@ export default function ProjectSettingsPage() {
     try {
       await api.updateProject(projectId, {
         name: projectName, naming,
+        baselines: baselineDefs,
         git: {
           user_name: gitUserName, user_email: gitUserEmail,
           remote_url: gitRemoteUrl, auto_commit: gitAutocommit,
@@ -212,8 +216,33 @@ export default function ProjectSettingsPage() {
         </div>
       </motion.div>
 
-      {/* Baselines */}
+      {/* Baseline definitions */}
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="card p-5 mb-6">
+        <h2 className="font-semibold text-sm text-card-foreground mb-1">Baseline Definitions</h2>
+        <p className="text-xs text-muted-foreground mb-3">Define the available baseline names for this project (e.g. PDR, CDR, TRR). These appear as selectable options on requirement forms.</p>
+        <div className="flex flex-wrap gap-1 mb-2">
+          {baselineDefs.map((name) => (
+            <span key={name} className="inline-flex items-center gap-1 rounded-full bg-accent px-2.5 py-0.5 text-xs">
+              {name}
+              <button onClick={() => setBaselineDefs((prev) => prev.filter((n) => n !== name))} className="text-muted-foreground hover:text-destructive"><X size={11} /></button>
+            </span>
+          ))}
+          {baselineDefs.length === 0 && (
+            <span className="text-xs text-muted-foreground italic">No baselines defined. Add names like PDR, CDR below.</span>
+          )}
+        </div>
+        <div className="flex gap-2">
+          <input className="input text-sm flex-1" placeholder="PDR" value={newBaselineDef}
+            onChange={(e) => setNewBaselineDef(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); const n = newBaselineDef.trim(); if (n && !baselineDefs.includes(n)) { setBaselineDefs([...baselineDefs, n]); } setNewBaselineDef(''); } }} />
+          <button className="btn-secondary text-xs" onClick={() => { const n = newBaselineDef.trim(); if (n && !baselineDefs.includes(n)) { setBaselineDefs([...baselineDefs, n]); } setNewBaselineDef(''); }}>
+            <Plus size={14} /> Add
+          </button>
+        </div>
+      </motion.div>
+
+      {/* Baselines */}
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="card p-5 mb-6">
         <h2 className="font-semibold text-sm text-card-foreground mb-1">Baselines</h2>
         <p className="text-xs text-muted-foreground mb-4">Manage configuration baselines. Renaming updates all linked requirements. Deleting clears the baseline from all requirements.</p>
         {baselines.length === 0 ? (

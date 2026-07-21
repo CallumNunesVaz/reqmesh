@@ -22,7 +22,7 @@ PROJECT_NAME = "Cessna 172S Skyhawk SP"
 
 def _req(pid, tid, name, desc, ptype="functional", status="proposed",
          priority="high", rationale="", source="", verification="test",
-         baseline=None, allocated="", effort=None, priorities=None,
+         baselines=None, allocated="", effort=None, priorities=None,
          needs=None, derived=False, normative=True,
          references=None, reviewed=None):
     return {
@@ -37,7 +37,7 @@ def _req(pid, tid, name, desc, ptype="functional", status="proposed",
         "source": source,
         "verification_method": verification,
         "verification_status": "pending",
-        "baseline": baseline,
+        "baselines": baselines or [],
         "allocated_to": allocated,
         "cascade_from": None,
         "attributes": [],
@@ -77,7 +77,7 @@ def _requirements() -> list[dict]:
         "Top-level system requirement defining the product scope for"
         " a 4-seat, single-engine, high-wing trainer.",
         "FAR Part 23 Amendment 64",
-        baseline="PDR",
+        baselines=["PDR"],
         needs=["design"],
         effort=100,
         priorities={"development": 10, "customers": 10, "safety": 10},
@@ -99,7 +99,7 @@ def _requirements() -> list[dict]:
         " of the aircraft. The Cessna 172S uses proven aluminum"
         " semi-monocoque construction for optimal strength-to-weight.",
         "FAR 23.301, Cessna DS-100",
-        baseline="PDR",
+        baselines=["PDR"],
         allocated="Airframe Team",
         needs=["design", "verification_case"],
         effort=60,
@@ -175,7 +175,7 @@ def _requirements() -> list[dict]:
         " (pendulum effect), protects the cabin from sun/rain,"
         " and gives pilots exceptional ground visibility.",
         "Cessna DS-120",
-        baseline="PDR",
+        baselines=["PDR"],
         needs=["design", "verification_case"],
         effort=25,
         priorities={"development": 5, "safety": 5, "customers": 6},
@@ -225,7 +225,7 @@ def _requirements() -> list[dict]:
         " for pitch control, and a fixed vertical fin plus movable"
         " rudder for directional (yaw) control.</p>",
         "design", "approved", "high",
-        baseline="PDR",
+        baselines=["PDR"],
         needs=["design"],
         effort=12,
         priorities={"development": 3, "safety": 4, "customers": 2},
@@ -275,7 +275,7 @@ def _requirements() -> list[dict]:
         " improved hot-start behavior. The 180 BHP rating provides"
         " a power loading of 14.2 lb/BHP at MTOW.",
         "Lycoming TCDS E-2918",
-        baseline="PDR",
+        baselines=["PDR"],
         allocated="Powerplant Team",
         needs=["design", "verification_case"],
         effort=40,
@@ -402,7 +402,7 @@ def _requirements() -> list[dict]:
         " gascolator captures water and sediment before they"
         " reach the injection servo.",
         "FAR 23.955, Cessna DS-155",
-        baseline="CDR",
+        baselines=["CDR"],
         allocated="Fuel Systems",
         needs=["design", "verification_case"],
         effort=12,
@@ -429,7 +429,7 @@ def _requirements() -> list[dict]:
         " pilots with the glass-cockpit environment they will"
         " encounter in airline operations.",
         "Garmin G1000 NXi System Manual",
-        baseline="CDR",
+        baselines=["CDR"],
         allocated="Avionics Integration",
         needs=["design", "verification_case"],
         effort=50,
@@ -646,7 +646,7 @@ def _requirements() -> list[dict]:
         "  This is essential for a training aircraft where the"
         " student must learn to interpret control forces directly.",
         "FAR 23.671, FAR 23.629 (Flutter)",
-        baseline="PDR",
+        baselines=["PDR"],
         allocated="Flight Controls Team",
         needs=["design", "verification_case"],
         effort=35,
@@ -806,7 +806,7 @@ def _requirements() -> list[dict]:
         "  Spring steel legs provide excellent energy absorption"
         " and are virtually maintenance-free compared to oleo"
         " struts.",
-        baseline="CDR",
+        baselines=["CDR"],
         allocated="Landing Gear Team",
         needs=["design", "verification_case"],
         effort=20,
@@ -889,7 +889,7 @@ def _requirements() -> list[dict]:
         " (PFD, COM1, GPS, transponder) remain powered after an"
         " alternator failure.",
         "FAR 23.1351, FAR 23.1353",
-        baseline="CDR",
+        baselines=["CDR"],
         allocated="Electrical Systems",
         needs=["design", "verification_case"],
         effort=25,
@@ -981,7 +981,7 @@ def _requirements() -> list[dict]:
         " 10-30°C across the operating altitude range with"
         " outside air temperatures (OAT) from -20°C to +40°C.</p>",
         "functional", "approved", "high",
-        baseline="CDR",
+        baselines=["CDR"],
         needs=["design"],
         effort=10,
         priorities={"development": 2, "customers": 7, "safety": 2},

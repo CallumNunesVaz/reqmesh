@@ -25,19 +25,33 @@ const priorityColors: Record<string, string> = {
 
 const typeColors: Record<string, string> = {
   functional: '#539fe6',
-  non_functional: '#009d96',
   interface: '#b291ff',
-  design: '#ec4899',
-  constraint: '#f59e0b',
+  user: '#ec4899',
+  system: '#0ea5e9',
+  business: '#f59e0b',
+  regulatory_compliance: '#ef4444',
+  safety: '#f43f5e',
+  environmental: '#22c55e',
+  verification: '#8b5cf6',
 };
+
+// Every non-functional variant keeps the cyan colouration (req 3a).
+const typeColorFor = (k: string): string =>
+  k.startsWith('non_functional') ? '#009d96' : typeColors[k] || '#64748b';
 
 const typeIcons: Record<string, React.ComponentType<any>> = {
   functional: Zap,
-  non_functional: Gauge,
   interface: Plug,
-  design: PenTool,
-  constraint: Lock,
+  user: PenTool,
+  system: Lock,
+  business: Lock,
+  regulatory_compliance: Lock,
+  safety: Lock,
+  environmental: Lock,
+  verification: Lock,
 };
+const typeIconFor = (k: string): React.ComponentType<any> =>
+  k.startsWith('non_functional') ? Gauge : typeIcons[k] || Zap;
 
 const qualityColors: Record<string, string> = {
   description: '#539fe6',
@@ -115,7 +129,9 @@ export default function ProjectOverview() {
         if (r.allocated_to) withAllocation++;
         if (r.description) withDescription++;
         if ((r.relations?.length || 0) > 0) withTraces++;
-        if (r.baseline) baselines.add(r.baseline);
+        for (const b of (r.baselines || [])) {
+          if (b) baselines.add(b);
+        }
       }
       const total = reqs.length;
       const vcsPassed = vcs.filter((v) => v.status === 'passed').length;
@@ -165,7 +181,7 @@ export default function ProjectOverview() {
     .map(([k, v]) => ({ name: k, count: v, fill: priorityColors[k] || '#64748b' }));
 
   const typeData = Object.entries(stats.typeCounts)
-    .map(([k, v]) => ({ name: k.replace('_', ' '), count: v, fill: typeColors[k] || '#64748b' }));
+    .map(([k, v]) => ({ key: k, name: k.replace(/_/g, ' '), count: v, fill: typeColorFor(k) }));
 
   const methodData = Object.entries(stats.methodCounts)
     .sort(([, a], [, b]) => b - a)
@@ -336,7 +352,7 @@ export default function ProjectOverview() {
               </ResponsiveContainer>
               <div className="flex-1 space-y-1.5">
                 {typeData.map((t) => {
-                  const Icon = typeIcons[Object.keys(typeColors).find(k => k.replace('_', ' ') === t.name) || 'functional'] || Zap;
+                  const Icon = typeIconFor(t.key);
                   return (
                     <div key={t.name} className="flex items-center justify-between gap-3 text-xs">
                       <div className="flex items-center gap-1.5 min-w-0">

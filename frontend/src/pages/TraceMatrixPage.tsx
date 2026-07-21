@@ -5,8 +5,20 @@ import { GitBranch, Plus, X, LayoutGrid, LayoutList } from 'lucide-react';
 import { api } from '../api/client';
 import type { TraceLink, Requirement, VerificationCase } from '../api/client';
 import { useAuthStore } from '../store/auth';
+import { useStore } from '../store';
 import AutocompleteInput from '../components/AutocompleteInput';
 import { ENTITY_META, EntityLink, type EntityKind } from '../components/entities';
+
+// Cell tint per link type. Falls back to a neutral chip for any type not
+// listed here (importers emit types like `verifies`/`traces` too).
+const LINK_TYPE_COLORS: Record<string, string> = {
+  satisfies: 'bg-blue-500/20 text-blue-400',
+  refines: 'bg-purple-500/20 text-purple-400',
+  verified_by: 'bg-emerald-500/20 text-emerald-400',
+  verifies: 'bg-emerald-500/20 text-emerald-400',
+  derives: 'bg-orange-500/20 text-orange-400',
+  conflicts: 'bg-red-500/20 text-red-400',
+};
 
 export default function TraceMatrixPage() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -17,6 +29,7 @@ export default function TraceMatrixPage() {
   const [error, setError] = useState('');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const editable = useAuthStore((s) => s.editMode && s.user !== null && s.user.role !== 'viewer');
+  const dataVersion = useStore((s) => s.dataVersion);
 
   const entitySuggestions = useMemo(() => {
     const reqItems = requirements.map((r) => ({ id: r.id, label: r.name || r.id }));
@@ -37,7 +50,7 @@ export default function TraceMatrixPage() {
     }).catch(console.error);
   };
 
-  useEffect(load, [projectId]);
+  useEffect(load, [projectId, dataVersion]);
 
   const addLink = async () => {
     if (!projectId || !newLink.source || !newLink.target) return;
@@ -63,6 +76,19 @@ export default function TraceMatrixPage() {
   const kindOf = (id: string): EntityKind => (vcIds.has(id) ? 'verification' : 'requirement');
   const nameOf = (id: string) =>
     requirements.find((r) => r.id === id)?.name ?? verificationCases.find((v) => v.id === id)?.name;
+
+  // A general trace matrix: rows are every distinct link source, columns every
+  // distinct link target. Either end may be a requirement or a verification
+  // case, so requirement→requirement links (refines/derives/…) render as cells
+  // too — not just requirement→VC pairings.
+  const matrixSources = useMemo(
+    () => [...new Set(links.map((l) => l.source))].sort(),
+    [links],
+  );
+  const matrixTargets = useMemo(
+    () => [...new Set(links.map((l) => l.target))].sort(),
+    [links],
+  );
 
   return (
     <div className="max-w-5xl mx-auto p-8">
@@ -184,44 +210,37 @@ export default function TraceMatrixPage() {
             <thead>
               <tr>
                 <th className="sticky top-0 left-0 z-20 bg-card border-b border-r px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider text-left min-w-[100px]">
-                  Req \ VC
+                  Source \ Target
                 </th>
-                {verificationCases.map((vc) => (
+                {matrixTargets.map((tgt) => (
                   <th
-                    key={vc.id}
+                    key={tgt}
                     className="sticky top-0 z-10 bg-card border-b px-2 py-2 text-[9px] font-mono whitespace-nowrap"
                   >
-                    <EntityLink kind="verification" id={vc.id} showIcon={false} className="text-muted-foreground hover:text-primary" />
+                    <EntityLink kind={kindOf(tgt)} id={tgt} name={nameOf(tgt)} showIcon={false} className="text-muted-foreground hover:text-primary" />
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {requirements.map((req) => {
-                const reqLinks = links.filter((l) => l.source === req.id);
+              {matrixSources.map((src) => {
+                const srcLinks = links.filter((l) => l.source === src);
                 return (
-                  <tr key={req.id} className="group">
+                  <tr key={src} className="group">
                     <td className="sticky left-0 z-10 bg-card border-r px-3 py-1.5 text-[10px] font-mono whitespace-nowrap group-hover:bg-accent/40">
-                      <EntityLink kind="requirement" id={req.id} showIcon={false} className="text-foreground hover:text-primary" />
+                      <EntityLink kind={kindOf(src)} id={src} name={nameOf(src)} showIcon={false} className="text-foreground hover:text-primary" />
                     </td>
-                    {verificationCases.map((vc) => {
-                      const link = reqLinks.find((l) => l.target === vc.id);
-                      const colorMap: Record<string, string> = {
-                        satisfies: 'bg-blue-500/20 text-blue-400',
-                        refines: 'bg-purple-500/20 text-purple-400',
-                        verified_by: 'bg-emerald-500/20 text-emerald-400',
-                        derives: 'bg-orange-500/20 text-orange-400',
-                        conflicts: 'bg-red-500/20 text-red-400',
-                      };
+                    {matrixTargets.map((tgt) => {
+                      const link = srcLinks.find((l) => l.target === tgt);
                       return (
-                        <td key={vc.id} className="border-b px-2 py-1.5 text-center">
+                        <td key={tgt} className="border-b px-2 py-1.5 text-center">
                           {link ? (
                             // The headers already link both ends; the cell
                             // itself takes you to the target the pairing hits.
                             <Link
-                              to={ENTITY_META.verification.path(projectId!, vc.id)}
-                              title={`${req.id} ${link.type} ${vc.id}`}
-                              className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-medium hover:ring-1 hover:ring-primary/40 transition-shadow ${colorMap[link.type] || 'bg-muted text-muted-foreground'}`}
+                              to={ENTITY_META[kindOf(tgt)].path(projectId!, tgt)}
+                              title={`${src} ${link.type} ${tgt}`}
+                              className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-medium hover:ring-1 hover:ring-primary/40 transition-shadow ${LINK_TYPE_COLORS[link.type] || 'bg-muted text-muted-foreground'}`}
                             >
                               {link.type}
                             </Link>
@@ -236,7 +255,7 @@ export default function TraceMatrixPage() {
               })}
             </tbody>
           </table>
-          {requirements.length === 0 && <p className="text-xs text-muted-foreground text-center py-8">No requirements to display.</p>}
+          {matrixSources.length === 0 && <p className="text-xs text-muted-foreground text-center py-8">No trace links to display.</p>}
         </div>
       )}
     </div>

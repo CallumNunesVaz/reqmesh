@@ -18,7 +18,7 @@ import ParametricsGuide from '../components/ParametricsGuide';
 import { useKeyboardShortcuts } from '../components/useKeyboardShortcuts';
 import LoadingSplash from '../components/LoadingSplash';
 
-const typeOptions = ['functional', 'non_functional', 'interface', 'design', 'constraint'];
+const typeOptions = ['functional', 'non_functional_performance', 'non_functional_security', 'non_functional_usability', 'non_functional_maintainability', 'non_functional_reliability', 'non_functional_scalability', 'non_functional_portability', 'interface', 'user', 'system', 'business', 'regulatory_compliance', 'safety', 'environmental', 'verification'];
 const priorityOptions = ['low', 'medium', 'high', 'critical'];
 const methodOptions = ['test', 'analysis', 'demonstration', 'inspection'];
 
@@ -52,6 +52,7 @@ export default function RequirementDetailPage() {
   const [unreviewedIds, setUnreviewedIds] = useState<Set<string>>(new Set());
   const [saveError, setSaveError] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [projectBaselines, setProjectBaselines] = useState<string[]>([]);
   const statusOptions = workflow?.states || ['proposed', 'approved', 'implemented', 'verified', 'rejected', 'deprecated'];
 
   const refSuggestions = useMemo(() => {
@@ -141,6 +142,7 @@ export default function RequirementDetailPage() {
     api.getUnreviewed(projectId).then((u) => {
       setUnreviewedIds(new Set(u.items.map((r) => r.id)));
     }).catch(() => {});
+    api.getProject(projectId).then((p: any) => setProjectBaselines(p.baselines || [])).catch(() => {});
   }, [projectId, reqId]);
 
   const save = async (updates: Partial<Requirement>) => {
@@ -599,7 +601,15 @@ export default function RequirementDetailPage() {
               <div>
                 <label className="label">Type</label>
                 <select className="select" value={req.type} onChange={(e) => save({ type: e.target.value })} disabled={!editable}>
-                  {typeOptions.map((t) => (<option key={t} value={t}>{t.replace('_', ' ')}</option>))}
+                  {typeOptions.map((t) => {
+                    let label = t.replace(/_/g, ' ');
+                    if (t.startsWith('non_functional_')) {
+                      label = 'Non-Functional \u2013 ' + t.slice('non_functional_'.length).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                    } else {
+                      label = label.replace(/\b\w/g, c => c.toUpperCase());
+                    }
+                    return (<option key={t} value={t}>{label}</option>);
+                  })}
                 </select>
               </div>
               <div>
@@ -794,21 +804,30 @@ export default function RequirementDetailPage() {
                 />
               </div>
               <div>
-                <label className="label">Baseline</label>
-                <div className="flex gap-1">
-                  <select
-                    className="select"
-                    value={req.baseline || ''}
-                    onChange={(e) => save({ baseline: e.target.value || null })}
-                    disabled={!editable}
-                  >
-                    <option value="">None</option>
-                    <option value="Baseline A">Baseline A</option>
-                    <option value="Baseline B">Baseline B</option>
-                    <option value="PDR">PDR</option>
-                    <option value="CDR">CDR</option>
-                    <option value="TRR">TRR</option>
-                  </select>
+                <label className="label">Baselines</label>
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  {projectBaselines.map((b) => {
+                    const active = (req.baselines || []).includes(b);
+                    return (
+                      <button
+                        key={b}
+                        type="button"
+                        onClick={() => {
+                          const current = req.baselines || [];
+                          const next = active ? current.filter(x => x !== b) : [...current, b];
+                          save({ baselines: next });
+                        }}
+                        disabled={!editable}
+                        className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
+                          active
+                            ? 'bg-primary/15 text-primary border-primary/30'
+                            : 'bg-muted text-muted-foreground border-transparent hover:border-primary/20'
+                        }`}
+                      >
+                        {b}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>

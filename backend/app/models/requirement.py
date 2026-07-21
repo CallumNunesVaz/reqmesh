@@ -17,10 +17,21 @@ from pydantic import BaseModel, Field
 
 class RequirementType(str, Enum):
     FUNCTIONAL = "functional"
-    NON_FUNCTIONAL = "non_functional"
+    NON_FUNCTIONAL_PERFORMANCE = "non_functional_performance"
+    NON_FUNCTIONAL_SECURITY = "non_functional_security"
+    NON_FUNCTIONAL_USABILITY = "non_functional_usability"
+    NON_FUNCTIONAL_MAINTAINABILITY = "non_functional_maintainability"
+    NON_FUNCTIONAL_RELIABILITY = "non_functional_reliability"
+    NON_FUNCTIONAL_SCALABILITY = "non_functional_scalability"
+    NON_FUNCTIONAL_PORTABILITY = "non_functional_portability"
     INTERFACE = "interface"
-    DESIGN = "design"
-    CONSTRAINT = "constraint"
+    USER = "user"
+    SYSTEM = "system"
+    BUSINESS = "business"
+    REGULATORY_COMPLIANCE = "regulatory_compliance"
+    SAFETY = "safety"
+    ENVIRONMENTAL = "environmental"
+    VERIFICATION = "verification"
 
 
 class RequirementStatus(str, Enum):
@@ -136,7 +147,7 @@ class Requirement(BaseModel):
     rationale: str = ""
     source: str = ""
     allocated_to: str = ""
-    baseline: Optional[str] = None
+    baselines: list[str] = Field(default_factory=list)
     reviewed: Optional[str] = None
     derived: bool = False
     normative: bool = True
@@ -170,7 +181,7 @@ class RequirementCreate(BaseModel):
     rationale: str = ""
     source: str = ""
     allocated_to: str = ""
-    baseline: Optional[str] = None
+    baselines: list[str] = Field(default_factory=list)
     reviewed: Optional[str] = None
     derived: bool = False
     normative: bool = True
@@ -201,7 +212,7 @@ class RequirementUpdate(BaseModel):
     rationale: Optional[str] = None
     source: Optional[str] = None
     allocated_to: Optional[str] = None
-    baseline: Optional[str] = None
+    baselines: Optional[list[str]] = None
     reviewed: Optional[str] = None
     derived: Optional[bool] = None
     normative: Optional[bool] = None

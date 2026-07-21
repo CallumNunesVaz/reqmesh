@@ -263,9 +263,7 @@ export default function VerificationPage() {
           </select>
           <button
             onClick={async () => {
-              for (const id of selectedVcs) {
-                await api.updateVerificationCase(projectId!, id, { status: bulkStatus } as any);
-              }
+              await api.bulkUpdateVerificationCases(projectId!, [...selectedVcs], { status: bulkStatus });
               setSelectedVcs(new Set());
               load();
             }}

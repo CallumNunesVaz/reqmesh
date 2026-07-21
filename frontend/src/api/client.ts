@@ -123,7 +123,7 @@ export interface Requirement {
   rationale: string;
   source: string;
   allocated_to: string;
-  baseline: string | null;
+  baselines: string[];
   references: Reference[];
   reviewed: string | null;
   derived: boolean;
@@ -382,8 +382,8 @@ export interface ManagedUser {
 /** One admin-editable runtime setting, as returned by GET /system/settings. */
 export interface AppSetting {
   key: string;
-  value: string | number | boolean;
-  type: 'str' | 'int' | 'bool';
+  value: string | number | boolean | string[];
+  type: 'str' | 'int' | 'bool' | 'list';
   category: string;
   label: string;
   help: string;
@@ -417,6 +417,13 @@ export interface SystemInfo {
   self_update_supported: boolean;
   file_update_supported: boolean;
   github_repo: string;
+  hostname: string;
+  fqdn: string;
+  internal_ips: string[];
+  os: { system: string; release: string; version: string; machine: string; python: string };
+  process_uptime_seconds: number;
+  working_directory: string;
+  running_user: string;
 }
 
 export interface UpdateCheck {
@@ -499,7 +506,7 @@ export const api = {
 
   // Application settings (admin) + public instance config
   getSettings: () => request<{ settings: AppSetting[] }>('/system/settings'),
-  patchSettings: (patch: Record<string, string | number | boolean>) =>
+  patchSettings: (patch: Record<string, string | number | boolean | string[]>) =>
     request<{ settings: AppSetting[] }>('/system/settings', { method: 'PATCH', body: patch }),
   testEmail: (to: string) =>
     request<{ ok: boolean; error?: string }>('/system/settings/test-email', { method: 'POST', body: { to } }),
@@ -510,7 +517,7 @@ export const api = {
   createProject: (data: { id: string; name: string }) => request<Project>('/projects', { method: 'POST', body: data }),
   getProject: (id: string) => request<Project>(`/projects/${id}`),
   deleteProject: (id: string) => request<void>(`/projects/${id}`, { method: 'DELETE' }),
-  updateProject: (id: string, data: { name?: string; naming?: Record<string, any>; quality?: Record<string, any>; workflow?: Record<string, any>; git?: Record<string, any> }) =>
+  updateProject: (id: string, data: { name?: string; naming?: Record<string, any>; quality?: Record<string, any>; workflow?: Record<string, any>; git?: Record<string, any>; baselines?: string[] }) =>
     request<any>(`/projects/${id}`, { method: 'PATCH', body: data }),
   getWorkflow: (projectId: string) =>
     request<{ states: string[]; transitions: Record<string, string[]>; default: string }>(`/projects/${projectId}/workflow`),
@@ -684,11 +691,45 @@ export const api = {
   getCompliance: (projectId: string) =>
     request<{ standards: { name: string; count: number }[]; tracked_count: number; total_requirements: number }>(`/projects/${projectId}/compliance`),
 
-  // Bulk
+  // Bulk — Requirements
   bulkUpdateRequirements: (projectId: string, ids: string[], updates: Record<string, any>) =>
     request<{ updated: number; ids: string[] }>(`/projects/${projectId}/requirements/bulk`, { method: 'POST', body: { ids, updates } }),
   bulkDeleteRequirements: (projectId: string, ids: string[]) =>
     request<{ deleted: number }>(`/projects/${projectId}/requirements/bulk-delete`, { method: 'POST', body: { ids } }),
+  bulkReparentRequirements: (projectId: string, ids: string[], parent: string | null, rePrefix: boolean = false) =>
+    request<{ updated: number; ids: string[] }>(`/projects/${projectId}/requirements/bulk-reparent`, { method: 'POST', body: { ids, parent, re_prefix: rePrefix } }),
+
+  // Bulk — Components
+  bulkUpdateComponents: (projectId: string, ids: string[], updates: Record<string, any>) =>
+    request<{ updated: number }>(`/projects/${projectId}/components/bulk`, { method: 'POST', body: { ids, updates } }),
+  bulkDeleteComponents: (projectId: string, ids: string[]) =>
+    request<{ deleted: number }>(`/projects/${projectId}/components/bulk-delete`, { method: 'POST', body: { ids } }),
+  bulkReparentComponents: (projectId: string, ids: string[], parent: string | null) =>
+    request<{ updated: number }>(`/projects/${projectId}/components/bulk-reparent`, { method: 'POST', body: { ids, parent } }),
+
+  // Bulk — Verification Cases
+  bulkUpdateVerificationCases: (projectId: string, ids: string[], updates: Record<string, any>) =>
+    request<{ updated: number }>(`/projects/${projectId}/verification/bulk`, { method: 'POST', body: { ids, updates } }),
+  bulkDeleteVerificationCases: (projectId: string, ids: string[]) =>
+    request<{ deleted: number }>(`/projects/${projectId}/verification/bulk-delete`, { method: 'POST', body: { ids } }),
+
+  // Bulk — Specifications
+  bulkUpdateSpecifications: (projectId: string, ids: string[], updates: Record<string, any>) =>
+    request<{ updated: number }>(`/projects/${projectId}/specifications/bulk`, { method: 'POST', body: { ids, updates } }),
+  bulkDeleteSpecifications: (projectId: string, ids: string[]) =>
+    request<{ deleted: number }>(`/projects/${projectId}/specifications/bulk-delete`, { method: 'POST', body: { ids } }),
+
+  // Bulk — Risks
+  bulkUpdateRisks: (projectId: string, ids: string[], updates: Record<string, any>) =>
+    request<{ updated: number }>(`/projects/${projectId}/risks/bulk`, { method: 'POST', body: { ids, updates } }),
+  bulkDeleteRisks: (projectId: string, ids: string[]) =>
+    request<{ deleted: number }>(`/projects/${projectId}/risks/bulk-delete`, { method: 'POST', body: { ids } }),
+
+  // Bulk — Change Requests
+  bulkUpdateChangeRequests: (projectId: string, ids: string[], updates: Record<string, any>) =>
+    request<{ updated: number }>(`/projects/${projectId}/change-requests/bulk`, { method: 'POST', body: { ids, updates } }),
+  bulkDeleteChangeRequests: (projectId: string, ids: string[]) =>
+    request<{ deleted: number }>(`/projects/${projectId}/change-requests/bulk-delete`, { method: 'POST', body: { ids } }),
 
   // History
   getRequirementHistory: (projectId: string, reqId: string) =>

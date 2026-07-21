@@ -96,6 +96,7 @@ async def get_project(project_id: str, authorization: Optional[str] = Header(Non
         "workflow": meta.get("workflow"),
         "naming": naming,
         "quality": meta.get("quality"),
+        "baselines": meta.get("baselines", []),
     }
     # Git settings can hold a credentialed remote URL, so unlike the rest of
     # the project metadata they are only shown to signed-in editors.
@@ -113,6 +114,7 @@ class ProjectSettings(BaseModel):
     quality: Optional[dict] = None
     workflow: Optional[dict] = None
     git: Optional[dict] = None
+    baselines: Optional[list[str]] = None
 
 
 @router.patch("/projects/{project_id}")
@@ -120,7 +122,7 @@ async def update_project_settings(project_id: str, data: ProjectSettings, user: 
     store = get_store(project_id)
     meta = store.read_meta()
     updates = {}
-    for field in ("name", "naming", "quality", "workflow", "git"):
+    for field in ("name", "naming", "quality", "workflow", "git", "baselines"):
         val = getattr(data, field, None)
         if val is not None:
             updates[field] = val
@@ -163,28 +165,85 @@ async def get_requirement_tree(project_id: str):
 async def next_uid(project_id: str, parent: str | None = None):
     store = get_store(project_id)
     reqs = store.list_requirements()
+    meta = store.read_meta()
+    naming = meta.get("naming", {}).get("requirements", {})
+    prefix_len = int(naming.get("prefix_length", 4) or 4)
+    prefix_type = naming.get("prefix_type", "alpha")
+    prefix_hint = naming.get("prefix_hint", "REQ")
+    separator = naming.get("separator", "")
+    suffix_len = int(naming.get("suffix_length", 4) or 4)
+    suffix_type = naming.get("suffix_type", "numeric")
 
     prefix = None
     if parent:
         parent_req = store.get_requirement(parent)
         if parent_req:
-            prefix = _parse_uid_prefix(parent_req["id"])
-            if not prefix:
-                m = re.match(r"([A-Z]{4})", parent_req["id"])
-                prefix = m.group(1) if m else parent_req["id"][:4].upper()
+            pid = parent_req["id"]
+            if separator and separator in pid:
+                prefix = pid.split(separator)[0]
+            elif separator:
+                prefix = pid[:prefix_len].upper()
+            else:
+                prefix = pid[:prefix_len].upper()
 
     if not prefix:
-        used = {r["id"][:4].upper() for r in reqs if r.get("id")}
-        prefix = next(
-            ("".join(c) for c in itertools.product(string.ascii_uppercase, repeat=4) if "".join(c) not in used),
-            "REQ0",
-        )
+        used = set()
+        for r in reqs:
+            rid = r.get("id", "")
+            if separator and separator in rid:
+                used.add(rid.split(separator)[0].upper())
+            else:
+                used.add(rid[:prefix_len].upper())
+        if prefix_hint.upper() not in used:
+            prefix = prefix_hint.upper()
+        else:
+            chars = string.ascii_uppercase if prefix_type == "alpha" else string.ascii_uppercase + string.digits
+            prefix = None
+            for length in range(prefix_len, prefix_len + 3):
+                for combo in itertools.product(chars, repeat=length):
+                    candidate = "".join(combo)
+                    if candidate not in used:
+                        prefix = candidate
+                        break
+                if prefix:
+                    break
+            if not prefix:
+                prefix = prefix_hint.upper() + "0"
 
-    max_num = 0
+    base = prefix + separator if separator else prefix
+    max_suffix = -1
+    suffix_pattern = re.escape(base)
     for r in reqs:
-        if _parse_uid_prefix(r["id"]) == prefix:
-            max_num = max(max_num, int(r["id"][4:]))
-    return {"prefix": prefix, "next_id": f"{prefix}{max_num + 1:04d}"}
+        rid = r.get("id", "")
+        if rid.startswith(base):
+            rest = rid[len(base):]
+            if suffix_type == "numeric":
+                try:
+                    max_suffix = max(max_suffix, int(rest))
+                except ValueError:
+                    pass
+            else:
+                if len(rest) == suffix_len:
+                    max_suffix = max(max_suffix, int(rest, 36) if rest.isalnum() else -1)
+
+    next_val = max_suffix + 1 if max_suffix >= 0 else 1
+    if suffix_type == "numeric":
+        suffix = str(next_val).zfill(suffix_len)
+    else:
+        suffix = _int_to_base36(next_val).zfill(suffix_len)
+
+    return {"prefix": prefix, "next_id": f"{base}{suffix}"}
+
+
+def _int_to_base36(n: int) -> str:
+    chars = string.digits + string.ascii_lowercase
+    if n == 0:
+        return "0"
+    result = ""
+    while n > 0:
+        n, r = divmod(n, 36)
+        result = chars[r] + result
+    return result
 
 
 @router.get("/projects/{project_id}/requirements")
@@ -399,9 +458,9 @@ async def list_baselines(project_id: str):
     store = get_store(project_id)
     baselines: dict[str, list[str]] = {}
     for r in store.list_requirements():
-        bl = r.get("baseline")
-        if bl:
-            baselines.setdefault(bl, []).append(r["id"])
+        for bl in (r.get("baselines") or []):
+            if bl:
+                baselines.setdefault(bl, []).append(r["id"])
     return [{"name": k, "requirements": v, "count": len(v)} for k, v in sorted(baselines.items())]
 
 
@@ -411,8 +470,14 @@ async def create_baseline(project_id: str, data: BaselineCreate, user: dict = De
     name = safe_id(data.name, "baseline name")
     updated = 0
     for req_id in data.requirements:
-        if store.update_requirement(req_id, {"baseline": name}):
-            updated += 1
+        req = store.get_requirement(req_id)
+        if req is None:
+            continue
+        baselines = list(req.get("baselines") or [])
+        if name not in baselines:
+            baselines.append(name)
+            if store.update_requirement(req_id, {"baselines": baselines}):
+                updated += 1
     return {"name": name, "requirements_assigned": updated}
 
 
@@ -428,10 +493,11 @@ async def rename_baseline(project_id: str, name: str, data: dict, user: dict = D
         raise HTTPException(status_code=409, detail="A baseline with that name already exists")
     updated = 0
     for r in store.list_requirements():
-        if r.get("baseline") == name:
-            store.update_requirement(r["id"], {"baseline": new_name})
+        baselines = list(r.get("baselines") or [])
+        if name in baselines:
+            baselines = [new_name if b == name else b for b in baselines]
+            store.update_requirement(r["id"], {"baselines": baselines})
             updated += 1
-    # Carry any frozen snapshot across to the new name.
     frozen = store.get_item("baselines", name)
     if frozen is not None:
         frozen["name"] = new_name
@@ -448,8 +514,10 @@ async def delete_baseline(project_id: str, name: str, user: dict = Depends(requi
     store.delete_item("baselines", name)
     updated = 0
     for r in store.list_requirements():
-        if r.get("baseline") == name:
-            store.update_requirement(r["id"], {"baseline": None})
+        baselines = list(r.get("baselines") or [])
+        if name in baselines:
+            baselines.remove(name)
+            store.update_requirement(r["id"], {"baselines": baselines})
             updated += 1
     return {"name": name, "requirements_cleared": updated}
 

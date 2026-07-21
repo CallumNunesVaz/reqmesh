@@ -1,7 +1,7 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   SlidersHorizontal, ShieldCheck, Save, Loader, Lock, Send, CheckCircle2,
-  AlertTriangle, Palette, ToggleLeft, Mail, KeyRound, Gauge, ArrowUpCircle,
+  AlertTriangle,   Palette, ToggleLeft, Mail, KeyRound, Gauge, ArrowUpCircle, Users, FileText, Plus, X, Upload,
 } from 'lucide-react';
 import { api, type AppSetting } from '../api/client';
 import { useAuthStore } from '../store/auth';
@@ -13,15 +13,17 @@ const CATEGORY_META: Record<string, { label: string; icon: typeof Palette; hint:
   security: { label: 'Security', icon: KeyRound, hint: 'Sessions and account lockout.' },
   limits: { label: 'Limits', icon: Gauge, hint: 'Upload and size limits.' },
   updates: { label: 'Updates', icon: ArrowUpCircle, hint: 'Where updates are pulled from.' },
+  teams: { label: 'Teams', icon: Users, hint: 'Organisational units available for requirement allocation.' },
+  reporting: { label: 'Reporting', icon: FileText, hint: 'Configuration for generated reports (cover page, headers, footers).' },
 };
-const CATEGORY_ORDER = ['branding', 'features', 'email', 'security', 'limits', 'updates'];
+const CATEGORY_ORDER = ['branding', 'features', 'teams', 'reporting', 'email', 'security', 'limits', 'updates'];
 
 export default function SettingsPage() {
   const user = useAuthStore((s) => s.user);
   const isAdmin = user?.role === 'admin';
 
   const [settings, setSettings] = useState<AppSetting[]>([]);
-  const [draft, setDraft] = useState<Record<string, string | number | boolean>>({});
+  const [draft, setDraft] = useState<Record<string, string | number | boolean | string[]>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
@@ -40,8 +42,11 @@ export default function SettingsPage() {
   useEffect(() => { if (isAdmin) load(); }, [isAdmin, load]);
 
   const dirty = Object.keys(draft).length > 0;
-  const valueOf = (s: AppSetting) => (s.key in draft ? draft[s.key] : s.value);
-  const setValue = (key: string, v: string | number | boolean) => {
+  const valueOf = (s: AppSetting) => {
+    if (s.key in draft) return draft[s.key];
+    return s.value;
+  };
+  const setValue = (key: string, v: string | number | boolean | string[]) => {
     setDraft((d) => ({ ...d, [key]: v }));
     setSaved(false);
   };
@@ -109,7 +114,7 @@ export default function SettingsPage() {
             {meta.hint && <p className="text-xs text-muted-foreground mb-3">{meta.hint}</p>}
             <div className="space-y-3">
               {items.map((s) => (
-                <SettingRow key={s.key} setting={s} value={valueOf(s)} onChange={(v) => setValue(s.key, v)} />
+                <SettingRow key={s.key} setting={s} value={valueOf(s) as any} onChange={(v) => setValue(s.key, v)} />
               ))}
             </div>
 
@@ -149,10 +154,42 @@ export default function SettingsPage() {
 
 function SettingRow({ setting, value, onChange }: {
   setting: AppSetting;
-  value: string | number | boolean;
-  onChange: (v: string | number | boolean) => void;
+  value: string | number | boolean | string[];
+  onChange: (v: string | number | boolean | string[]) => void;
 }) {
   const locked = setting.env_locked;
+
+  if (setting.type === 'list') {
+    const teams = Array.isArray(value) ? value : [];
+    return (
+      <div className="flex items-start gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 text-sm">
+            {setting.label}
+            {locked && <Lock size={11} className="text-muted-foreground" aria-label="Set by environment variable" />}
+          </div>
+          {setting.help && <div className="text-[11px] text-muted-foreground">{setting.help}</div>}
+        </div>
+        <TeamList teams={teams} onChange={(v) => onChange(v)} locked={locked} />
+      </div>
+    );
+  }
+
+  if (setting.key === 'report_logo_url') {
+    return (
+      <div className="flex items-start gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 text-sm">
+            {setting.label}
+            {locked && <Lock size={11} className="text-muted-foreground" aria-label="Set by environment variable" />}
+          </div>
+          {setting.help && <div className="text-[11px] text-muted-foreground">{setting.help}</div>}
+        </div>
+        <LogoInput value={typeof value === 'string' ? value : ''} onChange={(v) => onChange(v)} locked={locked} />
+      </div>
+    );
+  }
+
   return (
     <div className="flex items-start gap-3">
       <div className="flex-1 min-w-0">
@@ -184,6 +221,126 @@ function SettingRow({ setting, value, onChange }: {
           />
         )}
       </div>
+    </div>
+  );
+}
+
+function TeamList({ teams, onChange, locked }: { teams: string[]; onChange: (v: string[]) => void; locked: boolean }) {
+  const [newName, setNewName] = useState('');
+
+  const add = () => {
+    const name = newName.trim();
+    if (!name || teams.includes(name)) return;
+    onChange([...teams, name]);
+    setNewName('');
+  };
+
+  const remove = (name: string) => {
+    onChange(teams.filter((t) => t !== name));
+  };
+
+  return (
+    <div className="shrink-0 w-64 space-y-2">
+      <div className="flex flex-wrap gap-1">
+        {teams.map((t) => (
+          <span key={t} className="inline-flex items-center gap-1 rounded-full bg-accent px-2 py-0.5 text-xs">
+            {t}
+            {!locked && (
+              <button onClick={() => remove(t)} className="text-muted-foreground hover:text-destructive">
+                <X size={11} />
+              </button>
+            )}
+          </span>
+        ))}
+        {teams.length === 0 && (
+          <span className="text-xs text-muted-foreground italic">No teams defined</span>
+        )}
+      </div>
+      {!locked && (
+        <div className="flex gap-1.5">
+          <input
+            className="input text-xs flex-1"
+            placeholder="Add team…"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
+          />
+          <button className="btn-ghost p-1" onClick={add} disabled={!newName.trim()} title="Add team">
+            <Plus size={14} />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ~1 MB keeps the base64 logo small in settings.yaml; a report logo never
+// needs more. The value is stored as a data: URI (or a plain URL).
+const MAX_LOGO_BYTES = 1_000_000;
+
+function LogoInput({ value, onChange, locked }: { value: string; onChange: (v: string) => void; locked: boolean }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [err, setErr] = useState('');
+  const isData = value.startsWith('data:');
+  const embeddedKb = isData ? Math.round((value.length * 3) / 4 / 1024) : 0;
+
+  const pick = (file: File | undefined) => {
+    setErr('');
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setErr('Please choose an image file (PNG recommended).');
+      return;
+    }
+    if (file.size > MAX_LOGO_BYTES) {
+      setErr(`Image is too large (${Math.round(file.size / 1024)} KB). Max ${MAX_LOGO_BYTES / 1000} KB.`);
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => onChange(String(reader.result || ''));
+    reader.onerror = () => setErr('Could not read the file.');
+    reader.readAsDataURL(file);
+  };
+
+  return (
+    <div className="shrink-0 w-64 space-y-2">
+      {value ? (
+        <div className="flex items-center gap-2">
+          <img src={value} alt="Logo preview" className="max-h-10 max-w-[7rem] rounded border border-border bg-white/5 object-contain" />
+          {!locked && (
+            <button onClick={() => { onChange(''); setErr(''); }} className="text-muted-foreground hover:text-destructive" title="Remove logo">
+              <X size={13} />
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="text-xs text-muted-foreground italic">No logo set</div>
+      )}
+      {isData ? (
+        <div className="text-[11px] text-muted-foreground">Embedded image ({embeddedKb} KB)</div>
+      ) : (
+        <input
+          className="input text-xs w-full font-mono"
+          placeholder="https://… or paste a data: URI"
+          value={value}
+          disabled={locked}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      )}
+      {!locked && (
+        <>
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/svg+xml"
+            className="hidden"
+            onChange={(e) => { pick(e.target.files?.[0]); e.target.value = ''; }}
+          />
+          <button onClick={() => inputRef.current?.click()} className="btn-secondary text-xs w-full justify-center">
+            <Upload size={13} /> Upload PNG
+          </button>
+        </>
+      )}
+      {err && <div className="text-[11px] text-destructive">{err}</div>}
     </div>
   );
 }

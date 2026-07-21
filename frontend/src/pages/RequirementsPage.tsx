@@ -3,11 +3,12 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus, Search, X, Trash2, ChevronRight, ChevronDown, ChevronsDownUp, ChevronsUpDown,
-  Zap, Gauge, Plug, PenTool, Lock, Inbox, Square, CheckSquare,
+  Zap, Gauge, Plug, User, Cpu, Briefcase, Shield, AlertTriangle, Leaf, CheckCircle, Inbox, Square, CheckSquare, ArrowUp,
 } from 'lucide-react';
 import { api, type Requirement, type EvalVerdict } from '../api/client';
 import { useStore } from '../store';
 import { useAuthStore } from '../store/auth';
+import { useSelectedReq } from '../components/Layout';
 import LoadingSplash from '../components/LoadingSplash';
 
 const statusStyles: Record<string, { dot: string; text: string }> = {
@@ -26,10 +27,21 @@ const priorityChips: Record<string, string> = {
 
 const typeMeta: Record<string, { icon: typeof Zap; cls: string; label: string }> = {
   functional: { icon: Zap, cls: 'text-cs-blue', label: 'Functional' },
-  non_functional: { icon: Gauge, cls: 'text-cs-teal', label: 'Non-Functional' },
+  non_functional_performance: { icon: Gauge, cls: 'text-cs-teal', label: 'Non-Functional \u2013 Performance' },
+  non_functional_security: { icon: Gauge, cls: 'text-cs-teal', label: 'Non-Functional \u2013 Security' },
+  non_functional_usability: { icon: Gauge, cls: 'text-cs-teal', label: 'Non-Functional \u2013 Usability' },
+  non_functional_maintainability: { icon: Gauge, cls: 'text-cs-teal', label: 'Non-Functional \u2013 Maintainability' },
+  non_functional_reliability: { icon: Gauge, cls: 'text-cs-teal', label: 'Non-Functional \u2013 Reliability' },
+  non_functional_scalability: { icon: Gauge, cls: 'text-cs-teal', label: 'Non-Functional \u2013 Scalability' },
+  non_functional_portability: { icon: Gauge, cls: 'text-cs-teal', label: 'Non-Functional \u2013 Portability' },
   interface: { icon: Plug, cls: 'text-cs-purple', label: 'Interface' },
-  design: { icon: PenTool, cls: 'text-cs-pink', label: 'Design' },
-  constraint: { icon: Lock, cls: 'text-cs-orange', label: 'Constraint' },
+  user: { icon: User, cls: 'text-cs-yellow', label: 'User' },
+  system: { icon: Cpu, cls: 'text-cs-pink', label: 'System' },
+  business: { icon: Briefcase, cls: 'text-cs-blue', label: 'Business' },
+  regulatory_compliance: { icon: Shield, cls: 'text-cs-red', label: 'Regulatory/Compliance' },
+  safety: { icon: AlertTriangle, cls: 'text-cs-orange', label: 'Safety' },
+  environmental: { icon: Leaf, cls: 'text-cs-green', label: 'Environmental' },
+  verification: { icon: CheckCircle, cls: 'text-cs-teal', label: 'Verification' },
 };
 
 interface Row {
@@ -53,6 +65,9 @@ export default function RequirementsPage() {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [showCreate, setShowCreate] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [projectBaselines, setProjectBaselines] = useState<string[]>([]);
+  const [bulkParent, setBulkParent] = useState('');
+  const [moveReq, setMoveReq] = useState<{id: string, target: string} | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const [verdicts, setVerdicts] = useState<Map<string, EvalVerdict>>(new Map());
@@ -71,6 +86,7 @@ export default function RequirementsPage() {
         ev.requirements.filter((r) => r.verdict !== 'none').map((r) => [r.id, r.verdict]),
       )))
       .catch(() => {});
+    api.getProject(projectId).then((p: any) => setProjectBaselines(p.baselines || [])).catch(() => {});
   };
   useEffect(load, [projectId, dataVersion]);
 
@@ -192,6 +208,28 @@ export default function RequirementsPage() {
     load();
   };
 
+  const handleBulkBaseline = async (baseline: string) => {
+    if (!projectId) return;
+    await api.bulkUpdateRequirements(projectId, [...selectedIds], { baselines: [baseline] });
+    clearSelection();
+    load();
+  };
+
+  const handleBulkReparent = async () => {
+    if (!bulkParent.trim()) return;
+    await api.bulkReparentRequirements(projectId!, [...selectedIds], bulkParent.trim(), true);
+    clearSelection();
+    load();
+    setBulkParent('');
+  };
+
+  const handleSingleReparent = async () => {
+    if (!moveReq || !moveReq.target.trim()) return;
+    await api.bulkReparentRequirements(projectId!, [moveReq.id], moveReq.target.trim(), true);
+    setMoveReq(null);
+    load();
+  };
+
   return (
     <div className="relative max-w-4xl mx-auto px-6 py-6 min-h-[50vh]">
       {loading && requirements.length === 0 && <LoadingSplash label="Loading requirements…" />}
@@ -278,7 +316,20 @@ export default function RequirementsPage() {
             )}
           </div>
         ) : (
-          rows.map(({ req, depth, childCount }) => {
+          <>
+            {editMode && rows.length > 0 && (
+              <div className="flex items-center gap-2 px-3 py-2 border-b border-border/60 bg-muted/30">
+                <span className="shrink-0 mr-0.5 cursor-pointer" onClick={() => selectedIds.size === rows.length ? clearSelection() : selectAllVisible()}>
+                  {selectedIds.size === rows.length && rows.length > 0 ? (
+                    <CheckSquare size={13} className="text-primary" />
+                  ) : (
+                    <Square size={13} className="text-muted-foreground/40 hover:text-muted-foreground" />
+                  )}
+                </span>
+                <span className="text-[11px] text-muted-foreground">Select all</span>
+              </div>
+            )}
+            {rows.map(({ req, depth, childCount }) => {
             const TypeIcon = (typeMeta[req.type] || typeMeta.functional).icon;
             const typeCls = (typeMeta[req.type] || typeMeta.functional).cls;
             const status = statusStyles[req.status] || statusStyles.proposed;
@@ -357,18 +408,43 @@ export default function RequirementsPage() {
                     </span>
                   )}
                   {editMode && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleDelete(req.id); }}
-                      className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
-                      title="Delete"
-                    >
-                      <Trash2 size={13} />
-                    </button>
+                    <>
+                      {moveReq?.id === req.id ? (
+                        <span className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            className="input text-[11px] w-20 h-6"
+                            placeholder="Parent ID"
+                            value={moveReq.target}
+                            onChange={(e) => setMoveReq({ ...moveReq, target: e.target.value })}
+                            onKeyDown={(e) => { if (e.key === 'Enter') handleSingleReparent(); if (e.key === 'Escape') setMoveReq(null); }}
+                            autoFocus
+                          />
+                          <button onClick={handleSingleReparent} className="btn-secondary text-[10px] px-1.5 py-0.5" disabled={!moveReq.target.trim()}>Move</button>
+                          <button onClick={() => setMoveReq(null)} className="p-1 rounded hover:bg-accent text-muted-foreground"><X size={11} /></button>
+                        </span>
+                      ) : (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setMoveReq({ id: req.id, target: '' }); }}
+                          className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                          title="Move to parent"
+                        >
+                          <ChevronRight size={13} />
+                        </button>
+                      )}
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDelete(req.id); }}
+                        className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="Delete"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </>
                   )}
                 </span>
               </div>
             );
-          })
+          })}
+          </>
         )}
       </div>
 
@@ -388,6 +464,16 @@ export default function RequirementsPage() {
             <option value="rejected">Rejected</option>
             <option value="deprecated">Deprecated</option>
           </select>
+          <select
+            className="select text-xs py-1 w-32"
+            onChange={(e) => { if (e.target.value) { handleBulkBaseline(e.target.value); e.target.value = ''; } }}
+            value=""
+          >
+            <option value="">Set baseline...</option>
+            {projectBaselines.map(b => <option key={b} value={b}>{b}</option>)}
+          </select>
+          <input className="input text-xs w-20" placeholder="Parent ID" value={bulkParent} onChange={(e) => setBulkParent(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleBulkReparent(); }} />
+          <button onClick={handleBulkReparent} className="btn-secondary text-xs" disabled={!bulkParent.trim()}>Move</button>
           <button onClick={handleBulkDelete} className="btn-danger text-xs">
             <Trash2 size={13} /> Delete
           </button>
@@ -421,12 +507,34 @@ function CreateRequirementModal({
   const [form, setForm] = useState({ id: '', name: '', type: 'functional', priority: 'medium', parent: '', description: '' });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const { selectedReqId } = useSelectedReq();
 
   useEffect(() => {
     if (!open) return;
     setError('');
-    api.getNextUid(projectId).then((uid) => setForm((f) => ({ ...f, id: uid.next_id }))).catch(() => {});
-  }, [open, projectId]);
+    const parent = selectedReqId || '';
+    setForm((f) => ({ ...f, parent }));
+    const parentParam = parent || undefined;
+    api.getNextUid(projectId, parentParam)
+      .then((uid) => setForm((f) => ({ ...f, id: uid.next_id, parent })))
+      .catch(() => {});
+  }, [open, projectId, selectedReqId]);
+
+  const jumpToParent = () => {
+    if (!form.parent) return;
+    const parentReq = requirements.find(r => r.id === form.parent);
+    if (parentReq?.parent) {
+      setForm((f) => ({ ...f, parent: parentReq.parent! }));
+      api.getNextUid(projectId, parentReq.parent)
+        .then((uid) => setForm((f) => ({ ...f, id: uid.next_id })))
+        .catch(() => {});
+    } else {
+      setForm((f) => ({ ...f, parent: '' }));
+      api.getNextUid(projectId)
+        .then((uid) => setForm((f) => ({ ...f, id: uid.next_id })))
+        .catch(() => {});
+    }
+  };
 
   const handleParentChange = (parentId: string) => {
     setForm((f) => ({ ...f, parent: parentId }));
@@ -486,12 +594,20 @@ function CreateRequirementModal({
             <div className="space-y-3">
               <div>
                 <label className="label">Parent</label>
-                <select className="select" value={form.parent} onChange={(e) => handleParentChange(e.target.value)}>
-                  <option value="">None (top level)</option>
-                  {parentOptions.map((r) => (
-                    <option key={r.id} value={r.id}>{r.id} — {r.name || 'Untitled'}</option>
-                  ))}
-                </select>
+                <div className="flex gap-1.5">
+                  <select className="select flex-1" value={form.parent} onChange={(e) => handleParentChange(e.target.value)}>
+                    <option value="">None (top level)</option>
+                    {parentOptions.map((r) => (
+                      <option key={r.id} value={r.id}>{r.id} — {r.name || 'Untitled'}</option>
+                    ))}
+                  </select>
+                  <button type="button" onClick={jumpToParent}
+                    className="p-2 rounded-md border text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                    title="Jump to parent group"
+                    disabled={!form.parent || !requirements.find(r => r.id === form.parent)}>
+                    <ArrowUp size={14} />
+                  </button>
+                </div>
               </div>
 
               <div className="grid grid-cols-[8rem_1fr] gap-3">
@@ -501,7 +617,7 @@ function CreateRequirementModal({
                 </div>
                 <div>
                   <label className="label">Name</label>
-                  <input className="input" placeholder="The system shall…" value={form.name} autoFocus
+                  <input className="input" placeholder="Requirement name" value={form.name} autoFocus
                     onChange={(e) => setForm({ ...form, name: e.target.value })} />
                 </div>
               </div>

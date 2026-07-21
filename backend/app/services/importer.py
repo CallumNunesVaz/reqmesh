@@ -83,7 +83,7 @@ def _normalise_component(raw: dict) -> dict | None:
 # Fields the import formats don't carry; seeded on create so imported records
 # have the same shape as UI-created ones, but left untouched when updating an
 # existing requirement (a merge must not wipe local-only data).
-_CREATE_DEFAULTS = {"allocated_to": "", "cascade_from": None, "baseline": None}
+_CREATE_DEFAULTS = {"allocated_to": "", "cascade_from": None, "baselines": []}
 
 
 def import_into_store(store, parsed: dict, mode: str = "merge") -> dict:

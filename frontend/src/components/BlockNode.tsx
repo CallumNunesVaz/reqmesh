@@ -46,7 +46,9 @@ export interface BlockNodeData {
   type: string;
   cascadeFrom: string | null;
   hasChildren: boolean;
+  collapsed: boolean;
   childCount?: number;
+  onExpandCollapse?: () => void;
   params: BlockParam[];
   constraints: BlockConstraint[];
   verdict: string | null;
@@ -88,23 +90,48 @@ function BlockNode({ data }: NodeProps) {
     </>
   );
 
-  const frame = (children: React.ReactNode, clip = true) => (
+  // When a group is collapsed, its children are hidden — hint at the folded
+  // subtree with a diagonal stack of same-size cards peeking out behind.
+  const showStack = d.hasChildren && d.collapsed;
+  const stackCard = (offset: number, op: number) => (
     <div
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      className={`rounded-md border bg-card ${clip ? 'overflow-hidden' : ''}`}
+      className="absolute rounded-md border bg-card"
       style={{
-        width: BLOCK_W,
-        opacity: dimmed ? 0.18 : 1,
-        filter: glowFilter,
-        borderColor: isSelected ? colors.fill : hover ? 'hsl(var(--foreground) / 0.3)' : 'hsl(var(--border))',
-        boxShadow: isSelected ? `0 0 0 1px ${colors.fill}` : undefined,
-        transition: 'opacity 0.25s ease, filter 0.25s ease, border-color 0.2s ease',
-        cursor: 'pointer',
+        inset: 0,
+        transform: `translate(${offset}px, ${offset}px)`,
+        borderColor: 'hsl(var(--border))',
+        opacity: (dimmed ? 0.18 : 1) * op,
+        boxShadow: '0 1px 3px rgba(0,0,0,0.22)',
+        pointerEvents: 'none',
       }}
-    >
-      {handles}
-      {children}
+    />
+  );
+
+  const frame = (children: React.ReactNode, clip = true) => (
+    <div style={{ position: 'relative', width: BLOCK_W }}>
+      {showStack && (
+        <>
+          {stackCard(11, 0.5)}
+          {stackCard(6, 0.75)}
+        </>
+      )}
+      <div
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        className={`relative rounded-md border bg-card ${clip ? 'overflow-hidden' : ''}`}
+        style={{
+          width: BLOCK_W,
+          opacity: dimmed ? 0.18 : 1,
+          filter: glowFilter,
+          borderColor: isSelected ? colors.fill : hover ? 'hsl(var(--foreground) / 0.3)' : 'hsl(var(--border))',
+          boxShadow: isSelected ? `0 0 0 1px ${colors.fill}` : undefined,
+          transition: 'opacity 0.25s ease, filter 0.25s ease, border-color 0.2s ease',
+          cursor: 'pointer',
+        }}
+      >
+        {handles}
+        {children}
+      </div>
     </div>
   );
 
@@ -160,12 +187,28 @@ function BlockNode({ data }: NodeProps) {
       className="px-2.5 py-1.5 flex items-baseline gap-1.5"
       style={{ background: `linear-gradient(90deg, ${glow(colors.fill, 0.28)}, ${glow(colors.fill, 0.08)})` }}
     >
+      {d.hasChildren && (
+        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke={colors.text} strokeWidth="2.5" strokeLinecap="round" style={{ opacity: 0.55, flexShrink: 0 }}>
+          <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
+        </svg>
+      )}
       <span className="text-[9px] font-semibold tracking-wide" style={{ color: colors.text }}>
         &#171;{(d.type || 'functional').replace(/_/g, ' ')}&#187;
       </span>
       <span className="font-mono text-[9px] text-muted-foreground">{d.label}</span>
       {d.hasChildren && (
-        <span className="ml-auto text-[8.5px] text-muted-foreground opacity-70">+{d.childCount}</span>
+        <button
+          className="ml-auto flex items-center gap-0.5 px-1 py-0.5 rounded hover:bg-white/10 transition-colors"
+          onClick={(e) => { e.stopPropagation(); d.onExpandCollapse?.(); }}
+          title={d.collapsed ? `Expand (${d.childCount} hidden)` : 'Collapse'}
+        >
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="none" className="text-muted-foreground">
+            <rect x="1.5" y="1.5" width="13" height="13" rx="3" stroke="currentColor" strokeWidth="1.4" />
+            <line x1="5" y1="8" x2="11" y2="8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+            {d.collapsed && <line x1="8" y1="5" x2="8" y2="11" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />}
+          </svg>
+          <span className="text-[8.5px] text-muted-foreground">{d.childCount}</span>
+        </button>
       )}
     </div>
   );

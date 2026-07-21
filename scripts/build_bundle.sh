@@ -68,6 +68,8 @@ for f in Dockerfile.prod docker-compose.prod.yml Caddyfile nginx.conf DEPLOYMENT
 done
 cp scripts/bundle_install.sh "$DEST/install.sh"
 chmod +x "$DEST/install.sh"
+cp scripts/install-ubuntu-24.04.sh "$DEST/"
+chmod +x "$DEST/install-ubuntu-24.04.sh"
 [ -f "${RELEASE_NOTES_FILE:-}" ] && cp "$RELEASE_NOTES_FILE" "$DEST/RELEASE_NOTES.md" || true
 
 # ── 6. Manifest ──────────────────────────────────────────────────────────────
