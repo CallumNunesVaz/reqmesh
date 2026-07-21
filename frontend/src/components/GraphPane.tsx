@@ -20,7 +20,6 @@ import {
   useStore as useFlowStore,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import dagre from '@dagrejs/dagre';
 import { forceSimulation, forceLink, forceManyBody, forceCollide, forceX, forceY } from 'd3-force';
 import { Search, RotateCw, ListTree, Orbit, SlidersHorizontal, ChevronsUpDown, ChevronsDownUp, Filter } from 'lucide-react';
 import { api, type Requirement, type TraceLink, type EvaluatedRequirement, type EvaluatedParameter, type Component } from '../api/client';
@@ -28,7 +27,6 @@ import CircularNode from './CircularNode';
 import BlockNode, { BLOCK_W, type BlockParam, type BlockConstraint } from './BlockNode';
 import { statusColors } from './RequirementNode';
 import OrthoEdge from './OrthoEdge';
-import { routeEdges, type NodeRect } from './orthoRoute';
 import LoadingSplash from './LoadingSplash';
 import { zoomLevel, LEVEL_LABELS } from './semanticZoom';
 import { useTheme } from './ThemeProvider';
@@ -183,26 +181,84 @@ function forceLayout(nodes: Node[], edges: Edge[]) {
   });
 }
 
-// Left-to-right layered layout along the parent hierarchy — much easier to
-// read for requirement breakdowns than the radial view.
-function hierarchyLayout(nodes: Node[], edges: Edge[], gs: { nodesep: number; ranksep: number; rankdir: string; margin: number }) {
-  const g = new dagre.graphlib.Graph();
-  g.setGraph({ rankdir: gs.rankdir || 'LR', nodesep: gs.nodesep, ranksep: gs.ranksep, marginx: gs.margin, marginy: gs.margin });
-  g.setDefaultEdgeLabel(() => ({}));
-  for (const n of nodes) {
-    g.setNode(n.id, { width: NODE_W + 20, height: NODE_H + 16 });
+// Lazy, code-split ELK singleton — keeps the ~1 MB engine out of the main
+// chunk and off the critical path until the graph is actually rendered.
+let elkInstance: any = null;
+async function getElk() {
+  if (!elkInstance) {
+    const ELK = (await import('elkjs/lib/elk.bundled.js')).default;
+    elkInstance = new ELK();
   }
+  return elkInstance;
+}
+
+const ELK_DIRECTION: Record<string, string> = { LR: 'RIGHT', RL: 'LEFT', TB: 'DOWN', BT: 'UP' };
+
+interface ElkResult {
+  positions: Map<string, { x: number; y: number }>;
+  edgePoints: Map<string, { x: number; y: number }[]>;
+}
+
+// Layered (Sugiyama) layout via ELK, the algorithm behind Eclipse/SysML
+// editors. Unlike the old dagre pass — which ranked on the composition tree
+// alone — this feeds BOTH composition and relation edges, so ELK's global
+// crossing-minimisation places strongly-related requirements near each other.
+// Composition edges are prioritised so the breakdown tree stays dominant.
+// ELK also routes the edges orthogonally itself (bend points below), replacing
+// the bespoke router. Node footprints stay fixed (NODE_W×NODE_H) on purpose:
+// semantic zoom changes real heights, and measured heights would make the
+// layout jump — and this way ELK's routing shares the exact rects it laid out.
+async function elkLayout(
+  nodes: Node[], edges: Edge[],
+  gs: { nodesep: number; ranksep: number; rankdir: string; margin: number },
+): Promise<ElkResult> {
+  const elk = await getElk();
+  const nodeIds = new Set(nodes.map((n) => n.id));
+  const seen = new Set<string>();
+  const elkEdges: any[] = [];
   for (const e of edges) {
-    if (e.id.endsWith('-parent') && g.hasNode(e.source) && g.hasNode(e.target)) {
-      g.setEdge(e.source, e.target);
-    }
+    if (e.source === e.target || seen.has(e.id)) continue;
+    if (!nodeIds.has(e.source) || !nodeIds.has(e.target)) continue;
+    seen.add(e.id);
+    elkEdges.push({
+      id: e.id,
+      sources: [e.source],
+      targets: [e.target],
+      layoutOptions: e.id.endsWith('-parent') ? { 'elk.layered.priority.straightness': '10' } : {},
+    });
   }
-  dagre.layout(g);
-  return nodes.map((n) => {
-    const pos = g.node(n.id);
-    if (!pos) return n;
-    return { ...n, position: { x: pos.x - NODE_W / 2, y: pos.y - NODE_H / 2 } };
-  });
+  const graph = {
+    id: 'root',
+    layoutOptions: {
+      'elk.algorithm': 'layered',
+      'elk.direction': ELK_DIRECTION[gs.rankdir] || 'RIGHT',
+      'elk.edgeRouting': 'ORTHOGONAL',
+      'elk.spacing.nodeNode': String(gs.nodesep),
+      'elk.layered.spacing.nodeNodeBetweenLayers': String(gs.ranksep),
+      'elk.spacing.edgeNode': String(Math.max(12, Math.round(gs.nodesep / 2))),
+      'elk.spacing.edgeEdge': String(Math.max(8, Math.round(gs.nodesep / 3))),
+      'elk.padding': `[top=${gs.margin},left=${gs.margin},bottom=${gs.margin},right=${gs.margin}]`,
+      'elk.layered.cycleBreaking.strategy': 'GREEDY',
+      'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
+      'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',
+    },
+    children: nodes.map((n) => ({ id: n.id, width: NODE_W, height: NODE_H })),
+    edges: elkEdges,
+  };
+  const res = await elk.layout(graph);
+  const positions = new Map<string, { x: number; y: number }>();
+  for (const c of res.children || []) positions.set(c.id, { x: c.x ?? 0, y: c.y ?? 0 });
+  const edgePoints = new Map<string, { x: number; y: number }[]>();
+  for (const e of res.edges || []) {
+    const pts: { x: number; y: number }[] = [];
+    for (const sec of e.sections || []) {
+      pts.push(sec.startPoint);
+      for (const bp of sec.bendPoints || []) pts.push(bp);
+      pts.push(sec.endPoint);
+    }
+    if (pts.length) edgePoints.set(e.id, pts);
+  }
+  return { positions, edgePoints };
 }
 
 // Floating edge: connects the two node circles along the straight line
@@ -657,6 +713,9 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
   const hasLaidOutRef = useRef(false);
   // Guards the one-shot startup fit (effect lives after `nodes` is declared).
   const didInitialFit = useRef(false);
+  // Monotonic id so a stale async ELK result (from a superseded relayout or a
+  // rapid filter change) is discarded instead of clobbering the current one.
+  const layoutReqIdRef = useRef(0);
 
   useEffect(() => {
     const layoutSig = `${layoutMode}|${gs.nodesep}|${gs.ranksep}|${gs.rankdir}|${gs.margin}|${gs.maxZoom}`;
@@ -665,56 +724,51 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
     layoutSigRef.current = layoutSig;
     hasLaidOutRef.current = true;
     const shouldRefit = firstRun || layoutChanged;
-    const laid = layoutMode === 'uml'
-      ? hierarchyLayout(initialNodes, initialEdges, gs)
-      : forceLayout(initialNodes, initialEdges);
-    setNodes(laid);
-    // UML mode plans all edges together with the orthogonal router: ports fan
-    // out along block faces, parallel runs get separate lanes, and long or
-    // backward edges travel corridors that stay clear of intervening blocks.
-    // Force mode keeps floating centre-to-centre edges.
-    if (layoutMode === 'uml') {
-      const rects: NodeRect[] = laid.map((n) => ({
-        id: n.id, x: n.position.x, y: n.position.y, w: NODE_W, h: NODE_H,
-      }));
-      const vertical = gs.rankdir === 'TB' || gs.rankdir === 'BT';
-      const routes = routeEdges(
-        rects,
-        initialEdges.map((e) => ({ id: e.id, source: e.source, target: e.target })),
-        {
-          rankdir: gs.rankdir,
-          // Fan ports across the block width when flow is vertical; on the
-          // side faces stay within the height every zoom level guarantees.
-          portBand: vertical ? [28, NODE_W - 28] : [12, 44],
-        },
-      );
-      setEdges(initialEdges.map((e) => {
-        // Composition (parent) edges carry the diagram's structure, so in
-        // block-diagram mode they read stronger than the relation overlays.
-        const isParent = e.id.endsWith('-parent');
-        return {
-          ...e,
-          type: 'ortho',
-          data: { ...e.data, points: routes.get(e.id) },
-          style: {
-            ...(e.style as Record<string, unknown>),
-            ...(isParent
-              ? { stroke: 'hsl(var(--muted-foreground) / 0.55)', strokeWidth: 1.4, opacity: 0.7 }
-              : { opacity: 0.55 }),
-          },
-        };
-      }));
-    } else {
-      setEdges(initialEdges);
-    }
-    // Only reset focus/camera on a structural relayout — a live data refresh
-    // keeps the user's current selection and viewport intact.
-    if (shouldRefit) {
+    // Re-fit only on a structural relayout — a live data refresh keeps the
+    // user's current selection and viewport intact.
+    const refit = () => {
+      if (!shouldRefit) return;
       selectReq(null);
-      // Re-fit once the laid-out nodes have rendered and been measured.
-      const t = setTimeout(() => rfRef.current?.fitView({ padding: 0.12, maxZoom: gs.maxZoom }), 250);
-      return () => clearTimeout(t);
+      return setTimeout(() => rfRef.current?.fitView({ padding: 0.12, maxZoom: gs.maxZoom }), 250);
+    };
+
+    // UML mode: ELK lays out (over composition + relations) AND routes the
+    // edges orthogonally. It's async, so guard against stale results.
+    if (layoutMode === 'uml') {
+      const reqId = ++layoutReqIdRef.current;
+      let fitTimer: ReturnType<typeof setTimeout> | undefined;
+      elkLayout(initialNodes, initialEdges, gs).then(({ positions, edgePoints }) => {
+        if (reqId !== layoutReqIdRef.current) return; // superseded — discard
+        setNodes(initialNodes.map((n) => {
+          const p = positions.get(n.id);
+          return p ? { ...n, position: { x: p.x, y: p.y } } : n;
+        }));
+        setEdges(initialEdges.map((e) => {
+          // Composition (parent) edges carry the diagram's structure, so in
+          // block-diagram mode they read stronger than the relation overlays.
+          const isParent = e.id.endsWith('-parent');
+          return {
+            ...e,
+            type: 'ortho',
+            data: { ...e.data, points: edgePoints.get(e.id) },
+            style: {
+              ...(e.style as Record<string, unknown>),
+              ...(isParent
+                ? { stroke: 'hsl(var(--muted-foreground) / 0.55)', strokeWidth: 1.4, opacity: 0.7 }
+                : { opacity: 0.55 }),
+            },
+          };
+        }));
+        fitTimer = refit();
+      }).catch((err) => console.error('ELK layout failed', err));
+      return () => { if (fitTimer) clearTimeout(fitTimer); };
     }
+
+    // Force mode: synchronous d3-force + floating centre-to-centre edges.
+    setNodes(forceLayout(initialNodes, initialEdges));
+    setEdges(initialEdges);
+    const t = refit();
+    return () => { if (t) clearTimeout(t); };
   }, [initialNodes, initialEdges, layoutMode, gs.nodesep, gs.ranksep, gs.rankdir, gs.margin, gs.maxZoom, setNodes, setEdges]);
 
   useEffect(() => {

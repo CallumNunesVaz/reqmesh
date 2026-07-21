@@ -12,7 +12,6 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@dagrejs/dagre": "^3.0.0",
     "@tiptap/extension-character-count": "^2.27.2",
     "@tiptap/extension-image": "^2.27.2",
     "@tiptap/extension-placeholder": "^2.9.0",
@@ -21,6 +20,7 @@
     "@tiptap/starter-kit": "^2.9.0",
     "@xyflow/react": "^12.11.2",
     "d3-force": "^3.0.0",
+    "elkjs": "^0.12.0",
     "framer-motion": "^11.0.0",
     "lucide-react": "^0.441.0",
     "react": "^18.3.1",
