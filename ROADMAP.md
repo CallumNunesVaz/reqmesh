@@ -1,15 +1,37 @@
+# reqmesh — Roadmap & Refinement Tracking
 
-# reqmesh — Refinement Roadmap
-
-This document captures every refinement opportunity identified in the
-comprehensive codebase review. Items are grouped by priority with clear
-ownership (backend service, API route, frontend component, config, or auth).
+The single source of truth for reqmesh's delivered feature phases, the active
+refinement backlog, and design records for completed initiatives.
 
 **Status legend:** ✅ done · 🔨 proposed · ⚡ quick win
 
 ---
 
-## CRITICAL — Security & Correctness
+## Feature phases
+
+All eleven planned phases are delivered.
+
+- [x] **Phase 1** — Core CRUD, YAML storage, React UI
+- [x] **Phase 2** — Traceability & verification enhancements
+- [x] **Phase 3** — ReqIF / SysML import & export
+- [x] **Phase 4** — Git integration (auto-commit, history, hooks)
+- [x] **Phase 5** — Real-time collaboration (SSE + presence)
+- [x] **Phase 6** — Code & test traceability (coverage tag scanning, staleness)
+- [x] **Phase 7** — Deep coverage & tracing (needs, shallow/deep, cycle detection)
+- [x] **Phase 8** — Fingerprint-based review & change control
+- [x] **Phase 9** — Requirement quality linting
+- [x] **Phase 10** — Planning & estimation (effort, per-stakeholder priority, backlog)
+- [x] **Phase 11** — CSV / TSV / XLSX interchange + custom attribute schema
+
+---
+
+## Refinement backlog
+
+Every refinement opportunity identified in the comprehensive codebase review,
+grouped by priority with clear ownership (backend service, API route, frontend
+component, config, or auth).
+
+### CRITICAL — Security & Correctness
 
 | # | What | Where | Effort |
 |---|------|-------|--------|
@@ -25,9 +47,7 @@ ownership (backend service, API route, frontend component, config, or auth).
 | 10 | Atomic `save_users` (mkstemp + os.replace) | `core/auth.py` | S |
 | 11 | `smtp_password` → `SecretStr` to prevent log leakage | `core/config.py` | S |
 
----
-
-## HIGH — Missing Features & Robustness
+### HIGH — Missing Features & Robustness
 
 | # | What | Where | Effort |
 |---|------|-------|--------|
@@ -56,9 +76,7 @@ ownership (backend service, API route, frontend component, config, or auth).
 | 34 | Save-on-keystroke → debounce or save-on-blur for free-text fields | `RequirementDetailPage.tsx` | S |
 | 35 | Paste sanitization in RichTextEditor (Word/Google Docs) | `RichTextEditor.tsx` | S |
 
----
-
-## MEDIUM — Polish & Completeness
+### MEDIUM — Polish & Completeness
 
 | # | What | Where | Effort |
 |---|------|-------|--------|
@@ -85,9 +103,7 @@ ownership (backend service, API route, frontend component, config, or auth).
 | 56 | Bulk status change on verification cases | `VerificationPage.tsx` | S |
 | 57 | "Run Test" loading state + feedback | `VerificationPage.tsx` | S |
 
----
-
-## LOW — Nice-to-Have
+### LOW — Nice-to-Have
 
 | # | What | Where | Effort |
 |---|------|-------|--------|
@@ -106,9 +122,7 @@ ownership (backend service, API route, frontend component, config, or auth).
 | 70 | Dependency pinning — exact versions + hashes | `requirements.txt` | S |
 | 71 | Dependency pinning — split `requirements-dev.txt` | `requirements-dev.txt` | S |
 
----
-
-## Suggested sequencing
+### Suggested sequencing
 
 1. **CRITICAL #1–5, #7** — security fixes (S effort, immediate)
 2. **CRITICAL #10** — atomic user file writes (S effort)
@@ -118,3 +132,53 @@ ownership (backend service, API route, frontend component, config, or auth).
 6. **HIGH #20–21, #30, #35** — audit trail + input validation + editor sanitization (M effort)
 7. **MEDIUM #36–55** — polish pass (S/M effort, spread across sprints)
 8. **LOW #58–71** — backlog
+
+---
+
+## Completed initiatives
+
+Design records for delivered multi-slice initiatives. Full implementation-level
+detail lives in git history; the summaries below capture intent and outcome.
+
+### Parametrics → SysML v2 alignment — ✅ IMPLEMENTED (2026-07-21)
+
+All four slices, the GUI data-entry updates, the Cessna demo examples, and
+documentation shipped and were verified (backend + frontend suites, typecheck,
+build, e2e).
+
+**Context.** reqmesh's parametric modelling was SysML v2-*inspired* but not
+conformant: a bespoke, accessible engine (`backend/app/services/evaluation.py`)
+evaluates free-text expressions over a flat `ENTITY.param` namespace and produces
+rich verdicts (pass/fail/unknown/not_applicable/error), margins, rollups, and
+verification-measured verdicts. The chosen direction was **"keep the engine,
+SysML-ify the representation"** — deliberately additive, removing no computed
+capability. "Nothing is lost" guarantees: unknown/free-text units skip checking;
+inline `expr` constraints stay valid alongside definition-based ones; `MeasureKind`
+(MOE/MOP/TPM) preserved as SysML `metadata`; `rollup()`, cross-entity refs, verdict
+taxonomy, and measured verdicts untouched; all new model fields `Optional` with
+defaults, so existing YAML loads unchanged with no data migration.
+
+- **Slice 1 — Round-trip parametrics in the SysML v2 interchange.** `sysml_export.py`
+  now emits parameters (`attribute name = value [unit]` / derived exprs),
+  constraints (`require`/`assume constraint { … }`), `MeasureKind` metadata, and
+  components as `part def` blocks with `satisfy requirement`; `sysml_import.py`
+  parses them back. Verified via byte-equivalent export→import→re-evaluate.
+- **Slice 2 — Value types + units with dimensional checking.** New
+  `backend/app/services/units.py` (SI 7-dim registry, `dimension_of`, `compatible`,
+  `combine`, `to_base`); optional `value_type` on `Parameter`; a separate,
+  non-fatal dimension pass in the evaluator that attaches `unit_warning` without
+  changing verdicts; frontend surfaces warnings + unit autocomplete.
+- **Slice 3 — Reusable constraint def / calc def (with binding).** New
+  `models/definition.py` (`ConstraintDef`, `CalcDef`); `Constraint`/`Parameter`
+  gain optional `def`/`calc` + `bindings`; a `definitions` collection with CRUD
+  under `/projects/{id}/definitions`; evaluator resolves bound formals reusing
+  existing cycle protection; a small Definitions manager in the UI.
+- **Slice 4 — Analysis cases + assume/require formalization.** `subject` on
+  `Requirement` (exported/imported); `AnalysisCase{ scope, overrides }` evaluated
+  by reusing `Evaluator(overrides=…)`, exposed at `GET /projects/{id}/analysis/{caseId}`
+  and stored in an `analysis_cases` collection; a scoped analysis-case runner in
+  the UI.
+
+**Cross-cutting.** Every new field optional/defaulted; evaluator changes additive;
+no data migration required; `demo_seed.py` (Cessna) extended with typed-unit
+parameters, a shared `ConstraintDef`, and an analysis case as living examples.

@@ -46,8 +46,7 @@ reqmesh/                    # THE TOOL (this repo)
 ├── docker-compose.prod.yml # Single-origin production deployment
 ├── Caddyfile / nginx.conf # Reverse proxy configs with TLS
 ├── DEPLOYMENT.md          # Full server deployment guide
-├── REFINEMENT_ROADMAP.md  # Comprehensive refinement tracking
-└── ROADMAP.md             # Feature roadmap (phases 6–11)
+└── ROADMAP.md             # Roadmap, refinement backlog & design records
 
 <your-project>/            # YOUR DATA (separate, git-tracked)
 ├── _meta.yaml             # Project identity + workflow + quality config
@@ -481,7 +480,7 @@ cd backend
 - [x] Phase 10: Planning & estimation (effort, per-stakeholder priority, backlog)
 - [x] Phase 11: CSV/TSV/XLSX interchange + custom attribute schema
 
-Detailed design notes and inspiration sources are in [ROADMAP.md](ROADMAP.md). Ongoing refinements are tracked in [REFINEMENT_ROADMAP.md](REFINEMENT_ROADMAP.md).
+The full phase roadmap, the active refinement backlog, and design records for completed initiatives are consolidated in [ROADMAP.md](ROADMAP.md).
 
 ## License
 
