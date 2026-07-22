@@ -1,6 +1,6 @@
 import { memo, useState } from 'react';
 import { Handle, Position, useStore, type NodeProps } from '@xyflow/react';
-import { ChevronDown, ChevronUp, ChevronsUp, ChevronsUpDown, ChevronsDownUp, Minus, FlaskConical, Sigma, AlertTriangle } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronUp, Minus, ChevronsDown, ChevronsUp, FlaskConical, Sigma, AlertTriangle } from 'lucide-react';
 import { useGraphSelection } from './GraphPane';
 import { statusColors } from './RequirementNode';
 import { glow } from './graphColors';
@@ -49,8 +49,8 @@ export interface BlockNodeData {
   collapsed: boolean;
   childCount?: number;
   onExpandCollapse?: () => void;
-  onExpandAll?: () => void;
-  onCollapseAll?: () => void;
+  onToggleDescendants?: () => void;
+  onSelect?: () => void;
   hasMissingInfo?: boolean;
   elkHeight?: number;
   params: BlockParam[];
@@ -206,34 +206,25 @@ function BlockNode({ data }: NodeProps) {
       {d.hasChildren && (
         <button
           className="ml-auto flex items-center gap-0.5 px-1 py-0.5 rounded hover:bg-white/10 transition-colors"
-          onClick={(e) => { e.stopPropagation(); d.onExpandCollapse?.(); }}
+          onClick={(e) => { e.stopPropagation(); d.onExpandCollapse?.(); d.onSelect?.(); }}
           title={d.collapsed ? `Expand (${d.childCount} hidden)` : 'Collapse'}
         >
-          <svg width="11" height="11" viewBox="0 0 16 16" fill="none" className="text-muted-foreground">
-            <rect x="1.5" y="1.5" width="13" height="13" rx="3" stroke="currentColor" strokeWidth="1.4" />
-            <line x1="5" y1="8" x2="11" y2="8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-            {d.collapsed && <line x1="8" y1="5" x2="8" y2="11" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />}
-          </svg>
+          {d.collapsed
+            ? <ChevronRight size={10} className="text-muted-foreground" />
+            : <ChevronDown size={10} className="text-muted-foreground" />}
           <span className="text-[8.5px] text-muted-foreground">{d.childCount}</span>
         </button>
       )}
       {d.hasChildren && (
-        <>
-          <button
-            className="flex items-center px-0.5 py-0.5 rounded hover:bg-white/10 transition-colors"
-            onClick={(e) => { e.stopPropagation(); d.onExpandAll?.(); }}
-            title="Expand all descendants"
-          >
-            <ChevronsUpDown size={10} className="text-muted-foreground" />
-          </button>
-          <button
-            className="flex items-center px-0.5 py-0.5 rounded hover:bg-white/10 transition-colors"
-            onClick={(e) => { e.stopPropagation(); d.onCollapseAll?.(); }}
-            title="Collapse all descendants"
-          >
-            <ChevronsDownUp size={10} className="text-muted-foreground" />
-          </button>
-        </>
+        <button
+          className="flex items-center px-0.5 py-0.5 rounded hover:bg-white/10 transition-colors"
+          onClick={(e) => { e.stopPropagation(); d.onToggleDescendants?.(); d.onSelect?.(); }}
+          title={d.collapsed ? 'Expand all descendants' : 'Collapse all descendants'}
+        >
+          {d.collapsed
+            ? <ChevronsDown size={10} className="text-muted-foreground" />
+            : <ChevronsUp size={10} className="text-muted-foreground" />}
+        </button>
       )}
     </div>
   );

@@ -690,6 +690,7 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
           hasChildren: reqs.some(r => r.parent === req.id),
           collapsed: collapsed.has(req.id),
           childCount: childCounts.get(req.id) || 0,
+          onSelect: () => selectReq(req.id),
           onExpandCollapse: () => {
             setCollapsed(prev => {
               const next = new Set(prev);
@@ -697,26 +698,26 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
               return next;
             });
           },
-          onExpandAll: () => {
+          onToggleDescendants: () => {
             setCollapsed(prev => {
               const next = new Set(prev);
-              const removeDescendants = (nodeId: string) => {
-                next.delete(nodeId);
-                for (const r of reqs) { if (r.parent === nodeId) removeDescendants(r.id); }
-              };
-              removeDescendants(req.id);
-              return next;
-            });
-          },
-          onCollapseAll: () => {
-            setCollapsed(prev => {
-              const next = new Set(prev);
-              const collapseDescendants = (nodeId: string) => {
-                for (const r of reqs) {
-                  if (r.parent === nodeId) { next.add(r.id); collapseDescendants(r.id); }
-                }
-              };
-              collapseDescendants(req.id);
+              if (next.has(req.id)) {
+                // Currently collapsed → expand all descendants
+                const removeDescendants = (nodeId: string) => {
+                  next.delete(nodeId);
+                  for (const r of reqs) { if (r.parent === nodeId) removeDescendants(r.id); }
+                };
+                removeDescendants(req.id);
+              } else {
+                // Currently expanded → collapse this node and all descendants
+                next.add(req.id);
+                const collapseDescendants = (nodeId: string) => {
+                  for (const r of reqs) {
+                    if (r.parent === nodeId) { next.add(r.id); collapseDescendants(r.id); }
+                  }
+                };
+                collapseDescendants(req.id);
+              }
               return next;
             });
           },
