@@ -1,6 +1,6 @@
 import { memo, useState } from 'react';
 import { Handle, Position, useStore, type NodeProps } from '@xyflow/react';
-import { ChevronDown, ChevronUp, ChevronsUp, Minus, FlaskConical, Sigma } from 'lucide-react';
+import { ChevronDown, ChevronUp, ChevronsUp, ChevronsUpDown, ChevronsDownUp, Minus, FlaskConical, Sigma, AlertTriangle } from 'lucide-react';
 import { useGraphSelection } from './GraphPane';
 import { statusColors } from './RequirementNode';
 import { glow } from './graphColors';
@@ -49,6 +49,9 @@ export interface BlockNodeData {
   collapsed: boolean;
   childCount?: number;
   onExpandCollapse?: () => void;
+  onExpandAll?: () => void;
+  onCollapseAll?: () => void;
+  hasMissingInfo?: boolean;
   elkHeight?: number;
   params: BlockParam[];
   constraints: BlockConstraint[];
@@ -214,6 +217,24 @@ function BlockNode({ data }: NodeProps) {
           <span className="text-[8.5px] text-muted-foreground">{d.childCount}</span>
         </button>
       )}
+      {d.hasChildren && (
+        <>
+          <button
+            className="flex items-center px-0.5 py-0.5 rounded hover:bg-white/10 transition-colors"
+            onClick={(e) => { e.stopPropagation(); d.onExpandAll?.(); }}
+            title="Expand all descendants"
+          >
+            <ChevronsUpDown size={10} className="text-muted-foreground" />
+          </button>
+          <button
+            className="flex items-center px-0.5 py-0.5 rounded hover:bg-white/10 transition-colors"
+            onClick={(e) => { e.stopPropagation(); d.onCollapseAll?.(); }}
+            title="Collapse all descendants"
+          >
+            <ChevronsDownUp size={10} className="text-muted-foreground" />
+          </button>
+        </>
+      )}
     </div>
   );
 
@@ -238,6 +259,9 @@ function BlockNode({ data }: NodeProps) {
           <Sigma size={8.5} /> {d.verdict === 'not_applicable' ? 'n/a' : d.verdict}
         </span>
       )}
+      {d.hasMissingInfo && (
+        <span title="Missing information"><AlertTriangle size={10} className="text-amber-400" /></span>
+      )}
       <PriorityIcon size={11} color={prio.color} strokeWidth={2.5} className="ml-auto shrink-0" />
     </div>
   );
@@ -250,41 +274,56 @@ function BlockNode({ data }: NodeProps) {
   const paramRows = d.params.slice(0, level === 4 ? 4 : 8);
   const constraintRows = level === 5 ? d.constraints : [];
 
-  return frame(
+  return (
     <>
-      {header}
-      {nameRow}
-      {level === 5 && d.desc && (
-        <div className="px-2.5 pb-1.5 text-[9px] leading-snug text-muted-foreground line-clamp-3">{d.desc}</div>
-      )}
-      {paramRows.length > 0 && (
-        <div className="border-t px-2.5 py-1.5" style={{ borderColor: 'hsl(var(--border) / 0.6)' }}>
-          <div className="text-[7.5px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">values</div>
-          {paramRows.map((p) => (
-            <div key={p.name} className="font-mono text-[9px] leading-relaxed flex items-center gap-1" style={{ color: 'hsl(var(--foreground) / 0.85)' }}>
-              {/* Derived values are italic, the SysML convention for computed properties */}
-              <span className="truncate" style={{ fontStyle: p.derived ? 'italic' : 'normal' }}>{p.name} {p.display}</span>
-              {p.measured && <FlaskConical size={8} className="shrink-0 text-cs-teal" />}
+      {frame(
+        <>
+          {header}
+          {nameRow}
+          {level === 5 && d.desc && (
+            <div className="px-2.5 pb-1.5 overflow-hidden" style={{ height: '3em', maxHeight: '3em' }}>
+              <div className="text-[9px] leading-snug text-muted-foreground"
+                style={{
+                  animation: 'scrollDesc 8s linear infinite alternate',
+                  whiteSpace: 'normal',
+                }}>
+                {d.desc}
+              </div>
             </div>
-          ))}
-          {d.params.length > paramRows.length && (
-            <div className="text-[8px] text-muted-foreground">+{d.params.length - paramRows.length} more</div>
           )}
-        </div>
-      )}
-      {constraintRows.length > 0 && (
-        <div className="border-t px-2.5 py-1.5" style={{ borderColor: 'hsl(var(--border) / 0.6)' }}>
-          <div className="text-[7.5px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">constraints</div>
-          {constraintRows.map((c, i) => (
-            <div key={i} className="font-mono text-[8.5px] leading-relaxed flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: constraintColors[c.status] || 'hsl(var(--muted-foreground) / 0.4)' }} />
-              <span className="truncate" style={{ color: 'hsl(var(--foreground) / 0.8)' }}>{c.expr}</span>
+          {paramRows.length > 0 && (
+            <div className="border-t px-2.5 py-1.5" style={{ borderColor: 'hsl(var(--border) / 0.6)' }}>
+              <div className="text-[7.5px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">values</div>
+              {paramRows.map((p) => (
+                <div key={p.name} className="font-mono text-[9px] leading-relaxed flex items-center gap-1" style={{ color: 'hsl(var(--foreground) / 0.85)' }}>
+                  {/* Derived values are italic, the SysML convention for computed properties */}
+                  <span className="truncate" style={{ fontStyle: p.derived ? 'italic' : 'normal' }}>{p.name} {p.display}</span>
+                  {p.measured && <FlaskConical size={8} className="shrink-0 text-cs-teal" />}
+                </div>
+              ))}
+              {d.params.length > paramRows.length && (
+                <div className="text-[8px] text-muted-foreground">+{d.params.length - paramRows.length} more</div>
+              )}
             </div>
-          ))}
-        </div>
+          )}
+          {constraintRows.length > 0 && (
+            <div className="border-t px-2.5 py-1.5" style={{ borderColor: 'hsl(var(--border) / 0.6)' }}>
+              <div className="text-[7.5px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">constraints</div>
+              {constraintRows.map((c, i) => (
+                <div key={i} className="font-mono text-[8.5px] leading-relaxed flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: constraintColors[c.status] || 'hsl(var(--muted-foreground) / 0.4)' }} />
+                  <span className="truncate" style={{ color: 'hsl(var(--foreground) / 0.8)' }}>{c.expr}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {footer}
+        </>,
       )}
-      {footer}
-    </>,
+      {level === 5 && d.desc && (
+        <style>{`@keyframes scrollDesc { 0% { transform: translateY(0); } 20% { transform: translateY(0); } 80% { transform: translateY(calc(-100% + 3em)); } 100% { transform: translateY(calc(-100% + 3em)); } }`}</style>
+      )}
+    </>
   );
 }
 

@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, ChevronRight, Boxes, Square, CheckSquare, Trash2, X } from 'lucide-react';
+import { Plus, ChevronRight, Boxes, Square, CheckSquare, Trash2, X, Search } from 'lucide-react';
 import { api, COMPONENT_TYPES, type Component, type ComponentTreeNode } from '../api/client';
 import { useStore } from '../store';
 import { useAuthStore } from '../store/auth';
@@ -22,6 +22,8 @@ export default function ComponentsPage() {
   const [tree, setTree] = useState<ComponentTreeNode[]>([]);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [showCreate, setShowCreate] = useState(false);
+  const [search, setSearch] = useState('');
+  const [filterType, setFilterType] = useState('');
   const [draft, setDraft] = useState(EMPTY_DRAFT);
   const [error, setError] = useState('');
 
@@ -33,6 +35,24 @@ export default function ComponentsPage() {
   };
 
   useEffect(load, [projectId, dataVersion]);
+
+  const filterMatchIds = useMemo(() => {
+    if (!search && !filterType) return null;
+    const q = search.toLowerCase();
+    const ids = new Set<string>();
+    for (const c of components) {
+      if (filterType && c.type !== filterType) continue;
+      if (q) {
+        const hay = `${c.id} ${c.name || ''}`.toLowerCase();
+        if (!hay.includes(q)) continue;
+      }
+      ids.add(c.id);
+    }
+    return ids;
+  }, [components, search, filterType]);
+
+  const filtering = !!(search || filterType);
+  const filteredCount = filterMatchIds ? filterMatchIds.size : components.length;
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,6 +111,13 @@ export default function ComponentsPage() {
     const isCollapsed = collapsed.has(node.id);
     const typeMeta = COMPONENT_TYPE_META[node.type] || COMPONENT_TYPE_META.assembly;
     const TypeIcon = typeMeta.icon;
+
+    const subtreeMatches = (n: ComponentTreeNode): boolean => {
+      if (!filterMatchIds) return true;
+      if (filterMatchIds.has(n.id)) return true;
+      return n.children.some(subtreeMatches);
+    };
+    if (filtering && !subtreeMatches(node)) return null;
     return (
       <div key={node.id}>
         <div
@@ -141,7 +168,7 @@ export default function ComponentsPage() {
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Components</h1>
           <HelpTip>Components represent the physical design — what the system IS. Each component can satisfy requirements and carry numeric parameters for budget rollups (e.g. mass, current draw). Click a component to open its detail page.</HelpTip>
           <p className="text-sm text-muted-foreground mt-1">
-            {components.length} components — the synthesised design
+            {filtering ? `${filteredCount} of ${components.length} components` : `${components.length} components`} — the synthesised design
           </p>
         </div>
         {editable && (
@@ -207,15 +234,46 @@ export default function ComponentsPage() {
         )}
       </AnimatePresence>
 
+      <div className="sticky top-0 z-10 -mx-2 px-2 py-2 bg-background/95 backdrop-blur-sm mb-4">
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input
+              className="input pl-9 pr-14 h-9"
+              placeholder="Search components…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            {search ? (
+              <button className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" onClick={() => setSearch('')}>
+                <X size={14} />
+              </button>
+            ) : (
+              <kbd className="absolute right-3 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded border bg-muted text-[10px] font-mono text-muted-foreground pointer-events-none">/</kbd>
+            )}
+          </div>
+          <select className="select w-36 h-9 text-xs" value={filterType} onChange={(e) => setFilterType(e.target.value)}>
+            <option value="">All types</option>
+            {COMPONENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </div>
+      </div>
+
       {error && <div className="mb-4 text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">{error}</div>}
 
-      {components.length === 0 ? (
+      {components.length === 0 && !filtering ? (
         <div className="card p-12 text-center">
           <Boxes size={48} className="mx-auto text-muted-foreground/40 mb-4" />
           <p className="text-card-foreground font-medium">No components yet</p>
           <p className="text-sm text-muted-foreground mt-1">
             Components describe what the system <i>is</i>, and map onto the requirements they satisfy.
           </p>
+        </div>
+      ) : components.length > 0 && filteredCount === 0 ? (
+        <div className="card p-12 text-center">
+          <Boxes size={48} className="mx-auto text-muted-foreground/40 mb-4" />
+          <p className="text-card-foreground font-medium">No components match your filters.</p>
+          <button className="text-xs text-primary hover:underline mt-2" onClick={() => { setSearch(''); setFilterType(''); }}>Clear filters</button>
         </div>
       ) : (
         <div className="card p-2 flex-1 min-w-[280px]">

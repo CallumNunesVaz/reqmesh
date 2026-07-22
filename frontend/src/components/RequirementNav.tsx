@@ -53,8 +53,15 @@ function TreeNode({
   const isRouteActive = currentPath.endsWith(`/requirements/${node.id}`);
   const isSelected = selectedReqId === node.id || isRouteActive;
 
+  useEffect(() => {
+    if (!selectedReqId || !hasChildren) return;
+    const hasDescendant = (n: RequirementTreeNode): boolean =>
+      n.id === selectedReqId || n.children.some(hasDescendant);
+    if (hasDescendant(node)) setExpanded(true);
+  }, [selectedReqId, hasChildren, node]);
+
   return (
-    <div>
+    <div id={`nav-${node.id}`}>
       <button
         onClick={() => {
           onSelect(node.id);
@@ -242,6 +249,12 @@ export default function RequirementNav({ width = 300, collapsed, onToggleCollaps
     if (!projectId) return;
     api.getRequirementTree(projectId).then(setTree).catch(console.error);
   }, [projectId, dataVersion]);
+
+  useEffect(() => {
+    if (!selectedReqId) return;
+    const el = document.getElementById(`nav-${selectedReqId}`);
+    el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [selectedReqId]);
 
   // The non-requirement sections each load their own list/tree on demand.
   useEffect(() => {

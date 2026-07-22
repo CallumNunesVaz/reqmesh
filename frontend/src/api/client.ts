@@ -416,6 +416,9 @@ export interface SystemInfo {
   control_dir_writable: boolean;
   self_update_supported: boolean;
   file_update_supported: boolean;
+  bundle_update_supported: boolean;
+  can_restart: boolean;
+  latex_engine: string | null;
   github_repo: string;
   hostname: string;
   fqdn: string;
@@ -439,7 +442,7 @@ export interface UpdateCheck {
 }
 
 export interface UpdateStatus {
-  state: 'idle' | 'preparing' | 'requested' | 'in_progress' | 'completed' | 'failed' | 'unsupported';
+  state: 'idle' | 'preparing' | 'requested' | 'in_progress' | 'staged' | 'completed' | 'failed' | 'unsupported';
   current?: string;
   target_version: string | null;
   message: string;
@@ -466,6 +469,13 @@ export const api = {
     return request<{ state: string; target_version: string; backup: { tag: string; projects: string[] }; archive_bytes: number }>(
       '/system/update/upload', { method: 'POST', body: fd });
   },
+  uploadBundle: (file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return request<{ state: string; target_version: string; backup: { tag: string; projects: string[] }; archive_bytes: number }>(
+      '/system/update/bundle', { method: 'POST', body: fd });
+  },
+  restartApp: () => request<{ ok: boolean; restarting: boolean }>('/system/restart', { method: 'POST' }),
   dismissUpdate: () => request<{ ok: boolean }>('/system/update/dismiss', { method: 'POST' }),
 
   // Auth

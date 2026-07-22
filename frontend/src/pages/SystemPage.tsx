@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   ShieldCheck, RefreshCw, Download, CheckCircle2, AlertTriangle, Loader,
   ArrowUpCircle, GitBranch, Server, ExternalLink, Terminal, X, Upload,
-  Monitor, Globe, Network, Clock,
+  Monitor, Globe, Network, Clock, Power, FileText,
 } from 'lucide-react';
 import { api, type SystemInfo, type UpdateCheck, type UpdateStatus, type BuildInfo } from '../api/client';
 import { useAuthStore } from '../store/auth';
@@ -24,7 +24,10 @@ export default function SystemPage() {
   const [starting, setStarting] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [restarting, setRestarting] = useState(false);
+  const [confirmRestart, setConfirmRestart] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const restartPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const runCheck = useCallback(async (force: boolean) => {
     setChecking(true);
@@ -98,25 +101,71 @@ export default function SystemPage() {
     }
   };
 
+  // Docker deployments upload a Docker image archive (applied by the sidecar);
+  // bare-metal installs upload a release bundle, staged for the next restart.
+  const bundleMode = !!info?.bundle_update_supported && !info?.file_update_supported;
+
   const uploadUpdate = async () => {
     if (!uploadFile) return;
     setUploading(true);
     setError('');
     try {
-      const m = uploadFile.name.match(/v?(\d+\.\d+\.\d+)/);
-      const res = await api.uploadUpdate(uploadFile, m?.[1]);
-      setUploadFile(null);
-      setStatus({
-        state: 'requested', target_version: res.target_version || (m?.[1] ?? null),
-        message: 'Image uploaded; backing up and handing off to the updater…',
-        updated_at: new Date().toISOString(), backup: res.backup,
-      });
+      if (bundleMode) {
+        const res = await api.uploadBundle(uploadFile);
+        setUploadFile(null);
+        setStatus({
+          state: 'staged', target_version: res.target_version,
+          message: `v${res.target_version} is staged — restart to apply.`,
+          updated_at: new Date().toISOString(), backup: res.backup,
+        });
+      } else {
+        const m = uploadFile.name.match(/v?(\d+\.\d+\.\d+)/);
+        const res = await api.uploadUpdate(uploadFile, m?.[1]);
+        setUploadFile(null);
+        setStatus({
+          state: 'requested', target_version: res.target_version || (m?.[1] ?? null),
+          message: 'Image uploaded; backing up and handing off to the updater…',
+          updated_at: new Date().toISOString(), backup: res.backup,
+        });
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Upload failed');
     } finally {
       setUploading(false);
     }
   };
+
+  // Restart the app in place (re-exec). The connection drops briefly while the
+  // process comes back — and, if a bundle is staged, applies on the way up — so
+  // we poll /version until it answers again.
+  const restart = async () => {
+    setConfirmRestart(false);
+    setRestarting(true);
+    setError('');
+    try {
+      await api.restartApp();
+    } catch {
+      // The process may drop the request as it re-execs — that's expected.
+    }
+    const started = Date.now();
+    if (restartPollRef.current) clearInterval(restartPollRef.current);
+    restartPollRef.current = setInterval(async () => {
+      try {
+        const [b, s] = await Promise.all([api.getVersion(), api.updateStatus()]);
+        if (restartPollRef.current) { clearInterval(restartPollRef.current); restartPollRef.current = null; }
+        setBuild(b); setStatus(s); setRestarting(false);
+        runCheck(true);
+      } catch {
+        if (Date.now() - started > 120000) {
+          if (restartPollRef.current) { clearInterval(restartPollRef.current); restartPollRef.current = null; }
+          setRestarting(false);
+          setError('The app did not come back within two minutes — check the server logs.');
+        }
+      }
+    }, 2000);
+  };
+
+  useEffect(() => () => { if (restartPollRef.current) clearInterval(restartPollRef.current); }, []);
 
   const dismiss = async () => {
     try { await api.dismissUpdate(); } catch { /* best effort */ }
@@ -135,6 +184,7 @@ export default function SystemPage() {
 
   const updateAvailable = check?.update_available;
   const active = status && ACTIVE.has(status.state);
+  const staged = status?.state === 'staged';
   const completed = status?.state === 'completed';
   const failed = status?.state === 'failed';
   const repoUrl = info ? `https://github.com/${info.github_repo}` : '';
@@ -185,6 +235,12 @@ export default function SystemPage() {
           <dd className="col-span-2 sm:col-span-1 font-mono text-xs truncate">{info?.working_directory ?? '…'}</dd>
           <dt className="text-muted-foreground col-span-2 sm:col-span-1"><ShieldCheck size={13} className="inline mr-1" /> Running as</dt>
           <dd className="col-span-2 sm:col-span-1 font-mono text-xs">{info?.running_user ?? '…'}{info?.docker ? ' (Docker)' : ''}</dd>
+          <dt className="text-muted-foreground col-span-2 sm:col-span-1"><FileText size={13} className="inline mr-1" /> PDF reports</dt>
+          <dd className="col-span-2 sm:col-span-1 font-mono text-xs">
+            {info == null ? '…' : info.latex_engine
+              ? `LaTeX (${info.latex_engine})`
+              : 'HTML fallback — no LaTeX engine'}
+          </dd>
         </dl>
       </section>
 
@@ -192,10 +248,39 @@ export default function SystemPage() {
       <section className="card p-5">
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-medium flex items-center gap-2"><ArrowUpCircle size={16} /> Updates</h2>
-          <button className="btn-ghost text-xs" onClick={() => runCheck(true)} disabled={checking || !!active}>
-            <RefreshCw size={14} className={checking ? 'animate-spin' : ''} /> Check now
-          </button>
+          <div className="flex items-center gap-1">
+            {info?.can_restart && !staged && (
+              <button className="btn-ghost text-xs" onClick={() => setConfirmRestart(true)} disabled={restarting || !!active} title="Restart the application">
+                <Power size={14} className={restarting ? 'animate-pulse' : ''} /> {restarting ? 'Restarting…' : 'Restart'}
+              </button>
+            )}
+            <button className="btn-ghost text-xs" onClick={() => runCheck(true)} disabled={checking || !!active}>
+              <RefreshCw size={14} className={checking ? 'animate-spin' : ''} /> Check now
+            </button>
+          </div>
         </div>
+
+        {/* Staged bundle update — awaiting a restart to apply (bare-metal). */}
+        {staged && (
+          <div className="rounded-lg border border-primary/40 bg-primary/5 p-4 mb-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 font-medium text-sm">
+                <ArrowUpCircle size={16} className="text-primary" /> Version {status?.target_version} is staged
+              </div>
+              <button className="btn-ghost text-xs" onClick={dismiss} disabled={restarting}><X size={14} /> Discard</button>
+            </div>
+            <p className="text-sm text-muted-foreground mt-1">
+              The new version is validated and ready. Restart to apply it — the app is briefly unavailable while it comes back up.
+            </p>
+            {status?.backup?.tag && (
+              <p className="text-xs text-muted-foreground mt-2">Data backed up as <span className="font-mono">{status.backup.tag}</span>{typeof status.backup.projects?.length === 'number' ? ` (${status.backup.projects.length} project${status.backup.projects.length === 1 ? '' : 's'})` : ''}.</p>
+            )}
+            <button className="btn-primary mt-3" onClick={restart} disabled={restarting}>
+              {restarting ? <Loader size={15} className="animate-spin" /> : <Power size={15} />}
+              {restarting ? 'Restarting…' : 'Restart & apply'}
+            </button>
+          </div>
+        )}
 
         {/* Active update progress */}
         {active && (
@@ -272,13 +357,19 @@ export default function SystemPage() {
       </section>
 
       {/* ── Update from file (offline / air-gapped) ──────────────── */}
-      {info?.file_update_supported && !active && !completed && (
+      {(info?.file_update_supported || info?.bundle_update_supported) && !active && !staged && !completed && (
         <section className="card p-5">
           <h2 className="font-medium mb-1 flex items-center gap-2"><Upload size={16} /> Update from a file</h2>
           <p className="text-sm text-muted-foreground mb-3">
-            For air-gapped servers. Upload a reqmesh image archive
-            (<span className="font-mono text-xs">reqmesh-v&lt;version&gt;-image.tar.gz</span> from a release);
-            it's loaded and applied without contacting GitHub.
+            {bundleMode ? (
+              <>For offline / air-gapped servers. Upload a reqmesh release bundle
+              (<span className="font-mono text-xs">reqmesh-v&lt;version&gt;.tar.gz</span>); it's validated and
+              staged, then applied on the next restart — no contact with GitHub.</>
+            ) : (
+              <>For air-gapped servers. Upload a reqmesh image archive
+              (<span className="font-mono text-xs">reqmesh-v&lt;version&gt;-image.tar.gz</span> from a release);
+              it's loaded and applied without contacting GitHub.</>
+            )}
           </p>
           <div className="flex flex-wrap items-center gap-3">
             <label className="btn-secondary cursor-pointer">
@@ -297,10 +388,14 @@ export default function SystemPage() {
             )}
             <button className="btn-primary" onClick={uploadUpdate} disabled={!uploadFile || uploading}>
               {uploading ? <Loader size={15} className="animate-spin" /> : <Upload size={15} />}
-              {uploading ? 'Uploading…' : 'Upload & update'}
+              {uploading ? (bundleMode ? 'Staging…' : 'Uploading…') : (bundleMode ? 'Upload & stage' : 'Upload & update')}
             </button>
           </div>
-          <p className="text-xs text-muted-foreground mt-2">Project data is backed up first, exactly as with an online update.</p>
+          <p className="text-xs text-muted-foreground mt-2">
+            {bundleMode
+              ? "Project data is backed up before staging; nothing changes until you restart."
+              : "Project data is backed up first, exactly as with an online update."}
+          </p>
         </section>
       )}
 
@@ -318,6 +413,25 @@ export default function SystemPage() {
               <button className="btn-ghost" onClick={() => setConfirming(false)}>Cancel</button>
               <button className="btn-primary" onClick={startUpdate} disabled={starting}>
                 {starting ? <Loader size={15} className="animate-spin" /> : <Download size={15} />} Update now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Confirm restart ──────────────────────────────────────── */}
+      {confirmRestart && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setConfirmRestart(false)}>
+          <div className="card p-6 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-semibold flex items-center gap-2"><Power size={18} /> Restart the application?</h3>
+            <p className="text-sm text-muted-foreground mt-3">
+              The app will be unavailable for a few seconds while it restarts, disconnecting anyone currently using it.
+              {staged ? ' The staged update will be applied on the way back up.' : ''}
+            </p>
+            <div className="flex justify-end gap-2 mt-5">
+              <button className="btn-ghost" onClick={() => setConfirmRestart(false)}>Cancel</button>
+              <button className="btn-primary" onClick={restart} disabled={restarting}>
+                {restarting ? <Loader size={15} className="animate-spin" /> : <Power size={15} />} Restart now
               </button>
             </div>
           </div>

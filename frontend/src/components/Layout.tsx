@@ -1,5 +1,5 @@
 import { Outlet, Link, useParams } from 'react-router-dom';
-import { PanelRight, PanelRightClose, LogIn, LogOut, User, Pencil, Eye, FileDown, FileUp, Users, Search, HelpCircle, BookOpen, Server, SlidersHorizontal } from 'lucide-react';
+import { PanelRight, PanelRightClose, PanelRightOpen, LogIn, LogOut, User, Pencil, Eye, FileDown, FileUp, Users, Search, HelpCircle, BookOpen, Server, SlidersHorizontal } from 'lucide-react';
 import { useState, useEffect, useCallback, createContext, useContext, useRef } from 'react';
 import { ThemeToggle } from './ThemeToggle';
 import RequirementNav from './RequirementNav';
@@ -75,6 +75,12 @@ export default function Layout() {
   const { projectId } = useParams();
   const isInProject = !!projectId;
   const [graphOpen, setGraphOpen] = useState(true);
+  const [contextOpen, setContextOpen] = useState(true);
+  const [contextWidth, setContextWidth] = useState(() => {
+    const saved = localStorage.getItem('rt-context-width');
+    return saved ? Number(saved) : Math.round(window.innerWidth * 0.35);
+  });
+  const CONTEXT_MIN = 200;
   const [loginOpen, setLoginOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -90,7 +96,7 @@ export default function Layout() {
     const saved = parseInt(localStorage.getItem('rt-nav-width') || '', 10);
     return Math.min(Math.max(isNaN(saved) ? 300 : saved, NAV_MIN), NAV_MAX);
   });
-  const [resizing, setResizing] = useState<'graph' | 'nav' | false>(false);
+  const [resizing, setResizing] = useState<'graph' | 'nav' | 'context' | false>(false);
   const [selectedReqId, setSelectedReqId] = useState<string | null>(null);
   const [navCollapsed, setNavCollapsed] = useState(() => localStorage.getItem('rt-nav-collapsed') === '1');
 
@@ -102,7 +108,7 @@ export default function Layout() {
   }, []);
 
   // Collapsing the nav hands its freed width to the canvas, not the page.
-  const canvasBonus = navCollapsed ? navWidth + 4 - NAV_RAIL : 0;
+  const canvasBonus = (navCollapsed ? navWidth + 4 - NAV_RAIL : 0) + (!contextOpen ? contextWidth : 0);
 
   const selectReq = useCallback((id: string | null) => {
     setSelectedReqId(id);
@@ -141,6 +147,25 @@ export default function Layout() {
     const onUp = (ev: PointerEvent) => {
       const w = Math.min(Math.max(ev.clientX, NAV_MIN), NAV_MAX);
       localStorage.setItem('rt-nav-width', String(w));
+      setResizing(false);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  }, []);
+
+  const startContextResize = useCallback((e: React.PointerEvent) => {
+    e.preventDefault();
+    setResizing('context');
+    const onMove = (ev: PointerEvent) => {
+      const w = Math.min(Math.max(window.innerWidth - ev.clientX, CONTEXT_MIN), window.innerWidth - NAV_RAIL);
+      setContextWidth(w);
+    };
+    const onUp = (ev: PointerEvent) => {
+      const w = Math.min(Math.max(window.innerWidth - ev.clientX, CONTEXT_MIN), window.innerWidth - NAV_RAIL);
+      setContextWidth(w);
+      localStorage.setItem('rt-context-width', String(w));
       setResizing(false);
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
@@ -269,6 +294,13 @@ export default function Layout() {
             <button onClick={toggleGraph} className={`btn-ghost p-2 rounded-lg gap-1.5 text-xs ${graphOpen ? 'bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground' : 'text-muted-foreground'}`}>
               {graphOpen ? <PanelRightClose size={15} /> : <PanelRight size={15} />}
               <span className="hidden sm:inline">Canvas</span>
+            </button>
+          )}
+
+          {isInProject && (
+            <button onClick={() => setContextOpen(o => !o)} className={`btn-ghost p-2 rounded-lg gap-1.5 text-xs ${contextOpen ? 'bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground' : 'text-muted-foreground'}`}>
+              {contextOpen ? <PanelRightClose size={15} /> : <PanelRightOpen size={15} />}
+              <span className="hidden sm:inline">Inspector</span>
             </button>
           )}
 
@@ -416,9 +448,29 @@ export default function Layout() {
               />
             </>
           )}
-          <main className="flex-1 overflow-auto">
-            <Outlet />
-          </main>
+          {isInProject && contextOpen && (
+            <div
+              onPointerDown={startContextResize}
+              className={`w-1 shrink-0 cursor-col-resize transition-colors ${resizing === 'context' ? 'bg-primary/60' : 'bg-border/60 hover:bg-primary/40'}`}
+              title="Drag to resize"
+            />
+          )}
+          {isInProject && contextOpen ? (
+            <main
+              className="overflow-auto"
+              style={{
+                width: graphOpen ? contextWidth : undefined,
+                flex: graphOpen ? undefined : '1 1 0%',
+                transition: resizing ? 'none' : 'width 0.3s ease',
+              }}
+            >
+              <Outlet />
+            </main>
+          ) : !isInProject ? (
+            <main className="flex-1 overflow-auto">
+              <Outlet />
+            </main>
+          ) : null}
         </div>
         {/* Capture pointer events over the canvas while resizing */}
         {resizing && <div className="fixed inset-0 z-50 cursor-col-resize" />}

@@ -30,6 +30,9 @@ services:
       - RT_GITHUB_TOKEN=${RT_GITHUB_TOKEN:-}
       - RT_SELF_UPDATE_ENABLED=${RT_SELF_UPDATE_ENABLED:-true}
       - RT_DATA_ROOT=/data/projects
+      # tectonic caches its ~300MB TeX bundle here (on the persistent /data
+      # volume) so it downloads once, on the first LaTeX PDF export.
+      - TECTONIC_CACHE_DIR=/data/.tectonic-cache
       - RT_HOST=0.0.0.0
       - RT_PORT=8000
       - RT_SECRET=${RT_SECRET:?RT_SECRET is required — generate with: openssl rand -hex 32}

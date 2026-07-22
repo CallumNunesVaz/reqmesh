@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Trash2, AlertTriangle, Square, CheckSquare, X } from 'lucide-react';
+import { Plus, Trash2, AlertTriangle, Square, CheckSquare, X, Search } from 'lucide-react';
 import { api, type Risk } from '../api/client';
 import { useAuthStore } from '../store/auth';
 import { useStore } from '../store';
@@ -27,9 +27,29 @@ export default function RisksPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const dataVersion = useStore((s) => s.dataVersion);
   const entityKinds = useEntityKinds(projectId);
+  const [search, setSearch] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+  const [filterSeverity, setFilterSeverity] = useState('');
+  const [filterProbability, setFilterProbability] = useState('');
 
   const load = () => { if (!projectId) return; api.listRisks(projectId).then(setRisks).catch(console.error); };
   useEffect(load, [projectId, dataVersion]);
+
+  const filteredRisks = useMemo(() => {
+    if (!search && !filterStatus && !filterSeverity && !filterProbability) return risks;
+    const q = search.toLowerCase();
+    return risks.filter((r) => {
+      if (filterStatus && r.status !== filterStatus) return false;
+      if (filterSeverity && r.severity !== filterSeverity) return false;
+      if (filterProbability && r.probability !== filterProbability) return false;
+      if (q) {
+        const hay = `${r.id} ${r.title || ''} ${r.description || ''}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [risks, search, filterStatus, filterSeverity, filterProbability]);
+  const filtering = !!(search || filterStatus || filterSeverity || filterProbability);
 
   // Arriving from a link elsewhere (?focus=RSK-001).
   const focusId = useFocusedEntity(risks.length > 0);
@@ -54,7 +74,7 @@ export default function RisksPage() {
 
   const toggleRisk = (id: string) => setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const clearRiskSelection = () => setSelectedIds(new Set());
-  const selectAllRisks = () => setSelectedIds(new Set(risks.map(r => r.id)));
+  const selectAllRisks = () => setSelectedIds(new Set(filteredRisks.map(r => r.id)));
 
   const handleBulkRiskStatus = async (status: string) => {
     if (!projectId) return;
@@ -75,10 +95,49 @@ export default function RisksPage() {
     <div className="max-w-5xl mx-auto p-8">
       {error && <div className="mb-4 text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">{error}</div>}
       <div className="flex items-center justify-between mb-6">
-        <div><h1 className="text-2xl font-bold text-foreground">Risks</h1><p className="text-sm text-muted-foreground mt-1">{risks.length} risks</p></div>
+        <div><h1 className="text-2xl font-bold text-foreground">Risks</h1><p className="text-sm text-muted-foreground mt-1">{filtering ? `${filteredRisks.length} of ${risks.length} risks` : `${risks.length} risks`}</p></div>
         {editable && (
         <button onClick={() => setShowCreate(!showCreate)} className="btn-primary"><Plus size={16} /> New Risk</button>
         )}
+      </div>
+      <div className="sticky top-0 z-10 -mx-2 px-2 py-2 bg-background/95 backdrop-blur-sm mb-4">
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input
+              className="input pl-9 pr-14 h-9"
+              placeholder="Search risks…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            {search ? (
+              <button className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" onClick={() => setSearch('')}>
+                <X size={14} />
+              </button>
+            ) : (
+              <kbd className="absolute right-3 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded border bg-muted text-[10px] font-mono text-muted-foreground pointer-events-none">/</kbd>
+            )}
+          </div>
+          <select className="select w-32 h-9 text-xs" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
+            <option value="">All statuses</option>
+            <option value="open">Open</option>
+            <option value="closed">Closed</option>
+            <option value="mitigated">Mitigated</option>
+          </select>
+          <select className="select w-32 h-9 text-xs" value={filterSeverity} onChange={(e) => setFilterSeverity(e.target.value)}>
+            <option value="">All severities</option>
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+            <option value="critical">Critical</option>
+          </select>
+          <select className="select w-32 h-9 text-xs" value={filterProbability} onChange={(e) => setFilterProbability(e.target.value)}>
+            <option value="">All probabilities</option>
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+          </select>
+        </div>
       </div>
       <AnimatePresence>
         {showCreate && (
@@ -96,7 +155,7 @@ export default function RisksPage() {
         )}
       </AnimatePresence>
       <div className="space-y-3">
-        {risks.map((r, i) => (
+        {filteredRisks.map((r, i) => (
           <motion.div key={r.id} id={`entity-${r.id}`} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.03 }}
             className={`card p-4 hover:shadow-md transition-shadow group ${focusId === r.id ? 'ring-2 ring-primary/50' : ''}`}>
             <div className="flex items-center gap-3">

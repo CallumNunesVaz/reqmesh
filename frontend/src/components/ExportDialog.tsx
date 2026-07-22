@@ -23,13 +23,23 @@ const formats = [
 
 const allSections = [
   { id: 'cover', label: 'Cover Page' },
-  { id: 'requirements', label: 'Requirements Hierarchy' },
+  { id: 'summary', label: 'Project Summary' },
+  { id: 'requirements', label: 'Requirements by Type' },
+  { id: 'components', label: 'Components' },
+  { id: 'specifications', label: 'Specifications' },
   { id: 'verification', label: 'Verification Cases' },
+  { id: 'verification_details', label: 'Verification Details (steps & history)' },
   { id: 'traceability', label: 'Traceability Matrix' },
+  { id: 'baselines', label: 'Baselines' },
+  { id: 'changes', label: 'Change Requests' },
+  { id: 'risks', label: 'Risk Register' },
+  { id: 'decisions', label: 'Design Decisions' },
   { id: 'quality', label: 'Quality Metrics' },
   { id: 'gaps', label: 'Gap Analysis' },
-  { id: 'risks', label: 'Risk Register' },
-  { id: 'conflicts', label: 'Conflict Report' },
+  { id: 'conflicts', label: 'Conflicts' },
+  { id: 'parameters', label: 'Parameters & Constraints' },
+  { id: 'system_states', label: 'System States' },
+  { id: 'glossary', label: 'Glossary' },
 ];
 
 function flattenTree(nodes: RequirementTreeNode[]): RequirementTreeNode[] {

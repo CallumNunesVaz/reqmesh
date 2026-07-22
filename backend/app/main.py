@@ -20,6 +20,15 @@ from app.api.auth_routes import router as auth_router
 from app.api.component_routes import router as component_router
 from app.api.system_routes import router as system_router
 
+# Apply a staged bare-metal bundle update, if one is pending, before the app is
+# built or serves any request. On success this swaps in the new code and
+# re-execs (never returning); with nothing staged it's a cheap no-op.
+try:
+    from app.services.bundle_update import apply_pending_update
+    apply_pending_update()
+except Exception:  # noqa: BLE001 - a failed apply must never block startup
+    logging.getLogger(__name__).exception("bundle update apply check failed")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -56,7 +65,7 @@ app = FastAPI(
     description="A git-native requirements management tool with traceability, verification tracking, parametrics, and real-time collaboration.",
     lifespan=lifespan,
     contact={"name": "reqmesh", "url": "https://github.com/CallumNunesVaz/reqmesh"},
-    license_info={"name": "GNU GPL-2.0", "url": "https://www.gnu.org/licenses/gpl-2.0.html"},
+    license_info={"name": "GPL-3.0-or-later", "url": "https://www.gnu.org/licenses/gpl-3.0.html"},
     openapi_tags=[
         {"name": "auth", "description": "Authentication — login, register, guest access, user management"},
         {"name": "projects", "description": "Project CRUD and lifecycle"},

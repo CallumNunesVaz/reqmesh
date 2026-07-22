@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, FileText, Trash2, ChevronDown, Square, CheckSquare, X } from 'lucide-react';
+import { Plus, FileText, Trash2, ChevronDown, Square, CheckSquare, X, Search } from 'lucide-react';
 import { api, type Requirement } from '../api/client';
 import { useStore } from '../store';
 import { useAuthStore } from '../store/auth';
@@ -19,6 +19,7 @@ export default function SpecificationsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [newSpec, setNewSpec] = useState({ id: '', name: '', description: '' });
   const [requirements, setRequirements] = useState<Requirement[]>([]);
+  const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const entityKinds = useEntityKinds(projectId);
 
@@ -32,6 +33,15 @@ export default function SpecificationsPage() {
 
   const reqNames = useMemo(() => new Map(requirements.map((r) => [r.id, r.name])), [requirements]);
   const specNames = useMemo(() => new Map(specifications.map((s) => [s.id, s.name])), [specifications]);
+
+  const filteredSpecs = useMemo(() => {
+    if (!search) return specifications;
+    const q = search.toLowerCase();
+    return specifications.filter((s) =>
+      s.id.toLowerCase().includes(q) || (s.name || '').toLowerCase().includes(q),
+    );
+  }, [specifications, search]);
+  const filtering = !!search;
 
   const toggleExpand = (specId: string) =>
     setExpanded((prev) => {
@@ -69,7 +79,7 @@ export default function SpecificationsPage() {
 
   const toggleSpec = (id: string) => setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const clearSpecSelection = () => setSelectedIds(new Set());
-  const selectAllSpecs = () => setSelectedIds(new Set(specifications.map(s => s.id)));
+  const selectAllSpecs = () => setSelectedIds(new Set(filteredSpecs.map(s => s.id)));
 
   const handleBulkSpecDelete = async () => {
     if (!projectId) return;
@@ -84,13 +94,36 @@ export default function SpecificationsPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Specifications</h1>
-          <p className="text-sm text-muted-foreground mt-1">{specifications.length} specifications</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            {filtering ? `${filteredSpecs.length} of ${specifications.length} specifications` : `${specifications.length} specifications`}
+          </p>
         </div>
         {editable && (
         <button onClick={() => setShowCreate(!showCreate)} className="btn-primary">
           <Plus size={16} /> New Specification
         </button>
         )}
+      </div>
+
+      <div className="sticky top-0 z-10 -mx-2 px-2 py-2 bg-background/95 backdrop-blur-sm mb-4">
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input
+              className="input pl-9 pr-14 h-9"
+              placeholder="Search specifications…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            {search ? (
+              <button className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" onClick={() => setSearch('')}>
+                <X size={14} />
+              </button>
+            ) : (
+              <kbd className="absolute right-3 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded border bg-muted text-[10px] font-mono text-muted-foreground pointer-events-none">/</kbd>
+            )}
+          </div>
+        </div>
       </div>
 
       <AnimatePresence>
@@ -118,15 +151,21 @@ export default function SpecificationsPage() {
         )}
       </AnimatePresence>
 
-      {specifications.length === 0 ? (
+      {filteredSpecs.length === 0 ? (
         <div className="card p-12 text-center">
           <FileText size={48} className="mx-auto text-muted-foreground/40 mb-4" />
-          <p className="text-card-foreground font-medium">No specifications yet</p>
-          <p className="text-sm text-muted-foreground mt-1">Create your first specification to organize requirements.</p>
+          <p className="text-card-foreground font-medium">
+            {filtering ? 'No specifications match your filters.' : 'No specifications yet'}
+          </p>
+          {filtering ? (
+            <button className="text-xs text-primary hover:underline mt-2" onClick={() => setSearch('')}>Clear filters</button>
+          ) : (
+            <p className="text-sm text-muted-foreground mt-1">Create your first specification to organize requirements.</p>
+          )}
         </div>
       ) : (
         <div className="space-y-3">
-          {specifications.map((spec, i) => {
+          {filteredSpecs.map((spec, i) => {
             const isExpanded = expanded.has(spec.id);
             return (
             <motion.div

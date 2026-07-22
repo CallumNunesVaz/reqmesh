@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { GitBranch, Plus, X, LayoutGrid, LayoutList } from 'lucide-react';
+import { GitBranch, Plus, X, LayoutGrid, LayoutList, Search } from 'lucide-react';
 import { api } from '../api/client';
 import type { TraceLink, Requirement, VerificationCase } from '../api/client';
 import { useAuthStore } from '../store/auth';
@@ -30,6 +30,8 @@ export default function TraceMatrixPage() {
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const editable = useAuthStore((s) => s.editMode && s.user !== null && s.user.role !== 'viewer');
   const dataVersion = useStore((s) => s.dataVersion);
+  const [search, setSearch] = useState('');
+  const [filterLinkType, setFilterLinkType] = useState('');
 
   const entitySuggestions = useMemo(() => {
     const reqItems = requirements.map((r) => ({ id: r.id, label: r.name || r.id }));
@@ -52,6 +54,28 @@ export default function TraceMatrixPage() {
 
   useEffect(load, [projectId, dataVersion]);
 
+  // Either end of a trace can be a requirement or a verification case.
+  const vcIds = useMemo(() => new Set(verificationCases.map((v) => v.id)), [verificationCases]);
+  const kindOf = (id: string): EntityKind => (vcIds.has(id) ? 'verification' : 'requirement');
+  const nameOf = (id: string) =>
+    requirements.find((r) => r.id === id)?.name ?? verificationCases.find((v) => v.id === id)?.name;
+
+  const filteredLinks = useMemo(() => {
+    if (!search && !filterLinkType) return links;
+    const q = search.toLowerCase();
+    return links.filter((l) => {
+      if (filterLinkType && l.type !== filterLinkType) return false;
+      if (q) {
+        const sourceName = nameOf(l.source) || '';
+        const targetName = nameOf(l.target) || '';
+        const hay = `${l.source} ${sourceName} ${l.target} ${targetName}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [links, search, filterLinkType]);
+  const filtering = !!(search || filterLinkType);
+
   const addLink = async () => {
     if (!projectId || !newLink.source || !newLink.target) return;
     try {
@@ -71,30 +95,24 @@ export default function TraceMatrixPage() {
     } catch (err: any) { setError(err.message || 'Failed to remove link'); }
   };
 
-  // Either end of a trace can be a requirement or a verification case.
-  const vcIds = useMemo(() => new Set(verificationCases.map((v) => v.id)), [verificationCases]);
-  const kindOf = (id: string): EntityKind => (vcIds.has(id) ? 'verification' : 'requirement');
-  const nameOf = (id: string) =>
-    requirements.find((r) => r.id === id)?.name ?? verificationCases.find((v) => v.id === id)?.name;
-
   // A general trace matrix: rows are every distinct link source, columns every
   // distinct link target. Either end may be a requirement or a verification
   // case, so requirement→requirement links (refines/derives/…) render as cells
   // too — not just requirement→VC pairings.
   const matrixSources = useMemo(
-    () => [...new Set(links.map((l) => l.source))].sort(),
-    [links],
+    () => [...new Set(filteredLinks.map((l) => l.source))].sort(),
+    [filteredLinks],
   );
   const matrixTargets = useMemo(
-    () => [...new Set(links.map((l) => l.target))].sort(),
-    [links],
+    () => [...new Set(filteredLinks.map((l) => l.target))].sort(),
+    [filteredLinks],
   );
 
   return (
     <div className="max-w-5xl mx-auto p-8">
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
         <h1 className="text-2xl font-bold tracking-tight text-foreground">Traceability Matrix</h1>
-        <p className="text-sm text-muted-foreground mt-1">{links.length} trace links</p>
+        <p className="text-sm text-muted-foreground mt-1">{filtering ? `${filteredLinks.length} of ${links.length} trace links` : `${links.length} trace links`}</p>
         <div className="flex gap-1 mt-2">
           <button
             onClick={() => setViewMode('list')}
@@ -110,6 +128,35 @@ export default function TraceMatrixPage() {
           </button>
         </div>
       </motion.div>
+
+      <div className="sticky top-0 z-10 -mx-2 px-2 py-2 bg-background/95 backdrop-blur-sm mb-4 mt-4">
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input
+              className="input pl-9 pr-14 h-9"
+              placeholder="Search trace links…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            {search ? (
+              <button className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" onClick={() => setSearch('')}>
+                <X size={14} />
+              </button>
+            ) : (
+              <kbd className="absolute right-3 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded border bg-muted text-[10px] font-mono text-muted-foreground pointer-events-none">/</kbd>
+            )}
+          </div>
+          <select className="select w-36 h-9 text-xs" value={filterLinkType} onChange={(e) => setFilterLinkType(e.target.value)}>
+            <option value="">All types</option>
+            <option value="satisfies">Satisfies</option>
+            <option value="refines">Refines</option>
+            <option value="verified_by">Verified By</option>
+            <option value="derives">Derives</option>
+            <option value="conflicts">Conflicts</option>
+          </select>
+        </div>
+      </div>
 
       {editable && (
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="card p-4 mt-6">
@@ -160,6 +207,12 @@ export default function TraceMatrixPage() {
           <p className="text-card-foreground font-medium">No trace links yet</p>
           <p className="text-sm text-muted-foreground mt-1">Add links to connect requirements and verification cases.</p>
         </div>
+      ) : filteredLinks.length === 0 ? (
+        <div className="card p-12 text-center mt-6">
+          <GitBranch size={48} className="mx-auto text-muted-foreground/40 mb-4" />
+          <p className="text-card-foreground font-medium">No trace links match your filters.</p>
+          <button className="text-xs text-primary hover:underline mt-2" onClick={() => { setSearch(''); setFilterLinkType(''); }}>Clear filters</button>
+        </div>
       ) : viewMode === 'list' ? (
         <div className="card mt-6 overflow-hidden">
           <table className="w-full text-sm">
@@ -172,7 +225,7 @@ export default function TraceMatrixPage() {
               </tr>
             </thead>
             <tbody>
-              {links.map((link, i) => (
+              {filteredLinks.map((link, i) => (
                 <motion.tr
                   key={`${link.source}-${link.target}-${i}`}
                   initial={{ opacity: 0 }}
@@ -224,7 +277,7 @@ export default function TraceMatrixPage() {
             </thead>
             <tbody>
               {matrixSources.map((src) => {
-                const srcLinks = links.filter((l) => l.source === src);
+                const srcLinks = filteredLinks.filter((l) => l.source === src);
                 return (
                   <tr key={src} className="group">
                     <td className="sticky left-0 z-10 bg-card border-r px-3 py-1.5 text-[10px] font-mono whitespace-nowrap group-hover:bg-accent/40">

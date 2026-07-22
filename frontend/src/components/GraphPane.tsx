@@ -697,10 +697,34 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
               return next;
             });
           },
+          onExpandAll: () => {
+            setCollapsed(prev => {
+              const next = new Set(prev);
+              const removeDescendants = (nodeId: string) => {
+                next.delete(nodeId);
+                for (const r of reqs) { if (r.parent === nodeId) removeDescendants(r.id); }
+              };
+              removeDescendants(req.id);
+              return next;
+            });
+          },
+          onCollapseAll: () => {
+            setCollapsed(prev => {
+              const next = new Set(prev);
+              const collapseDescendants = (nodeId: string) => {
+                for (const r of reqs) {
+                  if (r.parent === nodeId) { next.add(r.id); collapseDescendants(r.id); }
+                }
+              };
+              collapseDescendants(req.id);
+              return next;
+            });
+          },
           params, constraints,
           verdict: ev && ev.verdict !== 'none' ? ev.verdict : null,
           vcCount: (req.verification_cases ?? []).length,
           desc: stripHtml(req.description).slice(0, 160),
+          hasMissingInfo: !req.description || !req.name || !req.rationale || (req.verification_cases?.length ?? 0) === 0,
         },
         style: entranceDone ? {} : { opacity: 0, transform: 'scale(0)' },
       };
@@ -787,7 +811,18 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
     // edges orthogonally. It's async, so guard against stale results.
     if (layoutMode === 'uml') {
       const reqId = ++layoutReqIdRef.current;
-      let fitTimer: ReturnType<typeof setTimeout> | undefined;
+      // Every phased-animation timer is tracked here so a re-run (data refresh,
+      // filter/mode change) can cancel the whole chain. `schedule` also bails if
+      // a newer layout superseded this one before the timer fired, so stale
+      // closures can never clobber a fresher layout.
+      const timers: ReturnType<typeof setTimeout>[] = [];
+      const schedule = (fn: () => void, ms: number) => {
+        const t = setTimeout(() => {
+          if (reqId !== layoutReqIdRef.current) return; // superseded — discard
+          fn();
+        }, ms);
+        timers.push(t);
+      };
       elkLayout(initialNodes, initialEdges, gs).then(({ positions, edgePoints, heights }) => {
         if (reqId !== layoutReqIdRef.current) return; // superseded — discard
 
@@ -825,14 +860,14 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
           setEdges((eds) => eds.map((e) => ({ ...e, style: retractAnimStyle(edgeLenFn(e)) as any })));
 
           // Phase 2 — after retract, slide nodes to new ELK positions.
-          setTimeout(() => {
+          schedule(() => {
             setNodes(initialNodes.map((n) => {
               const p = positions.get(n.id);
               const isNew = newIds.has(n.id);
               return p ? { ...n, position: { x: p.x, y: p.y }, data: { ...n.data, elkHeight: heights.get(n.id) ?? BASE_NODE_H }, style: { ...(n.style as any || {}), opacity: isNew ? 0 : undefined } } : n;
             }));
             // Phase 3 — after nodes settle, grow new edges + fade children.
-            setTimeout(() => {
+            schedule(() => {
               const newEdgeLen = (pts: { x: number; y: number }[] | undefined) => {
                 if (!pts || pts.length < 2) return 600;
                 let len = 0;
@@ -862,7 +897,7 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
               }));
               // Phase 4 — cleanup after grow animation finishes.
               const cleanupMs = growMs(maxGrowLen) + 60;
-              setTimeout(() => {
+              schedule(() => {
                 setEdges((eds) => eds.map((e) => {
                   const clean = { ...(e.style as any)! };
                   delete clean['--edge-len']; delete clean.animation;
@@ -872,6 +907,14 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
                   return { ...e, style: clean };
                 }));
                 animatingRef.current = false;
+                const expandedParents = new Set([...newChildrenIds].map(cid => initialNodes.find(n => n.id === cid)?.data?.parent).filter(Boolean) as string[]);
+                const expandedNodeId = [...expandedParents][0];
+                if (expandedNodeId) {
+                  selectReq(expandedNodeId);
+                  requestAnimationFrame(() => {
+                    rfRef.current?.fitView({ nodes: initialNodes.filter(n => n.id === expandedNodeId), padding: 0.2, maxZoom: gs.maxZoom, duration: 500 });
+                  });
+                }
               }, cleanupMs);
             }, 400);
           }, 350);
@@ -886,7 +929,7 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
           }));
         }
         if (r) {
-          fitTimer = setTimeout(() => rfRef.current?.fitView({
+          schedule(() => rfRef.current?.fitView({
             padding: 0.12,
             maxZoom: gs.maxZoom,
             duration: expanding ? 700 : 300,
@@ -910,7 +953,13 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
         }
         hasLaidOutOnceRef.current = true;
       }).catch((err) => console.error('ELK layout failed', err));
-      return () => { if (fitTimer) clearTimeout(fitTimer); };
+      return () => {
+        // Supersede any in-flight ELK result and cancel every pending phase
+        // timer so a re-run never gets clobbered by the previous animation.
+        layoutReqIdRef.current++;
+        timers.forEach(clearTimeout);
+        animatingRef.current = false;
+      };
     }
 
     // Force mode: synchronous d3-force + floating centre-to-centre edges.
@@ -1063,6 +1112,11 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
         onNodeMouseEnter={handleNodeEnter}
         onNodeMouseLeave={handleNodeLeave}
         onPaneClick={onPaneClick}
+        onEdgeClick={(_event, edge) => {
+          if (!selectedReqId) return;
+          const otherNode = edge.source === selectedReqId ? edge.target : edge.source;
+          selectReq(otherNode);
+        }}
         onInit={(inst) => { rfRef.current = inst; }}
         colorMode={theme}
         nodeTypes={layoutMode === 'uml' ? blockNodeTypes : circleNodeTypes}

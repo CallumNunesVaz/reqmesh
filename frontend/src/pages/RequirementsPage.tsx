@@ -62,6 +62,10 @@ export default function RequirementsPage() {
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [filterType, setFilterType] = useState('');
+  const [filterPriority, setFilterPriority] = useState('');
+  const [filterBaseline, setFilterBaseline] = useState('');
+  const [filterVerStatus, setFilterVerStatus] = useState('');
+  const [filterAllocated, setFilterAllocated] = useState('');
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [showCreate, setShowCreate] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -114,16 +118,24 @@ export default function RequirementsPage() {
     return m;
   }, [requirements]);
 
-  const filtering = !!(search || filterStatus || filterType);
+  const filtering = !!(search || filterStatus || filterType || filterPriority || filterBaseline || filterVerStatus || filterAllocated);
 
   // IDs that match the current search/filters directly
   const matchIds = useMemo(() => {
     if (!filtering) return null;
     const q = search.toLowerCase();
+    const allocatedQ = filterAllocated.toLowerCase();
     const ids = new Set<string>();
     for (const r of requirements) {
       if (filterStatus && r.status !== filterStatus) continue;
       if (filterType && r.type !== filterType) continue;
+      if (filterPriority && r.priority !== filterPriority) continue;
+      if (filterBaseline && (!r.baselines || !r.baselines.includes(filterBaseline))) continue;
+      if (filterVerStatus && r.verification_status !== filterVerStatus) continue;
+      if (allocatedQ) {
+        const allocated = (r.allocated_to || '').toLowerCase();
+        if (!allocated.includes(allocatedQ)) continue;
+      }
       if (q) {
         const hay = `${r.id} ${r.name} ${stripHtml(r.description || '')} ${r.rationale || ''} ${r.allocated_to || ''}`.toLowerCase();
         if (!hay.includes(q)) continue;
@@ -131,7 +143,7 @@ export default function RequirementsPage() {
       ids.add(r.id);
     }
     return ids;
-  }, [requirements, filtering, search, filterStatus, filterType]);
+  }, [requirements, filtering, search, filterStatus, filterType, filterPriority, filterBaseline, filterVerStatus, filterAllocated]);
 
   // Flatten the tree in DFS order. While filtering, keep ancestors of matches
   // for context and ignore manual collapse so results are always visible.
@@ -284,6 +296,32 @@ export default function RequirementsPage() {
               <option key={k} value={k}>{v.label}</option>
             ))}
           </select>
+          <select className="select w-32 h-9 text-xs" value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)}>
+            <option value="">All priorities</option>
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+            <option value="critical">Critical</option>
+          </select>
+          <select className="select w-36 h-9 text-xs" value={filterBaseline} onChange={(e) => setFilterBaseline(e.target.value)}>
+            <option value="">All baselines</option>
+            {projectBaselines.map((b) => (
+              <option key={b} value={b}>{b}</option>
+            ))}
+          </select>
+          <select className="select w-36 h-9 text-xs" value={filterVerStatus} onChange={(e) => setFilterVerStatus(e.target.value)}>
+            <option value="">All ver. statuses</option>
+            <option value="pending">Pending</option>
+            <option value="passed">Passed</option>
+            <option value="failed">Failed</option>
+            <option value="na">N/A</option>
+          </select>
+          <input
+            className="input text-xs w-28 h-9"
+            placeholder="Allocated to…"
+            value={filterAllocated}
+            onChange={(e) => setFilterAllocated(e.target.value)}
+          />
           <button
             onClick={() => setCollapsed(allCollapsed ? new Set() : new Set(parentIds))}
             className="btn-secondary h-9 px-3 text-xs"
@@ -305,7 +343,7 @@ export default function RequirementsPage() {
             {filtering ? (
               <button
                 className="text-xs text-primary hover:underline mt-2"
-                onClick={() => { setSearch(''); setFilterStatus(''); setFilterType(''); }}
+                onClick={() => { setSearch(''); setFilterStatus(''); setFilterType(''); setFilterPriority(''); setFilterBaseline(''); setFilterVerStatus(''); setFilterAllocated(''); }}
               >
                 Clear filters
               </button>

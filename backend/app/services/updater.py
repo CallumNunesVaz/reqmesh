@@ -178,7 +178,14 @@ def file_update_supported() -> bool:
 
 def runtime_info() -> dict:
     docker = is_running_in_docker()
+    # Bare-metal (non-Docker) installs update from an uploaded bundle instead of
+    # via the Docker sidecar; imported lazily to avoid an import cycle.
+    from app.services import bundle_update
+    # Which LaTeX engine (if any) drives the primary PDF report path; None means
+    # PDF export uses the weasyprint HTML→PDF fallback.
+    from app.services.publisher import latex_engine_available
     return {
+        "latex_engine": latex_engine_available(),
         "version": get_version(),
         "docker": docker,
         "offline": settings.offline_mode,
@@ -186,6 +193,8 @@ def runtime_info() -> dict:
         "control_dir_writable": control_dir_writable() if (docker and settings.self_update_enabled) else False,
         "self_update_supported": self_update_supported(),
         "file_update_supported": file_update_supported(),
+        "bundle_update_supported": bundle_update.bundle_update_supported(),
+        "can_restart": bundle_update.can_restart(),
         "github_repo": settings.github_repo,
     }
 
@@ -310,6 +319,13 @@ def get_update_status() -> dict:
     """Current update state, combining the sidecar's status file with the fact
     that a completed update manifests as the running version having changed."""
     current = get_version()
+    # A staged/applied bare-metal bundle update takes precedence over the Docker
+    # control-file state; only one update mechanism is ever active per deployment.
+    from app.services import bundle_update
+    bstat = bundle_update.bundle_status()
+    if bstat is not None:
+        return bstat
+
     if not _infra_ready():
         return {"state": UNSUPPORTED, "current": current, "target_version": None,
                 "message": "Self-update is not available in this deployment.", "updated_at": _now_iso()}
@@ -344,3 +360,6 @@ def clear_update_state() -> None:
             (control / name).unlink()
         except OSError:
             pass
+    # Also clear any bare-metal bundle markers so "dismiss" works in either mode.
+    from app.services import bundle_update
+    bundle_update.clear_bundle_state()

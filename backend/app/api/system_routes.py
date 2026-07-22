@@ -219,6 +219,76 @@ async def upload_update(
     return {**result, "archive_bytes": size}
 
 
+@router.post("/update/bundle")
+async def upload_bundle(
+    file: UploadFile = File(...),
+    admin: dict = Depends(require_admin),
+):
+    """Stage an uploaded release bundle for a bare-metal (non-Docker) install.
+
+    The bundle (reqmesh-vX.Y.Z.tar.gz from a release) is streamed to the
+    instance, validated, and staged. It's applied on the next restart — the
+    admin can trigger that immediately via POST /system/restart. Works offline.
+    """
+    from app.services import bundle_update
+
+    if not bundle_update.bundle_update_supported():
+        raise HTTPException(
+            status_code=409,
+            detail="Bundle-based update is not available in this deployment.",
+        )
+
+    dest = bundle_update.incoming_path()
+    limit = settings.max_update_upload_mb * 1024 * 1024
+
+    def _stream_to_disk() -> int:
+        written = 0
+        with open(dest, "wb") as out:
+            while True:
+                chunk = file.file.read(4 * 1024 * 1024)
+                if not chunk:
+                    break
+                written += len(chunk)
+                if written > limit:
+                    out.close()
+                    dest.unlink(missing_ok=True)
+                    raise ValueError("too_large")
+                out.write(chunk)
+        return written
+
+    try:
+        size = await asyncio.to_thread(_stream_to_disk)
+    except ValueError:
+        raise HTTPException(status_code=413, detail=f"Upload exceeds {settings.max_update_upload_mb} MB limit.")
+
+    if size == 0:
+        dest.unlink(missing_ok=True)
+        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+
+    try:
+        result = await asyncio.to_thread(
+            bundle_update.stage_from_archive, dest, admin.get("username", "admin")
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    return {**result, "archive_bytes": size}
+
+
+@router.post("/restart")
+async def restart_app(admin: dict = Depends(require_admin)):
+    """Restart the app in place (re-exec). Applies any staged bundle update on
+    the way back up. Bare-metal only — Docker manages its own lifecycle."""
+    from app.services import bundle_update
+
+    if not bundle_update.can_restart():
+        raise HTTPException(
+            status_code=409,
+            detail="In-place restart is not available in this deployment.",
+        )
+    bundle_update.schedule_restart()
+    return {"ok": True, "restarting": True}
+
+
 @router.post("/update/dismiss")
 async def dismiss_update(admin: dict = Depends(require_admin)):
     """Clear a completed/failed update's control files (and any staged archive)."""

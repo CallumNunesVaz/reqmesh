@@ -21,10 +21,32 @@ server is needed.
 | **Node.js** | 20+ | Only needed to build the frontend. Pre-built bundles include `frontend/dist` |
 | **Git** | 2.x | For project versioning and in-app change history |
 | **nginx / Caddy** | Any recent | Reverse proxy for TLS and SSE streaming |
-| **pango / harfbuzz** | – | System libraries for PDF export. Part of the script install |
+| **pango / harfbuzz** | – | System libraries for the fallback PDF renderer (weasyprint). Part of the script install |
+| **tectonic** | Optional | LaTeX engine for the primary, typeset PDF reports. If absent, PDF export falls back to the weasyprint HTML renderer |
 
 No database or message broker is required — projects are plain YAML files on
 disk, and real-time collaboration uses in-process SSE.
+
+### PDF reports (optional tectonic)
+
+PDF export prefers a real LaTeX engine — [tectonic](https://tectonic-typesetting.github.io/)
+— for typeset tables, coloured status/priority badges, and a table of contents.
+Without one, reqmesh silently falls back to the weasyprint (HTML→PDF) renderer,
+so PDF export always works either way. The System page shows which path is
+active ("PDF reports: LaTeX (tectonic)" vs "HTML fallback").
+
+The Docker images already bundle tectonic. On a **bare-metal** install, add it to
+`PATH` to enable the LaTeX path:
+
+```bash
+# Single self-contained binary (MIT-licensed); no full TeX Live needed.
+curl --proto '=https' --tlsv1.2 -fsSL https://drop-sh.fullyjustified.net | sh
+sudo mv tectonic /usr/local/bin/
+```
+
+tectonic downloads its TeX package bundle (~300 MB) on first use and caches it
+under `TECTONIC_CACHE_DIR` (defaults to `~/.cache/tectonic`); that first PDF
+needs network access, after which it works offline.
 
 ---
 

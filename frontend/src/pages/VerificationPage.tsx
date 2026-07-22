@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, CheckCircle2, Trash2, XCircle, Clock, ChevronDown, X, Link as LinkIcon, Play, ListChecks, ClipboardList, FlaskConical, Loader } from 'lucide-react';
+import { Plus, CheckCircle2, Trash2, XCircle, Clock, ChevronDown, X, Link as LinkIcon, Play, ListChecks, ClipboardList, FlaskConical, Loader, Search } from 'lucide-react';
 import { api, type VerificationCase, type Requirement, type Component } from '../api/client';
 import { useStore } from '../store';
 import { useAuthStore } from '../store/auth';
@@ -50,6 +50,9 @@ export default function VerificationPage() {
   const [runningVcs, setRunningVcs] = useState<Set<string>>(new Set());
   const [selectedVcs, setSelectedVcs] = useState<Set<string>>(new Set());
   const [bulkStatus, setBulkStatus] = useState('passed');
+  const [search, setSearch] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+  const [filterMethod, setFilterMethod] = useState('');
 
   const load = () => {
     if (!projectId) return;
@@ -64,6 +67,21 @@ export default function VerificationPage() {
   };
 
   useEffect(() => { load(); }, [projectId]);
+
+  const filteredVCs = useMemo(() => {
+    if (!search && !filterStatus && !filterMethod) return verificationCases;
+    const q = search.toLowerCase();
+    return verificationCases.filter((vc) => {
+      if (filterStatus && vc.status !== filterStatus) return false;
+      if (filterMethod && vc.method !== filterMethod) return false;
+      if (q) {
+        const hay = `${vc.id} ${vc.name || ''} ${vc.description || ''}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [verificationCases, search, filterStatus, filterMethod]);
+  const filtering = !!(search || filterStatus || filterMethod);
 
   const reqSuggestions = useMemo(
     () => requirements.map((r) => ({ id: r.id, label: r.name || r.id })),
@@ -243,13 +261,50 @@ export default function VerificationPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Verification Cases</h1>
           <HelpTip>Verification cases prove that requirements are met. Choose a method (test, analysis, demonstration, or inspection), link the requirements being verified, and optionally record measurements to feed the parametric evaluation engine.</HelpTip>
-          <p className="text-sm text-muted-foreground mt-1">{verificationCases.length} verification cases</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            {filtering ? `${filteredVCs.length} of ${verificationCases.length} verification cases` : `${verificationCases.length} verification cases`}
+          </p>
         </div>
         {editable && (
         <button onClick={() => setShowCreate(!showCreate)} className="btn-primary whitespace-nowrap shrink-0 self-start">
           <Plus size={16} /> New Verification Case
         </button>
         )}
+      </div>
+
+      <div className="sticky top-0 z-10 -mx-2 px-2 py-2 bg-background/95 backdrop-blur-sm mb-4">
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input
+              className="input pl-9 pr-14 h-9"
+              placeholder="Search verification cases…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            {search ? (
+              <button className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" onClick={() => setSearch('')}>
+                <X size={14} />
+              </button>
+            ) : (
+              <kbd className="absolute right-3 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded border bg-muted text-[10px] font-mono text-muted-foreground pointer-events-none">/</kbd>
+            )}
+          </div>
+          <select className="select w-32 h-9 text-xs" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
+            <option value="">All statuses</option>
+            <option value="pending">Pending</option>
+            <option value="in_progress">In Progress</option>
+            <option value="passed">Passed</option>
+            <option value="failed">Failed</option>
+          </select>
+          <select className="select w-36 h-9 text-xs" value={filterMethod} onChange={(e) => setFilterMethod(e.target.value)}>
+            <option value="">All methods</option>
+            <option value="test">Test</option>
+            <option value="analysis">Analysis</option>
+            <option value="demonstration">Demonstration</option>
+            <option value="inspection">Inspection</option>
+          </select>
+        </div>
       </div>
 
       {selectedVcs.size > 0 && (
@@ -272,7 +327,7 @@ export default function VerificationPage() {
             Apply
           </button>
           <button
-            onClick={() => setSelectedVcs(new Set(verificationCases.map(v => v.id)))}
+            onClick={() => setSelectedVcs(new Set(filteredVCs.map(v => v.id)))}
             className="btn-ghost text-xs px-2 py-1"
           >
             Select all
@@ -317,15 +372,21 @@ export default function VerificationPage() {
         )}
       </AnimatePresence>
 
-      {verificationCases.length === 0 ? (
+      {filteredVCs.length === 0 ? (
         <div className="card p-12 text-center">
           <CheckCircle2 size={48} className="mx-auto text-muted-foreground/40 mb-4" />
-          <p className="text-card-foreground font-medium">No verification cases yet</p>
-          <p className="text-sm text-muted-foreground mt-1">Create verification cases to track requirement testing.</p>
+          <p className="text-card-foreground font-medium">
+            {filtering ? 'No verification cases match your filters.' : 'No verification cases yet'}
+          </p>
+          {filtering ? (
+            <button className="text-xs text-primary hover:underline mt-2" onClick={() => { setSearch(''); setFilterStatus(''); setFilterMethod(''); }}>Clear filters</button>
+          ) : (
+            <p className="text-sm text-muted-foreground mt-1">Create verification cases to track requirement testing.</p>
+          )}
         </div>
       ) : (
         <div className="space-y-3">
-          {verificationCases.map((vc, i) => {
+          {filteredVCs.map((vc, i) => {
             const StatusIcon = statusIcons[vc.status] || Clock;
             const isExpanded = expanded.has(vc.id);
             const linkedCount = vc.verified_requirements.length;
@@ -602,7 +663,7 @@ export default function VerificationPage() {
                                     ) : (
                                       <span className="text-foreground text-xs">{step.actual_result || '—'}</span>
                                     )}
-                                  </div>
+                                </div>
                                 </div>
                               </div>
                             </div>

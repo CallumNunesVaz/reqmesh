@@ -24,8 +24,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libharfbuzz0b \
     libharfbuzz-subset0 \
     fonts-dejavu-core \
-    curl `# healthcheck` \
+    curl `# healthcheck + tectonic download` \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
+
+# tectonic: self-contained LaTeX engine for the primary (LaTeX) PDF report path.
+# Only the ~30MB binary is baked into the image; its ~300MB TeX package bundle is
+# fetched on demand at the first PDF export and cached under TECTONIC_CACHE_DIR,
+# which points at the persistent /data volume so it downloads once and survives
+# restarts and image upgrades. If tectonic or the network is unavailable, report
+# generation falls back to the weasyprint (HTML→PDF) renderer.
+RUN curl --proto '=https' --tlsv1.2 -fsSL https://drop-sh.fullyjustified.net | sh \
+    && mv tectonic /usr/local/bin/tectonic
+ENV TECTONIC_CACHE_DIR=/data/.tectonic-cache
 
 WORKDIR /app
 
