@@ -1,7 +1,7 @@
 {
   "name": "reqmesh-desktop",
   "productName": "reqmesh",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "Desktop (Electron) shell for reqmesh — boots the backend and loads the UI in a native window.",
   "main": "main.js",
   "author": "reqmesh",
