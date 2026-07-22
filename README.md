@@ -485,4 +485,11 @@ Detailed design notes and inspiration sources are in [ROADMAP.md](ROADMAP.md). O
 
 ## License
 
-GNU GPL-2.0
+reqmesh is licensed under the **GNU General Public License v3.0 or later**
+(GPL-3.0-or-later) — see [LICENSE](LICENSE). GPLv3 is required for compatibility
+with the project's dependencies: elkjs is offered under `GPL-3.0-or-later`, and
+the Apache-2.0 components (bcrypt, python-multipart) are GPLv3-compatible but not
+GPLv2-compatible.
+
+Bundled/adjacent third-party software (e.g. the tectonic LaTeX engine) is listed
+in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

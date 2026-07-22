@@ -27,8 +27,8 @@ currently drops parameters and constraints entirely).
 - `rollup()`, cross-entity refs, verdict taxonomy, and measured verdicts are untouched.
 - All new model fields are `Optional` with defaults → existing YAML loads unchanged; no data migration required.
 
-Reference specs are already in-repo: `docs/formal-26-03-02.pdf`,
-`docs/formal-26-03-03.pdf` (SysML v2 / KerML).
+Reference specs (SysML v2 / KerML) are cited in [docs/REFERENCES.md](docs/REFERENCES.md);
+they are not redistributed here — obtain them from the OMG specification catalog.
 
 ---
 
