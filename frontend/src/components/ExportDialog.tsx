@@ -83,6 +83,11 @@ export default function ExportDialog({ open, onClose, projectId }: ExportDialogP
   const [tree, setTree] = useState<RequirementTreeNode[]>([]);
   const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set());
   const [groupSelectAll, setGroupSelectAll] = useState(true);
+  const [latexAvail, setLatexAvail] = useState(false);
+
+  useEffect(() => {
+    api.getLatexStatus().then(s => setLatexAvail(s.available)).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!open || !projectId) return;
@@ -202,7 +207,16 @@ export default function ExportDialog({ open, onClose, projectId }: ExportDialogP
                     );
                   })}
                 </div>
-              </div>
+                </div>
+
+              {!latexAvail && (
+                <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs">
+                  <p className="font-medium text-amber-400">LaTeX engine not detected — PDF quality reduced</p>
+                  <p className="text-muted-foreground mt-0.5">
+                    Install <code className="bg-muted px-1 rounded">tectonic</code> (<code>curl -L https://github.com/tectonic-typesetting/tectonic/releases/download/tectonic%400.15.0/tectonic-0.15.0-x86_64-unknown-linux-gnu.tar.gz | tar xz -C ~/.local/bin</code>) for full-quality PDF with coloured badges and table of contents.
+                  </p>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-5">
                 <div>

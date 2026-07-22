@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { FileDown, FileText, FileCode, File, Check, Download, Printer } from 'lucide-react';
@@ -39,6 +39,11 @@ export default function PublishPage() {
   const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState<{ format: string; content: string } | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [latexAvail, setLatexAvail] = useState(false);
+
+  useEffect(() => {
+    api.getLatexStatus().then(s => setLatexAvail(s.available)).catch(() => {});
+  }, []);
 
   const handleGenerate = async () => {
     if (!projectId) return;
@@ -96,6 +101,23 @@ export default function PublishPage() {
           );
         })}
       </div>
+
+      {!latexAvail && (
+        <div className="card p-4 mb-6 border-amber-500/30 bg-amber-500/5">
+          <p className="text-sm font-medium text-amber-400">LaTeX engine not detected</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            PDF reports will be rendered from the HTML version (basic formatting, no coloured badges or table of contents).
+            Install a LaTeX engine for full-quality PDF output:
+          </p>
+          <code className="block mt-2 text-xs bg-muted rounded px-3 py-2">
+            # Option 1 — single binary (recommended)<br />
+            curl -L https://github.com/tectonic-typesetting/tectonic/releases/download/tectonic%400.15.0/tectonic-0.15.0-x86_64-unknown-linux-gnu.tar.gz | tar xz -C ~/.local/bin<br />
+            <br />
+            # Option 2 — system package<br />
+            sudo apt install texlive-latex-base
+          </code>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-1">

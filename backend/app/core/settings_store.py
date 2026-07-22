@@ -74,6 +74,22 @@ OVERRIDABLE: dict[str, dict] = {
                         "help": "Paste a URL or upload a PNG below."},
     "report_show_git_commit": {"type": "bool", "category": "reporting", "label": "Show git commit on each page",
                                "help": "Includes the short commit SHA in the page footer."},
+    "report_document_number": {"type": "str", "category": "reporting", "label": "Document number",
+                               "help": "Document control number shown on the cover and in the page header (e.g. DOC-SRS-001)."},
+    "report_revision": {"type": "str", "category": "reporting", "label": "Revision",
+                        "help": "Document revision. Leave blank to derive from the latest baseline or git."},
+    "report_classification": {"type": "str", "category": "reporting", "label": "Classification / handling caveat",
+                              "help": "e.g. 'Proprietary — Company Confidential'. Shown as a banner on every page."},
+    "report_status": {"type": "str", "category": "reporting", "label": "Document status",
+                      "help": "e.g. 'Draft' or 'Released'. A draft/preliminary status adds a DRAFT watermark."},
+    "report_prepared_by": {"type": "str", "category": "reporting", "label": "Prepared by",
+                           "help": "Name and role for the approval block, e.g. 'A. Engineer, Systems Lead'."},
+    "report_reviewed_by": {"type": "str", "category": "reporting", "label": "Reviewed by",
+                           "help": "Name and role for the approval block."},
+    "report_approved_by": {"type": "str", "category": "reporting", "label": "Approved by",
+                           "help": "Name and role for the approval block."},
+    "report_distribution": {"type": "list", "category": "reporting", "label": "Distribution list",
+                            "help": "Recipients of this document, one per line."},
 }
 
 _SECRET_MASK = "********"

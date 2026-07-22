@@ -82,6 +82,15 @@ class Settings(BaseSettings):
     report_document_title: str = ""
     report_logo_url: str = ""
     report_show_git_commit: bool = False
+    # Formal document-control front matter (engineering SRS/SyRS conventions).
+    report_document_number: str = ""      # e.g. "DOC-SRS-001"
+    report_revision: str = ""             # blank → derived from latest baseline / git
+    report_classification: str = ""       # e.g. "Proprietary — Company Confidential"
+    report_status: str = ""               # e.g. "Draft" / "Released"; "draft" adds a watermark
+    report_prepared_by: str = ""          # "Name, Role"
+    report_reviewed_by: str = ""
+    report_approved_by: str = ""
+    report_distribution: list[str] = []   # distribution list, one recipient per line
 
     # validate_assignment ensures runtime overrides (settings_store) that assign a
     # plain str to smtp_password are re-coerced back into a SecretStr, so the field

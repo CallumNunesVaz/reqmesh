@@ -62,6 +62,14 @@ async def public_config():
     }
 
 
+@router.get("/latex-status")
+async def latex_status():
+    """Whether a LaTeX engine is available for PDF report generation."""
+    from app.services.publisher import latex_engine_available
+    engine = latex_engine_available()
+    return {"available": engine is not None, "engine": engine}
+
+
 @router.get("/info")
 async def system_info(admin: dict = Depends(require_admin)):
     """Runtime facts the admin UI uses to decide what update UX to show."""

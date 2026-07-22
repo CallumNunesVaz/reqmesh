@@ -521,6 +521,7 @@ export const api = {
   testEmail: (to: string) =>
     request<{ ok: boolean; error?: string }>('/system/settings/test-email', { method: 'POST', body: { to } }),
   getPublicConfig: () => request<PublicConfig>('/system/public-config'),
+  getLatexStatus: () => request<{ available: boolean; engine: string | null }>('/system/latex-status'),
 
   // Projects
   listProjects: () => request<Project[]>('/projects'),

@@ -45,8 +45,7 @@ def compile_latex_to_pdf(latex: str, out_path: str) -> bool:
         tex_file = tmp_dir / "report.tex"
         tex_file.write_text(latex, encoding="utf-8")
         if engine == "tectonic":
-            cmds = [[engine, "--outdir", str(tmp_dir), "--chatter", "minimal",
-                     str(tex_file)]]
+            cmds = [[engine, "--outdir", str(tmp_dir), str(tex_file)]]
         else:
             # Two passes so \tableofcontents and longtable column widths settle.
             base = [engine, "-interaction=nonstopmode", "-halt-on-error",
@@ -71,6 +70,9 @@ def compile_latex_to_pdf(latex: str, out_path: str) -> bool:
 
 
 def _latex_escape(text: str) -> str:
+    # Standard TeX escaping first \u2014 it only touches ASCII specials, so the
+    # Unicode \u2192 LaTeX-macro replacements applied afterwards (which themselves
+    # contain $, \, ^, {, }) are left intact rather than being re-escaped.
     text = text.replace("\\", "\x00")
     for char, repl in (
         ("&", r"\&"), ("%", r"\%"), ("$", r"\$"), ("#", r"\#"), ("_", r"\_"),
@@ -78,7 +80,47 @@ def _latex_escape(text: str) -> str:
         ("~", r"\textasciitilde{}"), ("^", r"\textasciicircum{}"),
     ):
         text = text.replace(char, repl)
-    return text.replace("\x00", r"\textbackslash{}")
+    text = text.replace("\x00", r"\textbackslash{}")
+    # Then map Unicode characters that typical TeX fonts can't render to their
+    # LaTeX equivalents. Safe now \u2014 these macros won't be re-escaped.
+    replacements = {
+        "\u2014": "---",    # em dash
+        "\u2013": "--",     # en dash
+        "\u2018": "`",      # left single quote
+        "\u2019": "'",      # right single quote
+        "\u201c": "``",     # left double quote
+        "\u201d": "''",     # right double quote
+        "\u2026": r"\ldots{}",   # ellipsis
+        "\u00a0": "~",      # non-breaking space
+        "\u00d7": r"$\times$",
+        "\u2192": r"$\rightarrow$",
+        "\u03b1": r"$\alpha$",
+        "\u03b2": r"$\beta$",
+        "\u03b3": r"$\gamma$",
+        "\u03b4": r"$\delta$",
+        "\u03b5": r"$\epsilon$",
+        "\u03bc": r"$\mu$",
+        "\u03c0": r"$\pi$",
+        "\u03c3": r"$\sigma$",
+        "\u03c9": r"$\omega$",
+        "\u2264": r"$\leq$",
+        "\u2265": r"$\geq$",
+        "\u00b0": r"$^\circ$",  # degree symbol
+        "\u00b1": r"$\pm$",
+    }
+    for char, repl in replacements.items():
+        text = text.replace(char, repl)
+    return text
+
+
+def _truncate_words(text: str, limit: int) -> str:
+    """Trim text to at most ``limit`` characters at a word boundary, appending an
+    ellipsis when truncated. Keeps table cells from ending mid-word."""
+    text = (text or "").strip()
+    if len(text) <= limit:
+        return text
+    cut = text[:limit].rsplit(" ", 1)[0].rstrip()
+    return (cut or text[:limit].rstrip()) + "…"
 
 
 # ── CSS with page-margin boxes (headers / footers) ────────────────────────────
@@ -252,6 +294,21 @@ class Publisher:
             return f'<a class="entity-link" href="#spec-{esc(entity_id, quote=True)}">{esc(display)}</a>'
         return esc(display)
 
+    def _latex_link(self, entity_id: str, label: str | None = None) -> str:
+        """LaTeX hyperlink to a requirement, VC, component, spec, or risk anchor."""
+        display = label or entity_id
+        if entity_id in self._all_req_ids:
+            prefix = "req"
+        elif entity_id in self._vc_by_id:
+            prefix = "vc"
+        elif entity_id in self._comp_by_id:
+            prefix = "comp"
+        elif entity_id in self._spec_by_id:
+            prefix = "spec"
+        else:
+            return _latex_escape(display)
+        return f"\\hyperlink{{{prefix}-{_latex_escape(entity_id)}}}{{{_latex_escape(display)}}}"
+
     def _anchor(self, prefix: str, entity_id: str) -> str:
         return f'id="{prefix}-{esc(entity_id, quote=True)}"'
 
@@ -271,14 +328,43 @@ class Publisher:
 
         # Footer string for @bottom-left
         footer = self.now_str
-        if show_git:
+        git_sha = ""
+        try:
             import subprocess
+            git_sha = subprocess.check_output(
+                ["git", "rev-parse", "--short", "HEAD"],
+                cwd=str(self.store.root), stderr=subprocess.DEVNULL).decode().strip()
+        except Exception:
+            git_sha = ""
+        if show_git and git_sha:
+            footer = f"rev {git_sha} · {footer}"
+
+        # ── Formal document-control fields (SRS/SyRS conventions) ────────────
+        doc_number = getattr(global_settings, "report_document_number", "") or ""
+        classification = getattr(global_settings, "report_classification", "") or ""
+        status = getattr(global_settings, "report_status", "") or ""
+        prepared_by = getattr(global_settings, "report_prepared_by", "") or ""
+        reviewed_by = getattr(global_settings, "report_reviewed_by", "") or ""
+        approved_by = getattr(global_settings, "report_approved_by", "") or ""
+        distribution = list(getattr(global_settings, "report_distribution", []) or [])
+
+        # Revision: explicit setting → latest baseline → git sha → default.
+        revision = getattr(global_settings, "report_revision", "") or ""
+        if not revision:
             try:
-                sha = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"],
-                                              cwd=str(self.store.root), stderr=subprocess.DEVNULL).decode().strip()
-                footer = f"rev {sha} · {footer}"
+                baselines = self.store.list_items("baselines")
             except Exception:
-                pass
+                baselines = []
+            if baselines:
+                latest = max(baselines, key=lambda b: b.get("frozen_at", ""))
+                revision = latest.get("name", "")
+        if not revision and git_sha:
+            revision = f"git-{git_sha}"
+        if not revision:
+            revision = "1.0"
+
+        is_draft = status.strip().lower() in {
+            "draft", "working", "preliminary", "in review", "in_review", "wip"}
 
         return {
             "logo_url": logo_url,
@@ -287,6 +373,16 @@ class Publisher:
             "title": title,
             "header_str": header_str,
             "footer_str": footer,
+            "doc_number": doc_number,
+            "revision": revision,
+            "classification": classification,
+            "status": status,
+            "prepared_by": prepared_by,
+            "reviewed_by": reviewed_by,
+            "approved_by": approved_by,
+            "distribution": distribution,
+            "is_draft": is_draft,
+            "git_sha": git_sha,
         }
 
     # ── Section builders ────────────────────────────────────────────────────────
@@ -731,11 +827,21 @@ class Publisher:
             sections = self._all_latex_sections
         hdr = self._header_config()
         project_name = _latex_escape(self.meta.get("name", self.project_id))
-        company = _latex_escape(hdr["company"] or "\\mbox{}")
-        dept = _latex_escape(hdr["dept"] or "\\mbox{}")
+        company = _latex_escape(hdr["company"] or "")
+        dept = _latex_escape(hdr["dept"] or "")
         doc_title = _latex_escape(hdr["title"] or "Requirements Specification Report")
         now_esc = _latex_escape(self.now_str)
         project_id_esc = _latex_escape(self.project_id)
+        # Formal document-control fields (raw from settings → escape for LaTeX).
+        doc_number = _latex_escape(hdr["doc_number"])
+        revision = _latex_escape(hdr["revision"])
+        classification = _latex_escape(hdr["classification"])
+        status_txt = _latex_escape(hdr["status"])
+        prepared_by = _latex_escape(hdr["prepared_by"])
+        reviewed_by = _latex_escape(hdr["reviewed_by"])
+        approved_by = _latex_escape(hdr["approved_by"])
+        distribution = [_latex_escape(x) for x in hdr["distribution"]]
+        is_draft = hdr["is_draft"]
 
         # ── Stats ────────────────────────────────────────────────────────
         total = len(self.reqs)
@@ -760,50 +866,114 @@ class Publisher:
         L.append(r"\documentclass[11pt,a4paper]{article}")
         L.append(r"\usepackage[utf8]{inputenc}")
         L.append(r"\usepackage[T1]{fontenc}")
+        L.append(r"\usepackage{lmodern}")
         L.append(r"\usepackage{geometry}")
-        L.append(r"\geometry{margin=2.5cm}")
+        L.append(r"\geometry{margin=2.6cm, includehead, includefoot, headsep=14pt, footskip=28pt}")
         L.append(r"\usepackage[table]{xcolor}")
         L.append(r"\usepackage{fancyhdr}")
-        L.append(r"\usepackage{hyperref}")
-        L.append(r"\hypersetup{colorlinks=true,linkcolor=black!60!blue,urlcolor=black!60!blue}")
+        L.append(r"\usepackage{lastpage}")
         L.append(r"\usepackage{longtable}")
         L.append(r"\usepackage{booktabs}")
+        L.append(r"\usepackage{array}")
         L.append(r"\usepackage{tabularx}")
-        L.append(r"\usepackage{tocloft}")
+        L.append(r"\usepackage{ragged2e}")
+        L.append(r"\usepackage{enumitem}")
         L.append(r"\usepackage{titlesec}")
+        L.append(r"\usepackage{titletoc}")
         L.append(r"\usepackage{parskip}")
         L.append(r"\usepackage{ifthen}")
+        L.append(r"\usepackage{makecell}")
+        L.append(r"\usepackage{xstring}")
+        L.append(r"\usepackage{graphicx}")
+        if is_draft:
+            L.append(r"\usepackage{draftwatermark}")
+            L.append(f"\\SetWatermarkText{{{status_txt or 'DRAFT'}}}")
+            L.append(r"\SetWatermarkScale{0.5}")
+            L.append(r"\SetWatermarkColor[gray]{0.92}")
+
+        # ── Palette ───────────────────────────────────────────────────────
+        # A restrained slate/indigo identity; the status hues supply the accents.
+        L.append(r"\definecolor{accent}{RGB}{37,99,235}")       # indigo-600 — headings, rules
+        L.append(r"\definecolor{accentdark}{RGB}{30,58,138}")   # indigo-900 — title
+        L.append(r"\definecolor{ink}{RGB}{15,23,42}")           # slate-900 — body
+        L.append(r"\definecolor{muted}{RGB}{100,116,139}")      # slate-500 — captions
+        L.append(r"\definecolor{rule}{RGB}{203,213,225}")       # slate-300 — hairlines
+        L.append(r"\definecolor{prop}{RGB}{59,130,246}")
+        L.append(r"\definecolor{appr}{RGB}{22,163,74}")
+        L.append(r"\definecolor{impl}{RGB}{147,51,234}")
+        L.append(r"\definecolor{veri}{RGB}{13,148,136}")
+        L.append(r"\definecolor{rej}{RGB}{220,38,38}")
+        L.append(r"\definecolor{depr}{RGB}{100,116,139}")
+        L.append(r"\definecolor{prihigh}{RGB}{217,119,6}")
+        L.append(r"\definecolor{pricrit}{RGB}{220,38,38}")
+        L.append(r"\definecolor{prlow}{RGB}{100,116,139}")
+        L.append(r"\definecolor{primed}{RGB}{37,99,235}")
+        L.append(r"\definecolor{tabhead}{RGB}{226,232,240}")    # header fill (light, dark text)
+        L.append(r"\definecolor{rowalt}{RGB}{248,250,252}")     # zebra stripe
+
+        L.append(r"\usepackage{hyperref}")
+        L.append(r"\hypersetup{colorlinks=true,linkcolor=accent,urlcolor=accent,citecolor=accent}")
+
+        # ── Section headings — coloured, ruled, generously spaced ─────────
+        L.append(r"\titleformat{\section}{\Large\bfseries\color{accentdark}}{\thesection}{0.6em}{}"
+                 r"[{\vspace{2pt}\color{accent}\titlerule[1.2pt]}]")
+        L.append(r"\titleformat{\subsection}{\large\bfseries\color{accent}}{\thesubsection}{0.6em}{}")
+        L.append(r"\titlespacing*{\section}{0pt}{22pt}{10pt}")
+        L.append(r"\titlespacing*{\subsection}{0pt}{14pt}{6pt}")
+
+        # ── Tables — airy rows, no cramped stretch ────────────────────────
+        L.append(r"\setlength{\tabcolsep}{7pt}")
+        L.append(r"\renewcommand{\arraystretch}{1.2}")
+        L.append(r"\setlength{\LTpre}{6pt}")
+        L.append(r"\setlength{\LTpost}{10pt}")
+        L.append(r"\setlength{\extrarowheight}{1pt}")
+        L.append(r"\setlength{\arrayrulewidth}{0.5pt}")
+        L.append(r"\arrayrulecolor{rule}")
+
+        # ── Running head / foot (document-control layout) ─────────────────
+        # Header:  doc-number (L) · classification banner (C) · Rev (R)
+        # Footer:  company/date (L) · Page X of Y (C) · classification/status (R)
+        head_l = doc_number or company
+        head_r = (f"Rev {revision}" if revision else doc_title)
+        foot_l = company or now_esc
+        foot_r = classification or (status_txt if status_txt else "")
         L.append(r"\pagestyle{fancy}")
         L.append(r"\fancyhf{}")
-        L.append(f"\\fancyhead[L]{{\\small\\sffamily\\color{{gray}}{company}}}")
-        L.append(f"\\fancyhead[R]{{\\small\\sffamily\\color{{gray}}{doc_title}}}")
-        L.append(r"\fancyfoot[C]{\thepage}")
+        L.append(f"\\fancyhead[L]{{\\footnotesize\\sffamily\\color{{muted}}{head_l}}}")
+        if classification:
+            L.append(f"\\fancyhead[C]{{\\footnotesize\\sffamily\\bfseries\\color{{accent}}{classification}}}")
+        L.append(f"\\fancyhead[R]{{\\footnotesize\\sffamily\\color{{muted}}{head_r}}}")
+        L.append(f"\\fancyfoot[L]{{\\footnotesize\\sffamily\\color{{muted}}{foot_l}}}")
+        L.append(r"\fancyfoot[C]{\footnotesize\sffamily\color{muted}Page \thepage\ of \pageref{LastPage}}")
+        if foot_r:
+            L.append(f"\\fancyfoot[R]{{\\footnotesize\\sffamily\\color{{muted}}{foot_r}}}")
         L.append(r"\renewcommand{\headrulewidth}{0.4pt}")
         L.append(r"\renewcommand{\footrulewidth}{0.4pt}")
+        L.append(r"\renewcommand{\headrule}{\color{rule}\hrule width\headwidth height\headrulewidth}")
+        L.append(r"\renewcommand{\footrule}{\color{rule}\hrule width\headwidth height\footrulewidth}")
 
-        # Colours
-        L.append(r"\definecolor{prop}{RGB}{59,130,246}")
-        L.append(r"\definecolor{appr}{RGB}{34,197,94}")
-        L.append(r"\definecolor{impl}{RGB}{168,85,247}")
-        L.append(r"\definecolor{veri}{RGB}{16,185,129}")
-        L.append(r"\definecolor{rej}{RGB}{239,68,68}")
-        L.append(r"\definecolor{depr}{RGB}{148,163,184}")
-        L.append(r"\definecolor{prihigh}{RGB}{245,158,11}")
-        L.append(r"\definecolor{pricrit}{RGB}{239,68,68}")
-        L.append(r"\definecolor{prlow}{RGB}{148,163,184}")
-        L.append(r"\definecolor{primed}{RGB}{59,130,246}")
-        L.append(r"\definecolor{tabhead}{RGB}{241,245,249}")
-
-        # Badge commands. String comparison is done with \ifthenelse/\equal
-        # (ifthen package) rather than pdfTeX's \pdfstrcmp so the report compiles
-        # under any engine — pdflatex, xelatex, lualatex, or tectonic.
+        # Badge commands — use \IfStrEqCase (xstring) instead of nested
+        # \ifthenelse to avoid brace-counting errors.
+        L.append(r"\setlength{\fboxsep}{2.5pt}")
         L.append(r"\newcommand{\statusbadge}[1]{%")
-        L.append(r"  \ifthenelse{\equal{#1}{proposed}}{\colorbox{prop!20}{\textcolor{prop}{\textbf{\small #1}}}}{%")
-        L.append(r"  \ifthenelse{\equal{#1}{approved}}{\colorbox{appr!20}{\textcolor{appr}{\textbf{\small #1}}}}{%")
-        L.append(r"  \ifthenelse{\equal{#1}{implemented}}{\colorbox{impl!20}{\textcolor{impl}{\textbf{\small #1}}}}{%")
-        L.append(r"  \ifthenelse{\equal{#1}{verified}}{\colorbox{veri!20}{\textcolor{veri}{\textbf{\small #1}}}}{%")
-        L.append(r"  \ifthenelse{\equal{#1}{rejected}}{\colorbox{rej!20}{\textcolor{rej}{\textbf{\small #1}}}}{%")
-        L.append(r"  \colorbox{tabhead}{\textcolor{depr}{\textbf{\small #1}}}}}}}}}")
+        L.append(r"  \IfStrEqCase{#1}{%")
+        L.append(r"    {proposed}{\colorbox{prop!20}{\textcolor{prop}{\textbf{\small proposed}}}}%")
+        L.append(r"    {approved}{\colorbox{appr!20}{\textcolor{appr}{\textbf{\small approved}}}}%")
+        L.append(r"    {implemented}{\colorbox{impl!20}{\textcolor{impl}{\textbf{\small implemented}}}}%")
+        L.append(r"    {verified}{\colorbox{veri!20}{\textcolor{veri}{\textbf{\small verified}}}}%")
+        L.append(r"    {rejected}{\colorbox{rej!20}{\textcolor{rej}{\textbf{\small rejected}}}}%")
+        L.append(r"    {passed}{\colorbox{appr!20}{\textcolor{appr}{\textbf{\small passed}}}}%")
+        L.append(r"    {failed}{\colorbox{rej!20}{\textcolor{rej}{\textbf{\small failed}}}}%")
+        L.append(r"    {pending}{\colorbox{tabhead}{\textcolor{depr}{\textbf{\small pending}}}}%")
+        L.append(r"    {in_progress}{\colorbox{prop!20}{\textcolor{prop}{\textbf{\small in progress}}}}%")
+        L.append(r"    {submitted}{\colorbox{prop!20}{\textcolor{prop}{\textbf{\small submitted}}}}%")
+        L.append(r"    {in_review}{\colorbox{prop!20}{\textcolor{prop}{\textbf{\small in review}}}}%")
+        L.append(r"    {open}{\colorbox{prop!20}{\textcolor{prop}{\textbf{\small open}}}}%")
+        L.append(r"    {closed}{\colorbox{depr!20}{\textcolor{depr}{\textbf{\small closed}}}}%")
+        L.append(r"    {mitigated}{\colorbox{appr!20}{\textcolor{appr}{\textbf{\small mitigated}}}}%")
+        L.append(r"    {deprecated}{\colorbox{depr!20}{\textcolor{depr}{\textbf{\small deprecated}}}}%")
+        L.append(r"  }[\colorbox{tabhead}{\textcolor{depr}{\textbf{\small #1}}}]%")
+        L.append(r"}")
         L.append(r"\newcommand{\prioritybadge}[1]{%")
         L.append(r"  \ifthenelse{\equal{#1}{critical}}{\textcolor{pricrit}{\textbf{#1}}}{%")
         L.append(r"  \ifthenelse{\equal{#1}{high}}{\textcolor{prihigh}{\textbf{#1}}}{%")
@@ -811,76 +981,233 @@ class Publisher:
         L.append(r"  \textcolor{prlow}{\textbf{#1}}}}}}")
 
         L.append(r"\begin{document}")
+        L.append(r"\color{ink}")
 
         # ── Title page ────────────────────────────────────────────────────
         L.append(r"\begin{titlepage}")
+        L.append(r"\thispagestyle{empty}")
         L.append(r"\centering")
-        L.append(r"\vspace*{4cm}")
-        L.append(f"{{\\Huge\\bfseries {project_name}}}\\par")
-        L.append(r"\vspace{1cm}")
-        L.append(f"{{\\Large {doc_title}}}\\par")
+        L.append(r"\vspace*{2.4cm}")
+        # Classification banner at the top of the cover.
+        if classification:
+            L.append(f"{{\\normalsize\\sffamily\\bfseries\\color{{accent}} {classification}}}\\par")
+            L.append(r"\vspace{1.3cm}")
+        else:
+            L.append(r"\vspace{0.4cm}")
+        L.append(r"{\color{accent}\rule{\textwidth}{2.5pt}}\par")
+        L.append(r"\vspace{0.9cm}")
+        L.append(f"{{\\fontsize{{34}}{{40}}\\selectfont\\bfseries\\color{{accentdark}} {project_name}}}\\par")
+        L.append(r"\vspace{0.7cm}")
+        L.append(f"{{\\LARGE\\color{{accent}} {doc_title}}}\\par")
+        if status_txt:
+            L.append(r"\vspace{0.5cm}")
+            L.append(f"{{\\large\\sffamily\\color{{muted}} {status_txt}}}\\par")
+        L.append(r"\vspace{0.9cm}")
+        L.append(r"{\color{accent}\rule{\textwidth}{2.5pt}}\par")
         L.append(r"\vspace{1.5cm}")
-        L.append(f"{{\\large {company}}}\\par")
-        L.append(f"{{\\normalsize {dept}}}\\par")
+        L.append(f"{{\\Large\\bfseries {company}}}\\par")
+        L.append(r"\vspace{0.2cm}")
+        L.append(f"{{\\large\\color{{muted}} {dept}}}\\par")
         L.append(r"\vfill")
-        L.append(f"{{\\normalsize Generated: {now_esc}}}\\par")
-        L.append(f"{{\\normalsize Project: {project_id_esc}}}\\par")
-        L.append(f"{{\\normalsize Requirements: {total}}}\\par")
-        L.append(f"{{\\normalsize Verification Cases: {vc_count}}}\\par")
+        # Document-control metadata panel.
+        L.append(r"{\color{rule}\rule{0.7\textwidth}{0.5pt}}\par\vspace{0.5cm}")
+        L.append(r"\renewcommand{\arraystretch}{1.5}")
+        L.append(r"{\normalsize\begin{tabular}{r@{\hskip 1.2em}l}")
+        cover_rows = []
+        if doc_number:
+            cover_rows.append(("Document", f"\\texttt{{{doc_number}}}"))
+        cover_rows.append(("Revision", revision))
+        cover_rows.append(("Project", f"\\texttt{{{project_id_esc}}}"))
+        cover_rows.append(("Date", now_esc))
+        cover_rows.append(("Requirements", str(total)))
+        cover_rows.append(("Verification cases", str(vc_count)))
+        for _lbl, _val in cover_rows:
+            L.append(f"{{\\color{{muted}} {_lbl}}} & {_val} \\\\")
+        L.append(r"\end{tabular}}\par")
+        L.append(r"\renewcommand{\arraystretch}{1.2}")
+        L.append(r"\vspace{1.0cm}")
         L.append(r"\end{titlepage}")
 
-        # ── Table of Contents ─────────────────────────────────────────────
-        L.append(r"\tableofcontents")
-        L.append(r"\newpage")
+        # ── Document Control front matter ─────────────────────────────────
+        # Revision history, approval / sign-off block, and distribution list —
+        # standard front matter for a controlled engineering document.
+        L.append(r"\thispagestyle{fancy}")
+        L.append(r"{\color{accentdark}\Large\bfseries Document Control}\par\vspace{2pt}")
+        L.append(r"{\color{accent}\rule{\textwidth}{1.2pt}}\par\vspace{12pt}")
 
-        # ── 1. Introduction ───────────────────────────────────────────────
-        L.append(r"\section{Introduction}")
-        L.append(r"This document presents the requirements specification for the")
-        L.append(f"\\textbf{{{project_name}}} project.  It includes a project overview,")
-        L.append(r"a categorised listing of all requirements organised by type, a component")
-        L.append(r"inventory, verification cases, and the risk register.")
-        L.append(r"")
-        L.append(r"The requirements in this document follow the ISO/IEC 15288:2023 framework")
-        L.append(r"for stakeholder needs and system requirements definition.")
+        # Revision history — sourced from baselines (frozen snapshots); falls
+        # back to a single "initial issue" row.
+        L.append(r"{\large\bfseries\color{accent} Revision History}\par\vspace{4pt}")
+        L.append(r"\begin{tabularx}{\textwidth}{l l >{\raggedright\arraybackslash}X l}")
+        L.append(r"\toprule")
+        L.append(r"\rowcolor{tabhead}\textbf{Revision} & \textbf{Date} & \textbf{Description} & \textbf{Author} \\")
+        L.append(r"\midrule")
+        try:
+            baselines = self.store.list_items("baselines")
+        except Exception:
+            baselines = []
+        rev_rows = []
+        for b in sorted(baselines, key=lambda x: x.get("frozen_at", "")):
+            rname = _latex_escape(b.get("name", ""))
+            rdate = _latex_escape((b.get("frozen_at", "") or "")[:10])
+            rev_rows.append((rname, rdate, "Baseline snapshot", ""))
+        if not rev_rows:
+            rev_rows.append((revision, now_esc, "Initial issue", prepared_by or ""))
+        for i, (rv, dt, desc, auth) in enumerate(rev_rows):
+            stripe = r"\rowcolor{rowalt}" if i % 2 else ""
+            L.append(f"{stripe}{rv or '--'} & {dt or '--'} & {desc} & {auth or '--'} \\\\")
+        L.append(r"\bottomrule")
+        L.append(r"\end{tabularx}")
+        L.append(r"\vspace{16pt}")
+
+        # Approval / sign-off block.
+        L.append(r"{\large\bfseries\color{accent} Approvals}\par\vspace{4pt}")
+        L.append(r"\begin{tabularx}{\textwidth}{l >{\raggedright\arraybackslash}X p{4cm} p{2.4cm}}")
+        L.append(r"\toprule")
+        L.append(r"\rowcolor{tabhead}\textbf{Role} & \textbf{Name} & \textbf{Signature} & \textbf{Date} \\")
+        L.append(r"\midrule")
+        sig = r"\rule{3.6cm}{0.4pt}"
+        approvals = [("Prepared by", prepared_by), ("Reviewed by", reviewed_by), ("Approved by", approved_by)]
+        for i, (role, who) in enumerate(approvals):
+            stripe = r"\rowcolor{rowalt}" if i % 2 else ""
+            L.append(f"{stripe}\\textbf{{{role}}} & {who or ''} & {sig} & \\rule{{2cm}}{{0.4pt}} \\\\")
+        L.append(r"\bottomrule")
+        L.append(r"\end{tabularx}")
+
+        # Distribution list (optional).
+        if distribution:
+            L.append(r"\vspace{16pt}")
+            L.append(r"{\large\bfseries\color{accent} Distribution}\par\vspace{4pt}")
+            L.append(r"\begin{itemize}[leftmargin=1.4em, itemsep=1pt, topsep=2pt]")
+            for who in distribution:
+                L.append(f"  \\item {who}")
+            L.append(r"\end{itemize}")
+        L.append(r"\clearpage")
+
+        # ── Table of Contents ─────────────────────────────────────────────
+        # \tableofcontents emits its own (accent-styled) heading; TOC entries in
+        # ink rather than link-blue so a long contents list stays calm.
         L.append(r"\newpage")
+        L.append(r"\begingroup\hypersetup{linkcolor=ink}\tableofcontents\endgroup")
+        L.append(r"\clearpage")
+
+        # ── 1. Introduction (ISO/IEC/IEEE 29148 structure) ────────────────
+        L.append(r"\section{Introduction}")
+
+        L.append(r"\subsection{Purpose}")
+        L.append(f"This document specifies the requirements for the \\textbf{{{project_name}}}")
+        L.append(r"system. It defines the functional, performance, interface and constraint")
+        L.append(r"requirements that the system shall satisfy, together with the verification")
+        L.append(r"approach and supporting engineering data. The keyword \textbf{shall} denotes a")
+        L.append(r"mandatory requirement; each requirement carries a unique identifier for")
+        L.append(r"traceability.")
+
+        L.append(r"\subsection{Scope}")
+        L.append(f"The scope covers the {total} requirement{'s' if total != 1 else ''} of the")
+        L.append(f"\\textbf{{{project_name}}} system across all requirement types, the")
+        L.append(f"{comps_count} component{'s' if comps_count != 1 else ''} of the synthesised")
+        L.append(f"design, {vc_count} verification case{'s' if vc_count != 1 else ''}, and the")
+        L.append(r"associated risk register. Requirements engineering follows the")
+        L.append(r"ISO/IEC/IEEE~15288 and 29148 frameworks for stakeholder needs and system")
+        L.append(r"requirements definition.")
+
+        L.append(r"\subsection{Definitions, Acronyms, and Abbreviations}")
+        L.append(r"Terms, acronyms and abbreviations used in this document are defined in the")
+        L.append(r"Glossary (Appendix).")
+
+        # Applicable & reference documents — derived from requirement sources
+        # and file references.
+        L.append(r"\subsection{Applicable and Reference Documents}")
+        sources = sorted({(r.get("source") or "").strip() for r in self.reqs
+                          if (r.get("source") or "").strip()})
+        ref_paths = []
+        seen_ref = set()
+        for r in self.reqs:
+            for ref in r.get("references", []):
+                p = (ref.get("path") or "").strip()
+                if p and p not in seen_ref:
+                    seen_ref.add(p)
+                    ref_paths.append(p)
+        if sources:
+            L.append(r"\textbf{Applicable documents} — sources cited by requirements in this specification:")
+            L.append(r"\begin{longtable}{@{}p{2cm} >{\raggedright\arraybackslash}p{12.5cm}@{}}")
+            L.append(r"\toprule\rowcolor{tabhead}\textbf{Ref} & \textbf{Document} \\ \midrule")
+            L.append(r"\endfirsthead")
+            L.append(r"\toprule\rowcolor{tabhead}\textbf{Ref} & \textbf{Document} \\ \midrule")
+            L.append(r"\endhead\bottomrule\endfoot")
+            for i, s in enumerate(sources, 1):
+                stripe = r"\rowcolor{rowalt}" if i % 2 == 0 else ""
+                L.append(f"{stripe}\\texttt{{AD-{i:02d}}} & {_latex_escape(s)} \\\\")
+            L.append(r"\end{longtable}")
+        if ref_paths:
+            L.append(r"\textbf{Reference documents} — external artefacts linked from requirements:")
+            L.append(r"\begin{longtable}{@{}p{2cm} >{\raggedright\arraybackslash}p{12.5cm}@{}}")
+            L.append(r"\toprule\rowcolor{tabhead}\textbf{Ref} & \textbf{Location} \\ \midrule")
+            L.append(r"\endfirsthead")
+            L.append(r"\toprule\rowcolor{tabhead}\textbf{Ref} & \textbf{Location} \\ \midrule")
+            L.append(r"\endhead\bottomrule\endfoot")
+            for i, p in enumerate(ref_paths, 1):
+                stripe = r"\rowcolor{rowalt}" if i % 2 == 0 else ""
+                L.append(f"{stripe}\\texttt{{RD-{i:02d}}} & \\texttt{{{_latex_escape(p)}}} \\\\")
+            L.append(r"\end{longtable}")
+        if not sources and not ref_paths:
+            L.append(r"No external applicable or reference documents are cited.")
+
+        L.append(r"\subsection{Document Overview}")
+        L.append(r"The remainder of this document provides a project overview and metrics")
+        L.append(r"(Section~\ref{sec:overview}), the requirements organised by type, the")
+        L.append(r"component inventory, verification cases and the risk register, a")
+        L.append(r"requirements verification traceability matrix, and supporting engineering")
+        L.append(r"data. Reference material is provided in the appendices.")
 
         # ── 2. Project Overview ───────────────────────────────────────────
-        L.append(r"\section{Project Overview}")
-        L.append(r"")
-        L.append(r"\begin{tabularx}{\textwidth}{XXXX}")
-        L.append(r"\hline")
-        L.append(r"\rowcolor{tabhead}")
-        L.append(r"\textbf{Requirements} & \textbf{Verification Cases} & \textbf{Components} & \textbf{Risks} \\")
-        L.append(r"\hline")
-        L.append(f"{total} & {vc_count} & {comps_count} & {risk_count} \\\\")
-        L.append(r"\hline")
+        L.append(r"\section{Project Overview}\label{sec:overview}")
+
+        def _stat(n, label):
+            return (r"\makecell{{\fontsize{26}{30}\selectfont\bfseries\color{accent} "
+                    f"{n}}}\\\\[3pt]{{\\footnotesize\\color{{muted}} {label}}}}}")
+
+        L.append(r"\begin{tabularx}{\textwidth}{*{4}{>{\centering\arraybackslash}X}}")
+        L.append(r"\toprule")
+        L.append(f"{_stat(total, 'REQUIREMENTS')} & {_stat(vc_count, 'VERIFICATION')} & "
+                 f"{_stat(comps_count, 'COMPONENTS')} & {_stat(risk_count, 'RISKS')} \\\\")
+        L.append(r"\bottomrule")
         L.append(r"\end{tabularx}")
-        L.append(r"")
-        L.append(r"\vspace{1em}")
+        L.append(r"\vspace{0.6em}")
+
+        # Colour-coded distribution bar charts.
+        status_bar_colors = {
+            "proposed": "prop", "approved": "appr", "implemented": "impl",
+            "verified": "veri", "rejected": "rej", "deprecated": "depr",
+            "passed": "appr", "failed": "rej", "pending": "muted",
+            "in_progress": "prop", "open": "prop", "closed": "depr", "mitigated": "appr",
+        }
+        prio_bar_colors = {"critical": "pricrit", "high": "prihigh", "medium": "primed", "low": "prlow"}
+
+        def dist_table(head: str, dist: dict, colors: dict):
+            out = [r"\begin{tabularx}{\textwidth}{X r r >{\raggedright\arraybackslash}p{6cm}}"]
+            out.append(r"\toprule")
+            out.append(f"\\rowcolor{{tabhead}}\\textbf{{{head}}} & \\textbf{{Count}} & "
+                       r"\textbf{\%} & \textbf{Share} \\")
+            out.append(r"\midrule")
+            for i, (label, count) in enumerate(sorted(dist.items(), key=lambda x: -x[1])):
+                pct = round(count / total * 100) if total else 0
+                w = max(round(pct / 100 * 5.5, 2), 0.03)
+                color = colors.get(label, "accent")
+                disp = _latex_escape(label.replace("_", " ").title())
+                bar = f"\\textcolor{{{color}}}{{\\rule{{{w}cm}}{{9pt}}}}" if pct > 0 else ""
+                stripe = r"\rowcolor{rowalt}" if i % 2 else ""
+                out.append(f"{stripe}{disp} & {count} & {pct}\\% & {bar} \\\\")
+            out.append(r"\bottomrule")
+            out.append(r"\end{tabularx}")
+            return out
 
         L.append(r"\subsection{Status Distribution}")
-        L.append(r"\begin{tabularx}{\textwidth}{Xrr}")
-        for label, count in sorted(status_dist.items(), key=lambda x: -x[1]):
-            pct = round(count / total * 100) if total else 0
-            L.append(f"  {_latex_escape(label.replace('_',' ').title())} & {count} & {pct}\\% \\\\")
-        L.append(r"\end{tabularx}")
-        L.append(r"\vspace{1em}")
-
+        L.extend(dist_table("Status", status_dist, status_bar_colors))
         L.append(r"\subsection{Priority Distribution}")
-        L.append(r"\begin{tabularx}{\textwidth}{Xrr}")
-        for label, count in sorted(priority_dist.items(), key=lambda x: -x[1]):
-            pct = round(count / total * 100) if total else 0
-            L.append(f"  {_latex_escape(label.title())} & {count} & {pct}\\% \\\\")
-        L.append(r"\end{tabularx}")
-        L.append(r"\vspace{1em}")
-
+        L.extend(dist_table("Priority", priority_dist, prio_bar_colors))
         L.append(r"\subsection{Type Distribution}")
-        L.append(r"\begin{tabularx}{\textwidth}{Xrr}")
-        for label, count in sorted(type_dist.items(), key=lambda x: -x[1]):
-            pct = round(count / total * 100) if total else 0
-            display = label.replace('_', ' ').title()
-            L.append(f"  {_latex_escape(display)} & {count} & {pct}\\% \\\\")
-        L.append(r"\end{tabularx}")
+        L.extend(dist_table("Type", type_dist, {}))
         L.append(r"\newpage")
 
         # ── 3. Requirements by Type ───────────────────────────────────────
@@ -906,48 +1233,63 @@ class Publisher:
             L.append(f"\\subsection{{{_latex_escape(display)}}}")
             n = len(reqs_in_type)
             L.append(f"\\textbf{{{n}}} requirement{'s' if n != 1 else ''} of this type.")
-            L.append(r"\begin{longtable}{@{}>{\raggedright\arraybackslash}p{3cm} >{\raggedright\arraybackslash}p{3.5cm} >{\raggedright\arraybackslash}p{2cm} >{\raggedright\arraybackslash}p{2cm} >{\raggedright\arraybackslash}p{3cm}@{}}")
+            L.append(r"\begin{longtable}{@{}>{\raggedright\arraybackslash}p{3cm} >{\raggedright\arraybackslash}p{3.5cm} >{\raggedright\arraybackslash}p{2cm} >{\raggedright\arraybackslash}p{2cm}@{}}")
             L.append(r"\toprule")
             L.append(r"\rowcolor{tabhead}")
-            L.append(r"\textbf{ID} & \textbf{Name} & \textbf{Status} & \textbf{Priority} & \textbf{Description} \\")
+            L.append(r"\textbf{ID} & \textbf{Name} & \textbf{Status} & \textbf{Priority} \\")
             L.append(r"\midrule")
             L.append(r"\endfirsthead")
             L.append(r"\toprule")
             L.append(r"\rowcolor{tabhead}")
-            L.append(r"\textbf{ID} & \textbf{Name} & \textbf{Status} & \textbf{Priority} & \textbf{Description} \\")
+            L.append(r"\textbf{ID} & \textbf{Name} & \textbf{Status} & \textbf{Priority} \\")
             L.append(r"\midrule")
             L.append(r"\endhead")
             L.append(r"\bottomrule")
             L.append(r"\endfoot")
 
             for r in reqs_in_type:
-                rid = _latex_escape(r["id"])
+                rid = r["id"]
+                rid_esc = _latex_escape(rid)
                 name = _latex_escape(r.get("name", "Untitled"))
                 status = r.get("status", "proposed")
                 priority = r.get("priority", "medium")
                 desc = _latex_escape(
                     r.get("description", "")
-                    .replace("<p>", "").replace("</p>", "")
-                    .replace("<br>", " ")
-                    .replace("\n", " ")[:200]
-                )
+                    .replace("<p>", "\n\n").replace("</p>", "")
+                    .replace("<br />", "\n").replace("<br>", "\n")
+                    .replace("\n\n\n", "\n\n").strip()[:600]
+                ).replace("\n\n", r" \par ").replace("\n", r" \\ ")
                 rationale = _latex_escape(r.get("rationale", ""))
                 source = _latex_escape(r.get("source", ""))
                 allocated = _latex_escape(r.get("allocated_to", ""))
                 baselines = ", ".join(r.get("baselines", []))
+                vc_links = ", ".join(self._latex_link(vid) for vid in r.get("verification_cases", []))
+                rel_links = ", ".join(
+                    f"{rel['type']} \\textrightarrow\\ {self._latex_link(rel['target'])}"
+                    for rel in r.get("relations", [])
+                )
 
-                extras = []
+                extras_parts = []
+                if desc:
+                    extras_parts.append(desc)
                 if rationale:
-                    extras.append(f"Rationale: {rationale}")
+                    extras_parts.append(f"\\textbf{{Rationale:}} {rationale}")
                 if source:
-                    extras.append(f"Source: {source}")
+                    extras_parts.append(f"\\textbf{{Source:}} {source}")
                 if allocated:
-                    extras.append(f"Allocated to: {allocated}")
+                    extras_parts.append(f"\\textbf{{Allocated to:}} {allocated}")
                 if baselines:
-                    extras.append(f"Baselines: {_latex_escape(baselines)}")
-                extra_str = " \\\\\n  \\textit{" + "}\\\\\n  \\textit{".join(extras) + "}" if extras else ""
+                    extras_parts.append(f"\\textbf{{Baselines:}} {_latex_escape(baselines)}")
+                if vc_links:
+                    extras_parts.append(f"\\textbf{{VCs:}} {vc_links}")
+                if rel_links:
+                    extras_parts.append(f"\\textbf{{Links:}} {rel_links}")
+                extra_str = " \\newline ".join(extras_parts)
 
-                L.append(f"\\texttt{{{rid}}} & {name} & \\statusbadge{{{status}}} & \\prioritybadge{{{priority}}} & {desc}{extra_str} \\\\")
+                L.append(f"\\hypertarget{{req-{rid_esc}}}{{}}"
+                         f"\\texttt{{{rid_esc}}} & {name} & \\statusbadge{{{status}}} & \\prioritybadge{{{priority}}} \\\\")
+                if extra_str:
+                    L.append(f"\\multicolumn{{4}}{{@{{}}p{{\\dimexpr\\textwidth-\\tabcolsep\\relax}}@{{}}}}{{\\small {extra_str}}} \\\\")
                 L.append(r"\midrule")
 
             L.append(r"\end{longtable}")
@@ -970,12 +1312,14 @@ class Publisher:
             L.append(r"\bottomrule")
             L.append(r"\endfoot")
             for c in self.components:
-                cid = _latex_escape(c["id"])
+                cid = c["id"]
+                cid_esc = _latex_escape(cid)
                 name = _latex_escape(c.get("name", ""))
                 ctype = _latex_escape(c.get("type", "part"))
                 pn = _latex_escape(c.get("part_number", ""))
-                sat = _latex_escape(", ".join(c.get("satisfies", [])))
-                L.append(f"\\texttt{{{cid}}} & {name} & {ctype} & \\texttt{{{pn}}} & {sat} \\\\")
+                sat = ", ".join(self._latex_link(rid) for rid in c.get("satisfies", []))
+                L.append(f"\\hypertarget{{comp-{cid_esc}}}{{}}"
+                         f"\\texttt{{{cid_esc}}} & {name} & {ctype} & \\texttt{{{pn}}} & {sat or '---'} \\\\")
                 L.append(r"\midrule")
             L.append(r"\end{longtable}")
             L.append(r"\newpage")
@@ -997,12 +1341,14 @@ class Publisher:
             L.append(r"\bottomrule")
             L.append(r"\endfoot")
             for vc in self.vcs:
-                vid = _latex_escape(vc["id"])
+                vid = vc["id"]
+                vid_esc = _latex_escape(vid)
                 name = _latex_escape(vc.get("name", ""))
                 method = _latex_escape(vc.get("method", ""))
                 status = vc.get("status", "pending")
-                verified = _latex_escape(", ".join(vc.get("verified_requirements", [])))
-                L.append(f"\\texttt{{{vid}}} & {name} & {method} & \\statusbadge{{{status}}} & {verified} \\\\")
+                verified = ", ".join(self._latex_link(rid) for rid in vc.get("verified_requirements", []))
+                L.append(f"\\hypertarget{{vc-{vid_esc}}}{{}}"
+                         f"\\texttt{{{vid_esc}}} & {name} & {method} & \\statusbadge{{{status}}} & {verified or '---'} \\\\")
                 L.append(r"\midrule")
             L.append(r"\end{longtable}")
             L.append(r"\newpage")
@@ -1029,50 +1375,36 @@ class Publisher:
                 sev = r.get("severity", "medium")
                 prob = _latex_escape(r.get("probability", ""))
                 status = r.get("status", "open")
-                mitigation = _latex_escape(r.get("mitigation", "")[:150])
+                mitigation = _latex_escape(_truncate_words(r.get("mitigation", ""), 180))
                 L.append(f"\\texttt{{{rid}}} & {title} & \\prioritybadge{{{sev}}} & {prob} & \\statusbadge{{{status}}} & {mitigation} \\\\")
                 L.append(r"\midrule")
             L.append(r"\end{longtable}")
 
         # ── Traceability Matrix ───────────────────────────────────────────
         if "traceability" in sections:
-            L.append(r"\section{Traceability Matrix}")
-            vc_ids = [v["id"] for v in self.vcs]
-            links_map: dict[str, dict[str, str]] = {}
-            for t in self.traces.get("links", []):
-                links_map.setdefault(t["source"], {})[t["target"]] = t["type"]
-            for r in self.reqs:
-                for rel in r.get("relations", []):
-                    links_map.setdefault(r["id"], {})[rel["target"]] = rel["type"]
-            if vc_ids:
-                col_spec = "l" + "c" * len(vc_ids)
-                L.append(f"\\begin{{longtable}}{{{col_spec}}}")
-                L.append(r"\toprule")
-                L.append(r"\rowcolor{tabhead}")
-                header_cells = r"\textbf{Requirement}"
-                for vc_id in vc_ids:
-                    header_cells += f" & \\textbf{{{_latex_escape(vc_id)}}}"
-                L.append(header_cells + r" \\")
-                L.append(r"\midrule")
-                L.append(r"\endfirsthead")
-                L.append(r"\toprule")
-                L.append(r"\rowcolor{tabhead}")
-                L.append(header_cells + r" \\")
-                L.append(r"\midrule")
-                L.append(r"\endhead")
-                L.append(r"\bottomrule")
-                L.append(r"\endfoot")
-                for req in self.reqs:
-                    row = f"\\texttt{{{_latex_escape(req['id'])}}}"
-                    for vc_id in vc_ids:
-                        link = links_map.get(req["id"], {}).get(vc_id)
-                        if link:
-                            row += f" & {_latex_escape(link)}"
-                        else:
-                            row += r" & --"
-                    L.append(row + r" \\")
-                    L.append(r"\midrule")
-                L.append(r"\end{longtable}")
+            L.append(r"\section{Requirements Verification Traceability Matrix}")
+            L.append(r"Each requirement is mapped to its verification method, the verification")
+            L.append(r"case(s) that discharge it, and its current verification status. A")
+            L.append(r"requirement with no verification case is a coverage gap, flagged")
+            L.append(r"\textcolor{rej}{\textbf{none}} below.")
+            L.append(r"\begin{longtable}{@{}>{\ttfamily}p{2.4cm} >{\raggedright\arraybackslash}p{4.3cm} l >{\raggedright\arraybackslash}p{3cm} l@{}}")
+            hdr_row = (r"\normalfont\textbf{ID} & \normalfont\textbf{Requirement} & "
+                       r"\normalfont\textbf{Method} & \normalfont\textbf{Verified By} & "
+                       r"\normalfont\textbf{Status} \\")
+            L.append(r"\toprule\rowcolor{tabhead}" + hdr_row + r"\midrule\endfirsthead")
+            L.append(r"\toprule\rowcolor{tabhead}" + hdr_row + r"\midrule\endhead\bottomrule\endfoot")
+            for i, r in enumerate(self.reqs):
+                rid = _latex_escape(r["id"])
+                name = _latex_escape(r.get("name", "Untitled"))
+                method = _latex_escape(str(r.get("verification_method", "") or ""))
+                vcs = r.get("verification_cases", []) or []
+                verified_by = (", ".join(self._latex_link(v) for v in vcs)
+                               if vcs else r"\textcolor{rej}{\textbf{none}}")
+                vstatus = r.get("verification_status", "pending")
+                stripe = r"\rowcolor{rowalt}" if i % 2 else ""
+                L.append(f"{stripe}{rid} & {name} & {method} & {verified_by} & "
+                         f"\\statusbadge{{{vstatus}}} \\\\")
+            L.append(r"\end{longtable}")
             L.append(r"\newpage")
 
         # ── Specifications ────────────────────────────────────────────────
@@ -1081,7 +1413,7 @@ class Publisher:
             for spec in self.specs:
                 sid = _latex_escape(spec["id"])
                 name = _latex_escape(spec.get("name", ""))
-                desc = _latex_escape(spec.get("description", "")[:200])
+                desc = _latex_escape(_truncate_words(spec.get("description", ""), 240))
                 reqs = _latex_escape(", ".join(spec.get("requirements", [])))
                 L.append(f"\\subsection*{{{sid} -- {name}}}")
                 L.append(f"{desc}")
@@ -1144,8 +1476,8 @@ class Publisher:
                     cid = _latex_escape(cr["id"])
                     title = _latex_escape(cr.get("title", ""))
                     status = cr.get("status", "open")
-                    affected = _latex_escape(", ".join(cr.get("affected_requirements", [])))
-                    L.append(f"\\texttt{{{cid}}} & {title} & \\statusbadge{{{status}}} & {affected} \\\\")
+                    affected = ", ".join(self._latex_link(rid) for rid in cr.get("affected_requirements", []))
+                    L.append(f"\\texttt{{{cid}}} & {title} & \\statusbadge{{{status}}} & {affected or '---'} \\\\")
                     L.append(r"\midrule")
                 L.append(r"\end{longtable}")
                 L.append(r"\newpage")
@@ -1242,13 +1574,22 @@ class Publisher:
                 for d in decisions:
                     did = _latex_escape(d["id"])
                     title = _latex_escape(d.get("title", ""))
-                    decision = _latex_escape(d.get("decision", "")[:150])
-                    rationale = _latex_escape(d.get("rationale", "")[:150])
+                    decision = _latex_escape(_truncate_words(d.get("decision", ""), 200))
+                    rationale = _latex_escape(_truncate_words(d.get("rationale", ""), 200))
                     status = d.get("status", "open")
                     L.append(f"\\texttt{{{did}}} & {title} & {decision} & {rationale} & \\statusbadge{{{status}}} \\\\")
                     L.append(r"\midrule")
                 L.append(r"\end{longtable}")
                 L.append(r"\newpage")
+
+        # ── Appendices ────────────────────────────────────────────────────
+        # Reference/supporting material becomes lettered appendices (A, B, …).
+        appendix_ids = {"glossary", "conflicts", "parameters", "verification_details", "system_states"}
+        if appendix_ids & set(sections):
+            L.append(r"\clearpage")
+            L.append(r"\appendix")
+            L.append(r"\titleformat{\section}{\Large\bfseries\color{accentdark}}{Appendix~\thesection}{0.6em}{}"
+                     r"[{\vspace{2pt}\color{accent}\titlerule[1.2pt]}]")
 
         # ── Glossary ──────────────────────────────────────────────────────
         if "glossary" in sections:
@@ -1421,7 +1762,7 @@ class Publisher:
                     for h in history:
                         ts = _latex_escape(h.get("timestamp", ""))
                         hstatus = h.get("status", "pending")
-                        notes = _latex_escape(h.get("notes", "")[:100])
+                        notes = _latex_escape(_truncate_words(h.get("notes", ""), 120))
                         executor = _latex_escape(h.get("executor", ""))
                         duration = _latex_escape(str(h.get("duration", "")))
                         L.append(f"{ts} & \\statusbadge{{{hstatus}}} & {notes} & {executor} & {duration} \\\\")
