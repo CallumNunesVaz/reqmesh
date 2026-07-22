@@ -26,13 +26,14 @@ def test_settings_patch_roundtrip(client, workspace, monkeypatch):
 def test_settings_secret_redacted_and_blank_ignored(client, workspace, monkeypatch):
     monkeypatch.setattr(settings, "smtp_password", "")
     client.patch("/api/system/settings", json={"smtp_password": "hunter2"})
-    assert settings.smtp_password == "hunter2"
+    # Stored as a SecretStr (masked in logs/reprs), unwrapped only on demand.
+    assert settings.smtp_password.get_secret_value() == "hunter2"
     view = {i["key"]: i for i in client.get("/api/system/settings").json()["settings"]}
     assert view["smtp_password"]["value"] == "********"
     assert view["smtp_password"]["has_value"] is True
     # A blank/masked secret leaves the stored value unchanged.
     client.patch("/api/system/settings", json={"smtp_password": ""})
-    assert settings.smtp_password == "hunter2"
+    assert settings.smtp_password.get_secret_value() == "hunter2"
 
 
 def test_settings_env_locked_ignored(client, workspace, monkeypatch):

@@ -176,8 +176,13 @@ def effective_settings() -> dict:
         value = raw
         if meta["type"] == "list":
             value = raw if isinstance(raw, list) else []
+        # Secrets may be SecretStr (e.g. smtp_password) or plain str (github_token);
+        # unwrap before testing presence so an empty SecretStr isn't treated as set.
+        has_secret = False
         if secret:
-            value = _SECRET_MASK if raw else ""
+            rawval = raw.get_secret_value() if hasattr(raw, "get_secret_value") else raw
+            has_secret = bool(rawval)
+            value = _SECRET_MASK if has_secret else ""
         items.append({
             "key": key,
             "value": value,
@@ -187,6 +192,6 @@ def effective_settings() -> dict:
             "help": meta.get("help", ""),
             "secret": secret,
             "env_locked": is_env_locked(key),
-            "has_value": bool(raw) if secret else None,
+            "has_value": has_secret if secret else None,
         })
     return {"settings": items}

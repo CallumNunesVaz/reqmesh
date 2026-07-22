@@ -9,6 +9,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query, Depends, File, Form, UploadFile
 from pydantic import ValidationError
 
+from app.core.config import settings
 from app.core.dependencies import get_store, require_edit, get_current_user
 from app.core.ids import safe_id
 from app.models.change_request import ChangeRequestCreate, ChangeRequestUpdate
@@ -23,6 +24,23 @@ from app.services.git_hooks import install_hook, uninstall_hook
 from app.services.history import record_change
 
 router = APIRouter()
+
+
+async def _read_upload_capped(file: UploadFile, limit_mb: int) -> bytes:
+    """Read an uploaded file into memory, aborting with 413 once it exceeds the
+    configured limit so a large upload can't exhaust memory."""
+    limit = max(1, limit_mb) * 1024 * 1024
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = await file.read(4 * 1024 * 1024)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > limit:
+            raise HTTPException(status_code=413, detail=f"Upload exceeds {limit_mb} MB limit.")
+        chunks.append(chunk)
+    return b"".join(chunks)
 
 
 def _sorted_by_modified(items: list[dict], key: str = "modified") -> list[dict]:
@@ -1047,7 +1065,7 @@ async def import_project(
     if mode not in ("merge", "replace"):
         raise HTTPException(status_code=400, detail=f"Unknown mode: {mode}")
 
-    content = await file.read()
+    content = await _read_upload_capped(file, settings.max_upload_size_mb)
     from app.services.table_io import import_table as table_import
 
     if format in ("csv", "tsv"):

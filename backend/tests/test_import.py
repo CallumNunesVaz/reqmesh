@@ -113,7 +113,18 @@ def test_import_endpoint_sysml(client, project):
 
     got = client.get(f"/api/projects/{project}/requirements/SYST0001").json()
     assert got["name"] == "Imported req"
+
     assert got["status"] == "approved"
+
+
+def test_import_endpoint_rejects_oversized_upload(client, project, monkeypatch):
+    from app.core.config import settings
+    monkeypatch.setattr(settings, "max_upload_size_mb", 1)
+    oversized = io.BytesIO(b"x" * (2 * 1024 * 1024))  # 2 MB > 1 MB cap
+    files = {"file": ("big.sysml", oversized, "text/plain")}
+    res = client.post(f"/api/projects/{project}/import", files=files, data={"format": "auto", "mode": "merge"})
+    assert res.status_code == 413, res.text
+    assert "exceeds" in res.json()["detail"].lower()
 
 
 def test_import_endpoint_reqif_and_replace(client, project):

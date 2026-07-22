@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+import hashlib
 import os
 import tempfile
 from datetime import datetime, timezone
@@ -9,6 +11,32 @@ from typing import Optional
 from ruamel.yaml import YAML
 
 from app.core.ids import safe_id
+
+try:
+    import fcntl  # POSIX advisory locking
+except ImportError:  # pragma: no cover - non-POSIX (e.g. Windows)
+    fcntl = None
+
+
+@contextlib.contextmanager
+def _file_lock(target: Path):
+    """Best-effort inter-process exclusive lock guarding a read-modify-write on
+    ``target``. The lock file lives in the OS temp dir (keyed by the target's
+    absolute path) so it never lands in the project's git tree. Degrades to a
+    no-op where ``fcntl`` is unavailable."""
+    if fcntl is None:
+        yield
+        return
+    lock_dir = Path(tempfile.gettempdir()) / "reqmesh-locks"
+    lock_dir.mkdir(parents=True, exist_ok=True)
+    digest = hashlib.sha1(str(target.resolve()).encode()).hexdigest()
+    lock_file = lock_dir / f"{digest}.lock"
+    with open(lock_file, "w") as fh:
+        fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
 
 yaml = YAML()
 yaml.indent(mapping=2, sequence=4, offset=2)
@@ -119,14 +147,18 @@ class YamlStore:
         return data
 
     def update_item(self, collection: str, item_id: str, data: dict) -> Optional[dict]:
-        existing = self.get_item(collection, item_id)
-        if existing is None:
-            return None
-        existing.update(data)
-        existing["modified"] = _now()
-        existing["id"] = item_id
-        self._write_yaml(self._item_path(collection, item_id), existing)
-        return existing
+        path = self._item_path(collection, item_id)
+        # Hold an advisory lock across the read-modify-write so concurrent updates
+        # to the same item can't clobber each other (lost-update race).
+        with _file_lock(path):
+            if not path.exists():
+                return None
+            existing = self._read_yaml(path)
+            existing.update(data)
+            existing["modified"] = _now()
+            existing["id"] = item_id
+            self._write_yaml(path, existing)
+            return existing
 
     def delete_item(self, collection: str, item_id: str) -> bool:
         path = self._item_path(collection, item_id)

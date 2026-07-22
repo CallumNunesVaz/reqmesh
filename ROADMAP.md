@@ -39,13 +39,13 @@ component, config, or auth).
 | 2 | Default admin password must not be literal `"admin"` | `core/auth.py:load_users` | S |
 | 3 | Rate limiting on `POST /auth/login` (5/min/IP) | `auth_routes.py` + `config.py` | S |
 | 4 | Fix undefined `store` variable in `update_change_request` email block | `extra_routes.py:~59` | S |
-| 5 | File upload size limit on `import_project` | `extra_routes.py` + `config.py` | S |
+| 5 | ✅ File upload size limit on `import_project` | `extra_routes.py` + `config.py` | S |
 | 6 | Token revocation — add `token_version` per user | `auth.py` + `config.py` | M |
 | 7 | Validate `code_root` in `scan_code` — restrict to project tree | `extra_routes.py:scan_code` | S |
 | 8 | Auth audit trail — log logins, failures, role changes | `auth_routes.py` + `history.py` | M |
 | 9 | User existence check in `get_user_from_token` | `core/auth.py` | S |
 | 10 | Atomic `save_users` (mkstemp + os.replace) | `core/auth.py` | S |
-| 11 | `smtp_password` → `SecretStr` to prevent log leakage | `core/config.py` | S |
+| 11 | ✅ `smtp_password` → `SecretStr` to prevent log leakage | `core/config.py` | S |
 
 ### HIGH — Missing Features & Robustness
 
@@ -55,7 +55,7 @@ component, config, or auth).
 | 13 | Self-service password change (`PUT /auth/password`) | `auth_routes.py` | S |
 | 14 | Email verification on registration | `auth_routes.py` + `config.py` | M |
 | 15 | Stronger password policy (mixed case + digit + special) | `auth_routes.py` + `core/auth.py` | S |
-| 16 | Concurrent write safety — advisory file locking on update | `yaml_store.py` | M |
+| 16 | ✅ Concurrent write safety — advisory file locking on update | `yaml_store.py` | M |
 | 17 | Corrupt YAML — log and skip instead of crashing list | `yaml_store.py` | S |
 | 18 | `_write_yaml` exception handler `UnboundLocalError` fix | `yaml_store.py` | S |
 | 19 | Pagination on all list endpoints (`?offset=&limit=`) | `router.py`, `extra_routes.py`, `component_routes.py` | M |

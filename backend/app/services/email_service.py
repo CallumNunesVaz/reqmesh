@@ -53,8 +53,8 @@ def _send_email(to: str | list[str], subject: str, body_html: str, body_text: st
             else:
                 server = smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=15)
 
-            if settings.smtp_username and settings.smtp_password:
-                server.login(settings.smtp_username, settings.smtp_password)
+            if settings.smtp_username and settings.smtp_password.get_secret_value():
+                server.login(settings.smtp_username, settings.smtp_password.get_secret_value())
 
             server.sendmail(settings.smtp_from, recipients, msg.as_string())
             server.quit()

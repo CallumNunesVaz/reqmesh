@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings
 
 
@@ -33,7 +34,8 @@ class Settings(BaseSettings):
     smtp_host: str = ""
     smtp_port: int = 587
     smtp_username: str = ""
-    smtp_password: str = ""
+    # SecretStr keeps the password out of logs/reprs and any settings dump.
+    smtp_password: SecretStr = SecretStr("")
     smtp_from: str = "reqmesh@localhost"
     smtp_use_tls: bool = True
     # Rate limiting: max requests per window for auth endpoints.
@@ -81,7 +83,10 @@ class Settings(BaseSettings):
     report_logo_url: str = ""
     report_show_git_commit: bool = False
 
-    model_config = {"env_prefix": "RT_", "env_file": ".env"}
+    # validate_assignment ensures runtime overrides (settings_store) that assign a
+    # plain str to smtp_password are re-coerced back into a SecretStr, so the field
+    # is always masked regardless of how it was set.
+    model_config = {"env_prefix": "RT_", "env_file": ".env", "validate_assignment": True}
 
 
 settings = Settings()
