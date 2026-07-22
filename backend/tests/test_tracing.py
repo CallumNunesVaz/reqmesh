@@ -132,12 +132,13 @@ def test_trace_api_endpoint(client, project):
     store = YamlStore(Path(settings.data_root) / project)
     store.create_requirement({"id": "TR1", "name": "T1", "description": "X", "needs": []})
 
-    res = client.get(f"/api/projects/{project}/trace")
+    res = client.get(f"/api/projects/{project}/coverage")
     assert res.status_code == 200
     data = res.json()
-    assert len(data) >= 1
-    assert "shallow" in data[0]
-    assert "deep" in data[0]
+    items = data.get("items", [])
+    assert len(items) >= 1
+    assert "shallow" in items[0]
+    assert "deep" in items[0]
 
 
 def test_relation_cycle_detected(client, project):

@@ -15,9 +15,12 @@ NORMATIVE_FIELDS = (
 def _canonical(req: dict, include_links: bool = False) -> str:
     parts: dict = {}
     for field in NORMATIVE_FIELDS:
-        val = req.get(field, "")
+        val = req.get(field)
+        # Normalise so a missing field and an empty value/list canonicalise the
+        # same way — avoids spurious "suspect" flags when an empty list is added.
         if isinstance(val, list):
-            parts[field] = sorted([v for v in val if v is not None])
+            vals = sorted([v for v in val if v is not None])
+            parts[field] = vals if vals else ""
         elif val is None:
             parts[field] = ""
         else:

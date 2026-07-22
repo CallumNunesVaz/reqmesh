@@ -48,6 +48,7 @@ export default function VerificationPage() {
   const [newStepExpected, setNewStepExpected] = useState<Record<string, string>>({});
   const [newMeasurement, setNewMeasurement] = useState<Record<string, { parameter: string; value: string; unit: string }>>({});
   const [runningVcs, setRunningVcs] = useState<Set<string>>(new Set());
+  const [runFeedback, setRunFeedback] = useState<Record<string, { type: 'success' | 'error'; message: string }>>({});
   const [selectedVcs, setSelectedVcs] = useState<Set<string>>(new Set());
   const [bulkStatus, setBulkStatus] = useState('passed');
   const [search, setSearch] = useState('');
@@ -230,6 +231,7 @@ export default function VerificationPage() {
   const handleRunTest = async (vcId: string) => {
     if (!projectId) return;
     setRunningVcs(p => new Set(p).add(vcId));
+    setRunFeedback(p => ({ ...p, [vcId]: undefined as any }));
     try {
       const vc = verificationCases.find((v) => v.id === vcId);
       if (!vc) return;
@@ -242,9 +244,17 @@ export default function VerificationPage() {
         notes: '',
         step_results: stepResults,
       });
+      setRunFeedback(p => ({ ...p, [vcId]: { type: 'success', message: 'Test completed' } }));
       await load();
+    } catch {
+      setRunFeedback(p => ({ ...p, [vcId]: { type: 'error', message: 'Test failed' } }));
     } finally {
       setRunningVcs(p => { const n = new Set(p); n.delete(vcId); return n; });
+      setTimeout(() => setRunFeedback(p => {
+        const next = { ...p };
+        delete next[vcId];
+        return next;
+      }), 4000);
     }
   };
 
@@ -712,6 +722,20 @@ export default function VerificationPage() {
                               <Play size={13} />
                             )} Run Test
                           </button>
+                          {runFeedback[vc.id] && (
+                            <p className={`text-xs mt-1.5 ${
+                              runFeedback[vc.id].type === 'success'
+                                ? 'text-emerald-400'
+                                : 'text-red-400'
+                            }`}>
+                              {runFeedback[vc.id].type === 'success' ? (
+                                <CheckCircle2 size={12} className="inline mr-1" />
+                              ) : (
+                                <XCircle size={12} className="inline mr-1" />
+                              )}
+                              {runFeedback[vc.id].message}
+                            </p>
+                          )}
                         </div>
                         )}
 

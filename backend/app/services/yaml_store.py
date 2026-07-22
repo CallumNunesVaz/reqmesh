@@ -99,15 +99,17 @@ class YamlStore:
 
     def _write_yaml(self, path: Path, data: dict) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = None
+        fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
         try:
-            fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
             with os.fdopen(fd, "w") as f:
                 yaml.dump(data, f)
             os.replace(tmp, path)
         except BaseException:
-            if tmp and os.path.exists(tmp):
-                os.remove(tmp)
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+            os.unlink(tmp)
             raise
 
     # --- _meta ---
@@ -131,7 +133,14 @@ class YamlStore:
         d = self._root / collection
         if not d.exists():
             return []
-        return [self._read_yaml(f) for f in sorted(d.glob("*.yaml"))]
+        items = []
+        for f in sorted(d.glob("*.yaml")):
+            try:
+                items.append(self._read_yaml(f))
+            except Exception:
+                import logging
+                logging.getLogger(__name__).warning("Corrupt YAML skipped: %s", f)
+        return items
 
     def get_item(self, collection: str, item_id: str) -> Optional[dict]:
         path = self._item_path(collection, item_id)

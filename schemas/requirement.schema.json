@@ -22,6 +22,7 @@
       "description": "A boolean expression over parameters that must hold.\n\n`assume` is an optional precondition: when present and not satisfied the\nconstraint is out of scope rather than failed (SysML assume/require).",
       "properties": {
         "expr": {
+          "default": "",
           "title": "Expr",
           "type": "string"
         },
@@ -47,11 +48,27 @@
             }
           ],
           "default": null
+        },
+        "constraint_def": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Constraint Def"
+        },
+        "bindings": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Bindings",
+          "type": "object"
         }
       },
-      "required": [
-        "expr"
-      ],
       "title": "Constraint",
       "type": "object"
     },
@@ -111,6 +128,37 @@
             }
           ],
           "default": null
+        },
+        "value_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value Type"
+        },
+        "calc_def": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Calc Def"
+        },
+        "bindings": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Bindings",
+          "type": "object"
         }
       },
       "required": [
@@ -237,10 +285,21 @@
     "RequirementType": {
       "enum": [
         "functional",
-        "non_functional",
+        "non_functional_performance",
+        "non_functional_security",
+        "non_functional_usability",
+        "non_functional_maintainability",
+        "non_functional_reliability",
+        "non_functional_scalability",
+        "non_functional_portability",
         "interface",
-        "design",
-        "constraint"
+        "user",
+        "system",
+        "business",
+        "regulatory_compliance",
+        "safety",
+        "environmental",
+        "verification"
       ],
       "title": "RequirementType",
       "type": "string"
@@ -370,7 +429,6 @@
       "items": {
         "type": "string"
       },
-      "default": [],
       "title": "Baselines",
       "type": "array"
     },
@@ -439,6 +497,18 @@
       },
       "title": "System States",
       "type": "array"
+    },
+    "subject": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Subject"
     },
     "created": {
       "title": "Created",

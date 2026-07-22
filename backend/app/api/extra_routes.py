@@ -6,8 +6,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query, Depends, File, Form, UploadFile
-from pydantic import ValidationError
+from fastapi import APIRouter, HTTPException, Query, Depends, File, Form, UploadFile, WebSocket
+from pydantic import BaseModel, ValidationError
 
 from app.core.config import settings
 from app.core.dependencies import get_store, require_edit, get_current_user
@@ -22,6 +22,21 @@ from app.services.publisher import Publisher
 from app.services.integrity import IntegrityChecker, clear_suspect_links
 from app.services.git_hooks import install_hook, uninstall_hook
 from app.services.history import record_change
+
+class CommentUpdate(BaseModel):
+    resolved: Optional[bool] = None
+    text: Optional[str] = None
+
+
+class ReviewRequest(BaseModel):
+    comment: str = ""
+
+
+class PublishRequest(BaseModel):
+    subsystems: Optional[list[str]] = None
+    format: str = "html"
+    sections: Optional[list[str]] = None
+
 
 router = APIRouter()
 
@@ -50,8 +65,18 @@ def _sorted_by_modified(items: list[dict], key: str = "modified") -> list[dict]:
 # ── Change Requests ──────────────────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/change-requests")
-async def list_change_requests(project_id: str):
-    return _sorted_by_modified(get_store(project_id).list_items("change_requests"))
+async def list_change_requests(
+    project_id: str,
+    offset: Optional[int] = Query(None, ge=0),
+    limit: Optional[int] = Query(None, ge=1, le=2000),
+):
+    items = _sorted_by_modified(get_store(project_id).list_items("change_requests"))
+    if offset is None and limit is None:
+        return items
+    off = offset or 0
+    lim = limit or 500
+    total = len(items)
+    return {"items": items[off:off + lim], "total": total, "offset": off, "limit": lim}
 
 
 @router.post("/projects/{project_id}/change-requests", status_code=201)
@@ -101,8 +126,18 @@ async def delete_change_request(project_id: str, cr_id: str, user: dict = Depend
 # ── Risks ─────────────────────────────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/risks")
-async def list_risks(project_id: str):
-    return _sorted_by_modified(get_store(project_id).list_items("risks"))
+async def list_risks(
+    project_id: str,
+    offset: Optional[int] = Query(None, ge=0),
+    limit: Optional[int] = Query(None, ge=1, le=2000),
+):
+    items = _sorted_by_modified(get_store(project_id).list_items("risks"))
+    if offset is None and limit is None:
+        return items
+    off = offset or 0
+    lim = limit or 500
+    total = len(items)
+    return {"items": items[off:off + lim], "total": total, "offset": off, "limit": lim}
 
 
 @router.post("/projects/{project_id}/risks", status_code=201)
@@ -133,7 +168,7 @@ async def update_risk(project_id: str, risk_id: str, data: RiskUpdate, user: dic
     record_change(store, risk_id, "update", before, result, user.get("username", ""))
     try:
         from app.services.email_service import notify_risk
-        notify_risk(get_store(project_id), project_id, risk_id, "updated", user.get("username", ""))
+        notify_risk(store, project_id, risk_id, "updated", user.get("username", ""))
     except Exception:
         pass
     return result
@@ -152,11 +187,22 @@ async def delete_risk(project_id: str, risk_id: str, user: dict = Depends(requir
 # ── Comments ──────────────────────────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/comments")
-async def list_comments(project_id: str, requirement_id: Optional[str] = Query(None)):
+async def list_comments(
+    project_id: str,
+    requirement_id: Optional[str] = Query(None),
+    offset: Optional[int] = Query(None, ge=0),
+    limit: Optional[int] = Query(None, ge=1, le=2000),
+):
     comments = get_store(project_id).list_items("comments")
     if requirement_id:
         comments = [c for c in comments if c.get("requirement_id") == requirement_id]
-    return _sorted_by_modified(comments, key="created")
+    comments = _sorted_by_modified(comments, key="created")
+    if offset is None and limit is None:
+        return comments
+    off = offset or 0
+    lim = limit or 500
+    total = len(comments)
+    return {"items": comments[off:off + lim], "total": total, "offset": off, "limit": lim}
 
 
 @router.post("/projects/{project_id}/comments", status_code=201)
@@ -165,10 +211,11 @@ async def create_comment(project_id: str, data: CommentCreate, user: dict = Depe
     c["id"] = f"COMMENT-{uuid.uuid4().hex[:8].upper()}"
     c["resolved"] = False
     c.setdefault("author", user.get("username", ""))
-    result = get_store(project_id).create_item("comments", c)
+    store = get_store(project_id)
+    result = store.create_item("comments", c)
     try:
         from app.services.email_service import notify_comment
-        notify_comment(get_store(project_id), project_id, data.requirement_id, user.get("username", ""), data.text)
+        notify_comment(store, project_id, data.requirement_id, user.get("username", ""), data.text)
     except Exception:
         pass
     return result
@@ -182,16 +229,16 @@ async def delete_comment(project_id: str, comment_id: str, user: dict = Depends(
 
 
 @router.patch("/projects/{project_id}/comments/{comment_id}")
-async def update_comment(project_id: str, comment_id: str, data: dict, user: dict = Depends(require_edit)):
+async def update_comment(project_id: str, comment_id: str, data: CommentUpdate, user: dict = Depends(require_edit)):
     store = get_store(project_id)
     existing = store.get_item("comments", comment_id)
     if existing is None:
         raise HTTPException(status_code=404, detail="Comment not found")
     updates = {}
-    if "resolved" in data:
-        updates["resolved"] = bool(data["resolved"])
-    if "text" in data and data["text"] is not None:
-        updates["text"] = str(data["text"])
+    if data.resolved is not None:
+        updates["resolved"] = bool(data.resolved)
+    if data.text is not None:
+        updates["text"] = str(data.text)
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
     result = store.update_item("comments", comment_id, updates)
@@ -201,8 +248,18 @@ async def update_comment(project_id: str, comment_id: str, data: dict, user: dic
 # ── Decision Records ──────────────────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/decisions")
-async def list_decisions(project_id: str):
-    return _sorted_by_modified(get_store(project_id).list_items("decisions"))
+async def list_decisions(
+    project_id: str,
+    offset: Optional[int] = Query(None, ge=0),
+    limit: Optional[int] = Query(None, ge=1, le=2000),
+):
+    items = _sorted_by_modified(get_store(project_id).list_items("decisions"))
+    if offset is None and limit is None:
+        return items
+    off = offset or 0
+    lim = limit or 500
+    total = len(items)
+    return {"items": items[off:off + lim], "total": total, "offset": off, "limit": lim}
 
 
 @router.post("/projects/{project_id}/decisions", status_code=201)
@@ -213,11 +270,12 @@ async def create_decision(project_id: str, data: DecisionRecordCreate, user: dic
     d.setdefault("linked_requirements", [])
     d.setdefault("status", "accepted")
     d.setdefault("decided_by", user.get("username", ""))
-    result = get_store(project_id).create_item("decisions", d)
-    record_change(get_store(project_id), result["id"], "create", None, result, user.get("username", ""))
+    store = get_store(project_id)
+    result = store.create_item("decisions", d)
+    record_change(store, result["id"], "create", None, result, user.get("username", ""))
     try:
         from app.services.email_service import notify_decision
-        notify_decision(get_store(project_id), project_id, result["id"], "created", user.get("username", ""))
+        notify_decision(store, project_id, result["id"], "created", user.get("username", ""))
     except Exception:
         pass
     return result
@@ -233,7 +291,7 @@ async def update_decision(project_id: str, dec_id: str, data: DecisionRecordUpda
     record_change(store, dec_id, "update", before, result, user.get("username", ""))
     try:
         from app.services.email_service import notify_decision
-        notify_decision(get_store(project_id), project_id, dec_id, "updated", user.get("username", ""))
+        notify_decision(store, project_id, dec_id, "updated", user.get("username", ""))
     except Exception:
         pass
     return result
@@ -636,19 +694,6 @@ async def coverage_analysis(project_id: str):
     }
 
 
-@router.get("/projects/{project_id}/trace")
-async def trace_report(project_id: str, format: str = "json"):
-    from app.services.tracing import trace_all
-    items = trace_all(get_store(project_id))
-    if format == "text":
-        lines = []
-        for item in items:
-            status = "ok" if item["deep"] else "not ok"
-            lines.append(f"{status} [ {item['id']} ] shallow={item['shallow']} deep={item['deep']}")
-        return {"format": "text", "content": "\n".join(lines)}
-    return items
-
-
 # ── Conflict Detection ────────────────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/conflicts")
@@ -731,8 +776,9 @@ async def project_metrics(project_id: str):
         if r.get("relations"): with_trace += 1
         if r.get("cascade_from"): with_cascade += 1
 
-    effort_total = sum(r.get("effort") or 0 for r in reqs)
-    effort_done = sum(r.get("effort") or 0 for r in reqs if r.get("status") in ("verified", "implemented", "deprecated"))
+    effort_by_id = {r["id"]: r.get("effort") or 0 for r in reqs}
+    effort_total = sum(effort_by_id.values())
+    effort_done = sum(effort_by_id[r["id"]] for r in reqs if r.get("status") in ("verified", "implemented", "deprecated"))
 
     return {
         "total": total,
@@ -786,11 +832,11 @@ async def prioritized_backlog(project_id: str, sort: str = "priority"):
 # ── Publishing ────────────────────────────────────────────────────────────────
 
 @router.post("/projects/{project_id}/publish")
-async def publish_project(project_id: str, data: dict, user: dict = Depends(require_edit)):
+async def publish_project(project_id: str, data: PublishRequest, user: dict = Depends(require_edit)):
     store = get_store(project_id)
-    pub = Publisher(store, data.get("subsystems"))
-    fmt = data.get("format", "html")
-    sections = data.get("sections")
+    pub = Publisher(store, data.subsystems)
+    fmt = data.format
+    sections = data.sections
 
     if fmt == "html":
         return {"format": "html", "content": pub.build_html(sections)}
@@ -951,7 +997,7 @@ async def uninstall_git_hook(project_id: str, user: dict = Depends(require_edit)
 # ── Review Workflow ───────────────────────────────────────────────────────────
 
 @router.post("/projects/{project_id}/requirements/{req_id}/review")
-async def submit_review(project_id: str, req_id: str, data: dict, user: dict = Depends(require_edit)):
+async def submit_review(project_id: str, req_id: str, data: ReviewRequest, user: dict = Depends(require_edit)):
     store = get_store(project_id)
     req = store.get_requirement(req_id)
     if not req:
@@ -960,13 +1006,13 @@ async def submit_review(project_id: str, req_id: str, data: dict, user: dict = D
 
     from app.services.fingerprint import review_item
 
-    result = review_item(store, req_id, reviewer=user.get("username", ""), comment=data.get("comment", ""))
+    result = review_item(store, req_id, reviewer=user.get("username", ""), comment=data.comment)
     if result is None:
         raise HTTPException(status_code=404, detail="Not found")
     record_change(store, req_id, "review", before, result, user.get("username", ""))
     try:
         from app.services.email_service import notify_reviewed
-        notify_reviewed(store, project_id, req_id, user.get("username", ""), data.get("comment", ""))
+        notify_reviewed(store, project_id, req_id, user.get("username", ""), data.comment)
     except Exception:
         pass
     return result
@@ -1144,3 +1190,20 @@ async def project_events(project_id: str, user: dict = Depends(get_current_user)
             "X-Accel-Buffering": "no",
         },
     )
+
+
+# ── WebSocket (live events) ───────────────────────────────────────────────────
+
+@router.websocket("/projects/{project_id}/ws")
+async def project_websocket(websocket: WebSocket, project_id: str):
+    """WebSocket endpoint for real-time collaboration (presence + mutation events).
+
+    Authenticate by passing a ``?token=...`` query parameter or by sending
+    ``{"type": "auth", "token": "..."}`` as the first message.
+    """
+    from urllib.parse import parse_qs
+
+    query_params = parse_qs(websocket.scope.get("query_string", b"").decode())
+    token = (query_params.get("token", [""])[0]) or None
+    from app.services.websocket_bus import websocket_handler
+    await websocket_handler(websocket, project_id, token)

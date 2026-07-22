@@ -3,7 +3,10 @@ import jwt
 import secrets
 import time
 import os
+import logging
 from pathlib import Path
+
+audit_logger = logging.getLogger("audit")
 
 TOKEN_TTL = 86400 * 7  # 7 days
 RESET_TOKEN_TTL = 3600  # 1 hour
@@ -80,6 +83,10 @@ def save_users(users: dict) -> None:
             _yaml.dump(users, f)
         os.replace(tmp, USERS_FILE)
     except BaseException:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
         os.unlink(tmp)
         raise
 
@@ -131,14 +138,17 @@ def authenticate(username: str, password: str) -> dict:
     users = load_users()
     user = users.get(username)
     if not user:
+        audit_logger.warning("Login failed: user=%s reason=unknown_user", username)
         return {"status": "invalid"}
 
     now = int(time.time())
     locked_until = int(user.get("locked_until", 0) or 0)
     if locked_until > now:
+        audit_logger.warning("Login failed: user=%s reason=locked", username)
         return {"status": "locked", "until": locked_until}
 
     if user.get("disabled"):
+        audit_logger.warning("Login failed: user=%s reason=disabled", username)
         return {"status": "disabled"}
 
     if not verify_password(password, user["password_hash"]):
@@ -150,10 +160,12 @@ def authenticate(username: str, password: str) -> dict:
         else:
             user["failed_attempts"] = attempts
         save_users(users)
+        audit_logger.warning("Login failed: user=%s reason=invalid_password", username)
         return {"status": "invalid"}
 
     if (settings.require_email_verification and not user.get("email_verified")
             and user.get("role") != "admin"):
+        audit_logger.warning("Login failed: user=%s reason=unverified_email", username)
         return {"status": "unverified"}
 
     user["failed_attempts"] = 0
@@ -162,6 +174,7 @@ def authenticate(username: str, password: str) -> dict:
     save_users(users)
     role = user.get("role", "viewer")
     tv = int(user.get("token_version", 0))
+    audit_logger.info("Login successful: user=%s role=%s", username, role)
     return {"status": "ok", "username": username, "role": role,
             "token": create_token(username, role, tv)}
 
@@ -181,6 +194,7 @@ def register_user(username: str, password: str, role: str = "editor") -> dict | 
         "created": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
     save_users(users)
+    audit_logger.info("Account created: user=%s role=%s", username, role)
     return {"username": username, "role": role, "token": create_token(username, role)}
 
 
@@ -250,6 +264,7 @@ def create_invited_user(username: str, role: str = "editor", email: str = "",
         "created": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
     save_users(users)
+    audit_logger.info("Account created (invited): user=%s role=%s", username, role)
     return create_reset_token(username)
 
 
@@ -347,6 +362,10 @@ def _save_token_store(path: Path, data: dict) -> None:
             _yaml.dump(data, f)
         os.replace(tmp, path)
     except BaseException:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
         os.unlink(tmp)
         raise
 

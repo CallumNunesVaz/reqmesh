@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, X, Sigma, CheckCircle2, XCircle, HelpCircle, AlertTriangle, MinusCircle, FlaskConical, Ruler, Boxes } from 'lucide-react';
+import { Plus, X, Sigma, CheckCircle2, XCircle, HelpCircle, AlertTriangle, MinusCircle, FlaskConical, Ruler, Boxes, ArrowUp, ArrowDown } from 'lucide-react';
 import type {
   Parameter, Constraint, Definition,
   EvaluatedRequirement, EvaluatedConstraint, EvalVerdict, ConstraintStatus,
@@ -113,6 +113,20 @@ export function ParametricsCard({ reqId, parameters, constraints, evaluated, edi
   const removeConstraint = (i: number) =>
     onSave({ constraints: constraints.filter((_, idx) => idx !== i) });
 
+  const moveConstraintUp = (i: number) => {
+    if (i === 0) return;
+    const next = [...constraints];
+    [next[i - 1], next[i]] = [next[i], next[i - 1]];
+    onSave({ constraints: next });
+  };
+
+  const moveConstraintDown = (i: number) => {
+    if (i >= constraints.length - 1) return;
+    const next = [...constraints];
+    [next[i], next[i + 1]] = [next[i + 1], next[i]];
+    onSave({ constraints: next });
+  };
+
   if (!editable && parameters.length === 0 && constraints.length === 0) return null;
 
   return (
@@ -203,9 +217,19 @@ export function ParametricsCard({ reqId, parameters, constraints, evaluated, edi
                 {ev && <VerdictBadge status={ev.status} />}
                 {mev && mev.status !== ev?.status && <VerdictBadge status={mev.status} prefix="measured" />}
                 {editable && (
-                  <button onClick={() => removeConstraint(i)} className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all">
-                    <X size={12} />
-                  </button>
+                  <span className="flex items-center gap-0.5">
+                    <button onClick={() => moveConstraintUp(i)} disabled={i === 0}
+                      className="text-muted-foreground hover:text-foreground disabled:opacity-25 opacity-0 group-hover:opacity-100 transition-all">
+                      <ArrowUp size={10} />
+                    </button>
+                    <button onClick={() => moveConstraintDown(i)} disabled={i >= constraints.length - 1}
+                      className="text-muted-foreground hover:text-foreground disabled:opacity-25 opacity-0 group-hover:opacity-100 transition-all">
+                      <ArrowDown size={10} />
+                    </button>
+                    <button onClick={() => removeConstraint(i)} className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all ml-1">
+                      <X size={12} />
+                    </button>
+                  </span>
                 )}
               </div>
             );

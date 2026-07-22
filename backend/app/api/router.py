@@ -12,6 +12,7 @@ from pydantic import BaseModel
 
 from app.core.dependencies import get_store, require_edit, require_admin
 from app.core.ids import safe_id
+from app.core.tree_utils import build_flat_tree
 from app.models.requirement import RequirementCreate, RequirementUpdate
 from app.models.specification import SpecificationCreate, SpecificationUpdate
 from app.models.definition import DefinitionCreate, DefinitionUpdate
@@ -41,6 +42,10 @@ class RunVerification(BaseModel):
 
 class BreakCascade(BaseModel):
     break_children: bool = False
+
+class RenameBaseline(BaseModel):
+    name: str
+
 
 router = APIRouter()
 
@@ -158,7 +163,13 @@ async def get_workflow_config(project_id: str):
 async def get_requirement_tree(project_id: str):
     store = get_store(project_id)
     reqs = store.list_requirements()
-    return _build_tree(reqs, None)
+    return build_flat_tree(reqs, project=lambda r: {
+        "id": r["id"],
+        "name": r.get("name", ""),
+        "type": r.get("type", "functional"),
+        "status": r.get("status", "proposed"),
+        "priority": r.get("priority", "medium"),
+    })
 
 
 @router.get("/projects/{project_id}/requirements/next-uid")
@@ -401,9 +412,19 @@ async def break_cascade(project_id: str, req_id: str, data: BreakCascade | None 
 # ── Specifications ───────────────────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/specifications")
-async def list_specifications(project_id: str):
+async def list_specifications(
+    project_id: str,
+    offset: Optional[int] = Query(None, ge=0),
+    limit: Optional[int] = Query(None, ge=1, le=2000),
+):
     store = get_store(project_id)
-    return store.list_specifications()
+    items = store.list_specifications()
+    if offset is None and limit is None:
+        return items
+    off = offset or 0
+    lim = limit or 500
+    total = len(items)
+    return {"items": items[off:off + lim], "total": total, "offset": off, "limit": lim}
 
 
 @router.get("/projects/{project_id}/specifications/{spec_id}")
@@ -482,10 +503,10 @@ async def create_baseline(project_id: str, data: BaselineCreate, user: dict = De
 
 
 @router.patch("/projects/{project_id}/baselines/{name}")
-async def rename_baseline(project_id: str, name: str, data: dict, user: dict = Depends(require_edit)):
+async def rename_baseline(project_id: str, name: str, data: RenameBaseline, user: dict = Depends(require_edit)):
     store = get_store(project_id)
     safe_id(name, "baseline name")
-    new_name = data.get("name")
+    new_name = data.name
     if not new_name:
         raise HTTPException(status_code=400, detail="New name is required")
     safe_id(new_name, "baseline name")
@@ -525,9 +546,19 @@ async def delete_baseline(project_id: str, name: str, user: dict = Depends(requi
 # ── Parametric definitions (reusable constraint / calc defs) ─────────────────
 
 @router.get("/projects/{project_id}/definitions")
-async def list_definitions(project_id: str):
+async def list_definitions(
+    project_id: str,
+    offset: Optional[int] = Query(None, ge=0),
+    limit: Optional[int] = Query(None, ge=1, le=2000),
+):
     store = get_store(project_id)
-    return store.list_items("definitions")
+    items = store.list_items("definitions")
+    if offset is None and limit is None:
+        return items
+    off = offset or 0
+    lim = limit or 500
+    total = len(items)
+    return {"items": items[off:off + lim], "total": total, "offset": off, "limit": lim}
 
 
 @router.post("/projects/{project_id}/definitions", status_code=201)
@@ -561,9 +592,19 @@ async def delete_definition(project_id: str, def_id: str, user: dict = Depends(r
 # ── Analysis cases (scoped, parameterised evaluation) ────────────────────────
 
 @router.get("/projects/{project_id}/analysis")
-async def list_analysis_cases(project_id: str):
+async def list_analysis_cases(
+    project_id: str,
+    offset: Optional[int] = Query(None, ge=0),
+    limit: Optional[int] = Query(None, ge=1, le=2000),
+):
     store = get_store(project_id)
-    return store.list_items("analysis_cases")
+    items = store.list_items("analysis_cases")
+    if offset is None and limit is None:
+        return items
+    off = offset or 0
+    lim = limit or 500
+    total = len(items)
+    return {"items": items[off:off + lim], "total": total, "offset": off, "limit": lim}
 
 
 @router.post("/projects/{project_id}/analysis", status_code=201)
@@ -607,9 +648,19 @@ async def run_analysis_case_endpoint(project_id: str, case_id: str):
 # ── Verification Cases ───────────────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/verification")
-async def list_verification_cases(project_id: str):
+async def list_verification_cases(
+    project_id: str,
+    offset: Optional[int] = Query(None, ge=0),
+    limit: Optional[int] = Query(None, ge=1, le=2000),
+):
     store = get_store(project_id)
-    return store.list_verification_cases()
+    items = store.list_verification_cases()
+    if offset is None and limit is None:
+        return items
+    off = offset or 0
+    lim = limit or 500
+    total = len(items)
+    return {"items": items[off:off + lim], "total": total, "offset": off, "limit": lim}
 
 
 @router.get("/projects/{project_id}/verification/{vc_id}")
@@ -716,23 +767,6 @@ async def update_traces(project_id: str, data: TraceMatrix, user: dict = Depends
     store = get_store(project_id)
     store.write_traces(data.model_dump(mode="json"))
     return data
-
-
-# ── Requirement Tree ──────────────────────────────────────────────────────────
-
-def _build_tree(reqs: list[dict], parent_id: str | None) -> list[dict]:
-    children = []
-    for req in reqs:
-        if req.get("parent") == parent_id:
-            children.append({
-                "id": req["id"],
-                "name": req.get("name", ""),
-                "type": req.get("type", "functional"),
-                "status": req.get("status", "proposed"),
-                "priority": req.get("priority", "medium"),
-                "children": _build_tree(reqs, req["id"]),
-            })
-    return children
 
 
 # ── Auto UID ──────────────────────────────────────────────────────────────────

@@ -1,10 +1,19 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search } from 'lucide-react';
 import { ENTITY_META } from './entities';
-import { loadEntityIndex, searchEntities, type IndexedEntity } from './entityIndex';
+import { loadEntityIndex, searchEntities, recordEntityVisit, type IndexedEntity } from './entityIndex';
 import { useStore } from '../store';
+
+function highlightMatch(text: string, query: string): React.ReactNode {
+  if (!query.trim()) return text;
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const parts = text.split(new RegExp(`(${escaped})`, 'gi'));
+  return parts.map((part, i) =>
+    part.toLowerCase() === query.toLowerCase() ? <mark key={i}>{part}</mark> : part
+  );
+}
 
 /** Header button and other far-away UI can open the palette with this. */
 export const OPEN_PALETTE_EVENT = 'rt-open-palette';
@@ -66,6 +75,7 @@ export default function CommandPalette({ projectId }: { projectId: string }) {
     const newRecent = [entity.id, ...recentIds.filter(id => id !== entity.id)].slice(0, 8);
     setRecentIds(newRecent);
     try { localStorage.setItem(`rt-recent-${projectId}`, JSON.stringify(newRecent)); } catch {}
+    recordEntityVisit(entity.id);
     navigate(ENTITY_META[entity.kind].path(projectId, entity.id));
   }, [navigate, projectId, recentIds]);
 
@@ -118,8 +128,8 @@ export default function CommandPalette({ projectId }: { projectId: string }) {
                       <button key={`recent-${e.kind}-${e.id}`} onClick={() => pick(e)}
                         className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left hover:bg-accent/50 transition-colors">
                         <Icon size={14} className={`${meta.cls} shrink-0`} />
-                        <span className="font-mono text-xs text-muted-foreground shrink-0">{e.id}</span>
-                        <span className="text-sm text-card-foreground truncate">{e.name || 'Untitled'}</span>
+                        <span className="font-mono text-xs text-muted-foreground shrink-0">{highlightMatch(e.id, query)}</span>
+                        <span className="text-sm text-card-foreground truncate">{highlightMatch(e.name || 'Untitled', query)}</span>
                         <span className="ml-auto text-[10px] text-muted-foreground">{meta.label}</span>
                       </button>
                     );
@@ -144,8 +154,8 @@ export default function CommandPalette({ projectId }: { projectId: string }) {
                       }`}
                     >
                       <Icon size={14} className={`${meta.cls} shrink-0`} />
-                      <span className="font-mono text-xs text-muted-foreground shrink-0">{e.id}</span>
-                      <span className="text-sm text-card-foreground truncate">{e.name || 'Untitled'}</span>
+                      <span className="font-mono text-xs text-muted-foreground shrink-0">{highlightMatch(e.id, query)}</span>
+                      <span className="text-sm text-card-foreground truncate">{highlightMatch(e.name || 'Untitled', query)}</span>
                       <span className="ml-auto text-[10px] text-muted-foreground shrink-0 hidden sm:inline">{meta.label}</span>
                     </button>
                   );

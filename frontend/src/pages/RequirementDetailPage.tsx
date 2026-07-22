@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Trash2, ArrowLeft, Plus, X, ArrowRight, ArrowLeftRight, Sparkles, ShieldCheck, ExternalLink, ChevronRight, Waypoints, AlertTriangle, CheckCircle2 } from 'lucide-react';
-import { api, type Requirement, type VerificationCase, type QualityItem, type Component, type Specification, type ChangeRequest, type Risk, type EvaluatedRequirement, type Definition } from '../api/client';
+import { api, type Requirement, type VerificationCase, type QualityItem, type Component, type Specification, type ChangeRequest, type Risk, type EvaluatedRequirement, type Definition, type Comment, type DecisionRecord } from '../api/client';
 import { ParametricsCard } from '../components/parametrics';
 import RichTextEditor from '../components/RichTextEditor';
 import AutocompleteInput from '../components/AutocompleteInput';
@@ -35,6 +35,8 @@ export default function RequirementDetailPage() {
   const [definitions, setDefinitions] = useState<Definition[]>([]);
   const [affectingCrs, setAffectingCrs] = useState<ChangeRequest[]>([]);
   const [linkedRisks, setLinkedRisks] = useState<Risk[]>([]);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [decisions, setDecisions] = useState<DecisionRecord[]>([]);
   const entityKinds = useEntityKinds(projectId);
   const { graphOpen, toggleGraph } = useGraphPane();
   const { selectReq } = useSelectedReq();
@@ -143,6 +145,8 @@ export default function RequirementDetailPage() {
       setUnreviewedIds(new Set(u.items.map((r) => r.id)));
     }).catch(() => {});
     api.getProject(projectId).then((p: any) => setProjectBaselines(p.baselines || [])).catch(() => {});
+    api.listComments(projectId, reqId).then(setComments).catch(() => setComments([]));
+    api.listDecisions(projectId).then((decs) => setDecisions(decs.filter((d) => d.linked_requirements?.includes(reqId)))).catch(() => setDecisions([]));
   }, [projectId, reqId]);
 
   const save = async (updates: Partial<Requirement>) => {
@@ -591,6 +595,48 @@ export default function RequirementDetailPage() {
               </div>
             </motion.div>
           )}
+
+          {comments.length > 0 && (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.26 }} className="card p-5">
+              <h2 className="font-semibold text-sm text-card-foreground mb-3 flex items-center justify-between">
+                <span>Comments ({comments.length})</span>
+                <AddCommentForm projectId={projectId!} reqId={reqId!} onAdded={() => api.listComments(projectId!, reqId).then(setComments).catch(() => {})} disabled={!editable} />
+              </h2>
+              <div className="space-y-3">
+                {comments.map((c) => (
+                  <div key={c.id} className={`flex items-start gap-3 p-2.5 rounded-lg text-xs ${c.resolved ? 'bg-muted/30 opacity-60' : 'bg-accent/30'}`}>
+                    <span className="w-1 self-stretch rounded-full shrink-0" style={{ background: 'hsl(var(--primary) / 0.4)' }} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="font-medium text-foreground">{c.author}</span>
+                        <span className="text-muted-foreground">{new Date(c.created).toLocaleDateString()}</span>
+                        {c.resolved && <span className="badge bg-emerald-500/10 text-emerald-400 text-[9px]">Resolved</span>}
+                      </div>
+                      <p className="text-muted-foreground leading-relaxed">{c.text}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          )}
+
+          {decisions.length > 0 && (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.27 }} className="card p-5">
+              <h2 className="font-semibold text-sm text-card-foreground mb-3">Related Decisions ({decisions.length})</h2>
+              <div className="space-y-2">
+                {decisions.map((d) => (
+                  <div key={d.id} className="p-2.5 rounded-lg bg-accent/20 text-xs">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-mono font-medium text-foreground">{d.id}</span>
+                      <span className="font-medium">{d.title}</span>
+                      <span className="badge bg-muted text-muted-foreground ml-auto">{d.status}</span>
+                    </div>
+                    <p className="text-muted-foreground leading-relaxed line-clamp-2">{d.decision}</p>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          )}
         </div>
 
         <div className="space-y-6">
@@ -680,7 +726,14 @@ export default function RequirementDetailPage() {
                   className="input font-mono text-xs"
                   placeholder="e.g. design, verification_case"
                   value={(req.needs || []).join(', ')}
-                  onChange={(e) => save({ needs: e.target.value ? e.target.value.split(',').map(s => s.trim()).filter(Boolean) : [] })}
+                  onChange={(e) => {
+                    const needs = e.target.value ? e.target.value.split(',').map(s => s.trim()).filter(Boolean) : [];
+                    setReq({ ...req, needs });
+                  }}
+                  onBlur={(e) => {
+                    const needs = e.target.value ? e.target.value.split(',').map(s => s.trim()).filter(Boolean) : [];
+                    save({ needs });
+                  }}
                   disabled={!editable}
                 />
                 <div className="text-[10px] text-muted-foreground mt-0.5">Artifact types that must cover this requirement</div>
@@ -691,7 +744,8 @@ export default function RequirementDetailPage() {
                   className="input font-mono text-xs"
                   placeholder="e.g. WING (the part this requirement constrains)"
                   value={req.subject || ''}
-                  onChange={(e) => save({ subject: e.target.value || null } as Partial<Requirement>)}
+                  onChange={(e) => setReq({ ...req, subject: e.target.value })}
+                  onBlur={(e) => save({ subject: e.target.value || null } as Partial<Requirement>)}
                   disabled={!editable}
                 />
                 <div className="text-[10px] text-muted-foreground mt-0.5">SysML v2 subject — the component this requirement is about</div>
@@ -703,6 +757,14 @@ export default function RequirementDetailPage() {
                   placeholder="development: 5&#10;customers: 8&#10;safety: 10"
                   value={Object.entries(req.priorities || {}).map(([k, v]) => `${k}: ${v}`).join('\n')}
                   onChange={(e) => {
+                    const prio: Record<string, number> = {};
+                    for (const line of e.target.value.split('\n')) {
+                      const [k, v] = line.split(':').map(s => s.trim());
+                      if (k && v && !isNaN(Number(v))) prio[k] = Number(v);
+                    }
+                    setReq({ ...req, priorities: prio });
+                  }}
+                  onBlur={(e) => {
                     const prio: Record<string, number> = {};
                     for (const line of e.target.value.split('\n')) {
                       const [k, v] = line.split(':').map(s => s.trim());
@@ -891,6 +953,39 @@ export default function RequirementDetailPage() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function AddCommentForm({ projectId, reqId, onAdded, disabled }: { projectId: string; reqId: string; onAdded: () => void; disabled: boolean }) {
+  const [show, setShow] = useState(false);
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const user = useAuthStore((s) => s.user);
+
+  if (!show) {
+    return disabled ? null : (
+      <button onClick={() => setShow(true)} className="text-xs text-muted-foreground hover:text-foreground">+ Add comment</button>
+    );
+  }
+
+  const submit = async () => {
+    if (!text.trim()) return;
+    setBusy(true);
+    try {
+      await api.createComment(projectId, { requirement_id: reqId, author: user?.username || 'unknown', text: text.trim() });
+      setText('');
+      setShow(false);
+      onAdded();
+    } catch { /* ignore */ }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div className="flex gap-1.5 mt-1">
+      <input className="input text-xs flex-1" placeholder="Write a comment..." value={text}
+        onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') submit(); if (e.key === 'Escape') setShow(false); }} autoFocus />
+      <button onClick={submit} disabled={busy || !text.trim()} className="btn-primary text-xs">{busy ? '...' : 'Send'}</button>
     </div>
   );
 }

@@ -63,7 +63,7 @@ PASSIVE_RE = re.compile(
 
 PLACEHOLDER_RE = re.compile(r"\b(TODO|FIXME|TBD|XXX|HACK)\b|\?\?\?|\?\?")
 
-MULTI_AND_OR_RE = re.compile(r"\band\s+.*?\band\b|\bor\s+.*?\bor\b", re.IGNORECASE)
+NON_ATOMIC_RE = re.compile(r"\band\b.*\band\b", re.IGNORECASE)
 
 MEASURABLE_TERMS = re.compile(
     r"\b\d+(?:\.\d+)?\s*(?:%|percent|ms|s|sec|seconds?|minutes?|hours?|"
@@ -121,7 +121,7 @@ def score_requirement(req: dict, config: dict | None = None) -> dict:
         config = DEFAULT_CONFIG
 
     text = strip_html(req.get("description", ""))
-    name = req.get("name", "")
+    name = html.unescape(req.get("name", ""))
     combined = f"{name}\n{text}"
     plain = combined.strip()
     findings: list[dict] = []
@@ -177,7 +177,7 @@ def score_requirement(req: dict, config: dict | None = None) -> dict:
             penalty += weights.get("placeholders", 10)
 
     if rules.get("non_atomic", True):
-        match = re.search(r"\band\b.*\band\b", plain, re.IGNORECASE)
+        match = NON_ATOMIC_RE.search(plain)
         if match:
             findings.append({
                 "rule": "non_atomic",

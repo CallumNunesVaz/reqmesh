@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import re
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Header, Request
 from pydantic import BaseModel
 from typing import Optional
 
 from app.core.rate_limit import rate_limit
+
+audit_logger = logging.getLogger("audit")
 
 from app.core.auth import (
     ALLOWED_ROLES,
@@ -184,16 +187,11 @@ async def forgot_password(data: ForgotPasswordRequest, _rate: None = Depends(rat
     if token is None:
         return {"ok": True}
     from app.core.config import settings
-    from app.services.email_service import _send_email, _is_configured
-    if _is_configured():
-        users = load_users()
-        email = users.get(data.username, {}).get("email", "")
-        if email:
-            reset_url = f"{settings.base_url.rstrip('/')}/reset-password?token={token}"
-            _send_email(email, "Password reset request",
-                f"<p>A password reset was requested for your reqmesh account.</p>"
-                f"<p><a href=\"{reset_url}\">Click here to reset your password</a></p>"
-                f"<p>This link expires in 1 hour. If you did not request this, ignore this email.</p>")
+    users = load_users()
+    email = users.get(data.username, {}).get("email", "")
+    if email:
+        from app.services.email_service import send_password_reset
+        send_password_reset(email, token, settings.base_url)
     return {"ok": True}
 
 
@@ -278,6 +276,8 @@ async def create_user(data: CreateUserRequest, admin: dict = Depends(require_adm
     result = register_user(data.username, data.password, data.role)
     if not result:
         raise HTTPException(status_code=409, detail="Username already exists")
+    audit_logger.info("Account created by admin: user=%s role=%s by=%s",
+                       data.username, data.role, admin.get("username", ""))
     if data.email.strip() or data.full_name.strip():
         from app.core.auth import load_users, save_users
         users = load_users()
@@ -297,10 +297,13 @@ async def update_user(username: str, data: UpdateUserRequest, admin: dict = Depe
 
     if data.role is not None:
         _validate_role(data.role)
+        old_role = users[username].get("role", "viewer")
         demoting_admin = users[username].get("role") == "admin" and data.role != "admin"
         if demoting_admin and count_admins(users) <= 1:
             raise HTTPException(status_code=400, detail="Cannot demote the last administrator")
         set_user_role(username, data.role)
+        audit_logger.info("Role changed: user=%s old=%s new=%s by=%s",
+                          username, old_role, data.role, admin.get("username", ""))
 
     if data.password is not None:
         _validate_password(data.password)
@@ -332,6 +335,7 @@ async def remove_user(username: str, admin: dict = Depends(require_admin)):
     if users[username].get("role") == "admin" and count_admins(users) <= 1:
         raise HTTPException(status_code=400, detail="Cannot delete the last administrator")
     delete_user(username)
+    audit_logger.info("Account deleted: user=%s by=%s", username, admin.get("username", ""))
     return {"ok": True}
 
 
@@ -351,6 +355,9 @@ async def disable_user(username: str, data: DisableRequest, admin: dict = Depend
     if data.disabled and users[username].get("role") == "admin" and count_admins(users) <= 1:
         raise HTTPException(status_code=400, detail="Cannot disable the last administrator")
     set_user_disabled(username, data.disabled)
+    audit_logger.info("Account %s: user=%s by=%s",
+                      "disabled" if data.disabled else "enabled",
+                      username, admin.get("username", ""))
     return {"ok": True, "disabled": data.disabled}
 
 
@@ -439,18 +446,24 @@ async def bulk_user_action(data: BulkUserRequest, admin: dict = Depends(require_
                 skipped.append(username)
                 continue
             delete_user(username)
+            audit_logger.info("Account deleted: user=%s by=%s", username, me)
         elif data.action == "disable":
             if username == me or is_last_admin:
                 skipped.append(username)
                 continue
             set_user_disabled(username, True)
+            audit_logger.info("Account disabled: user=%s by=%s", username, me)
         elif data.action == "enable":
             set_user_disabled(username, False)
+            audit_logger.info("Account enabled: user=%s by=%s", username, me)
         elif data.action == "set_role":
             if is_last_admin and data.role != "admin":
                 skipped.append(username)
                 continue
+            old_role = users[username].get("role", "viewer")
             set_user_role(username, data.role or "editor")
+            audit_logger.info("Role changed: user=%s old=%s new=%s by=%s",
+                              username, old_role, data.role or "editor", me)
         applied.append(username)
         users = load_users()  # refresh admin count after a mutation
     return {"applied": applied, "skipped": skipped}

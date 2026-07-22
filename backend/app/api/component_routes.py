@@ -7,31 +7,20 @@ component satisfies, and which verification cases exercise it.
 
 from __future__ import annotations
 
+import csv
+import io
+
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 
 from app.core.dependencies import get_store, require_edit
 from app.core.ids import safe_id
+from app.core.tree_utils import build_flat_tree
 from app.models.component import ComponentCreate, ComponentUpdate
 from app.services.yaml_store import YamlStore
 from app.services.history import record_change
-from app.services.yaml_store import YamlStore
 
 router = APIRouter()
-
-
-def _build_tree(components: list[dict], parent_id: str | None) -> list[dict]:
-    children = []
-    for c in components:
-        if c.get("parent") == parent_id:
-            children.append({
-                "id": c["id"],
-                "name": c.get("name", ""),
-                "type": c.get("type", "assembly"),
-                "quantity": c.get("quantity", 1),
-                "satisfies": list(c.get("satisfies") or []),
-                "children": _build_tree(components, c["id"]),
-            })
-    return children
 
 
 def _validate_parent(store: YamlStore, component_id: str, parent_id: str | None) -> None:
@@ -74,7 +63,47 @@ def _validate_links(store: YamlStore, satisfies: list[str] | None, vcs: list[str
 @router.get("/projects/{project_id}/components/tree")
 async def get_component_tree(project_id: str):
     store = get_store(project_id)
-    return _build_tree(store.list_components(), None)
+    return build_flat_tree(store.list_components(), project=lambda c: {
+        "id": c["id"],
+        "name": c.get("name", ""),
+        "type": c.get("type", "assembly"),
+        "quantity": c.get("quantity", 1),
+        "satisfies": list(c.get("satisfies") or []),
+    })
+
+
+def _flatten_bom(components: list[dict], parent_id: str | None, indent: int = 0) -> list[dict]:
+    """Walk the design tree depth-first and produce a flat BOM with indentation level."""
+    rows: list[dict] = []
+    children = [c for c in components if c.get("parent") == parent_id]
+    for c in sorted(children, key=lambda x: x.get("id", "")):
+        rows.append({**c, "_indent": indent})
+        rows.extend(_flatten_bom(components, c["id"], indent + 1))
+    return rows
+
+
+@router.get("/projects/{project_id}/components/export/bom")
+async def export_bill_of_materials(project_id: str):
+    """Export an indented bill-of-materials as CSV."""
+    store = get_store(project_id)
+    all_comps = store.list_components()
+    flat = _flatten_bom(all_comps, None)
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["ID", "Name", "Type", "Part Number", "Quantity", "Parent"])
+    for c in flat:
+        indent = "  " * c["_indent"]
+        writer.writerow([
+            indent + c.get("id", ""),
+            indent + c.get("name", ""),
+            c.get("type", ""),
+            c.get("part_number", ""),
+            c.get("quantity", 1),
+            c.get("parent", ""),
+        ])
+    return Response(content=output.getvalue(), media_type="text/csv",
+                    headers={"Content-Disposition": f"attachment; filename={project_id}-bom.csv"})
 
 
 @router.get("/projects/{project_id}/components")

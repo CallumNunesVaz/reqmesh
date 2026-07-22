@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, ChevronRight, Boxes, Square, CheckSquare, Trash2, X, Search } from 'lucide-react';
@@ -26,6 +26,21 @@ export default function ComponentsPage() {
   const [filterType, setFilterType] = useState('');
   const [draft, setDraft] = useState(EMPTY_DRAFT);
   const [error, setError] = useState('');
+  const [focusedIndex, setFocusedIndex] = useState(-1);
+  const treeContainerRef = useRef<HTMLDivElement>(null);
+
+  const hasUnsavedChanges = showCreate && !!(draft.id.trim() || draft.name.trim() || draft.parent);
+
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [hasUnsavedChanges]);
 
   const load = () => {
     if (!projectId) return;
@@ -53,6 +68,74 @@ export default function ComponentsPage() {
 
   const filtering = !!(search || filterType);
   const filteredCount = filterMatchIds ? filterMatchIds.size : components.length;
+
+  const flatNodes = useMemo(() => {
+    const result: { id: string; depth: number }[] = [];
+    const walk = (nodes: ComponentTreeNode[], depth: number) => {
+      for (const n of nodes) {
+        if (filtering) {
+          if (filterMatchIds?.has(n.id) || n.children.some((c) => {
+            const check = (x: ComponentTreeNode): boolean => filterMatchIds?.has(x.id) || x.children.some(check);
+            return check(c);
+          })) {
+            result.push({ id: n.id, depth });
+            if (!collapsed.has(n.id)) walk(n.children, depth + 1);
+          }
+        } else {
+          result.push({ id: n.id, depth });
+          if (!collapsed.has(n.id)) walk(n.children, depth + 1);
+        }
+      }
+    };
+    walk(tree, 0);
+    return result;
+  }, [tree, collapsed, filtering, filterMatchIds]);
+
+  const handleTreeKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (flatNodes.length === 0) return;
+    let next = focusedIndex;
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        next = Math.min(next + 1, flatNodes.length - 1);
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        next = Math.max(next - 1, 0);
+        break;
+      case 'ArrowRight': {
+        e.preventDefault();
+        const id = flatNodes[next]?.id;
+        if (id && collapsed.has(id)) {
+          setCollapsed((prev) => { const s = new Set(prev); s.delete(id); return s; });
+        }
+        return;
+      }
+      case 'ArrowLeft': {
+        e.preventDefault();
+        const id = flatNodes[next]?.id;
+        if (id && !collapsed.has(id)) {
+          setCollapsed((prev) => { const s = new Set(prev); s.add(id); return s; });
+        }
+        return;
+      }
+      case 'Enter':
+        e.preventDefault();
+        if (next >= 0 && next < flatNodes.length) {
+          navigate(`/project/${projectId}/components/${flatNodes[next].id}`);
+        }
+        return;
+      default:
+        return;
+    }
+
+    if (next !== focusedIndex) {
+      setFocusedIndex(next);
+      const target = document.getElementById(`entity-${flatNodes[next]?.id}`);
+      target?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [flatNodes, focusedIndex, collapsed, navigate, projectId]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -118,12 +201,13 @@ export default function ComponentsPage() {
       return n.children.some(subtreeMatches);
     };
     if (filtering && !subtreeMatches(node)) return null;
+    const isFocused = flatNodes[focusedIndex]?.id === node.id;
     return (
       <div key={node.id}>
         <div
           id={`entity-${node.id}`}
           onClick={() => navigate(`/project/${projectId}/components/${node.id}`)}
-          className="flex items-center gap-2 px-2 py-2 rounded-lg cursor-pointer transition-colors hover:bg-accent"
+          className={`flex items-center gap-2 px-2 py-2 rounded-lg cursor-pointer transition-colors hover:bg-accent ${isFocused ? 'bg-accent ring-1 ring-ring/30' : ''}`}
           style={{ paddingLeft: depth * 20 + 8 }}
         >
           {editable && (
@@ -276,7 +360,7 @@ export default function ComponentsPage() {
           <button className="text-xs text-primary hover:underline mt-2" onClick={() => { setSearch(''); setFilterType(''); }}>Clear filters</button>
         </div>
       ) : (
-        <div className="card p-2 flex-1 min-w-[280px]">
+        <div className="card p-2 flex-1 min-w-[280px]" tabIndex={0} ref={treeContainerRef} onKeyDown={handleTreeKeyDown}>
           {tree.map((node) => renderNode(node, 0))}
         </div>
       )}

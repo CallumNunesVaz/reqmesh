@@ -200,6 +200,20 @@ def notify_decision(store, project_id: str, dec_id: str, action: str, user: str)
         _send_email(emails, subject, body)
 
 
+def send_password_reset(email: str, token: str, base_url: str) -> None:
+    """Send a password-reset email with a token link."""
+    if not _is_configured():
+        return
+    reset_url = f"{base_url.rstrip('/')}/reset-password?token={token}"
+    subject = "Password reset request"
+    body = (
+        f"<p>A password reset was requested for your reqmesh account.</p>"
+        f"<p><a href=\"{reset_url}\">Click here to reset your password</a></p>"
+        f"<p>This link expires in 1 hour. If you did not request this, ignore this email.</p>"
+    )
+    _send_email(email, subject, body)
+
+
 def notify_comment(store, project_id: str, req_id: str, author: str, text: str) -> None:
     """A comment was added to a requirement."""
     if not _is_configured():

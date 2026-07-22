@@ -3,8 +3,13 @@ import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import Image from '@tiptap/extension-image';
 import CharacterCount from '@tiptap/extension-character-count';
+import { Node } from '@tiptap/core';
+import { nodeInputRule } from '@tiptap/core';
 import { Bold, Italic, List, ListOrdered, Heading1, Undo2, Redo2 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { useEntityKinds } from './entityIndex';
+import { ENTITY_META, type EntityKind } from './entities';
 
 interface RichTextEditorProps {
   content: string;
@@ -13,8 +18,75 @@ interface RichTextEditorProps {
   disabled?: boolean;
 }
 
+const ENTITY_LINK_GLOBAL_REGEX = /\[\[([\w\-_.]+)\]\]/g;
+const ENTITY_LINK_INPUT_REGEX = /\[\[([\w\-_.]+)\]\]$/;
+
+function preprocessContent(html: string): string {
+  // Avoid double-wrapping: split on existing <span data-entity-id> blocks,
+  // only apply the regex to the text between them.
+  const parts = html.split(/(<span data-entity-id="[^"]*">.*?<\/span>)/gs);
+  return parts.map((part, i) => {
+    if (i % 2 === 0) {
+      return part.replace(ENTITY_LINK_GLOBAL_REGEX, '<span data-entity-id="$1">[[$1]]</span>');
+    }
+    return part;
+  }).join('');
+}
+
+const EntityLinkExtension = Node.create({
+  name: 'entityLink',
+  inline: true,
+  group: 'inline',
+  atom: true,
+
+  addAttributes() {
+    return { entityId: { default: null } };
+  },
+
+  parseHTML() {
+    return [{ tag: 'span[data-entity-id]' }];
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return ['span', {
+      'data-entity-id': HTMLAttributes.entityId,
+      class: 'text-blue-500 underline cursor-pointer',
+    }, `[[${HTMLAttributes.entityId}]]`];
+  },
+
+  addInputRules() {
+    return [
+      nodeInputRule({
+        find: ENTITY_LINK_INPUT_REGEX,
+        type: this.type,
+        getAttributes: (match) => ({ entityId: match[1] }),
+      }),
+    ];
+  },
+});
+
 export default function RichTextEditor({ content, onChange, onBlur, disabled = false }: RichTextEditorProps) {
   const isInternalChange = useRef(false);
+  const navigate = useNavigate();
+  const { projectId } = useParams<{ projectId: string }>();
+  const entityKinds = useEntityKinds(projectId);
+
+  const processedContent = preprocessContent(content || '');
+
+  const handleEditorClick = useCallback((e: React.MouseEvent) => {
+    let target = e.target as HTMLElement | null;
+    while (target && target !== e.currentTarget) {
+      const entityId = target.getAttribute('data-entity-id');
+      if (entityId && projectId) {
+        e.preventDefault();
+        e.stopPropagation();
+        const kind: EntityKind = entityKinds.get(entityId) ?? 'requirement';
+        navigate(ENTITY_META[kind].path(projectId, entityId));
+        return;
+      }
+      target = target.parentElement;
+    }
+  }, [navigate, projectId, entityKinds]);
 
   const editor = useEditor({
     extensions: [
@@ -28,6 +100,7 @@ export default function RichTextEditor({ content, onChange, onBlur, disabled = f
         inline: true,
       }),
       CharacterCount.configure({}),
+      EntityLinkExtension,
     ],
     editorProps: {
       transformPastedHTML(html: string) {
@@ -42,7 +115,7 @@ export default function RichTextEditor({ content, onChange, onBlur, disabled = f
           .replace(/<(\w+)\s+>/g, '<$1>');
       },
     },
-    content: content || '',
+    content: processedContent,
     editable: !disabled,
     onUpdate: ({ editor }) => {
       isInternalChange.current = true;
@@ -89,7 +162,7 @@ export default function RichTextEditor({ content, onChange, onBlur, disabled = f
   );
 
   return (
-    <div className={`border rounded-lg overflow-hidden ${!disabled ? 'focus-within:ring-2 focus-within:ring-ring/20 focus-within:border-ring/30' : 'opacity-70'} transition-all`}>
+    <div className={`border rounded-lg overflow-hidden ${!disabled ? 'focus-within:ring-2 focus-within:ring-ring/20 focus-within:border-ring/30' : 'opacity-70'} transition-all`} onClick={handleEditorClick}>
       {!disabled && (
       <div className="flex items-center gap-0.5 px-2 py-1.5 border-b bg-muted/50">
         <ToolbarButton label="Bold" active={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()}>
