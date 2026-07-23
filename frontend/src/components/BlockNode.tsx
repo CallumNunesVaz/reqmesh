@@ -61,6 +61,10 @@ export interface BlockNodeData {
 }
 
 export const BLOCK_W = 216;
+// How far the collapsed-group card stack peeks past the block's bottom-right
+// corner (see stackCard). The graph layout reserves this as extra footprint so
+// edges keep clear of the stack.
+export const STACK_OVERHANG = 11;
 
 function BlockNode({ data }: NodeProps) {
   const d = data as unknown as BlockNodeData;
@@ -115,8 +119,8 @@ function BlockNode({ data }: NodeProps) {
     <div style={{ position: 'relative', width: BLOCK_W }}>
       {showStack && (
         <>
-          {stackCard(11, 0.5)}
-          {stackCard(6, 0.75)}
+          {stackCard(STACK_OVERHANG, 0.5)}
+          {stackCard(Math.round(STACK_OVERHANG * 0.55), 0.75)}
         </>
       )}
       <div
@@ -272,10 +276,16 @@ function BlockNode({ data }: NodeProps) {
           {header}
           {nameRow}
           {level === 5 && d.desc && (
-            <div className="px-2.5 pb-1.5 overflow-hidden" style={{ height: '3em', maxHeight: '3em' }}>
+            // The scroll window height and the keyframe's travel are driven by
+            // the same --desc-h value, so the animation reveals the full
+            // (wrapped) description rather than stopping short. See scrollDesc.
+            <div
+              className="px-2.5 pb-1.5 overflow-hidden"
+              style={{ height: 'var(--desc-h)', '--desc-h': '46px' } as React.CSSProperties}
+            >
               <div className="text-[9px] leading-snug text-muted-foreground"
                 style={{
-                  animation: 'scrollDesc 8s linear infinite alternate',
+                  animation: 'scrollDesc 9s ease-in-out infinite alternate',
                   whiteSpace: 'normal',
                 }}>
                 {d.desc}
@@ -312,7 +322,10 @@ function BlockNode({ data }: NodeProps) {
         </>,
       )}
       {level === 5 && d.desc && (
-        <style>{`@keyframes scrollDesc { 0% { transform: translateY(0); } 20% { transform: translateY(0); } 80% { transform: translateY(calc(-100% + 3em)); } 100% { transform: translateY(calc(-100% + 3em)); } }`}</style>
+        // -100% is the inner text's own (wrapped) height; adding back one window
+        // height (--desc-h) lands on the last line. min(0px, …) keeps text that
+        // already fits from bobbing.
+        <style>{`@keyframes scrollDesc { 0%, 15% { transform: translateY(0); } 85%, 100% { transform: translateY(min(0px, calc(-100% + var(--desc-h, 46px)))); } }`}</style>
       )}
     </>
   );

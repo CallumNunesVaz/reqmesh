@@ -65,38 +65,37 @@ interface SelectedReqCtxValue {
 const SelectedReqCtx = createContext<SelectedReqCtxValue>({ selectedReqId: null, selectReq: () => {} });
 export function useSelectedReq() { return useContext(SelectedReqCtx); }
 
-const GRAPH_MIN = 320;
+const GRAPH_MIN = 320;    // px floor for the canvas column
+const CONTEXT_MIN = 300;  // px floor for the inspector column (form-heavy, size-sensitive)
 const NAV_MIN = 200;
 const NAV_MAX = 480;
 const NAV_RAIL = 40;
-const graphMax = () => Math.round(window.innerWidth * 0.65);
 
 export default function Layout() {
   const { projectId } = useParams();
   const isInProject = !!projectId;
   const [graphOpen, setGraphOpen] = useState(true);
   const [contextOpen, setContextOpen] = useState(true);
-  const [contextWidth, setContextWidth] = useState(() => {
-    const saved = localStorage.getItem('rt-context-width');
-    return saved ? Number(saved) : Math.round(window.innerWidth * 0.35);
-  });
-  const CONTEXT_MIN = 200;
   const [loginOpen, setLoginOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [docsOpen, setDocsOpen] = useState(false);
   const [presence, setPresence] = useState<PresenceUser[]>([]);
-  const [graphWidth, setGraphWidth] = useState(() => {
-    const saved = parseInt(localStorage.getItem('rt-graph-width') || '', 10);
-    const fallback = Math.round(window.innerWidth * 0.44);
-    return Math.min(Math.max(isNaN(saved) ? fallback : saved, GRAPH_MIN), graphMax());
+  // The canvas/inspector split is stored as the canvas's *fraction* of the
+  // space the two share (not an absolute width), so on a window resize both
+  // panes keep their proportions via flex-grow. Because the canvas holds the
+  // larger share it absorbs more of the delta in pixels, leaving the
+  // size-sensitive inspector comparatively stable.
+  const [graphFrac, setGraphFrac] = useState(() => {
+    const saved = parseFloat(localStorage.getItem('rt-graph-frac') || '');
+    return saved >= 0.15 && saved <= 0.85 ? saved : 0.52;
   });
   const [navWidth, setNavWidth] = useState(() => {
     const saved = parseInt(localStorage.getItem('rt-nav-width') || '', 10);
     return Math.min(Math.max(isNaN(saved) ? 300 : saved, NAV_MIN), NAV_MAX);
   });
-  const [resizing, setResizing] = useState<'graph' | 'nav' | 'context' | false>(false);
+  const [resizing, setResizing] = useState<'graph' | 'nav' | false>(false);
   const [selectedReqId, setSelectedReqId] = useState<string | null>(null);
   const [navCollapsed, setNavCollapsed] = useState(() => localStorage.getItem('rt-nav-collapsed') === '1');
 
@@ -108,34 +107,39 @@ export default function Layout() {
   }, []);
 
   // Collapsing the nav hands its freed width to the canvas, not the page.
-  const canvasBonus = (navCollapsed ? navWidth + 4 - NAV_RAIL : 0) + (!contextOpen ? contextWidth : 0);
+  const canvasBonus = navCollapsed ? navWidth + 4 - NAV_RAIL : 0;
 
   const selectReq = useCallback((id: string | null) => {
     setSelectedReqId(id);
   }, []);
 
-  // The canvas sits between the nav and the page content, so its width is
-  // measured from the nav's right edge. While the nav is collapsed the canvas
-  // renders with a width bonus, so dragging adjusts the stored base width.
+  // The divider sits between the canvas and the inspector. Dragging it sets the
+  // canvas fraction of the pool the two share (everything right of the nav and
+  // its bonus, minus the divider). Clamped so neither pane drops below its px
+  // floor, keeping the maths resolution-independent so the split survives a
+  // window resize.
   const startGraphResize = useCallback((e: React.PointerEvent) => {
     e.preventDefault();
     setResizing('graph');
-    const left = navCollapsed ? NAV_RAIL : navWidth + 4;
-    const bonus = navCollapsed ? navWidth + 4 - NAV_RAIL : 0;
-    const baseWidth = (clientX: number) =>
-      Math.min(Math.max(clientX - left - bonus, GRAPH_MIN), graphMax());
-    const onMove = (ev: PointerEvent) => setGraphWidth(baseWidth(ev.clientX));
+    const left = (navCollapsed ? NAV_RAIL : navWidth + 4) + canvasBonus;
+    const fracAt = (clientX: number) => {
+      const pool = Math.max(1, window.innerWidth - left - 4 /* divider */);
+      const minFrac = Math.min(0.85, GRAPH_MIN / pool);
+      const maxFrac = Math.max(0.15, 1 - CONTEXT_MIN / pool);
+      return Math.min(Math.max((clientX - left) / pool, minFrac), maxFrac);
+    };
+    const onMove = (ev: PointerEvent) => setGraphFrac(fracAt(ev.clientX));
     const onUp = (ev: PointerEvent) => {
-      const w = baseWidth(ev.clientX);
-      setGraphWidth(w);
-      localStorage.setItem('rt-graph-width', String(w));
+      const f = fracAt(ev.clientX);
+      setGraphFrac(f);
+      localStorage.setItem('rt-graph-frac', String(f));
       setResizing(false);
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
     };
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
-  }, [navWidth, navCollapsed]);
+  }, [navWidth, navCollapsed, canvasBonus]);
 
   const startNavResize = useCallback((e: React.PointerEvent) => {
     e.preventDefault();
@@ -147,25 +151,6 @@ export default function Layout() {
     const onUp = (ev: PointerEvent) => {
       const w = Math.min(Math.max(ev.clientX, NAV_MIN), NAV_MAX);
       localStorage.setItem('rt-nav-width', String(w));
-      setResizing(false);
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-    };
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
-  }, []);
-
-  const startContextResize = useCallback((e: React.PointerEvent) => {
-    e.preventDefault();
-    setResizing('context');
-    const onMove = (ev: PointerEvent) => {
-      const w = Math.min(Math.max(window.innerWidth - ev.clientX, CONTEXT_MIN), window.innerWidth - NAV_RAIL);
-      setContextWidth(w);
-    };
-    const onUp = (ev: PointerEvent) => {
-      const w = Math.min(Math.max(window.innerWidth - ev.clientX, CONTEXT_MIN), window.innerWidth - NAV_RAIL);
-      setContextWidth(w);
-      localStorage.setItem('rt-context-width', String(w));
       setResizing(false);
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
@@ -433,44 +418,42 @@ export default function Layout() {
           {isInProject && graphOpen && (
             <>
               <div
-                className="shrink-0 overflow-hidden bg-background"
+                className="overflow-hidden bg-background"
                 style={{
-                  width: graphWidth + canvasBonus,
-                  transition: resizing ? 'none' : 'width 0.3s ease',
+                  // When the inspector is open the canvas and inspector split the
+                  // shared pool by flex-grow weight, so a window resize keeps their
+                  // proportions; the nav-collapse bonus rides as a canvas-only
+                  // basis. When the inspector is closed the canvas takes it all.
+                  flex: contextOpen ? `${graphFrac} 1 ${canvasBonus}px` : '1 1 0%',
+                  minWidth: 0,
+                  transition: resizing ? 'none' : 'flex-grow 0.3s ease',
                 }}
               >
                 <GraphPane projectId={projectId!} />
               </div>
-              <div
-                onPointerDown={startGraphResize}
-                className={`w-1 shrink-0 cursor-col-resize transition-colors ${resizing === 'graph' ? 'bg-primary/60' : 'bg-border/60 hover:bg-primary/40'}`}
-                title="Drag to resize"
-              />
+              {contextOpen && (
+                <div
+                  onPointerDown={startGraphResize}
+                  className={`w-1 shrink-0 cursor-col-resize transition-colors ${resizing === 'graph' ? 'bg-primary/60' : 'bg-border/60 hover:bg-primary/40'}`}
+                  title="Drag to resize the canvas"
+                />
+              )}
             </>
           )}
-          {isInProject && contextOpen && (
-            <div
-              onPointerDown={startContextResize}
-              className={`w-1 shrink-0 cursor-col-resize transition-colors ${resizing === 'context' ? 'bg-primary/60' : 'bg-border/60 hover:bg-primary/40'}`}
-              title="Drag to resize"
-            />
-          )}
-          {isInProject && contextOpen ? (
+          {/* The inspector takes the remaining share of the pool (all of it when
+              the canvas is closed or off-project). */}
+          {(!isInProject || contextOpen) && (
             <main
               className="overflow-auto"
               style={{
-                width: graphOpen ? contextWidth : undefined,
-                flex: graphOpen ? undefined : '1 1 0%',
-                transition: resizing ? 'none' : 'width 0.3s ease',
+                flex: `${1 - graphFrac} 1 0%`,
+                minWidth: 0,
+                transition: resizing ? 'none' : 'flex-grow 0.3s ease',
               }}
             >
               <Outlet />
             </main>
-          ) : !isInProject ? (
-            <main className="flex-1 overflow-auto">
-              <Outlet />
-            </main>
-          ) : null}
+          )}
         </div>
         {/* Capture pointer events over the canvas while resizing */}
         {resizing && <div className="fixed inset-0 z-50 cursor-col-resize" />}

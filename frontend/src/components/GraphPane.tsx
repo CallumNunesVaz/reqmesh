@@ -21,10 +21,10 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { forceSimulation, forceLink, forceManyBody, forceCollide, forceX, forceY } from 'd3-force';
-import { Search, RotateCw, ListTree, Orbit, SlidersHorizontal, ChevronsUpDown, ChevronsDownUp, Filter } from 'lucide-react';
+import { Search, RotateCw, ListTree, Orbit, SlidersHorizontal, ChevronsUpDown, ChevronsDownUp, Filter, Waypoints, Share2, Save } from 'lucide-react';
 import { api, type Requirement, type TraceLink, type EvaluatedRequirement, type EvaluatedParameter, type Component } from '../api/client';
 import CircularNode from './CircularNode';
-import BlockNode, { BLOCK_W, type BlockParam, type BlockConstraint } from './BlockNode';
+import BlockNode, { BLOCK_W, STACK_OVERHANG, type BlockParam, type BlockConstraint } from './BlockNode';
 import { statusColors } from './RequirementNode';
 import OrthoEdge from './OrthoEdge';
 import LoadingSplash from './LoadingSplash';
@@ -251,6 +251,10 @@ async function elkLayout(
     );
   };
 
+  // Un-inflated (visual) height per node, captured while building the layout
+  // boxes so collapsed groups can render at their true size after routing.
+  const visualHeight = new Map<string, number>();
+
   const graph = {
     id: 'root',
     layoutOptions: {
@@ -267,11 +271,17 @@ async function elkLayout(
       'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
       'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',
     },
-    children: nodes.map((n) => ({
-      id: n.id,
-      width: NODE_W,
-      height: getNodeHeight(n.id),
-    })),
+    children: nodes.map((n) => {
+      const nd = n.data as any;
+      const h = getNodeHeight(n.id);
+      visualHeight.set(n.id, h);
+      // A collapsed group draws a card stack peeking past its bottom-right
+      // corner. Inflate its *layout* box by that overhang (right + bottom) so
+      // ELK keeps other nodes and routed edges clear of the stack. The rendered
+      // node stays BLOCK_W × h — only the reserved footprint grows.
+      const overhang = nd?.hasChildren && nd?.collapsed ? STACK_OVERHANG : 0;
+      return { id: n.id, width: NODE_W + overhang, height: h + overhang };
+    }),
     edges: elkEdges,
   };
   const res = await elk.layout(graph);
@@ -279,7 +289,8 @@ async function elkLayout(
   const heights = new Map<string, number>();
   for (const c of res.children || []) {
     positions.set(c.id, { x: c.x ?? 0, y: c.y ?? 0 });
-    heights.set(c.id, Number(c.height) || BASE_NODE_H);
+    // Store the un-inflated visual height so the node renders at its true size.
+    heights.set(c.id, visualHeight.get(c.id) ?? BASE_NODE_H);
   }
   const edgePoints = new Map<string, { x: number; y: number }[]>();
   for (const e of res.edges || []) {
@@ -391,6 +402,25 @@ export const GraphSelectionCtx = createContext<GraphSelectionCtxValue>({
 });
 export function useGraphSelection() { return useContext(GraphSelectionCtx); }
 
+// A snapshot of the full graph view a user can save to a slot and jump back to:
+// expansion state, focus, layout mode + settings, highlight controls, filters,
+// and the exact camera. Persisted per project in localStorage.
+interface SavedView {
+  collapsed: string[];
+  groupsOnly?: string[];
+  selectedReqId: string | null;
+  layoutMode: 'uml' | 'force';
+  graphSettings: Record<string, any>;
+  hopDepth: number;
+  showAllLinks: boolean;
+  filters: {
+    search: string; status: string; priority: string; baseline: string; type: string;
+    verStatus: string; verMethod: string; allocated: string; component: string; kind: string;
+  };
+  viewport: { x: number; y: number; zoom: number } | null;
+}
+const VIEW_SLOTS = 3;
+
 interface GraphPaneProps { projectId: string; compact?: boolean; }
 
 export default function GraphPane({ projectId, compact }: GraphPaneProps) {
@@ -436,8 +466,58 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
   const [showFilters, setShowFilters] = useState(false);
   const { selectedReqId, selectReq } = useSelectedReq();
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
+  // How many relationship hops out from the focused node stay highlighted.
+  const [hopDepth, setHopDepth] = useState(() => {
+    const saved = parseInt(localStorage.getItem('rt-graph-hop-depth') || '', 10);
+    return saved >= 1 && saved <= 3 ? saved : 1;
+  });
+  const setHopDepthPersist = useCallback((n: number) => {
+    setHopDepth(n);
+    try { localStorage.setItem('rt-graph-hop-depth', String(n)); } catch {}
+  }, []);
+  // When on, light up *every* relationship among the highlighted nodes —
+  // including cross-links between same-distance neighbours (e.g. two children
+  // of the focus that also relate to each other), not just the radial paths
+  // that fan out from the focused node.
+  const [showAllLinks, setShowAllLinks] = useState(() => localStorage.getItem('rt-graph-all-links') === '1');
+  const toggleAllLinks = useCallback(() => {
+    setShowAllLinks((v) => {
+      const next = !v;
+      try { localStorage.setItem('rt-graph-all-links', next ? '1' : '0'); } catch {}
+      return next;
+    });
+  }, []);
+
+  // Saved view slots (persisted per project) and a nonce that forces the layout
+  // effect to re-run on restore even when nothing it depends on changed.
+  const [views, setViews] = useState<(SavedView | null)[]>(() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem(`rt-graph-views-${projectId}`) || 'null');
+      if (Array.isArray(raw)) return Array.from({ length: VIEW_SLOTS }, (_, i) => raw[i] ?? null);
+    } catch { /* ignore malformed */ }
+    return Array(VIEW_SLOTS).fill(null);
+  });
+  const [layoutNonce, setLayoutNonce] = useState(0);
+  // Set just before a restore triggers a relayout; consumed by the layout effect
+  // to apply the saved focus + camera without the usual auto-fit fighting it.
+  const restoreRef = useRef<{ viewport: SavedView['viewport']; selectedReqId: string | null } | null>(null);
+  // Camera to apply after the next relayout when it isn't an auto-fit: a node id
+  // to re-frame, '*' to fit everything, or null. Set by a layout-mode switch or
+  // a collapse (single node / all) so the selection stays in view — mirroring
+  // how expanding re-frames the node it opened.
+  const refocusRef = useRef<string | null>(null);
+  // True while a layout-mode switch is being laid out, so the layout effect
+  // releases the splash on completion (ELK can outlast any fixed timer) rather
+  // than on a fixed delay.
+  const switchingRef = useRef(false);
+  // Declared here (not by the selection-fit effect) so a restore can pre-seed it
+  // and stop that effect from re-framing the camera it just positioned.
+  const prevSelectedRef = useRef<string | null>(null);
   const animatingRef = useRef(false);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  // Nodes expanded in "groups-only" mode: their leaf children stay hidden and
+  // only the children that are themselves parents (subgroups) are revealed.
+  const [groupsOnly, setGroupsOnly] = useState<Set<string>>(new Set());
   const [autoCollapsed, setAutoCollapsed] = useState(false);
   const [entranceDone, setEntranceDone] = useState(false);
   // Fresh storage key: the UML block diagram is the default view for
@@ -469,12 +549,17 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
 
   const switchLayout = (mode: 'uml' | 'force') => {
     if (mode === layoutMode) return;
-    // Same choreography as a reload: blur the old diagram, swap underneath,
-    // reveal the re-laid-out one.
+    // Blur the old diagram and keep the splash up until the (potentially slow)
+    // relayout finishes — the layout effect releases it once the new positions
+    // are applied, then the graph is revealed instantly (no node fade / camera
+    // pan) so the switch feels fast. All graph settings persist across the
+    // switch; the focused node is preserved and re-framed in the new layout.
     holdSplash();
     localStorage.setItem('rt-graph-layout2', mode);
+    refocusRef.current = selectedReqId;
+    switchingRef.current = true;
     setLayoutMode(mode);
-    releaseSplash();
+    // NB: no releaseSplash() here — completion drives it, not a fixed timer.
   };
 
   const loadData = useCallback(() => {
@@ -599,6 +684,22 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
     return counts;
   }, [reqs]);
 
+  // Which nodes are parents, and per-node counts of direct subgroup children
+  // (direct children that are themselves parents) — drives the two expand
+  // buttons and their badges.
+  const parentIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const r of reqs) { if (r.parent) s.add(r.parent); }
+    return s;
+  }, [reqs]);
+  const subgroupCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const r of reqs) {
+      if (r.parent && parentIds.has(r.id)) counts.set(r.parent, (counts.get(r.parent) || 0) + 1);
+    }
+    return counts;
+  }, [reqs, parentIds]);
+
   // Auto-collapse: on first load, fold every non-root group so the graph opens
   // as a groups overview — top-level roots stay expanded (showing their direct
   // child groups), and everything deeper is collapsed behind an expand button.
@@ -614,13 +715,17 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
     setAutoCollapsed(true);
   }, [reqs, autoCollapsed]);
 
-  const expandAll = () => setCollapsed(new Set());
+  const expandAll = () => { setCollapsed(new Set()); setGroupsOnly(new Set()); };
   const collapseAll = () => {
     const all = new Set<string>();
     for (const r of reqs) {
       if (reqs.some(c => c.parent === r.id)) all.add(r.id);
     }
+    // Re-frame the selection after the collapse (or fit everything if nothing
+    // is focused), mirroring the expand refocus.
+    refocusRef.current = selectedReqId ?? '*';
     setCollapsed(all);
+    setGroupsOnly(new Set());
   };
 
   const visibleNodeIds = useMemo(() => {
@@ -630,12 +735,19 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
       // descendants are hidden. So add it first, then stop recursing.
       visible.add(id);
       if (collapsed.has(id)) return;
-      for (const r of reqs) { if (r.parent === id) collect(r.id); }
+      // In groups-only mode, reveal only the children that are parents; leaf
+      // children stay hidden until the node is fully expanded.
+      const gOnly = groupsOnly.has(id);
+      for (const r of reqs) {
+        if (r.parent !== id) continue;
+        if (gOnly && !parentIds.has(r.id)) continue;
+        collect(r.id);
+      }
     }
     for (const r of reqs) { if (!r.parent) collect(r.id); }
     if (visible.size === 0) reqs.forEach(r => visible.add(r.id));
     return visible;
-  }, [reqs, collapsed]);
+  }, [reqs, collapsed, groupsOnly, parentIds]);
 
   // Track which nodes were visible *before* the current collapsed state, so we
   // can detect newly-appearing children and give them an entrance animation.
@@ -689,27 +801,52 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
           parent: req.parent, cascadeFrom: req.cascade_from,
           hasChildren: reqs.some(r => r.parent === req.id),
           collapsed: collapsed.has(req.id),
+          groupsOnly: groupsOnly.has(req.id),
           childCount: childCounts.get(req.id) || 0,
+          subgroupCount: subgroupCounts.get(req.id) || 0,
           onSelect: () => selectReq(req.id),
+          // Simple one-level toggle (all direct children) — used by the force
+          // layout node and double-click. Collapsing re-frames the selection.
           onExpandCollapse: () => {
+            if (!collapsed.has(req.id)) { refocusRef.current = req.id; prevSelectedRef.current = req.id; }
+            setGroupsOnly(prev => { const n = new Set(prev); n.delete(req.id); return n; });
             setCollapsed(prev => {
               const next = new Set(prev);
               if (next.has(req.id)) next.delete(req.id); else next.add(req.id);
               return next;
             });
           },
-          onToggleDescendants: () => {
+          // Button 1 (single chevron): reveal only the direct children that are
+          // themselves parents (subgroups); leaf children stay hidden. Toggles
+          // between groups-only and collapsed.
+          onExpandGroups: () => {
+            const wasCollapsed = collapsed.has(req.id);
+            if (!wasCollapsed) { refocusRef.current = req.id; prevSelectedRef.current = req.id; }
             setCollapsed(prev => {
               const next = new Set(prev);
-              if (next.has(req.id)) {
-                // Currently collapsed → expand all descendants
+              if (next.has(req.id)) next.delete(req.id); else next.add(req.id);
+              return next;
+            });
+            setGroupsOnly(prev => {
+              const next = new Set(prev);
+              if (wasCollapsed) next.add(req.id); else next.delete(req.id);
+              return next;
+            });
+          },
+          // Button 2 (double chevron): reveal ALL descendants (deep). Expands
+          // when collapsed or groups-only; otherwise collapses the whole subtree.
+          onToggleDescendants: () => {
+            const expand = collapsed.has(req.id) || groupsOnly.has(req.id);
+            if (!expand) { refocusRef.current = req.id; prevSelectedRef.current = req.id; }
+            setCollapsed(prev => {
+              const next = new Set(prev);
+              if (expand) {
                 const removeDescendants = (nodeId: string) => {
                   next.delete(nodeId);
                   for (const r of reqs) { if (r.parent === nodeId) removeDescendants(r.id); }
                 };
                 removeDescendants(req.id);
               } else {
-                // Currently expanded → collapse this node and all descendants
                 next.add(req.id);
                 const collapseDescendants = (nodeId: string) => {
                   for (const r of reqs) {
@@ -720,14 +857,25 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
               }
               return next;
             });
+            // Either way, clear groups-only across the subtree so the reveal is
+            // full (or the collapse is clean).
+            setGroupsOnly(prev => {
+              const next = new Set(prev);
+              const clear = (nodeId: string) => {
+                next.delete(nodeId);
+                for (const r of reqs) { if (r.parent === nodeId) clear(r.id); }
+              };
+              clear(req.id);
+              return next;
+            });
           },
           params, constraints,
           verdict: ev && ev.verdict !== 'none' ? ev.verdict : null,
           vcCount: (req.verification_cases ?? []).length,
-          desc: stripHtml(req.description).slice(0, 160),
+          desc: stripHtml(req.description).slice(0, 320),
           hasMissingInfo: !req.description || !req.name || !req.rationale || (req.verification_cases?.length ?? 0) === 0,
         },
-        style: entranceDone ? {} : { opacity: 0, transform: 'scale(0)' },
+        style: entranceDone ? {} : { opacity: 0 },
       };
     });
 
@@ -793,6 +941,78 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
   // rapid filter change) is discarded instead of clobbering the current one.
   const layoutReqIdRef = useRef(0);
 
+  // ── Saved view slots ──────────────────────────────────────────────────────
+  const persistViews = useCallback((next: (SavedView | null)[]) => {
+    try { localStorage.setItem(`rt-graph-views-${projectId}`, JSON.stringify(next)); } catch { /* quota */ }
+  }, [projectId]);
+
+  const saveView = useCallback((slot: number) => {
+    const snapshot: SavedView = {
+      collapsed: [...collapsed],
+      groupsOnly: [...groupsOnly],
+      selectedReqId,
+      layoutMode,
+      graphSettings,
+      hopDepth,
+      showAllLinks,
+      filters: {
+        search, status: filterStatus, priority: filterPriority, baseline: filterBaseline,
+        type: filterType, verStatus: filterVerStatus, verMethod: filterVerMethod,
+        allocated: filterAllocated, component: filterComponent, kind: filterKind,
+      },
+      viewport: rfRef.current?.getViewport() ?? null,
+    };
+    setViews((prev) => {
+      const next = [...prev];
+      next[slot] = snapshot;
+      persistViews(next);
+      return next;
+    });
+  }, [collapsed, groupsOnly, selectedReqId, layoutMode, graphSettings, hopDepth, showAllLinks, search,
+      filterStatus, filterPriority, filterBaseline, filterType, filterVerStatus, filterVerMethod,
+      filterAllocated, filterComponent, filterKind, persistViews]);
+
+  const clearView = useCallback((slot: number) => {
+    setViews((prev) => {
+      const next = [...prev];
+      next[slot] = null;
+      persistViews(next);
+      return next;
+    });
+  }, [persistViews]);
+
+  const restoreView = useCallback((slot: number) => {
+    const v = views[slot];
+    if (!v) return;
+    // The layout effect will apply focus + camera once the relayout settles.
+    restoreRef.current = { viewport: v.viewport, selectedReqId: v.selectedReqId };
+    setCollapsed(new Set(v.collapsed));
+    setGroupsOnly(new Set(v.groupsOnly ?? []));
+    if (v.layoutMode !== layoutMode) {
+      try { localStorage.setItem('rt-graph-layout2', v.layoutMode); } catch { /* ignore */ }
+      setLayoutMode(v.layoutMode);
+    }
+    setGraphSettings(v.graphSettings || {});
+    try { localStorage.setItem(`rt-graph-settings-${projectId}`, JSON.stringify(v.graphSettings || {})); } catch { /* ignore */ }
+    setHopDepthPersist(v.hopDepth ?? 1);
+    setShowAllLinks(v.showAllLinks ?? false);
+    try { localStorage.setItem('rt-graph-all-links', v.showAllLinks ? '1' : '0'); } catch { /* ignore */ }
+    const f = v.filters || ({} as SavedView['filters']);
+    setSearch(f.search ?? '');
+    setFilterStatus(f.status ?? '');
+    setFilterPriority(f.priority ?? '');
+    setFilterBaseline(f.baseline ?? '');
+    setFilterType(f.type ?? '');
+    setFilterVerStatus(f.verStatus ?? '');
+    setFilterVerMethod(f.verMethod ?? '');
+    setFilterAllocated(f.allocated ?? '');
+    setFilterComponent(f.component ?? '');
+    setFilterKind(f.kind ?? '');
+    // Guarantee the layout effect runs (and thus consumes restoreRef) even if
+    // the restored config is identical to the current one.
+    setLayoutNonce((n) => n + 1);
+  }, [views, layoutMode, projectId, setHopDepthPersist]);
+
   useEffect(() => {
     const layoutSig = `${layoutMode}|${gs.nodesep}|${gs.ranksep}|${gs.rankdir}|${gs.margin}|${gs.maxZoom}`;
     const firstRun = !hasLaidOutRef.current;
@@ -800,13 +1020,64 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
     layoutSigRef.current = layoutSig;
     hasLaidOutRef.current = true;
     const shouldRefit = firstRun || layoutChanged;
+    // A restore in flight: apply the saved focus + camera instead of auto-fitting.
+    const restore = restoreRef.current;
+    // A layout-mode switch in flight: keep the focused node and re-frame it,
+    // and reveal instantly (no camera animation) once positions are final.
+    const refocus = refocusRef.current;
+    const switching = switchingRef.current;
     // Re-fit only on a structural relayout — a live data refresh keeps the
-    // user's current selection and viewport intact.
+    // user's current selection and viewport intact. During a restore the saved
+    // camera wins; during a layout switch the focus is preserved — so in both
+    // cases skip clearing the selection.
     const refit = () => {
-      if (!shouldRefit) return;
-      selectReq(null);
+      if (!shouldRefit || restore) return;
+      if (!refocus) selectReq(null);
       return { duration: 300 };
     }; // fitView called inline below with correct duration
+
+    // Re-frame the camera after a structural change that keeps the selection:
+    // a layout switch (instant, no animation) or a collapse (animated, like the
+    // expand refocus). `refocus` is a node id to frame, '*' to fit everything,
+    // or null for no refocus. Returns true when it handled the camera.
+    const applyRefocus = () => {
+      const target = refocus;
+      refocusRef.current = null;
+      if (!target) return false;
+      const duration = switching ? 0 : 500;
+      if (target === '*') {
+        rfRef.current?.fitView({ padding: 0.12, maxZoom: gs.maxZoom, duration });
+        return true;
+      }
+      // A collapse may have hidden the target — walk up to its nearest visible
+      // ancestor (the group it now lives inside) so there's always something to
+      // frame.
+      let id: string | null = target;
+      while (id && !visibleNodeIds.has(id)) id = reqs.find((r) => r.id === id)?.parent ?? null;
+      if (!id) { rfRef.current?.fitView({ padding: 0.12, maxZoom: gs.maxZoom, duration }); return true; }
+      const related = new Set<string>([id]);
+      for (const e of initialEdges) {
+        if (e.source === id) related.add(e.target);
+        if (e.target === id) related.add(e.source);
+      }
+      rfRef.current?.fitView({
+        nodes: [...related].map((nid) => ({ id: nid })),
+        padding: 0.3, maxZoom: gs.maxZoom, duration,
+      });
+      return true;
+    };
+
+    // Apply a pending restore's focus + camera once nodes are at final positions.
+    const applyRestore = () => {
+      if (!restore) return;
+      restoreRef.current = null;
+      // Seed prevSelectedRef so the selection-fit effect won't re-frame.
+      prevSelectedRef.current = restore.selectedReqId;
+      selectReq(restore.selectedReqId);
+      if (restore.viewport) {
+        rfRef.current?.setViewport(restore.viewport, { duration: 450 });
+      }
+    };
 
     // UML mode: ELK lays out (over composition + relations) AND routes the
     // edges orthogonally. It's async, so guard against stale results.
@@ -827,7 +1098,8 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
       elkLayout(initialNodes, initialEdges, gs).then(({ positions, edgePoints, heights }) => {
         if (reqId !== layoutReqIdRef.current) return; // superseded — discard
 
-        const expanding = newChildrenIds.size > 0;
+        // A restore is a full relayout, never the expand choreography.
+        const expanding = newChildrenIds.size > 0 && !restore;
         const newIds = new Set(newChildrenIds);
         const r = refit();
 
@@ -860,12 +1132,14 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
           // Phase 1 — retract edges into sources (CSS animation).
           setEdges((eds) => eds.map((e) => ({ ...e, style: retractAnimStyle(edgeLenFn(e)) as any })));
 
-          // Phase 2 — after retract, slide nodes to new ELK positions.
+          // Phase 2 — after retract, slide nodes to new ELK positions. The
+          // transform transition is set inline (per-node) only here, since the
+          // expand choreography is the one place a position *slide* is wanted.
           schedule(() => {
             setNodes(initialNodes.map((n) => {
               const p = positions.get(n.id);
               const isNew = newIds.has(n.id);
-              return p ? { ...n, position: { x: p.x, y: p.y }, data: { ...n.data, elkHeight: heights.get(n.id) ?? BASE_NODE_H }, style: { ...(n.style as any || {}), opacity: isNew ? 0 : undefined } } : n;
+              return p ? { ...n, position: { x: p.x, y: p.y }, data: { ...n.data, elkHeight: heights.get(n.id) ?? BASE_NODE_H }, style: { ...(n.style as any || {}), opacity: isNew ? 0 : undefined, transition: 'transform 0.35s ease-out' } } : n;
             }));
             // Phase 3 — after nodes settle, grow new edges + fade children.
             schedule(() => {
@@ -920,6 +1194,10 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
             }, 400);
           }, 350);
         } else {
+          // Non-expand relayout (first load, refresh, mode/settings change):
+          // drop the nodes straight onto their final ELK positions — no
+          // transform transition exists globally, so there's no slide — then
+          // fade them in via opacity only.
           setNodes(initialNodes.map((n) => {
             const p = positions.get(n.id);
             return p ? {
@@ -928,13 +1206,28 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
               data: { ...n.data, elkHeight: heights.get(n.id) ?? BASE_NODE_H },
             } : n;
           }));
+          if (!entranceDone) {
+            schedule(() => {
+              setNodes((nds) => nds.map((n, i) => ({
+                ...n,
+                style: { ...(n.style as any), opacity: 1, transition: `opacity 0.3s ease-out ${Math.min(i * 4, 250)}ms` },
+              })));
+              setEntranceDone(true);
+            }, 40);
+          }
+          if (restore) schedule(applyRestore, 60);
+          // Positions are final — reveal by lifting the layout-switch splash.
+          if (switching) { switchingRef.current = false; releaseSplash(120); }
         }
-        if (r) {
-          schedule(() => rfRef.current?.fitView({
-            padding: 0.12,
-            maxZoom: gs.maxZoom,
-            duration: expanding ? 700 : 300,
-          }), expanding ? 200 : 250);
+        if (r || refocus) {
+          schedule(() => {
+            if (applyRefocus()) return;
+            rfRef.current?.fitView({
+              padding: 0.12,
+              maxZoom: gs.maxZoom,
+              duration: switching ? 0 : (expanding ? 700 : 300),
+            });
+          }, switching ? 40 : (expanding ? 200 : 250));
         }
         if (!expanding) {
           setEdges(initialEdges.map((e) => {
@@ -964,29 +1257,32 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
     }
 
     // Force mode: synchronous d3-force + floating centre-to-centre edges.
+    // Nodes land at their final positions immediately (no transform transition),
+    // then fade in opacity only.
     setNodes(forceLayout(initialNodes, initialEdges));
     setEdges(initialEdges);
     const r = refit();
-    if (r) {
-      const t = setTimeout(() => rfRef.current?.fitView({
-        padding: 0.12, maxZoom: gs.maxZoom, duration: r.duration,
-      }), 250);
-      return () => clearTimeout(t);
-    };
-  }, [initialNodes, initialEdges, layoutMode, gs.nodesep, gs.ranksep, gs.rankdir, gs.margin, gs.maxZoom, setNodes, setEdges]);
-
-  useEffect(() => {
-    if (!entranceDone && nodes.length > 0) {
-      const timer = setTimeout(() => {
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    if (!entranceDone) {
+      timers.push(setTimeout(() => {
         setNodes(nds => nds.map((n, i) => ({
           ...n,
-          style: { ...(n.style || {}), opacity: 1, transform: 'scale(1)', transition: `all 0.3s ease-out ${Math.min(i * 6, 400)}ms` },
+          style: { ...(n.style || {}), opacity: 1, transition: `opacity 0.3s ease-out ${Math.min(i * 4, 250)}ms` },
         })));
         setEntranceDone(true);
-      }, 80);
-      return () => clearTimeout(timer);
+      }, 40));
     }
-  }, [entranceDone, nodes.length]);
+    if (restore) timers.push(setTimeout(applyRestore, 60));
+    // Force layout is synchronous — positions are final now; lift the splash.
+    if (switching) { switchingRef.current = false; releaseSplash(120); }
+    if (r || refocus) {
+      timers.push(setTimeout(() => {
+        if (applyRefocus()) return;
+        rfRef.current?.fitView({ padding: 0.12, maxZoom: gs.maxZoom, duration: switching ? 0 : (r ? r.duration : 500) });
+      }, switching ? 40 : 250));
+    }
+    return () => timers.forEach(clearTimeout);
+  }, [initialNodes, initialEdges, layoutMode, entranceDone, layoutNonce, gs.nodesep, gs.ranksep, gs.rankdir, gs.margin, gs.maxZoom, setNodes, setEdges]);
 
   // Run "Reset view" once on startup. The layout effect's first-run fit is
   // invalidated by the initial auto-collapse pass (its timer is cleared when
@@ -1000,7 +1296,6 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
   }, [entranceDone, nodes.length, resetView]);
 
   // When selection changes externally (nav click, etc.), smoothly fit view.
-  const prevSelectedRef = useRef<string | null>(null);
   useEffect(() => {
     if (!entranceDone || !selectedReqId || selectedReqId === prevSelectedRef.current) return;
     prevSelectedRef.current = selectedReqId;
@@ -1033,24 +1328,45 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
     return () => cancelAnimationFrame(raf);
   }, [selectedReqId, entranceDone]);
 
-  const connectedIds = useMemo(() => {
+  // BFS out `hopDepth` rings from the focused node, recording each reached
+  // node's hop distance so edges can be classed as radial (distances differ)
+  // vs same-level cross-links (distances equal).
+  const focus = useMemo(() => {
     const highlightId = selectedReqId || hoveredNodeId;
-    if (!highlightId) return new Set<string>();
-    const connected = new Set<string>([highlightId]);
-    for (const edge of initialEdges) {
-      if (edge.source === highlightId) connected.add(edge.target);
-      if (edge.target === highlightId) connected.add(edge.source);
+    if (!highlightId) return { ids: new Set<string>(), dist: new Map<string, number>() };
+    const adj = new Map<string, string[]>();
+    const link = (a: string, b: string) => {
+      const list = adj.get(a);
+      if (list) list.push(b); else adj.set(a, [b]);
+    };
+    for (const edge of initialEdges) { link(edge.source, edge.target); link(edge.target, edge.source); }
+    const dist = new Map<string, number>([[highlightId, 0]]);
+    let frontier = [highlightId];
+    for (let d = 0; d < hopDepth && frontier.length; d++) {
+      const next: string[] = [];
+      for (const id of frontier) {
+        for (const nb of adj.get(id) || []) {
+          if (!dist.has(nb)) { dist.set(nb, d + 1); next.push(nb); }
+        }
+      }
+      frontier = next;
     }
-    return connected;
-  }, [selectedReqId, hoveredNodeId, initialEdges]);
+    return { ids: new Set(dist.keys()), dist };
+  }, [selectedReqId, hoveredNodeId, initialEdges, hopDepth]);
+  const connectedIds = focus.ids;
 
   const hasSelection = !!(selectedReqId || hoveredNodeId);
 
   const dimmedEdges = useMemo(() => {
     if (!hasSelection) return edges;
     return edges.map((e) => {
-      const connected = e.source === selectedReqId || e.target === selectedReqId ||
-        e.source === hoveredNodeId || e.target === hoveredNodeId;
+      // Both ends must be in the highlighted neighbourhood. By default only
+      // radial edges (endpoints at different hop distances) light — the paths
+      // fanning out from the focus. With "show all links" on, same-distance
+      // cross-links between neighbours light too.
+      const bothIn = connectedIds.has(e.source) && connectedIds.has(e.target);
+      const connected = bothIn && (showAllLinks ||
+        focus.dist.get(e.source) !== focus.dist.get(e.target));
       const stroke = (e.style as any)?.stroke as string | undefined;
       const dashed = ((e.style as any)?.strokeDasharray ?? 'none') !== 'none';
       return {
@@ -1066,7 +1382,7 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
         },
       };
     });
-  }, [edges, hasSelection, selectedReqId, hoveredNodeId]);
+  }, [edges, hasSelection, connectedIds, focus, showAllLinks]);
 
   const onNodeClick = useCallback(
     (_: React.MouseEvent, node: Node) => {
@@ -1078,9 +1394,13 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
 
   const onNodeDoubleClick = useCallback(
     (_: React.MouseEvent, node: Node) => {
-      if ((node.data as any).hasChildren) {
-        setCollapsed(prev => { const next = new Set(prev); if (next.has(node.id)) next.delete(node.id); else next.add(node.id); return next; });
-      }
+      if (!(node.data as any).hasChildren) return;
+      // Collapsing via double-click re-frames the node too (expanding is handled
+      // by the expand choreography). Double-click doesn't change the selection,
+      // so no prevSelectedRef seeding is needed.
+      if ((node.data as any).collapsed === false) refocusRef.current = node.id;
+      setGroupsOnly(prev => { const n = new Set(prev); n.delete(node.id); return n; });
+      setCollapsed(prev => { const next = new Set(prev); if (next.has(node.id)) next.delete(node.id); else next.add(node.id); return next; });
     },
     [],
   );
@@ -1301,6 +1621,69 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
               <ChevronsDownUp size={13} />
             </button>
           </div>
+          {/* Highlight radius: how many relationship hops out from the selected
+              node stay lit (1 = direct neighbours only, up to 3). */}
+          <div
+            className="flex items-center rounded-lg bg-graph-panel border border-graph-border shadow-sm overflow-hidden"
+            title="Highlight radius — hops from the selected node to keep lit"
+          >
+            <span className="pl-2 pr-1 text-graph-muted" aria-hidden><Waypoints size={13} /></span>
+            {[1, 2, 3].map((n) => (
+              <button
+                key={n}
+                onClick={() => setHopDepthPersist(n)}
+                className={`px-2 py-1.5 text-[11px] font-mono border-l border-graph-border transition-colors ${
+                  hopDepth === n ? 'bg-primary text-primary-foreground' : 'text-graph-text hover:bg-graph-control-hover'
+                }`}
+                title={`Highlight ${n} hop${n > 1 ? 's' : ''} out`}
+                aria-pressed={hopDepth === n}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+          {/* Toggle: also light cross-links between same-distance highlighted
+              neighbours, not just the radial paths from the focused node. */}
+          <button
+            onClick={toggleAllLinks}
+            className={`p-1.5 rounded-lg border shadow-sm transition-all ${
+              showAllLinks
+                ? 'bg-primary text-primary-foreground border-graph-border'
+                : 'bg-graph-panel border-graph-border text-graph-text hover:bg-graph-control-hover'
+            }`}
+            title={showAllLinks
+              ? 'Showing all links between highlighted nodes — click for radial paths only'
+              : 'Show all links between highlighted nodes (incl. cross-links)'}
+            aria-pressed={showAllLinks}
+          >
+            <Share2 size={13} />
+          </button>
+          {/* Saved view slots: click a filled slot to jump to it, an empty slot
+              to save the current view. Shift-click overwrites; right-click clears. */}
+          <div
+            className="flex items-center rounded-lg bg-graph-panel border border-graph-border shadow-sm overflow-hidden"
+            title="Saved views — click to jump, shift-click to save, right-click to clear"
+          >
+            <span className="pl-2 pr-1 text-graph-muted" aria-hidden><Save size={13} /></span>
+            {Array.from({ length: VIEW_SLOTS }, (_, i) => {
+              const filled = !!views[i];
+              return (
+                <button
+                  key={i}
+                  onClick={(e) => { if (e.shiftKey || !filled) saveView(i); else restoreView(i); }}
+                  onContextMenu={(e) => { e.preventDefault(); if (filled) clearView(i); }}
+                  className={`px-2 py-1.5 text-[11px] font-mono border-l border-graph-border transition-colors ${
+                    filled ? 'bg-primary/15 text-primary hover:bg-primary/25' : 'text-graph-muted hover:bg-graph-control-hover'
+                  }`}
+                  title={filled
+                    ? `Jump to view ${i + 1} · shift-click to overwrite · right-click to clear`
+                    : `Save current view to slot ${i + 1}`}
+                >
+                  {i + 1}
+                </button>
+              );
+            })}
+          </div>
           <button onClick={loadData} className="p-1.5 rounded-lg bg-graph-panel border border-graph-border text-graph-text hover:text-foreground hover:bg-graph-control-hover transition-colors shadow-sm" title="Refresh">
             <RotateCw size={13} />
           </button>
@@ -1341,7 +1724,10 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
       {splash && <LoadingSplash label="Loading graph…" leaving={splash === 'leaving'} />}
 
       <style>{`
-        .react-flow__node { font-family: var(--font-sans); transition: transform 0.35s ease-out; }
+        /* No global transform transition: nodes appear at their final layout
+           position and fade in (opacity). A position *slide* is opted into
+           inline, per-node, only during the expand/collapse choreography. */
+        .react-flow__node { font-family: var(--font-sans); }
         .react-flow__edge-path { transition: stroke-opacity 0.2s, opacity 0.25s ease, filter 0.25s ease; }
         @keyframes retractEdge { to { stroke-dashoffset: var(--edge-len); } }
         @keyframes growEdge { from { stroke-dashoffset: var(--edge-len); } to { stroke-dashoffset: 0; } }

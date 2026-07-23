@@ -1,6 +1,6 @@
 import { memo, useState } from 'react';
 import { Handle, Position, useStore, type NodeProps } from '@xyflow/react';
-import { Copy, Sigma } from 'lucide-react';
+import { Copy, Sigma, ChevronRight, ChevronDown } from 'lucide-react';
 import { useGraphSelection } from './GraphPane';
 import { glow, shiftLightness } from './graphColors';
 import { zoomLevel, labelScale, type ZoomLevel } from './semanticZoom';
@@ -32,6 +32,10 @@ interface CircularNodeData {
   params?: { name: string; display: string }[];
   verdict?: string | null;
   vcCount?: number;
+  hasChildren?: boolean;
+  collapsed?: boolean;
+  onExpandCollapse?: () => void;
+  onSelect?: () => void;
 }
 
 const verdictColors: Record<string, string> = {
@@ -127,6 +131,32 @@ function CircularNode({ data, selected }: NodeProps) {
           />
         )}
       </svg>
+
+      {/* Expand/collapse toggle for group nodes — the force layout's counterpart
+          to the block header chevron. A collapsed hub shows its hidden count. */}
+      {nodeData.hasChildren && (
+        <button
+          className="absolute z-30 flex items-center gap-0.5 rounded-full border bg-card shadow-sm hover:bg-accent hover:border-foreground/40 transition-colors"
+          style={{ right: -7, bottom: -7, padding: '1px 3px', lineHeight: 1, borderColor: 'hsl(var(--border))' }}
+          onClick={(e) => {
+            e.stopPropagation();
+            // Dismiss the hover tooltip: the relayout moves the node out from
+            // under the cursor, so mouseleave often never fires.
+            setHover(false);
+            nodeData.onExpandCollapse?.();
+            nodeData.onSelect?.();
+          }}
+          onDoubleClick={(e) => e.stopPropagation()}
+          title={nodeData.collapsed ? `Expand (${childCount} hidden)` : 'Collapse'}
+        >
+          {nodeData.collapsed
+            ? <ChevronRight size={10} className="text-muted-foreground" />
+            : <ChevronDown size={10} className="text-muted-foreground" />}
+          {nodeData.collapsed && childCount > 0 && (
+            <span className="text-[8px] font-mono text-muted-foreground pr-0.5">{childCount}</span>
+          )}
+        </button>
+      )}
 
       {/* Side label — content follows the semantic zoom level. L1 keeps only
           hub names (scaled like map labels) so the far-out view reads as
