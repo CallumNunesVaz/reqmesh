@@ -164,6 +164,7 @@ class Requirement(BaseModel):
 
 
 class RequirementCreate(BaseModel):
+    model_config = {"extra": "ignore"}
     id: str
     type: RequirementType = RequirementType.FUNCTIONAL
     name: str = ""

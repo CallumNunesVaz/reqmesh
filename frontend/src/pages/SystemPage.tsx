@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   ShieldCheck, RefreshCw, Download, CheckCircle2, AlertTriangle, Loader,
   ArrowUpCircle, GitBranch, Server, ExternalLink, Terminal, X, Upload,
-  Monitor, Globe, Network, Clock, Power, FileText,
+  Monitor, Globe, Network, Clock, Power, FileText, Play, DownloadCloud, Copy,
 } from 'lucide-react';
 import { api, type SystemInfo, type UpdateCheck, type UpdateStatus, type BuildInfo } from '../api/client';
 import { useAuthStore } from '../store/auth';
@@ -26,6 +26,11 @@ export default function SystemPage() {
   const [uploading, setUploading] = useState(false);
   const [restarting, setRestarting] = useState(false);
   const [confirmRestart, setConfirmRestart] = useState(false);
+  const [deps, setDeps] = useState<Array<{ id: string; label: string; category: string; status: string; detail: string; has_e2e: boolean; install_guide: string }>>([]);
+  const [testingDep, setTestingDep] = useState<string | null>(null);
+  const [installDep, setInstallDep] = useState<{ id: string; label: string; guide: string } | null>(null);
+  const [depError, setDepError] = useState('');
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const restartPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -52,6 +57,7 @@ export default function SystemPage() {
         setError(e instanceof Error ? e.message : 'Failed to load system info');
       }
       runCheck(false);
+      api.listDependencies().then(setDeps).catch(() => {});
     })();
   }, [isAdmin, runCheck]);
 
@@ -98,6 +104,21 @@ export default function SystemPage() {
       setError(e instanceof Error ? e.message : 'Failed to start update');
     } finally {
       setStarting(false);
+    }
+  };
+
+  const handleTestDep = async (depId: string) => {
+    setTestingDep(depId);
+    setDepError('');
+    try {
+      const result = await api.testDependency(depId);
+      setDeps(prev => prev.map(d => d.id === depId
+        ? { ...d, status: result.ok ? 'ok' : 'error', detail: result.detail || result.error || '' }
+        : d));
+    } catch (e) {
+      setDepError(e instanceof Error ? e.message : 'Test failed');
+    } finally {
+      setTestingDep(null);
     }
   };
 
@@ -242,6 +263,74 @@ export default function SystemPage() {
               : 'HTML fallback — no LaTeX engine'}
           </dd>
         </dl>
+      </section>
+
+      {/* ── System Dependencies ──────────────────────────────────── */}
+      <section className="card p-5">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-medium flex items-center gap-2"><Server size={16} /> System Dependencies</h2>
+          <button onClick={() => api.listDependencies().then(setDeps).catch(() => {})} className="btn-ghost p-1.5 rounded text-muted-foreground hover:text-foreground" title="Refresh">
+            <RefreshCw size={14} />
+          </button>
+        </div>
+        {depError && (
+          <div className="mb-3 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs">{depError}</div>
+        )}
+        <div className="space-y-2">
+          {/* Group by category */}
+          {(() => {
+            const cats = [...new Set(deps.map(d => d.category))];
+            return cats.map(cat => (
+              <div key={cat}>
+                <h3 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 px-1">{cat}</h3>
+                {deps.filter(d => d.category === cat).map(dep => (
+                  <div key={dep.id} className="flex items-center gap-3 py-1.5 px-2 rounded text-sm hover:bg-accent/40 group">
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${
+                      dep.status === 'ok' ? 'bg-cs-green' :
+                      dep.status === 'missing' ? 'bg-cs-red' :
+                      dep.status === 'error' ? 'bg-cs-red' :
+                      'bg-cs-grey'
+                    }`} />
+                    <span className="flex-1 font-medium text-foreground text-xs">{dep.label}</span>
+                    <span className={`text-[10px] truncate max-w-[180px] ${
+                      dep.status === 'ok' ? 'text-muted-foreground' :
+                      dep.status === 'missing' || dep.status === 'error' ? 'text-destructive' :
+                      'text-muted-foreground'
+                    }`}>
+                      {dep.detail || 'not checked'}
+                    </span>
+                    {dep.has_e2e && (
+                      <button
+                        onClick={() => handleTestDep(dep.id)}
+                        disabled={testingDep === dep.id}
+                        className="shrink-0 btn-ghost p-1 rounded text-xs text-muted-foreground hover:text-foreground disabled:opacity-50 opacity-0 group-hover:opacity-100 transition-opacity"
+                        title={`Run end-to-end test for ${dep.label}`}
+                      >
+                        {testingDep === dep.id ? (
+                          <Loader size={12} className="animate-spin" />
+                        ) : (
+                          <Play size={12} />
+                        )}
+                      </button>
+                    )}
+                    {dep.install_guide && dep.status !== 'ok' && (
+                      <button
+                        onClick={() => setInstallDep({ id: dep.id, label: dep.label, guide: dep.install_guide })}
+                        className="shrink-0 btn-ghost p-1 rounded text-xs text-muted-foreground hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity"
+                        title={`Install instructions for ${dep.label}`}
+                      >
+                        <DownloadCloud size={12} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ));
+          })()}
+          {deps.length === 0 && (
+            <p className="text-xs text-muted-foreground text-center py-4">Loading dependencies…</p>
+          )}
+        </div>
       </section>
 
       {/* ── Updates card ─────────────────────────────────────────── */}
@@ -433,6 +522,44 @@ export default function SystemPage() {
               <button className="btn-primary" onClick={restart} disabled={restarting}>
                 {restarting ? <Loader size={15} className="animate-spin" /> : <Power size={15} />} Restart now
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Install dependency modal ──────────────────────────────── */}
+      {installDep && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-[2px] p-4" onClick={() => setInstallDep(null)}>
+          <div className="card p-5 max-w-lg w-full shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                  <DownloadCloud size={16} className="text-primary" />
+                  Install {installDep.label}
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">Run these commands on the server to install this dependency.</p>
+              </div>
+              <button onClick={() => setInstallDep(null)} className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-accent">
+                <X size={15} />
+              </button>
+            </div>
+            <div className="bg-muted rounded-lg p-3 relative">
+              <pre className="text-xs font-mono text-foreground whitespace-pre-wrap">{installDep.guide}</pre>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(installDep.guide).then(() => {
+                    setCopiedId(installDep.id);
+                    setTimeout(() => setCopiedId(null), 2000);
+                  }).catch(() => {});
+                }}
+                className="absolute top-2 right-2 p-1.5 rounded bg-card border text-muted-foreground hover:text-foreground transition-colors"
+                title="Copy to clipboard"
+              >
+                {copiedId === installDep.id ? <CheckCircle2 size={14} className="text-cs-green" /> : <Copy size={14} />}
+              </button>
+            </div>
+            <div className="flex justify-end mt-4">
+              <button onClick={() => setInstallDep(null)} className="btn-secondary text-xs">Close</button>
             </div>
           </div>
         </div>

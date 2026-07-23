@@ -18,7 +18,7 @@ from app.models.requirement import RequirementUpdate
 from app.models.risk import RiskCreate, RiskUpdate, CommentCreate, DecisionRecordCreate, DecisionRecordUpdate
 from app.models.verification import VerificationCaseCreate, VerificationCaseUpdate
 from app.models.specification import SpecificationCreate, SpecificationUpdate
-from app.services.publisher import Publisher
+from app.services.publisher import Publisher, compile_latex_to_pdf
 from app.services.integrity import IntegrityChecker, clear_suspect_links
 from app.services.git_hooks import install_hook, uninstall_hook
 from app.services.history import record_change
@@ -737,6 +737,28 @@ async def git_log(project_id: str, limit: int = Query(50, ge=1, le=500)):
     }
 
 
+@router.post("/projects/{project_id}/git/restore")
+async def git_restore(project_id: str, data: dict, user: dict = Depends(require_edit)):
+    from app.services import git_service
+
+    commit_hash = data.get("hash", "").strip()
+    if not commit_hash:
+        raise HTTPException(status_code=400, detail="hash is required")
+
+    store = get_store(project_id)
+    if not git_service.is_repo(store.root):
+        raise HTTPException(status_code=400, detail="project is not a git repository")
+
+    if not git_service.restore_commit(store.root, commit_hash, user.get("username", "")):
+        raise HTTPException(status_code=500, detail="restore failed — check server logs")
+
+    from app.core.config import settings
+    if settings.git_push_on_commit:
+        git_service.push_to_remote(store.root)
+
+    return {"status": "ok", "message": f"Restored to {commit_hash[:8]}"}
+
+
 # ── Compliance ────────────────────────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/compliance")
@@ -851,7 +873,7 @@ async def publish_project(project_id: str, data: PublishRequest, user: dict = De
 
 
 @router.get("/projects/{project_id}/publish/download")
-async def download_report(project_id: str, format: str = "html", subsystems: str = ""):
+async def download_report(project_id: str, format: str = "html", subsystems: str = "", sections: str = ""):
     import os
     import tempfile
 
@@ -868,6 +890,8 @@ async def download_report(project_id: str, format: str = "html", subsystems: str
 
     fd, path = tempfile.mkstemp(suffix=f".{ext}")
     os.close(fd)
+    sec_list = [s.strip() for s in sections.split(",") if s.strip()] if sections else None
+    fallback = None  # message explaining why a preferred pipeline was bypassed
     try:
         if format == "reqif":
             from app.services.reqif_export import export_reqif
@@ -876,13 +900,17 @@ async def download_report(project_id: str, format: str = "html", subsystems: str
             from app.services.sysml_export import export_sysml_v2
             Path(path).write_text(export_sysml_v2(store))
         elif format == "html":
-            pub.to_html_file(path)
+            Path(path).write_text(pub.build_html(sec_list))
         elif format == "pdf":
-            pub.to_pdf_file(path)
+            latex = pub.build_latex(sec_list)
+            if not compile_latex_to_pdf(latex, path):
+                from weasyprint import HTML as WHTML
+                WHTML(string=pub.build_html(sec_list)).write_pdf(path)
+                fallback = "LaTeX→PDF (tectonic/pdflatex) not available — rendered via HTML→PDF weasyprint (tables, badges, and table-of-contents omitted)"
         elif format == "md":
             pub.to_markdown_file(path)
         elif format == "latex":
-            pub.to_latex_file(path)
+            Path(path).write_text(pub.build_latex(sec_list))
         elif format in ("csv", "tsv"):
             from app.services.table_io import export_table
             Path(path).write_text(export_table(store, format))
@@ -894,13 +922,15 @@ async def download_report(project_id: str, format: str = "html", subsystems: str
         raise
 
     project_name = store.read_meta().get("name", project_id)
-    return FileResponse(
+    response = FileResponse(
         path,
         filename=f"{project_name.replace(' ', '_')}_report.{ext}",
         media_type="application/octet-stream",
-        # Remove the temp file once the response has been sent.
         background=BackgroundTask(os.unlink, path),
     )
+    if fallback:
+        response.headers["X-Render-Fallback"] = fallback.replace(",", ";")
+    return response
 
 
 # ══ Code & Test Traceability ═══════════════════════════════════════════════════

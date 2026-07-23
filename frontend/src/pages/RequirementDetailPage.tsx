@@ -11,8 +11,10 @@ import { AutoLinkHtml } from '../components/autoLink';
 import { useEntityKinds } from '../components/entityIndex';
 import { useAuthStore } from '../store/auth';
 import { useStore } from '../store';
+import { useUndoStore } from '../store/undo';
 import { useGraphPane, useSelectedReq } from '../components/Layout';
 import { HelpTip } from '../components/HelpTip';
+import { useConfirm } from '../components/ConfirmDialog';
 import DescriptionHelper from '../components/DescriptionHelper';
 import ParametricsGuide from '../components/ParametricsGuide';
 import { useKeyboardShortcuts } from '../components/useKeyboardShortcuts';
@@ -48,7 +50,9 @@ export default function RequirementDetailPage() {
   const [newVC, setNewVC] = useState('');
   const { user, editMode } = useAuthStore();
   const bumpGraphVersion = useStore((s) => s.bumpGraphVersion);
+  const bumpDataVersion = useStore((s) => s.bumpDataVersion);
   const editable = user !== null && user.role !== 'viewer' && editMode;
+  const showConfirm = useConfirm();
   const [workflow, setWorkflow] = useState<{ states: string[]; transitions: Record<string, string[]> } | null>(null);
   const [qualityResult, setQualityResult] = useState<QualityItem | null>(null);
   const [unreviewedIds, setUnreviewedIds] = useState<Set<string>>(new Set());
@@ -151,8 +155,17 @@ export default function RequirementDetailPage() {
 
   const save = async (updates: Partial<Requirement>) => {
     if (!projectId || !reqId || !req || !editable) return;
+    const beforeFields: Record<string, any> = {};
+    for (const k of Object.keys(updates)) {
+      beforeFields[k] = (req as any)[k];
+    }
     try {
       const updated = await api.updateRequirement(projectId, reqId, updates);
+      useUndoStore.getState().push({
+        description: `Update ${reqId}`,
+        undo: async () => { await api.updateRequirementSkipWorkflow(projectId, reqId, beforeFields); },
+        redo: async () => { await api.updateRequirement(projectId, reqId, updates); },
+      });
       setReq(updated);
       setSaveError('');
       setSaveSuccess(true);
@@ -170,9 +183,18 @@ export default function RequirementDetailPage() {
   };
 
   const handleDelete = async () => {
-    if (!projectId || !reqId) return;
-    if (!confirm('Delete this requirement?')) return;
+    if (!projectId || !reqId || !req) return;
+    const ok = await showConfirm('Delete this requirement?', 'Delete Requirement');
+    if (!ok) return;
+    const snap = { ...req };
     await api.deleteRequirement(projectId, reqId);
+    useUndoStore.getState().push({
+      description: `Delete ${reqId}`,
+      undo: async () => { await api.createRequirement(projectId, snap); },
+      redo: async () => { await api.deleteRequirement(projectId, reqId); },
+    });
+    bumpGraphVersion();
+    bumpDataVersion();
     navigate(`/project/${projectId}/requirements`);
   };
 
@@ -545,6 +567,58 @@ export default function RequirementDetailPage() {
             </motion.div>
           )}
 
+          {qualityResult && (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }} className="card p-5">
+              <h2 className="font-semibold text-sm text-card-foreground mb-3 flex items-center gap-2"><Sparkles size={14} className="text-violet-400" /> Quality</h2>
+              <div className="flex items-center gap-3 mb-3">
+                <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-lg font-bold ${qualityResult.score >= 80 ? 'bg-emerald-500/10 text-emerald-400' : qualityResult.score >= 50 ? 'bg-amber-500/10 text-amber-400' : 'bg-red-500/10 text-red-400'}`}>
+                  {qualityResult.score}
+                </div>
+                <div className="flex-1">
+                  <div className="w-full bg-muted rounded-full h-2">
+                    <div className={`h-full rounded-full transition-all duration-500 ${qualityResult.score >= 80 ? 'bg-emerald-500' : qualityResult.score >= 50 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${qualityResult.score}%` }} />
+                  </div>
+                  <div className="text-[10px] text-muted-foreground mt-1">/100</div>
+                </div>
+              </div>
+              {qualityResult.findings.length > 0 && (
+                <div className="space-y-1">
+                  {qualityResult.findings.slice(0, 5).map((f, i) => (
+                    <div key={i} className={`text-xs px-2 py-1 rounded ${f.severity === 'error' ? 'bg-red-500/5 text-red-400' : f.severity === 'warning' ? 'bg-amber-500/5 text-amber-400' : 'bg-muted text-muted-foreground'}`}>
+                      {f.message}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </motion.div>
+          )}
+
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="card p-5">
+            <h2 className="font-semibold text-sm text-card-foreground mb-3">Attributes</h2>
+            <div className="flex gap-1 mb-3">
+              <input className="input flex-1 text-xs" placeholder="Key" value={newAttrKey} onChange={(e) => setNewAttrKey(e.target.value)} disabled={!editable} />
+              <input className="input flex-1 text-xs" placeholder="Value" value={newAttrVal} onChange={(e) => setNewAttrVal(e.target.value)} disabled={!editable} />
+              <button onClick={addAttribute} className="btn-secondary shrink-0 p-2" disabled={!editable}><Plus size={12} /></button>
+            </div>
+            {req.attributes.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No custom attributes.</p>
+            ) : (
+              <div className="space-y-1.5">
+                {req.attributes.map((attr, i) => (
+                  <div key={i} className="flex items-center gap-2 text-xs group py-1 px-2 rounded hover:bg-accent">
+                    <span className="font-medium text-muted-foreground w-24 shrink-0 truncate">{attr.key}</span>
+                    <span className="text-foreground flex-1 truncate">{attr.value}</span>
+                    {editable && (
+                    <button onClick={() => removeAttribute(i)} className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all">
+                      <X size={12} />
+                    </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </motion.div>
+
           {/* Backlinks: things that name this requirement from their own
               side. Read-only here — each mapping is owned by the other
               entity, so editing lives on its page. */}
@@ -894,58 +968,6 @@ export default function RequirementDetailPage() {
               </div>
             </div>
           </motion.div>
-
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="card p-5">
-            <h2 className="font-semibold text-sm text-card-foreground mb-3">Attributes</h2>
-            <div className="flex gap-1 mb-3">
-              <input className="input flex-1 text-xs" placeholder="Key" value={newAttrKey} onChange={(e) => setNewAttrKey(e.target.value)} disabled={!editable} />
-              <input className="input flex-1 text-xs" placeholder="Value" value={newAttrVal} onChange={(e) => setNewAttrVal(e.target.value)} disabled={!editable} />
-              <button onClick={addAttribute} className="btn-secondary shrink-0 p-2" disabled={!editable}><Plus size={12} /></button>
-            </div>
-            {req.attributes.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No custom attributes.</p>
-            ) : (
-              <div className="space-y-1.5">
-                {req.attributes.map((attr, i) => (
-                  <div key={i} className="flex items-center gap-2 text-xs group py-1 px-2 rounded hover:bg-accent">
-                    <span className="font-medium text-muted-foreground w-24 shrink-0 truncate">{attr.key}</span>
-                    <span className="text-foreground flex-1 truncate">{attr.value}</span>
-                    {editable && (
-                    <button onClick={() => removeAttribute(i)} className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all">
-                      <X size={12} />
-                    </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </motion.div>
-
-          {qualityResult && (
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }} className="card p-5">
-              <h2 className="font-semibold text-sm text-card-foreground mb-3 flex items-center gap-2"><Sparkles size={14} className="text-violet-400" /> Quality</h2>
-              <div className="flex items-center gap-3 mb-3">
-                <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-lg font-bold ${qualityResult.score >= 80 ? 'bg-emerald-500/10 text-emerald-400' : qualityResult.score >= 50 ? 'bg-amber-500/10 text-amber-400' : 'bg-red-500/10 text-red-400'}`}>
-                  {qualityResult.score}
-                </div>
-                <div className="flex-1">
-                  <div className="w-full bg-muted rounded-full h-2">
-                    <div className={`h-full rounded-full transition-all duration-500 ${qualityResult.score >= 80 ? 'bg-emerald-500' : qualityResult.score >= 50 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${qualityResult.score}%` }} />
-                  </div>
-                  <div className="text-[10px] text-muted-foreground mt-1">/100</div>
-                </div>
-              </div>
-              {qualityResult.findings.length > 0 && (
-                <div className="space-y-1">
-                  {qualityResult.findings.slice(0, 5).map((f, i) => (
-                    <div key={i} className={`text-xs px-2 py-1 rounded ${f.severity === 'error' ? 'bg-red-500/5 text-red-400' : f.severity === 'warning' ? 'bg-amber-500/5 text-amber-400' : 'bg-muted text-muted-foreground'}`}>
-                      {f.message}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </motion.div>
-          )}
 
           <div className="text-xs text-muted-foreground space-y-1">
             <div>Created: {new Date(req.created).toLocaleString()}</div>

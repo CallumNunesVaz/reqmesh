@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Save, CheckCircle2, Settings, Trash2, Pencil, X, Check, Plus } from 'lucide-react';
+import { ArrowLeft, Save, CheckCircle2, Settings, Trash2, Pencil, X, Check, Plus, RotateCw, GitBranch, Clock, User } from 'lucide-react';
 import { api } from '../api/client';
 import { useAuthStore } from '../store/auth';
 
@@ -60,6 +60,51 @@ export default function ProjectSettingsPage() {
   const [editingBaseline, setEditingBaseline] = useState<string | null>(null);
   const [editBaselineName, setEditBaselineName] = useState('');
 
+  // Git history
+  const [gitCommits, setGitCommits] = useState<Array<{ hash: string; author: string; date: string; message: string }>>([]);
+  const [gitRepo, setGitRepo] = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [restoring, setRestoring] = useState<string | null>(null);
+
+  const loadGitHistory = () => {
+    if (!projectId) return;
+    setLoadingHistory(true);
+    api.gitLog(projectId, 50).then((res) => {
+      setGitRepo(res.is_repo);
+      setGitCommits(res.commits || []);
+    }).catch(() => {}).finally(() => setLoadingHistory(false));
+  };
+
+  const handleRestore = async (hash: string) => {
+    if (!projectId || !editable) return;
+    if (!confirm(`Restore project to commit ${hash.slice(0, 8)}? This will restore all files to that state and create a new commit recording the restoration.`)) return;
+    setRestoring(hash);
+    try {
+      await api.gitRestore(projectId, hash);
+      loadGitHistory();
+    } catch (err: any) {
+      alert(err.message || 'Restore failed');
+    } finally {
+      setRestoring(null);
+    }
+  };
+
+  const relativeTime = (iso: string) => {
+    const then = new Date(iso).getTime();
+    const now = Date.now();
+    const diff = now - then;
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    const days = Math.floor(hrs / 24);
+    if (days < 30) return `${days}d ago`;
+    const months = Math.floor(days / 30);
+    if (months < 12) return `${months}mo ago`;
+    return `${Math.floor(months / 12)}y ago`;
+  };
+
   const loadBaselines = () => {
     if (!projectId) return;
     api.listBaselines(projectId).then((b: any[]) => setBaselines(b.map(x => ({ name: x.name, count: x.count })))).catch(() => {});
@@ -86,6 +131,7 @@ export default function ProjectSettingsPage() {
       setBaselineDefs(p.baselines || []);
     }).catch((err: any) => setError(err.message));
     loadBaselines();
+    loadGitHistory();
   }, [projectId]);
 
   const example = (rule: NamingRule) => {
@@ -354,6 +400,78 @@ export default function ProjectSettingsPage() {
             </div>
           </div>
         </div>
+      </motion.div>
+
+      {/* Git History */}
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }} className="card p-5 mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h2 className="font-semibold text-sm text-card-foreground flex items-center gap-2">
+              <GitBranch size={14} className="text-muted-foreground" />
+              Git History
+            </h2>
+            <p className="text-xs text-muted-foreground mt-0.5">Recent commits for this project. Restore to any past state.</p>
+          </div>
+          <button onClick={loadGitHistory} className="btn-secondary text-xs" disabled={loadingHistory}>
+            <RotateCw size={12} className={loadingHistory ? 'animate-spin' : ''} />
+            Refresh
+          </button>
+        </div>
+
+        {!gitRepo ? (
+          <div className="text-center py-8">
+            <GitBranch size={32} className="mx-auto text-muted-foreground/40 mb-3" />
+            <p className="text-sm text-muted-foreground">Not a git repository</p>
+            <p className="text-xs text-muted-foreground/60 mt-1">Initialize with <code className="bg-muted px-1 rounded">git init</code> in the project directory to enable version history.</p>
+          </div>
+        ) : gitCommits.length === 0 ? (
+          <div className="text-center py-8">
+            <Clock size={32} className="mx-auto text-muted-foreground/40 mb-3" />
+            <p className="text-sm text-muted-foreground">No commits yet</p>
+            <p className="text-xs text-muted-foreground/60 mt-1">Make changes to the project data — commits are created automatically.</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-border/60 max-h-[600px] overflow-y-auto">
+            {gitCommits.map((commit) => (
+              <div key={commit.hash} className="flex items-start gap-3 py-2.5 px-2 rounded hover:bg-accent/40 group transition-colors">
+                <div className="shrink-0 mt-0.5">
+                  <div className="w-2 h-2 rounded-full bg-primary/40" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <code className="text-[11px] font-mono text-primary bg-primary/5 px-1.5 py-0.5 rounded">{commit.hash.slice(0, 8)}</code>
+                    <span className="text-[11px] text-muted-foreground">{relativeTime(commit.date)}</span>
+                  </div>
+                  <p className="text-xs text-foreground truncate">{commit.message}</p>
+                  <div className="flex items-center gap-3 mt-1 text-[10px] text-muted-foreground/70">
+                    <span className="flex items-center gap-1">
+                      <User size={10} />
+                      {commit.author}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Clock size={10} />
+                      {new Date(commit.date).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+                {editable && (
+                  <button
+                    onClick={() => handleRestore(commit.hash)}
+                    disabled={restoring === commit.hash}
+                    className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity btn-secondary text-[10px] px-2 py-1 mt-0.5"
+                    title="Restore project to this commit"
+                  >
+                    {restoring === commit.hash ? (
+                      <RotateCw size={11} className="animate-spin" />
+                    ) : (
+                      <><RotateCw size={11} /> Restore</>
+                    )}
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </motion.div>
 
       {/* Save */}

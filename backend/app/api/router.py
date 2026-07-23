@@ -302,7 +302,7 @@ async def create_requirement(project_id: str, data: RequirementCreate, user: dic
 
 
 @router.put("/projects/{project_id}/requirements/{req_id}")
-async def update_requirement(project_id: str, req_id: str, data: RequirementUpdate, user: dict = Depends(require_edit)):
+async def update_requirement(project_id: str, req_id: str, data: RequirementUpdate, user: dict = Depends(require_edit), skip_workflow: bool = Query(False)):
     store = get_store(project_id)
     update_dict = data.model_dump(mode="json", exclude_unset=True)
 
@@ -310,8 +310,8 @@ async def update_requirement(project_id: str, req_id: str, data: RequirementUpda
     if before is None:
         raise HTTPException(status_code=404, detail="Requirement not found")
 
-    # Validate workflow transition if status is changing.
-    if "status" in update_dict and before.get("status") != update_dict["status"]:
+    # Validate workflow transition if status is changing (skip for undo).
+    if not skip_workflow and "status" in update_dict and before.get("status") != update_dict["status"]:
         from app.services.workflow import validate_transition
         meta = store.read_meta()
         err = validate_transition(meta, before.get("status", "proposed"), update_dict["status"])

@@ -1,5 +1,5 @@
 import { Outlet, Link, useParams } from 'react-router-dom';
-import { PanelRight, PanelRightClose, PanelRightOpen, LogIn, LogOut, User, Pencil, Eye, FileDown, FileUp, Users, Search, HelpCircle, BookOpen, Server, SlidersHorizontal } from 'lucide-react';
+import { PanelRight, PanelRightClose, PanelRightOpen, LogIn, LogOut, User, Pencil, Eye, FileDown, FileUp, Users, Search, HelpCircle, BookOpen, Server, SlidersHorizontal, Undo2, Redo2 } from 'lucide-react';
 import { useState, useEffect, useCallback, createContext, useContext, useRef } from 'react';
 import { ThemeToggle } from './ThemeToggle';
 import RequirementNav from './RequirementNav';
@@ -14,6 +14,7 @@ import ImportDialog from './ImportDialog';
 import PresenceBar from './PresenceBar';
 import { useAuthStore } from '../store/auth';
 import { useStore } from '../store';
+import { useUndoStore } from '../store/undo';
 import { api, type PresenceUser } from '../api/client';
 
 const GraphPaneCtx = createContext({ graphOpen: false, toggleGraph: () => {} });
@@ -161,6 +162,10 @@ export default function Layout() {
 
   const { user, token, editMode, isGuest, setUser, setEditMode, logout } = useAuthStore();
 
+  // Clear undo stack when switching projects
+  const clearUndo = useUndoStore((s) => s.clear);
+  useEffect(() => { clearUndo(); }, [projectId]);
+
   useEffect(() => {
     if (token) {
       api.whoami().then(u => setUser(u)).catch(() => logout());
@@ -172,6 +177,10 @@ export default function Layout() {
   const bumpDataVersion = useStore((s) => s.bumpDataVersion);
   const helpersEnabled = useStore((s) => s.helpersEnabled);
   const toggleHelpers = useStore((s) => s.toggleHelpers);
+  const { undo, redo, canUndo, canRedo } = useUndoStore();
+  const undoRef = useRef(undo);
+  const redoRef = useRef(redo);
+  useEffect(() => { undoRef.current = undo; redoRef.current = redo; }, [undo, redo]);
   const username = user?.username;
   useEffect(() => {
     if (!isInProject || !projectId) return;
@@ -216,6 +225,8 @@ export default function Layout() {
     onHelperToggle: toggleHelpers,
     onHelpToggle: () => setHelpOpen(o => !o),
     onDocsOpen: () => setDocsOpen(o => !o),
+    onUndo: () => { if (editMode) undoRef.current(); },
+    onRedo: () => { if (editMode) redoRef.current(); },
     // Escape/save/delete on detail pages belong to the page's own
     // useKeyboardShortcuts instance — a second handler here would fire twice.
   });
@@ -309,6 +320,27 @@ export default function Layout() {
               <FileUp size={15} />
               <span className="hidden sm:inline">Import</span>
             </button>
+          )}
+
+          {isInProject && editMode && (
+            <>
+              <button
+                onClick={() => undo()}
+                disabled={!canUndo()}
+                className="btn-ghost p-2 rounded-lg text-xs text-muted-foreground hover:text-foreground disabled:opacity-30"
+                title="Undo (Ctrl+Z)"
+              >
+                <Undo2 size={15} />
+              </button>
+              <button
+                onClick={() => redo()}
+                disabled={!canRedo()}
+                className="btn-ghost p-2 rounded-lg text-xs text-muted-foreground hover:text-foreground disabled:opacity-30"
+                title="Redo (Ctrl+Y / Ctrl+Shift+Z)"
+              >
+                <Redo2 size={15} />
+              </button>
+            </>
           )}
 
           {isInProject && <PresenceBar users={presence} self={username} />}
@@ -446,7 +478,7 @@ export default function Layout() {
             <main
               className="overflow-auto"
               style={{
-                flex: `${1 - graphFrac} 1 0%`,
+                flex: isInProject ? `${1 - graphFrac} 1 0%` : '1 1 0%',
                 minWidth: 0,
                 transition: resizing ? 'none' : 'flex-grow 0.3s ease',
               }}

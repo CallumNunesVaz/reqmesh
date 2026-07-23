@@ -302,3 +302,283 @@ async def dismiss_update(admin: dict = Depends(require_admin)):
     """Clear a completed/failed update's control files (and any staged archive)."""
     updater.clear_update_state()
     return {"ok": True}
+
+
+# ── System Dependencies ───────────────────────────────────────────────────────
+
+DEPENDENCY_CHECKERS: dict[str, callable] = {}
+
+
+def _register(name: str):
+    def deco(fn):
+        DEPENDENCY_CHECKERS[name] = fn
+        return fn
+    return deco
+
+
+@_register("git")
+def _check_git():
+    import shutil, subprocess
+    if not shutil.which("git"):
+        return {"ok": False, "error": "git not found on PATH"}
+    try:
+        r = subprocess.run(["git", "--version"], capture_output=True, text=True, timeout=10)
+        version = r.stdout.strip() or r.stderr.strip()
+        return {"ok": True, "version": version}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+@_register("git-e2e")
+def _test_git_e2e():
+    import shutil, subprocess, tempfile
+    from pathlib import Path
+    if not shutil.which("git"):
+        return {"ok": False, "error": "git not found"}
+    tmp = tempfile.mkdtemp(prefix="rm-dep-git-")
+    try:
+        subprocess.run(["git", "init"], cwd=tmp, capture_output=True, timeout=10, check=True)
+        (Path(tmp) / "test.txt").write_text("hello")
+        subprocess.run(["git", "config", "user.email", "test@reqmesh.local"], cwd=tmp, capture_output=True, timeout=10)
+        subprocess.run(["git", "config", "user.name", "reqmesh-test"], cwd=tmp, capture_output=True, timeout=10)
+        subprocess.run(["git", "add", "test.txt"], cwd=tmp, capture_output=True, timeout=10, check=True)
+        subprocess.run(["git", "commit", "-m", "test"], cwd=tmp, capture_output=True, timeout=10, check=True)
+        return {"ok": True, "detail": "init + add + commit succeeded"}
+    except subprocess.CalledProcessError as e:
+        return {"ok": False, "error": f"{e.stderr.strip() if e.stderr else str(e)}"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+@_register("weasyprint")
+def _check_weasyprint():
+    try:
+        import weasyprint
+        return {"ok": True, "version": getattr(weasyprint, "__version__", "installed")}
+    except ImportError:
+        return {"ok": False, "error": "weasyprint not installed"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+@_register("weasyprint-e2e")
+def _test_weasyprint_e2e():
+    try:
+        from weasyprint import HTML as WHTML
+    except ImportError:
+        return {"ok": False, "error": "weasyprint not installed"}
+    try:
+        WHTML(string="<html><body><h1>re</h1></body></html>").write_pdf()
+        return {"ok": True, "detail": "HTML→PDF render succeeded"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+@_register("tectonic")
+def _check_tectonic():
+    _, result = _detect_latex("tectonic")
+    return result
+
+
+@_register("tectonic-e2e")
+def _test_tectonic_e2e():
+    return _test_latex_compile("tectonic")
+
+
+@_register("pdflatex")
+def _check_pdflatex():
+    _, result = _detect_latex("pdflatex")
+    return result
+
+
+@_register("pdflatex-e2e")
+def _test_pdflatex_e2e():
+    return _test_latex_compile("pdflatex")
+
+
+@_register("lualatex")
+def _check_lualatex():
+    _, result = _detect_latex("lualatex")
+    return result
+
+
+@_register("lualatex-e2e")
+def _test_lualatex_e2e():
+    return _test_latex_compile("lualatex")
+
+
+@_register("xelatex")
+def _check_xelatex():
+    _, result = _detect_latex("xelatex")
+    return result
+
+
+@_register("xelatex-e2e")
+def _test_xelatex_e2e():
+    return _test_latex_compile("xelatex")
+
+
+@_register("openpyxl")
+def _check_openpyxl():
+    try:
+        import openpyxl
+        return {"ok": True, "version": getattr(openpyxl, "__version__", "installed")}
+    except ImportError:
+        return {"ok": False, "error": "openpyxl not installed"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+@_register("openpyxl-e2e")
+def _test_openpyxl_e2e():
+    try:
+        import openpyxl
+    except ImportError:
+        return {"ok": False, "error": "openpyxl not installed"}
+    try:
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "test"
+        ws["A1"] = "hello"
+        wb.save("/dev/null" if __import__("os").name != "nt" else "NUL")
+        return {"ok": True, "detail": "workbook create + save succeeded"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+@_register("rst2pdf")
+def _check_rst2pdf():
+    import shutil
+    if not shutil.which("rst2pdf"):
+        return {"ok": False, "error": "rst2pdf not found on PATH"}
+    try:
+        r = __import__("subprocess").run(["rst2pdf", "--version"], capture_output=True, text=True, timeout=10)
+        return {"ok": True, "version": (r.stdout or r.stderr).strip().splitlines()[0]}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+# ── Internal helpers ────────────────────────────────────────────────────────────
+
+def _detect_latex(engine: str) -> tuple[bool, dict]:
+    import shutil
+    if not shutil.which(engine):
+        return False, {"ok": False, "error": f"{engine} not found on PATH"}
+    return True, {"ok": True, "version": engine}
+
+
+def _test_latex_compile(engine: str) -> dict:
+    import shutil, subprocess, tempfile, os
+    from pathlib import Path as P
+    if not shutil.which(engine):
+        return {"ok": False, "error": f"{engine} not found"}
+
+    # Minimal LaTeX doc exercising common font & class requirements
+    tex = r"""
+\documentclass{article}
+\usepackage{lmodern}
+\usepackage{fontenc}
+\begin{document}
+\section{Smoke Test}
+This is a minimal reqmesh dependency test.
+\end{document}
+"""
+    tmp = tempfile.mkdtemp(prefix=f"rm-dep-{engine}-")
+    tex_path = P(tmp) / "smoke.tex"
+    try:
+        tex_path.write_text(tex)
+        if engine == "tectonic":
+            r = subprocess.run(
+                [engine, "--outdir", tmp, str(tex_path)],
+                cwd=tmp, capture_output=True, text=True, timeout=60,
+            )
+        else:
+            r = subprocess.run(
+                [engine, "-interaction=nonstopmode", "-halt-on-error",
+                 f"-output-directory={tmp}", str(tex_path)],
+                cwd=tmp, capture_output=True, text=True, timeout=60,
+            )
+            if r.returncode == 0:
+                # Classic engines need a second pass for TOC/refs
+                subprocess.run(
+                    [engine, "-interaction=nonstopmode", "-halt-on-error",
+                     f"-output-directory={tmp}", str(tex_path)],
+                    cwd=tmp, capture_output=True, text=True, timeout=60,
+                )
+
+        pdf = P(tmp) / "smoke.pdf"
+        if pdf.exists() and pdf.stat().st_size > 100:
+            stderr_tail = ""
+            if r.returncode != 0 and getattr(r, "stderr", None):
+                stderr_tail = "; " + r.stderr.strip()[-200:]
+            return {"ok": True, "detail": f"PDF compiled ({pdf.stat().st_size} bytes){stderr_tail}"}
+        else:
+            msg = (getattr(r, "stderr", None) or getattr(r, "stdout", None) or "").strip()
+            return {"ok": False, "error": f"no PDF produced (rc={r.returncode}): {msg[:500]}"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def _collect_deps() -> list[dict]:
+    import shutil, platform
+    results = []
+
+    _INSTALL_GUIDES: dict[str, str] = {
+        "git": "sudo apt install git  # Debian/Ubuntu\nbrew install git    # macOS",
+        "weasyprint": "pip install weasyprint\n# Also needs system fonts: sudo apt install fonts-dejavu-core",
+        "tectonic": 'curl -L https://github.com/tectonic-typesetting/tectonic/releases/download/tectonic%400.15.0/tectonic-0.15.0-x86_64-unknown-linux-gnu.tar.gz | tar xz -C ~/.local/bin',
+        "pdflatex": "sudo apt install texlive-latex-base  # Debian/Ubuntu\nbrew install --cask mactex  # macOS (installs pdfLaTeX)",
+        "lualatex": "sudo apt install texlive-latex-base  # Debian/Ubuntu\nbrew install --cask mactex  # macOS",
+        "xelatex": "sudo apt install texlive-xetex     # Debian/Ubuntu\nbrew install --cask mactex  # macOS",
+        "openpyxl": "pip install openpyxl",
+        "rst2pdf": "pip install rst2pdf",
+    }
+
+    def _append(name: str, label: str, category: str, *, has_e2e: bool = True):
+        checker = DEPENDENCY_CHECKERS.get(name)
+        status = "unknown"
+        detail = ""
+        if checker:
+            r = checker()
+            status = "ok" if r.get("ok") else "missing"
+            detail = r.get("version") or r.get("error") or r.get("detail") or ""
+        results.append({
+            "id": name,
+            "label": label,
+            "category": category,
+            "status": status,
+            "detail": detail,
+            "has_e2e": has_e2e,
+            "install_guide": _INSTALL_GUIDES.get(name, ""),
+        })
+
+    _append("git", "Git", "Core", has_e2e=True)
+    _append("weasyprint", "WeasyPrint", "PDF Engine")
+    _append("tectonic", "Tectonic", "LaTeX Engines")
+    _append("pdflatex", "pdfLaTeX", "LaTeX Engines")
+    _append("lualatex", "LuaLaTeX", "LaTeX Engines")
+    _append("xelatex", "XeLaTeX", "LaTeX Engines")
+    _append("openpyxl", "OpenPyXL", "Exports")
+    _append("rst2pdf", "rst2pdf", "PDF Engine", has_e2e=False)
+
+    return results
+
+
+@router.get("/dependencies")
+async def list_dependencies():
+    import asyncio
+    return await asyncio.to_thread(_collect_deps)
+
+
+@router.post("/dependencies/{dep_id}/test")
+async def test_dependency(dep_id: str):
+    e2e_name = f"{dep_id}-e2e"
+    checker = DEPENDENCY_CHECKERS.get(e2e_name)
+    if checker is None:
+        raise HTTPException(status_code=404, detail=f"No E2E test for '{dep_id}'")
+    import asyncio
+    return await asyncio.to_thread(checker)

@@ -10,6 +10,8 @@ interface ShortcutHandlers {
   onHelperToggle?: () => void;
   onHelpToggle?: () => void;
   onDocsOpen?: () => void;
+  onUndo?: () => void;
+  onRedo?: () => void;
   onListDown?: () => void;
   onListUp?: () => void;
   onListOpen?: () => void;
@@ -58,6 +60,12 @@ export function useKeyboardShortcuts(projectId: string | undefined, handlers: Sh
       }
       // '?' arrives with shiftKey set on most layouts — match on the key alone.
       if (!ctrl && key === '?' && !inTextInput) { e.preventDefault(); handlers.onHelpToggle?.(); return; }
+    }
+
+    // ── Undo / Redo (only when NOT in a text input) ─────────────────────
+    if (!inTextInput) {
+      if (ctrl && !shift && key === 'z') { e.preventDefault(); handlers.onUndo?.(); return; }
+      if ((ctrl && !shift && key === 'y') || (ctrl && shift && key === 'z')) { e.preventDefault(); handlers.onRedo?.(); return; }
     }
 
     // ── Escape closes modals / goes back (works everywhere) ────────────────

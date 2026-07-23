@@ -3,13 +3,16 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus, Search, X, Trash2, ChevronRight, ChevronDown, ChevronsDownUp, ChevronsUpDown,
-  Zap, Gauge, Plug, User, Cpu, Briefcase, Shield, AlertTriangle, Leaf, CheckCircle, Inbox, Square, CheckSquare, ArrowUp,
+  Zap, Gauge, Plug, User, Cpu, Briefcase, Shield, AlertTriangle, Leaf, CheckCircle, Inbox, Square, CheckSquare, ArrowUp, SlidersHorizontal,
 } from 'lucide-react';
 import { api, type Requirement, type EvalVerdict } from '../api/client';
 import { useStore } from '../store';
 import { useAuthStore } from '../store/auth';
+import { useUndoStore } from '../store/undo';
 import { useSelectedReq } from '../components/Layout';
 import LoadingSplash from '../components/LoadingSplash';
+import RichTextEditor from '../components/RichTextEditor';
+import { useConfirm } from '../components/ConfirmDialog';
 
 const statusStyles: Record<string, { dot: string; text: string }> = {
   proposed: { dot: 'bg-cs-blue', text: 'text-cs-blue' },
@@ -57,7 +60,11 @@ export default function RequirementsPage() {
   const navigate = useNavigate();
   const { requirements, setRequirements } = useStore();
   const dataVersion = useStore((s) => s.dataVersion);
+  const bumpGraphVersion = useStore((s) => s.bumpGraphVersion);
+  const bumpDataVersion = useStore((s) => s.bumpDataVersion);
   const editMode = useAuthStore((s) => s.editMode && s.user !== null && s.user.role !== 'viewer');
+  const showConfirm = useConfirm();
+  const { selectedReqId, selectReq } = useSelectedReq();
 
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
@@ -72,6 +79,7 @@ export default function RequirementsPage() {
   const [projectBaselines, setProjectBaselines] = useState<string[]>([]);
   const [bulkParent, setBulkParent] = useState('');
   const [moveReq, setMoveReq] = useState<{id: string, target: string} | null>(null);
+  const [showBulkEdit, setShowBulkEdit] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const [verdicts, setVerdicts] = useState<Map<string, EvalVerdict>>(new Map());
@@ -182,9 +190,22 @@ export default function RequirementsPage() {
 
   const handleDelete = async (reqId: string) => {
     if (!projectId || !editMode) return;
-    if (!confirm(`Delete requirement ${reqId}?`)) return;
+    const ok = await showConfirm(`Delete requirement ${reqId}?`, 'Delete Requirement');
+    if (!ok) return;
     try {
+      const before = requirements.find((r) => r.id === reqId);
       await api.deleteRequirement(projectId, reqId);
+      if (before) {
+        const snap = { ...before };
+        useUndoStore.getState().push({
+          description: `Delete ${reqId}`,
+          undo: async () => { await api.createRequirement(projectId, snap); },
+          redo: async () => { await api.deleteRequirement(projectId, reqId); },
+        });
+      }
+      bumpGraphVersion();
+      bumpDataVersion();
+      if (selectedReqId === reqId) selectReq(null);
       load();
     } catch {
       // silently no-op when permissions insufficient
@@ -205,17 +226,25 @@ export default function RequirementsPage() {
 
   const clearSelection = () => setSelectedIds(new Set());
 
-  const handleBulkStatus = async (status: string) => {
-    if (!projectId) return;
-    await api.bulkUpdateRequirements(projectId, [...selectedIds], { status });
-    clearSelection();
-    load();
-  };
-
   const handleBulkDelete = async () => {
     if (!projectId) return;
-    if (!confirm(`Delete ${selectedIds.size} requirement(s)?`)) return;
-    await api.bulkDeleteRequirements(projectId, [...selectedIds]);
+    const ids = [...selectedIds];
+    const ok = await showConfirm(`Delete ${ids.length} requirement(s)?`, 'Bulk Delete');
+    if (!ok) return;
+    const saved = requirements.filter((r) => ids.includes(r.id)).map((r) => ({ ...r }));
+    await api.bulkDeleteRequirements(projectId, ids);
+    useUndoStore.getState().push({
+      description: `Delete ${ids.length} requirements`,
+      undo: async () => {
+        for (const r of saved) {
+          await api.createRequirement(projectId, r);
+        }
+      },
+      redo: async () => { await api.bulkDeleteRequirements(projectId, ids); },
+    });
+    bumpGraphVersion();
+    bumpDataVersion();
+    if (selectedReqId && ids.includes(selectedReqId)) selectReq(null);
     clearSelection();
     load();
   };
@@ -489,19 +518,9 @@ export default function RequirementsPage() {
       {selectedIds.size > 0 && editMode && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-card border rounded-xl shadow-2xl px-4 py-3">
           <span className="text-xs font-medium text-foreground">{selectedIds.size} selected</span>
-          <select
-            className="select text-xs py-1 w-32"
-            onChange={(e) => { if (e.target.value) handleBulkStatus(e.target.value); e.target.value = ''; }}
-            value=""
-          >
-            <option value="">Set status...</option>
-            <option value="proposed">Proposed</option>
-            <option value="approved">Approved</option>
-            <option value="implemented">Implemented</option>
-            <option value="verified">Verified</option>
-            <option value="rejected">Rejected</option>
-            <option value="deprecated">Deprecated</option>
-          </select>
+          <button onClick={() => setShowBulkEdit(true)} className="btn-primary text-xs">
+            <SlidersHorizontal size={13} /> Bulk Edit
+          </button>
           <select
             className="select text-xs py-1 w-32"
             onChange={(e) => { if (e.target.value) { handleBulkBaseline(e.target.value); e.target.value = ''; } }}
@@ -521,6 +540,16 @@ export default function RequirementsPage() {
           </button>
         </div>
       )}
+
+      <BulkEditModal
+        open={showBulkEdit}
+        onClose={() => setShowBulkEdit(false)}
+        projectId={projectId!}
+        selectedIds={[...selectedIds]}
+        projectBaselines={projectBaselines}
+        onSaved={() => { clearSelection(); load(); }}
+        allReqs={requirements}
+      />
 
       <CreateRequirementModal
         open={showCreate}
@@ -545,7 +574,7 @@ function CreateRequirementModal({
   const [form, setForm] = useState({ id: '', name: '', type: 'functional', priority: 'medium', parent: '', description: '' });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const { selectedReqId } = useSelectedReq();
+  const { selectedReqId, selectReq } = useSelectedReq();
 
   useEffect(() => {
     if (!open) return;
@@ -588,10 +617,17 @@ function CreateRequirementModal({
     setError('');
     try {
       const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-      await api.createRequirement(projectId, {
+      const createData = {
         ...form,
         description: form.description ? `<p>${esc(form.description)}</p>` : '',
         parent: form.parent || undefined,
+      };
+      const created = await api.createRequirement(projectId, createData);
+      const createdId = created.id;
+      useUndoStore.getState().push({
+        description: `Create ${createdId}`,
+        undo: async () => { await api.deleteRequirement(projectId, createdId); },
+        redo: async () => { await api.createRequirement(projectId, createData); },
       });
       setForm({ id: '', name: '', type: 'functional', priority: 'medium', parent: '', description: '' });
       onClose();
@@ -696,6 +732,396 @@ function CreateRequirementModal({
               <button type="submit" disabled={busy || !form.id.trim()} className="btn-primary">
                 {busy ? 'Creating…' : 'Create requirement'}
               </button>
+            </div>
+          </motion.form>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+function BulkEditModal({
+  open, onClose, projectId, selectedIds, projectBaselines, onSaved, allReqs,
+}: {
+  open: boolean;
+  onClose: () => void;
+  projectId: string;
+  selectedIds: string[];
+  projectBaselines: string[];
+  onSaved: () => void;
+  allReqs: Requirement[];
+}) {
+  const INITIAL = {
+    type: '',
+    priority: '',
+    status: '',
+    verification_method: '',
+    verification_status: '',
+    requirement_kind: '',
+    rationale: '',
+    source: '',
+    allocated_to: '',
+    baselines: null as string[] | null,
+    derived: null as boolean | null,
+    normative: null as boolean | null,
+    effort: '' as number | string,
+    system_states: '',
+    subject: '',
+    needs: '',
+    priorities: '',
+    cascade_from: '',
+    description: '',
+  };
+
+  const [form, setForm] = useState(INITIAL);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (open) { setForm(INITIAL); setError(''); }
+  }, [open]);
+
+  const hasChanges = Object.entries(form).some(([k, v]) => {
+    const init = (INITIAL as any)[k];
+    if (init === null) return v !== null;
+    if (typeof init === 'boolean') return v !== null;
+    return v !== '' && v !== init;
+  });
+
+  const buildUpdates = (): Record<string, any> => {
+    const updates: Record<string, any> = {};
+    if (form.type) updates.type = form.type;
+    if (form.priority) updates.priority = form.priority;
+    if (form.status) updates.status = form.status;
+    if (form.verification_method) updates.verification_method = form.verification_method;
+    if (form.verification_status) updates.verification_status = form.verification_status;
+    if (form.requirement_kind) updates.requirement_kind = form.requirement_kind;
+    if (form.rationale) updates.rationale = form.rationale;
+    if (form.source) updates.source = form.source;
+    if (form.allocated_to) updates.allocated_to = form.allocated_to;
+    if (form.baselines !== null) updates.baselines = form.baselines;
+    if (form.derived !== null) updates.derived = form.derived;
+    if (form.normative !== null) updates.normative = form.normative;
+    if (form.effort !== '' && form.effort !== null) {
+      const v = typeof form.effort === 'number' ? form.effort : parseInt(String(form.effort));
+      if (!isNaN(v)) updates.effort = v;
+    }
+    if (form.system_states) updates.system_states = form.system_states.split(',').map(s => s.trim()).filter(Boolean);
+    if (form.subject) updates.subject = form.subject;
+    if (form.needs) updates.needs = form.needs.split(',').map(s => s.trim()).filter(Boolean);
+    if (form.priorities) {
+      const prio: Record<string, number> = {};
+      for (const line of form.priorities.split('\n')) {
+        const [k, v] = line.split(':').map(s => s.trim());
+        if (k && v && !isNaN(Number(v))) prio[k] = Number(v);
+      }
+      if (Object.keys(prio).length > 0) updates.priorities = prio;
+    }
+    if (form.cascade_from) updates.cascade_from = form.cascade_from;
+    if (form.description) updates.description = form.description;
+    return updates;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const updates = buildUpdates();
+    if (Object.keys(updates).length === 0) { setError('Select at least one field to update.'); return; }
+    setBusy(true);
+    setError('');
+    try {
+      const savedBefore: Record<string, Record<string, any>> = {};
+      for (const id of selectedIds) {
+        const r = allReqs.find((x) => x.id === id);
+        if (r) savedBefore[id] = {};
+        for (const k of Object.keys(updates)) {
+          if (r) savedBefore[id][k] = (r as any)[k];
+        }
+      }
+      await api.bulkUpdateRequirements(projectId, selectedIds, updates);
+      useUndoStore.getState().push({
+        description: `Update ${selectedIds.length} requirements`,
+        undo: async () => {
+          for (const [id, before] of Object.entries(savedBefore)) {
+            await api.updateRequirementSkipWorkflow(projectId, id, before);
+          }
+        },
+        redo: async () => { await api.bulkUpdateRequirements(projectId, selectedIds, updates); },
+      });
+      onSaved();
+      onClose();
+    } catch (err: any) {
+      setError(err.message || 'Bulk update failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const fieldCount = Object.entries(form).filter(([k, v]) => {
+    const init = (INITIAL as any)[k];
+    if (init === null) return v !== null;
+    if (typeof init === 'boolean') return v !== null;
+    return v !== '' && v !== init;
+  }).length;
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-[2px] flex items-start justify-center pt-[4vh] px-4"
+          onClick={onClose}
+        >
+          <motion.form
+            initial={{ opacity: 0, y: 12, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 8, scale: 0.98 }}
+            transition={{ duration: 0.15 }}
+            onSubmit={handleSubmit}
+            onClick={(e) => e.stopPropagation()}
+            className="card w-full max-w-2xl p-6 shadow-xl max-h-[92vh] overflow-y-auto"
+          >
+            <div className="flex items-center justify-between mb-5 sticky top-0 bg-card z-10 pb-3 border-b border-border/50">
+              <div>
+                <h2 className="text-sm font-semibold text-foreground">Bulk Edit Requirements</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {selectedIds.length} requirement(s) selected — only filled-in fields will be changed
+                </p>
+              </div>
+              <button type="button" onClick={onClose} className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent">
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-5">
+              {/* Row 1: Type / Priority / Status */}
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="label">Type</label>
+                  <select className="select" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
+                    <option value="">No change</option>
+                    {Object.entries(typeMeta).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="label">Priority</label>
+                  <select className="select" value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })}>
+                    <option value="">No change</option>
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="critical">Critical</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="label">Status</label>
+                  <select className="select" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+                    <option value="">No change</option>
+                    <option value="proposed">Proposed</option>
+                    <option value="approved">Approved</option>
+                    <option value="implemented">Implemented</option>
+                    <option value="verified">Verified</option>
+                    <option value="rejected">Rejected</option>
+                    <option value="deprecated">Deprecated</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Row 2: Ver Method / Ver Status / Req Kind */}
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="label">Verification Method</label>
+                  <select className="select" value={form.verification_method} onChange={(e) => setForm({ ...form, verification_method: e.target.value })}>
+                    <option value="">No change</option>
+                    <option value="test">Test</option>
+                    <option value="analysis">Analysis</option>
+                    <option value="demonstration">Demonstration</option>
+                    <option value="inspection">Inspection</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="label">Verification Status</label>
+                  <select className="select" value={form.verification_status} onChange={(e) => setForm({ ...form, verification_status: e.target.value })}>
+                    <option value="">No change</option>
+                    <option value="pending">Pending</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="passed">Passed</option>
+                    <option value="failed">Failed</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="label">Requirement Kind</label>
+                  <select className="select" value={form.requirement_kind} onChange={(e) => setForm({ ...form, requirement_kind: e.target.value })}>
+                    <option value="">No change</option>
+                    <option value="stakeholder_need">Stakeholder Need</option>
+                    <option value="system_requirement">System Requirement</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Row 3: Rationale / Source / Allocated To */}
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="label">Rationale</label>
+                  <input className="input" placeholder="Why this requirement exists..." value={form.rationale}
+                    onChange={(e) => setForm({ ...form, rationale: e.target.value })} />
+                </div>
+                <div>
+                  <label className="label">Source</label>
+                  <input className="input" placeholder="Stakeholder/document ref..." value={form.source}
+                    onChange={(e) => setForm({ ...form, source: e.target.value })} />
+                </div>
+                <div>
+                  <label className="label">Allocated To</label>
+                  <input className="input" placeholder="System element..." value={form.allocated_to}
+                    onChange={(e) => setForm({ ...form, allocated_to: e.target.value })} />
+                </div>
+              </div>
+
+              {/* Row 4: Subject / Cascade From / Effort */}
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="label">Subject</label>
+                  <input className="input font-mono text-xs" placeholder="e.g. WING" value={form.subject}
+                    onChange={(e) => setForm({ ...form, subject: e.target.value })} />
+                </div>
+                <div>
+                  <label className="label">Cascade From</label>
+                  <input className="input font-mono text-xs" placeholder="Parent requirement ID..." value={form.cascade_from}
+                    onChange={(e) => setForm({ ...form, cascade_from: e.target.value })} />
+                </div>
+                <div>
+                  <label className="label">Effort (story points)</label>
+                  <input className="input" type="number" min="0" placeholder="No change" value={form.effort}
+                    onChange={(e) => setForm({ ...form, effort: e.target.value })} />
+                </div>
+              </div>
+
+              {/* Row 5: System States / Coverage Needs */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">System States</label>
+                  <input className="input font-mono text-xs" placeholder="takeoff, cruise, landing" value={form.system_states}
+                    onChange={(e) => setForm({ ...form, system_states: e.target.value })} />
+                  <div className="text-[10px] text-muted-foreground mt-0.5">Comma-separated OOSEM modes</div>
+                </div>
+                <div>
+                  <label className="label">Coverage Needs</label>
+                  <input className="input font-mono text-xs" placeholder="design, verification_case" value={form.needs}
+                    onChange={(e) => setForm({ ...form, needs: e.target.value })} />
+                  <div className="text-[10px] text-muted-foreground mt-0.5">Comma-separated artifact types</div>
+                </div>
+              </div>
+
+              {/* Stakeholder Priorities */}
+              <div>
+                <label className="label">Stakeholder Priorities</label>
+                <textarea
+                  className="input font-mono text-xs h-16 resize-none"
+                  placeholder="development: 5\ncustomers: 8\nsafety: 10"
+                  value={form.priorities}
+                  onChange={(e) => setForm({ ...form, priorities: e.target.value })}
+                />
+                <div className="text-[10px] text-muted-foreground mt-0.5">One per line, format: stakeholder: score</div>
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="label">Description</label>
+                <RichTextEditor
+                  content={form.description}
+                  onChange={(html) => setForm({ ...form, description: html })}
+                  onBlur={() => {}}
+                  disabled={false}
+                />
+                <div className="text-[10px] text-muted-foreground mt-0.5">Overwrites the description on every selected requirement</div>
+              </div>
+
+              {/* Booleans */}
+              <div className="flex items-center gap-6">
+                <label className="flex items-center gap-2 text-xs cursor-pointer">
+                  <span className="text-muted-foreground">Derived:</span>
+                  <select className="select text-xs py-0.5 w-24" value={form.derived === null ? '' : String(form.derived)}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setForm({ ...form, derived: v === '' ? null : v === 'true' });
+                    }}>
+                    <option value="">No change</option>
+                    <option value="true">True</option>
+                    <option value="false">False</option>
+                  </select>
+                </label>
+                <label className="flex items-center gap-2 text-xs cursor-pointer">
+                  <span className="text-muted-foreground">Normative:</span>
+                  <select className="select text-xs py-0.5 w-24" value={form.normative === null ? '' : String(form.normative)}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setForm({ ...form, normative: v === '' ? null : v === 'true' });
+                    }}>
+                    <option value="">No change</option>
+                    <option value="true">True</option>
+                    <option value="false">False</option>
+                  </select>
+                </label>
+              </div>
+
+              {/* Baselines */}
+              {projectBaselines.length > 0 && (
+                <div>
+                  <label className="label">Baselines</label>
+                  <div className="flex flex-wrap gap-1.5 mt-1">
+                    {projectBaselines.map((b) => {
+                      const active = (form.baselines || []).includes(b);
+                      const anySet = form.baselines !== null;
+                      return (
+                        <button
+                          key={b}
+                          type="button"
+                          onClick={() => {
+                            const current = anySet ? [...(form.baselines || [])] : [...(projectBaselines)];
+                            const next = active ? current.filter(x => x !== b) : [...current, b];
+                            setForm({ ...form, baselines: next });
+                          }}
+                          className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
+                            active
+                              ? 'bg-primary/15 text-primary border-primary/30'
+                              : anySet ? 'bg-muted text-muted-foreground border-transparent hover:border-primary/20' : 'bg-muted/50 text-muted-foreground/50 border-transparent'
+                          }`}
+                        >
+                          {b}
+                        </button>
+                      );
+                    })}
+                    {form.baselines !== null && (
+                      <button
+                        type="button"
+                        onClick={() => setForm({ ...form, baselines: null })}
+                        className="text-[10px] text-muted-foreground hover:text-foreground underline ml-1"
+                      >
+                        clear selection
+                      </button>
+                    )}
+                  </div>
+                  <div className="text-[10px] text-muted-foreground mt-0.5">
+                    Click a baseline to toggle it. When any baseline is set, the new set replaces all existing baselines.
+                  </div>
+                </div>
+              )}
+
+              {error && <p className="text-xs text-destructive">{error}</p>}
+            </div>
+
+            <div className="flex justify-between items-center mt-6 pt-4 border-t border-border/50">
+              <span className="text-[11px] text-muted-foreground">{fieldCount > 0 ? `${fieldCount} field(s) will be updated` : 'No fields selected'}</span>
+              <div className="flex gap-2">
+                <button type="button" onClick={onClose} className="btn-secondary">Cancel</button>
+                <button
+                  type="submit"
+                  disabled={busy || !hasChanges}
+                  className="btn-primary"
+                >
+                  {busy ? `Updating ${selectedIds.length}…` : `Update ${selectedIds.length} requirement(s)`}
+                </button>
+              </div>
             </div>
           </motion.form>
         </motion.div>

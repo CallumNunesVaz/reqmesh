@@ -522,6 +522,8 @@ export const api = {
     request<{ ok: boolean; error?: string }>('/system/settings/test-email', { method: 'POST', body: { to } }),
   getPublicConfig: () => request<PublicConfig>('/system/public-config'),
   getLatexStatus: () => request<{ available: boolean; engine: string | null }>('/system/latex-status'),
+  listDependencies: () => request<Array<{ id: string; label: string; category: string; status: string; detail: string; has_e2e: boolean; install_guide: string }>>('/system/dependencies'),
+  testDependency: (depId: string) => request<{ ok: boolean; error?: string; detail?: string }>(`/system/dependencies/${depId}/test`, { method: 'POST' }),
 
   // Projects
   listProjects: () => request<Project[]>('/projects'),
@@ -582,6 +584,8 @@ export const api = {
     request<Requirement>(`/projects/${projectId}/requirements`, { method: 'POST', body: data }),
   updateRequirement: (projectId: string, reqId: string, data: Partial<Requirement>) =>
     request<Requirement>(`/projects/${projectId}/requirements/${reqId}`, { method: 'PUT', body: data }),
+  updateRequirementSkipWorkflow: (projectId: string, reqId: string, data: Partial<Requirement>) =>
+    request<Requirement>(`/projects/${projectId}/requirements/${reqId}?skip_workflow=true`, { method: 'PUT', body: data }),
   deleteRequirement: (projectId: string, reqId: string) =>
     request<void>(`/projects/${projectId}/requirements/${reqId}`, { method: 'DELETE' }),
   cascadeRequirement: (projectId: string, reqId: string) =>
@@ -745,6 +749,13 @@ export const api = {
   // History
   getRequirementHistory: (projectId: string, reqId: string) =>
     request<any[]>(`/projects/${projectId}/requirements/${reqId}/history`),
+
+  // Git
+  gitLog: (projectId: string, limit: number = 50) =>
+    request<{ is_repo: boolean; commits: Array<{ hash: string; author: string; date: string; message: string }> }>(`/projects/${projectId}/git/log?limit=${limit}`),
+
+  gitRestore: (projectId: string, hash: string) =>
+    request<{ status: string; message: string }>(`/projects/${projectId}/git/restore`, { method: 'POST', body: { hash } }),
 
   // Import (ReqIF / SysML)
   importProject: (projectId: string, file: File, format: string, mode: string) => {

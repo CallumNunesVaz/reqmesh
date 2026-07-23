@@ -591,13 +591,25 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
 
   // Reactively reload graph when requirements are mutated elsewhere.
   const graphVersion = useStore((s) => s.graphVersion);
+  const refocusGraph = useStore((s) => s.refocusGraph);
   const prevGraphVersion = useRef(graphVersion);
+  const prevRefocusGraph = useRef(refocusGraph);
   useEffect(() => {
     if (graphVersion !== prevGraphVersion.current) {
       prevGraphVersion.current = graphVersion;
       loadData();
     }
   }, [graphVersion, loadData]);
+  useEffect(() => {
+    if (refocusGraph !== prevRefocusGraph.current) {
+      prevRefocusGraph.current = refocusGraph;
+      // Wait for React to commit the new nodes, then refit
+      const id = requestAnimationFrame(() => {
+        rfRef.current?.fitView({ padding: 0.12, maxZoom: gs.maxZoom, duration: 400 });
+      });
+      return () => cancelAnimationFrame(id);
+    }
+  }, [refocusGraph]);
 
   // The set of requirement ids satisfied by the currently-selected component,
   // for O(1) membership tests in the filter below.

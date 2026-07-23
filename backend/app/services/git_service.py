@@ -222,3 +222,37 @@ def _flush_all() -> None:
         _push_timer = None
     for root in roots:
         push_to_remote(root)
+
+
+def restore_commit(project_root: Path, commit_hash: str, username: str = "") -> bool:
+    """Restore the working tree to the state of a past commit.
+
+    Does ``git checkout <hash> -- .`` then creates a new commit recording the
+    restoration so the operation itself is always reversible.
+    """
+    project_root = Path(project_root)
+    if not is_repo(project_root):
+        return False
+    try:
+        ident = _identity_for(project_root, username)
+        r = subprocess.run(
+            ["git", *ident, "checkout", commit_hash, "--", "."],
+            cwd=str(project_root), capture_output=True, text=True, timeout=30,
+        )
+        if r.returncode != 0:
+            logger.warning("git checkout %s failed in %s: %s", commit_hash, project_root, r.stderr.strip())
+            return False
+        subprocess.run(
+            ["git", *ident, "add", "-A"],
+            cwd=str(project_root), capture_output=True, text=True, timeout=30,
+        )
+        who = username or _FALLBACK_NAME
+        msg = f"rt: restored to {commit_hash[:8]} ({who})"
+        subprocess.run(
+            ["git", *ident, "commit", "-m", msg, "--allow-empty"],
+            cwd=str(project_root), capture_output=True, text=True, timeout=30,
+        )
+        return True
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        logger.warning("git restore error in %s: %s", project_root, exc)
+        return False
