@@ -74,13 +74,20 @@ def _latex_escape(text: str) -> str:
     # Unicode \u2192 LaTeX-macro replacements applied afterwards (which themselves
     # contain $, \, ^, {, }) are left intact rather than being re-escaped.
     text = text.replace("\\", "\x00")
+    text = text.replace("_", "\x01")
     for char, repl in (
-        ("&", r"\&"), ("%", r"\%"), ("$", r"\$"), ("#", r"\#"), ("_", r"\_"),
+        ("&", r"\&"), ("%", r"\%"), ("$", r"\$"), ("#", r"\#"),
         ("{", r"\{"), ("}", r"\}"),
         ("~", r"\textasciitilde{}"), ("^", r"\textasciicircum{}"),
     ):
         text = text.replace(char, repl)
     text = text.replace("\x00", r"\textbackslash{}")
+    # \allowbreak after the escaped underscore gives LaTeX a break point inside
+    # long snake_case identifiers (e.g. parameter names) — without it, an
+    # unbroken word wider than its table column overflows into the next cell
+    # instead of wrapping. Restored after the {}-escaping loop above so its
+    # own braces aren't re-escaped into literal visible characters.
+    text = text.replace("\x01", r"\_\allowbreak{}")
     # Then map Unicode characters that typical TeX fonts can't render to their
     # LaTeX equivalents. Safe now \u2014 these macros won't be re-escaped.
     replacements = {
@@ -864,9 +871,26 @@ class Publisher:
         L = []  # LaTeX lines
 
         L.append(r"\documentclass[11pt,a4paper]{article}")
-        L.append(r"\usepackage[utf8]{inputenc}")
-        L.append(r"\usepackage[T1]{fontenc}")
-        L.append(r"\usepackage{lmodern}")
+        # ── Fonts ─────────────────────────────────────────────────────────
+        # The app's UI runs on Inter (sans) + JetBrains Mono. Real Inter (and a
+        # close JetBrains Mono stand-in, Source Code Pro) need OpenType support,
+        # which only exists under XeTeX/LuaTeX — tectonic (the recommended,
+        # default engine) is one. Plain pdflatex can't load either, so this
+        # branches on the compiling engine via `iftex` and falls back to
+        # Helvetica/Courier metric clones (in every base LaTeX install) and, in
+        # the worst case, to bundled Computer Modern — never a hard failure.
+        L.append(r"\usepackage{iftex}")
+        L.append(r"\ifPDFTeX")
+        L.append(r"  \usepackage[utf8]{inputenc}")
+        L.append(r"  \usepackage[T1]{fontenc}")
+        L.append(r"  \IfFileExists{helvet.sty}{\usepackage[scaled=0.92]{helvet}}{}")
+        L.append(r"  \renewcommand{\familydefault}{\sfdefault}")
+        L.append(r"  \IfFileExists{courier.sty}{\usepackage{courier}}{}")
+        L.append(r"\else")
+        L.append(r"  \usepackage{fontspec}")
+        L.append(r"  \IfFileExists{inter.sty}{\usepackage[default]{inter}}{}")
+        L.append(r"  \IfFileExists{sourcecodepro.sty}{\usepackage{sourcecodepro}}{}")
+        L.append(r"\fi")
         L.append(r"\usepackage{geometry}")
         L.append(r"\geometry{margin=2.6cm, includehead, includefoot, headsep=14pt, footskip=28pt}")
         L.append(r"\usepackage[table]{xcolor}")
@@ -885,6 +909,10 @@ class Publisher:
         L.append(r"\usepackage{makecell}")
         L.append(r"\usepackage{xstring}")
         L.append(r"\usepackage{graphicx}")
+        # Pill-shaped badges need tikz for rounded corners; it's not in a
+        # minimal texlive-latex-base install, so this is optional too — the
+        # \pill fallback further down degrades to a flat colour chip.
+        L.append(r"\IfFileExists{tikz.sty}{\usepackage{tikz}\newcommand{\rmhaspill}{1}}{}")
         if is_draft:
             L.append(r"\usepackage{draftwatermark}")
             L.append(f"\\SetWatermarkText{{{status_txt or 'DRAFT'}}}")
@@ -892,24 +920,26 @@ class Publisher:
             L.append(r"\SetWatermarkColor[gray]{0.92}")
 
         # ── Palette ───────────────────────────────────────────────────────
-        # A restrained slate/indigo identity; the status hues supply the accents.
-        L.append(r"\definecolor{accent}{RGB}{37,99,235}")       # indigo-600 — headings, rules
-        L.append(r"\definecolor{accentdark}{RGB}{30,58,138}")   # indigo-900 — title
-        L.append(r"\definecolor{ink}{RGB}{15,23,42}")           # slate-900 — body
-        L.append(r"\definecolor{muted}{RGB}{100,116,139}")      # slate-500 — captions
-        L.append(r"\definecolor{rule}{RGB}{203,213,225}")       # slate-300 — hairlines
-        L.append(r"\definecolor{prop}{RGB}{59,130,246}")
-        L.append(r"\definecolor{appr}{RGB}{22,163,74}")
-        L.append(r"\definecolor{impl}{RGB}{147,51,234}")
-        L.append(r"\definecolor{veri}{RGB}{13,148,136}")
-        L.append(r"\definecolor{rej}{RGB}{220,38,38}")
-        L.append(r"\definecolor{depr}{RGB}{100,116,139}")
-        L.append(r"\definecolor{prihigh}{RGB}{217,119,6}")
-        L.append(r"\definecolor{pricrit}{RGB}{220,38,38}")
-        L.append(r"\definecolor{prlow}{RGB}{100,116,139}")
-        L.append(r"\definecolor{primed}{RGB}{37,99,235}")
-        L.append(r"\definecolor{tabhead}{RGB}{226,232,240}")    # header fill (light, dark text)
-        L.append(r"\definecolor{rowalt}{RGB}{248,250,252}")     # zebra stripe
+        # Matches the app UI exactly — the Cloudscape light-theme CSS variables
+        # (frontend/src/styles/index.css), converted from HSL to RGB, so the
+        # report reads as the same product rather than a generic LaTeX doc.
+        L.append(r"\definecolor{accent}{RGB}{32,148,243}")      # --primary — headings, rules, links
+        L.append(r"\definecolor{accentdark}{RGB}{9,100,174}")   # darker accent — cover title
+        L.append(r"\definecolor{ink}{RGB}{31,39,51}")           # --foreground — body
+        L.append(r"\definecolor{muted}{RGB}{104,119,141}")      # --muted-foreground — captions
+        L.append(r"\definecolor{rule}{RGB}{220,224,229}")       # --border — hairlines
+        L.append(r"\definecolor{prop}{RGB}{32,148,243}")        # --cs-blue — proposed
+        L.append(r"\definecolor{appr}{RGB}{34,160,86}")         # --cs-green — approved
+        L.append(r"\definecolor{impl}{RGB}{119,62,234}")        # --cs-purple — implemented
+        L.append(r"\definecolor{veri}{RGB}{0,143,140}")         # --cs-teal — verified
+        L.append(r"\definecolor{rej}{RGB}{237,44,44}")          # --cs-red — rejected
+        L.append(r"\definecolor{depr}{RGB}{133,144,147}")       # --cs-grey — deprecated
+        L.append(r"\definecolor{prihigh}{RGB}{255,119,0}")      # --cs-orange — high priority
+        L.append(r"\definecolor{pricrit}{RGB}{237,44,44}")      # --cs-red — critical priority
+        L.append(r"\definecolor{prlow}{RGB}{133,144,147}")      # --cs-grey — low priority
+        L.append(r"\definecolor{primed}{RGB}{32,148,243}")      # --cs-blue — medium priority
+        L.append(r"\definecolor{tabhead}{RGB}{232,243,252}")    # --accent (light) — table header fill
+        L.append(r"\definecolor{rowalt}{RGB}{250,251,252}")     # --background — zebra stripe
 
         L.append(r"\usepackage{hyperref}")
         L.append(r"\hypersetup{colorlinks=true,linkcolor=accent,urlcolor=accent,citecolor=accent}")
@@ -952,33 +982,69 @@ class Publisher:
         L.append(r"\renewcommand{\headrule}{\color{rule}\hrule width\headwidth height\headrulewidth}")
         L.append(r"\renewcommand{\footrule}{\color{rule}\hrule width\headwidth height\footrulewidth}")
 
+        # Pill-shaped badge, matching the app's rounded status/priority chips
+        # (tinted fill + solid text, no border). Rounded corners need tikz; if
+        # it isn't installed (see the \IfFileExists guard above) this falls
+        # back to a flat colour chip rather than failing the whole document.
+        L.append(r"\newcommand{\pill}[2]{%")
+        L.append(r"  \ifdefined\rmhaspill")
+        L.append(r"    \tikz[baseline=(P.base)]{\node[fill=#1!13,rounded corners=4.5pt,inner xsep=6pt,inner ysep=2.2pt,text=#1,font=\bfseries\footnotesize] (P) {#2};}%")
+        L.append(r"  \else")
+        L.append(r"    \colorbox{#1!18}{\textcolor{#1}{\textbf{\footnotesize #2}}}%")
+        L.append(r"  \fi")
+        L.append(r"}")
+        # KPI stat card (Project Overview) — a soft tinted, rounded card behind
+        # the big number, matching the app's summary cards. Same tikz/fallback
+        # split as \pill.
+        L.append(r"\newcommand{\statcard}[2]{%")
+        L.append(r"  \ifdefined\rmhaspill")
+        L.append(r"    \tikz[baseline=(S.base)]{\node[fill=accent!5,rounded corners=6pt,inner sep=10pt,align=center,minimum width=3.0cm] (S) {\shortstack{{\fontsize{26}{30}\selectfont\bfseries\color{accent} #1}\\[3pt]{\footnotesize\color{muted} #2}}};}%")
+        L.append(r"  \else")
+        L.append(r"    \makecell{{\fontsize{26}{30}\selectfont\bfseries\color{accent} #1}\\[3pt]{\footnotesize\color{muted} #2}}%")
+        L.append(r"  \fi")
+        L.append(r"}")
+        # Distribution bar (Status/Priority/Type tables) — a rounded fill on a
+        # neutral track, matching the app's progress-bar convention, instead
+        # of a bare coloured rule floating on white.
+        L.append(r"\newcommand{\distbar}[3]{%")  # #1 colour, #2 fill width (cm, no unit), #3 track width
+        L.append(r"  \ifdefined\rmhaspill")
+        L.append(r"    \begin{tikzpicture}[baseline=-0.5ex, x=1cm]")
+        L.append(r"      \draw[rule,line width=9pt,line cap=round] (0,0) -- (#3,0);")
+        L.append(r"      \draw[#1,line width=9pt,line cap=round] (0,0) -- (#2,0);")
+        L.append(r"    \end{tikzpicture}%")
+        L.append(r"  \else")
+        L.append(r"    \textcolor{#1}{\rule{#2cm}{9pt}}%")
+        L.append(r"  \fi")
+        L.append(r"}")
         # Badge commands — use \IfStrEqCase (xstring) instead of nested
         # \ifthenelse to avoid brace-counting errors.
-        L.append(r"\setlength{\fboxsep}{2.5pt}")
         L.append(r"\newcommand{\statusbadge}[1]{%")
         L.append(r"  \IfStrEqCase{#1}{%")
-        L.append(r"    {proposed}{\colorbox{prop!20}{\textcolor{prop}{\textbf{\small proposed}}}}%")
-        L.append(r"    {approved}{\colorbox{appr!20}{\textcolor{appr}{\textbf{\small approved}}}}%")
-        L.append(r"    {implemented}{\colorbox{impl!20}{\textcolor{impl}{\textbf{\small implemented}}}}%")
-        L.append(r"    {verified}{\colorbox{veri!20}{\textcolor{veri}{\textbf{\small verified}}}}%")
-        L.append(r"    {rejected}{\colorbox{rej!20}{\textcolor{rej}{\textbf{\small rejected}}}}%")
-        L.append(r"    {passed}{\colorbox{appr!20}{\textcolor{appr}{\textbf{\small passed}}}}%")
-        L.append(r"    {failed}{\colorbox{rej!20}{\textcolor{rej}{\textbf{\small failed}}}}%")
-        L.append(r"    {pending}{\colorbox{tabhead}{\textcolor{depr}{\textbf{\small pending}}}}%")
-        L.append(r"    {in_progress}{\colorbox{prop!20}{\textcolor{prop}{\textbf{\small in progress}}}}%")
-        L.append(r"    {submitted}{\colorbox{prop!20}{\textcolor{prop}{\textbf{\small submitted}}}}%")
-        L.append(r"    {in_review}{\colorbox{prop!20}{\textcolor{prop}{\textbf{\small in review}}}}%")
-        L.append(r"    {open}{\colorbox{prop!20}{\textcolor{prop}{\textbf{\small open}}}}%")
-        L.append(r"    {closed}{\colorbox{depr!20}{\textcolor{depr}{\textbf{\small closed}}}}%")
-        L.append(r"    {mitigated}{\colorbox{appr!20}{\textcolor{appr}{\textbf{\small mitigated}}}}%")
-        L.append(r"    {deprecated}{\colorbox{depr!20}{\textcolor{depr}{\textbf{\small deprecated}}}}%")
-        L.append(r"  }[\colorbox{tabhead}{\textcolor{depr}{\textbf{\small #1}}}]%")
+        L.append(r"    {proposed}{\pill{prop}{proposed}}%")
+        L.append(r"    {approved}{\pill{appr}{approved}}%")
+        L.append(r"    {implemented}{\pill{impl}{implemented}}%")
+        L.append(r"    {verified}{\pill{veri}{verified}}%")
+        L.append(r"    {rejected}{\pill{rej}{rejected}}%")
+        L.append(r"    {passed}{\pill{appr}{passed}}%")
+        L.append(r"    {failed}{\pill{rej}{failed}}%")
+        L.append(r"    {pending}{\pill{depr}{pending}}%")
+        L.append(r"    {in_progress}{\pill{prop}{in progress}}%")
+        L.append(r"    {submitted}{\pill{prop}{submitted}}%")
+        L.append(r"    {in_review}{\pill{prop}{in review}}%")
+        L.append(r"    {open}{\pill{prop}{open}}%")
+        L.append(r"    {closed}{\pill{depr}{closed}}%")
+        L.append(r"    {mitigated}{\pill{appr}{mitigated}}%")
+        L.append(r"    {deprecated}{\pill{depr}{deprecated}}%")
+        L.append(r"  }[\pill{depr}{#1}]%")
         L.append(r"}")
         L.append(r"\newcommand{\prioritybadge}[1]{%")
-        L.append(r"  \ifthenelse{\equal{#1}{critical}}{\textcolor{pricrit}{\textbf{#1}}}{%")
-        L.append(r"  \ifthenelse{\equal{#1}{high}}{\textcolor{prihigh}{\textbf{#1}}}{%")
-        L.append(r"  \ifthenelse{\equal{#1}{medium}}{\textcolor{primed}{\textbf{#1}}}{%")
-        L.append(r"  \textcolor{prlow}{\textbf{#1}}}}}}")
+        L.append(r"  \IfStrEqCase{#1}{%")
+        L.append(r"    {critical}{\pill{pricrit}{critical}}%")
+        L.append(r"    {high}{\pill{prihigh}{high}}%")
+        L.append(r"    {medium}{\pill{primed}{medium}}%")
+        L.append(r"    {low}{\pill{prlow}{low}}%")
+        L.append(r"  }[\pill{prlow}{#1}]%")
+        L.append(r"}")
 
         L.append(r"\begin{document}")
         L.append(r"\color{ink}")
@@ -1164,8 +1230,7 @@ class Publisher:
         L.append(r"\section{Project Overview}\label{sec:overview}")
 
         def _stat(n, label):
-            return (r"\makecell{{\fontsize{26}{30}\selectfont\bfseries\color{accent} "
-                    f"{n}}}\\\\[3pt]{{\\footnotesize\\color{{muted}} {label}}}}}")
+            return f"\\statcard{{{n}}}{{{label}}}"
 
         L.append(r"\begin{tabularx}{\textwidth}{*{4}{>{\centering\arraybackslash}X}}")
         L.append(r"\toprule")
@@ -1195,7 +1260,7 @@ class Publisher:
                 w = max(round(pct / 100 * 5.5, 2), 0.03)
                 color = colors.get(label, "accent")
                 disp = _latex_escape(label.replace("_", " ").title())
-                bar = f"\\textcolor{{{color}}}{{\\rule{{{w}cm}}{{9pt}}}}" if pct > 0 else ""
+                bar = f"\\distbar{{{color}}}{{{w}}}{{5.5}}" if pct > 0 else ""
                 stripe = r"\rowcolor{rowalt}" if i % 2 else ""
                 out.append(f"{stripe}{disp} & {count} & {pct}\\% & {bar} \\\\")
             out.append(r"\bottomrule")
@@ -1420,7 +1485,6 @@ class Publisher:
                 if spec.get("requirements"):
                     L.append(f"\\textbf{{Linked Requirements:}} \\texttt{{{reqs}}}")
                 L.append(r"\vspace{0.5em}")
-            L.append(r"\newpage")
 
         # ── Baselines ─────────────────────────────────────────────────────
         if "baselines" in sections:
@@ -1452,7 +1516,6 @@ class Publisher:
                 L.append(r"\end{longtable}")
             else:
                 L.append(r"No baselines defined.")
-            L.append(r"\newpage")
 
         # ── Change Requests ───────────────────────────────────────────────
         if "changes" in sections:
@@ -1480,7 +1543,6 @@ class Publisher:
                     L.append(f"\\texttt{{{cid}}} & {title} & \\statusbadge{{{status}}} & {affected or '---'} \\\\")
                     L.append(r"\midrule")
                 L.append(r"\end{longtable}")
-                L.append(r"\newpage")
 
         # ── Quality Metrics ───────────────────────────────────────────────
         if "quality" in sections:
@@ -1512,7 +1574,6 @@ class Publisher:
                 L.append(f"{_latex_escape(display)} & {cnt} / {total_reqs} & {pct}\\% \\\\")
                 L.append(r"\midrule")
             L.append(r"\end{longtable}")
-            L.append(r"\newpage")
 
         # ── Gap Analysis ──────────────────────────────────────────────────
         if "gaps" in sections:
@@ -1551,7 +1612,6 @@ class Publisher:
                 L.append(r"\end{longtable}")
             else:
                 L.append(r"No gaps detected.")
-            L.append(r"\newpage")
 
         # ── Decisions ────────────────────────────────────────────────────
         if "decisions" in sections:
@@ -1580,7 +1640,6 @@ class Publisher:
                     L.append(f"\\texttt{{{did}}} & {title} & {decision} & {rationale} & \\statusbadge{{{status}}} \\\\")
                     L.append(r"\midrule")
                 L.append(r"\end{longtable}")
-                L.append(r"\newpage")
 
         # ── Appendices ────────────────────────────────────────────────────
         # Reference/supporting material becomes lettered appendices (A, B, …).
@@ -1629,7 +1688,6 @@ class Publisher:
                 L.append(f"\\textbf{{{_latex_escape(term)}}} & {_latex_escape(definition)} \\\\")
                 L.append(r"\midrule")
             L.append(r"\end{longtable}")
-            L.append(r"\newpage")
 
         # ── Conflicts ─────────────────────────────────────────────────────
         if "conflicts" in sections:
@@ -1660,7 +1718,6 @@ class Publisher:
                         b = _latex_escape(c.get("b", ""))
                         L.append(f"\\textbf{{Conflict:}} \\texttt{{{a}}} $\\leftrightarrow$ \\texttt{{{b}}}")
                     L.append(r"")
-                L.append(r"\newpage")
 
         # ── Parameters & Constraints ──────────────────────────────────────
         if "parameters" in sections:
