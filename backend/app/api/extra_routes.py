@@ -873,7 +873,7 @@ async def publish_project(project_id: str, data: PublishRequest, user: dict = De
 
 
 @router.get("/projects/{project_id}/publish/download")
-async def download_report(project_id: str, format: str = "html", subsystems: str = "", sections: str = ""):
+async def download_report(project_id: str, format: str = "html", subsystems: str | None = None, sections: str = ""):
     import os
     import tempfile
 
@@ -881,7 +881,11 @@ async def download_report(project_id: str, format: str = "html", subsystems: str
     from starlette.background import BackgroundTask
 
     store = get_store(project_id)
-    sub_list = [s.strip() for s in subsystems.split(",") if s.strip()] if subsystems else None
+    # `subsystems` unset means "no filter" (all requirements); `subsystems=""`
+    # means an explicit filter selecting zero subsystems. These must stay
+    # distinguishable — collapsing them here previously made "select none" in
+    # the export dialog silently export everything.
+    sub_list = [s.strip() for s in subsystems.split(",") if s.strip()] if subsystems is not None else None
     pub = Publisher(store, sub_list)
     ext_map = {"html": "html", "pdf": "pdf", "md": "md", "latex": "tex", "reqif": "xml", "sysml": "sysml", "csv": "csv", "tsv": "tsv", "xlsx": "xlsx"}
     if format not in ext_map:

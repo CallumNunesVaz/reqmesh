@@ -569,13 +569,13 @@ def _collect_deps() -> list[dict]:
 
 
 @router.get("/dependencies")
-async def list_dependencies():
+async def list_dependencies(admin: dict = Depends(require_admin)):
     import asyncio
     return await asyncio.to_thread(_collect_deps)
 
 
 @router.post("/dependencies/{dep_id}/test")
-async def test_dependency(dep_id: str):
+async def test_dependency(dep_id: str, admin: dict = Depends(require_admin)):
     e2e_name = f"{dep_id}-e2e"
     checker = DEPENDENCY_CHECKERS.get(e2e_name)
     if checker is None:

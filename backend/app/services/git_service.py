@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import subprocess
 import threading
 import time
@@ -224,6 +225,9 @@ def _flush_all() -> None:
         push_to_remote(root)
 
 
+_HASH_RE = re.compile(r"^[0-9a-fA-F]{4,40}$")
+
+
 def restore_commit(project_root: Path, commit_hash: str, username: str = "") -> bool:
     """Restore the working tree to the state of a past commit.
 
@@ -233,10 +237,26 @@ def restore_commit(project_root: Path, commit_hash: str, username: str = "") -> 
     project_root = Path(project_root)
     if not is_repo(project_root):
         return False
+    # `commit_hash` comes straight from the API request. Reject anything that
+    # isn't hex up front, then resolve it through `rev-parse` and check out
+    # *that* output rather than the raw input — this guarantees the value
+    # handed to `checkout` is always a real commit object in this repo, never
+    # a crafted string that git could parse as an option (e.g. "--orphan=x").
+    if not _HASH_RE.match(commit_hash):
+        logger.warning("git restore rejected: %r is not a valid commit hash", commit_hash)
+        return False
     try:
         ident = _identity_for(project_root, username)
+        verify = subprocess.run(
+            ["git", "rev-parse", "--verify", "-q", commit_hash + "^{commit}"],
+            cwd=str(project_root), capture_output=True, text=True, timeout=10,
+        )
+        resolved = verify.stdout.strip()
+        if verify.returncode != 0 or not resolved:
+            logger.warning("git restore: %r does not resolve to a commit in %s", commit_hash, project_root)
+            return False
         r = subprocess.run(
-            ["git", *ident, "checkout", commit_hash, "--", "."],
+            ["git", *ident, "checkout", resolved, "--", "."],
             cwd=str(project_root), capture_output=True, text=True, timeout=30,
         )
         if r.returncode != 0:

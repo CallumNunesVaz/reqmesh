@@ -152,9 +152,15 @@ export default function ExportDialog({ open, onClose, projectId }: ExportDialogP
       if (isPdf) setDownloadStatus('Rendering PDF via HTML fallback…');
     }, 8000);
     try {
-      const subsystems = groupSelectAll ? '' : [...selectedGroups].join(',');
+      // groupSelectAll means "no filter" (omit the param entirely). Otherwise
+      // the filter is explicit and must be sent even when it's empty — an
+      // omitted param and an empty one mean very different things to the
+      // backend (all requirements vs. none), and collapsing them here used
+      // to silently export everything when the user picked "None".
+      const hasGroupFilter = !groupSelectAll;
+      const subsystems = [...selectedGroups].join(',');
       const secsParam = isReportFormat(format) ? `&sections=${encodeURIComponent(sections.join(','))}` : '';
-      const qs = subsystems
+      const qs = hasGroupFilter
         ? `?format=${format}&subsystems=${encodeURIComponent(subsystems)}${secsParam}`
         : `?format=${format}${secsParam}`;
       const auth = (() => { try { return localStorage.getItem('rt-token'); } catch { return null; } })();
@@ -396,8 +402,9 @@ export default function ExportDialog({ open, onClose, projectId }: ExportDialogP
               <div className="flex gap-2 pt-2 border-t">
                 <button
                   onClick={handleDownload}
-                  disabled={downloading}
+                  disabled={downloading || selectedCount === 0}
                   className="btn-primary flex-1 justify-center"
+                  title={selectedCount === 0 ? 'Select at least one subsystem' : undefined}
                 >
                   {downloading ? (
                     <><Loader size={14} className="animate-spin" /> Generating…</>

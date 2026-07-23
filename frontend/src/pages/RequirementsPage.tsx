@@ -232,43 +232,60 @@ export default function RequirementsPage() {
     const ok = await showConfirm(`Delete ${ids.length} requirement(s)?`, 'Bulk Delete');
     if (!ok) return;
     const saved = requirements.filter((r) => ids.includes(r.id)).map((r) => ({ ...r }));
-    await api.bulkDeleteRequirements(projectId, ids);
-    useUndoStore.getState().push({
-      description: `Delete ${ids.length} requirements`,
-      undo: async () => {
-        for (const r of saved) {
-          await api.createRequirement(projectId, r);
-        }
-      },
-      redo: async () => { await api.bulkDeleteRequirements(projectId, ids); },
-    });
-    bumpGraphVersion();
-    bumpDataVersion();
-    if (selectedReqId && ids.includes(selectedReqId)) selectReq(null);
-    clearSelection();
-    load();
+    try {
+      await api.bulkDeleteRequirements(projectId, ids);
+      useUndoStore.getState().push({
+        description: `Delete ${ids.length} requirements`,
+        undo: async () => {
+          for (const r of saved) {
+            await api.createRequirement(projectId, r);
+          }
+        },
+        redo: async () => { await api.bulkDeleteRequirements(projectId, ids); },
+      });
+      bumpGraphVersion();
+      bumpDataVersion();
+      if (selectedReqId && ids.includes(selectedReqId)) selectReq(null);
+      clearSelection();
+      load();
+    } catch {
+      // Failure leaves the selection intact so the user can retry; avoid
+      // clearing selection/undo state for a mutation that never happened.
+    }
   };
 
   const handleBulkBaseline = async (baseline: string) => {
     if (!projectId) return;
-    await api.bulkUpdateRequirements(projectId, [...selectedIds], { baselines: [baseline] });
-    clearSelection();
-    load();
+    try {
+      await api.bulkUpdateRequirements(projectId, [...selectedIds], { baselines: [baseline] });
+      clearSelection();
+      load();
+    } catch {
+      // Leave selection intact so the user can see what was being changed and retry.
+    }
   };
 
   const handleBulkReparent = async () => {
     if (!bulkParent.trim()) return;
-    await api.bulkReparentRequirements(projectId!, [...selectedIds], bulkParent.trim(), true);
-    clearSelection();
-    load();
-    setBulkParent('');
+    try {
+      await api.bulkReparentRequirements(projectId!, [...selectedIds], bulkParent.trim(), true);
+      clearSelection();
+      load();
+      setBulkParent('');
+    } catch {
+      // Leave selection/input intact so the user can retry.
+    }
   };
 
   const handleSingleReparent = async () => {
     if (!moveReq || !moveReq.target.trim()) return;
-    await api.bulkReparentRequirements(projectId!, [moveReq.id], moveReq.target.trim(), true);
-    setMoveReq(null);
-    load();
+    try {
+      await api.bulkReparentRequirements(projectId!, [moveReq.id], moveReq.target.trim(), true);
+      setMoveReq(null);
+      load();
+    } catch {
+      // Leave the move-target input open so the user can retry.
+    }
   };
 
   return (

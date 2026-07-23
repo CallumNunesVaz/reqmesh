@@ -47,8 +47,11 @@ export interface BlockNodeData {
   cascadeFrom: string | null;
   hasChildren: boolean;
   collapsed: boolean;
+  groupsOnly?: boolean;
   childCount?: number;
+  subgroupCount?: number;
   onExpandCollapse?: () => void;
+  onExpandGroups?: () => void;
   onToggleDescendants?: () => void;
   onSelect?: () => void;
   hasMissingInfo?: boolean;
@@ -208,27 +211,38 @@ function BlockNode({ data }: NodeProps) {
       </span>
       <span className="font-mono text-[9px] text-muted-foreground">{d.label}</span>
       {d.hasChildren && (
-        <button
-          className="ml-auto flex items-center gap-0.5 px-1 py-0.5 rounded hover:bg-white/10 transition-colors"
-          onClick={(e) => { e.stopPropagation(); d.onExpandCollapse?.(); d.onSelect?.(); }}
-          title={d.collapsed ? `Expand (${d.childCount} hidden)` : 'Collapse'}
-        >
-          {d.collapsed
-            ? <ChevronRight size={10} className="text-muted-foreground" />
-            : <ChevronDown size={10} className="text-muted-foreground" />}
-          <span className="text-[8.5px] text-muted-foreground">{d.childCount}</span>
-        </button>
-      )}
-      {d.hasChildren && (
-        <button
-          className="flex items-center px-0.5 py-0.5 rounded hover:bg-white/10 transition-colors"
-          onClick={(e) => { e.stopPropagation(); d.onToggleDescendants?.(); d.onSelect?.(); }}
-          title={d.collapsed ? 'Expand all descendants' : 'Collapse all descendants'}
-        >
-          {d.collapsed
-            ? <ChevronsDown size={10} className="text-muted-foreground" />
-            : <ChevronsUp size={10} className="text-muted-foreground" />}
-        </button>
+        <div className="ml-auto flex items-center gap-1">
+          {/* Button 1 (single chevron): reveal only the direct children that
+              are themselves parents (subgroups). Count = subgroup children. */}
+          {(d.subgroupCount ?? 0) > 0 && (
+            <button
+              className="flex items-center gap-0.5 px-1 py-0.5 rounded hover:bg-white/10 transition-colors"
+              onClick={(e) => { e.stopPropagation(); d.onExpandGroups?.(); d.onSelect?.(); }}
+              title={d.collapsed
+                ? `Reveal ${d.subgroupCount} subgroup${d.subgroupCount === 1 ? '' : 's'}`
+                : 'Collapse'}
+            >
+              {d.collapsed
+                ? <ChevronRight size={10} className="text-muted-foreground" />
+                : <ChevronDown size={10} className="text-muted-foreground" />}
+              <span className="text-[8.5px] text-muted-foreground">{d.subgroupCount}</span>
+            </button>
+          )}
+          {/* Button 2 (double chevron): reveal ALL children (every descendant).
+              Count = total descendants. */}
+          <button
+            className="flex items-center gap-0.5 px-1 py-0.5 rounded hover:bg-white/10 transition-colors"
+            onClick={(e) => { e.stopPropagation(); d.onToggleDescendants?.(); d.onSelect?.(); }}
+            title={(d.collapsed || d.groupsOnly)
+              ? `Reveal all ${d.childCount} descendants`
+              : 'Collapse all descendants'}
+          >
+            {(d.collapsed || d.groupsOnly)
+              ? <ChevronsDown size={10} className="text-muted-foreground" />
+              : <ChevronsUp size={10} className="text-muted-foreground" />}
+            <span className="text-[8.5px] text-muted-foreground">{d.childCount}</span>
+          </button>
+        </div>
       )}
     </div>
   );

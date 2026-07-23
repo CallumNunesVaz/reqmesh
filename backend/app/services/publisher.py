@@ -251,7 +251,7 @@ class Publisher:
         self.now_str = self.now.strftime("%Y-%m-%d %H:%M UTC")
         self._toc = []  # list of (level, label, anchor) for TOC
 
-        if subsystems:
+        if subsystems is not None:
             ids = set()
             def collect(root_id):
                 ids.add(root_id)
