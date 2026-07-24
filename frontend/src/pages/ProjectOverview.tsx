@@ -188,7 +188,7 @@ export default function ProjectOverview() {
     .map(([k, v]) => ({ name: k, count: v, fill: priorityColors.medium }));
 
   return (
-    <div className="max-w-6xl mx-auto p-8">
+    <div className="max-w-6xl mx-auto p-4 @3xl:p-8">
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">{project?.name || projectId}</h1>
@@ -202,7 +202,7 @@ export default function ProjectOverview() {
       </motion.div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mt-6">
+      <div className="grid grid-cols-2 @2xl:grid-cols-3 @4xl:grid-cols-5 gap-4 mt-6">
         {statCards.map((card, i) => {
           const Icon = card.icon;
           return (
@@ -225,7 +225,7 @@ export default function ProjectOverview() {
       </div>
 
       {/* Row 1: Status + Quality */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+      <div className="grid grid-cols-1 @3xl:grid-cols-2 gap-6 mt-6">
         {/* Requirement Status */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="card p-5">
           <h2 className="font-semibold text-sm text-card-foreground mb-4 flex items-center gap-2">
@@ -294,7 +294,7 @@ export default function ProjectOverview() {
       </div>
 
       {/* Row 2: Priority + Type (charts) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+      <div className="grid grid-cols-1 @3xl:grid-cols-2 gap-6 mt-6">
         {/* Priority Distribution */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }} className="card p-5">
           <h2 className="font-semibold text-sm text-card-foreground mb-3 flex items-center gap-2">
@@ -370,7 +370,7 @@ export default function ProjectOverview() {
       </div>
 
       {/* Row 3: Verification Method + Verification Progress */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+      <div className="grid grid-cols-1 @3xl:grid-cols-2 gap-6 mt-6">
         {/* Verification Method */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }} className="card p-5">
           <h2 className="font-semibold text-sm text-card-foreground mb-3 flex items-center gap-2">

@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { api, type SystemInfo, type UpdateCheck, type UpdateStatus, type BuildInfo } from '../api/client';
 import { useAuthStore } from '../store/auth';
+import BodyPortal from '../components/BodyPortal';
 
 /** States during which the update is actively running and we should poll. */
 const ACTIVE = new Set(['preparing', 'requested', 'in_progress']);
@@ -240,24 +241,24 @@ export default function SystemPage() {
       <section className="card p-5">
         <h2 className="font-medium mb-3 flex items-center gap-2"><Monitor size={16} /> Environment</h2>
         <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
-          <dt className="text-muted-foreground col-span-2 sm:col-span-1"><Globe size={13} className="inline mr-1" /> Hostname</dt>
-          <dd className="col-span-2 sm:col-span-1 font-mono text-xs">{info?.fqdn ?? '…'}{info?.hostname !== info?.fqdn ? ` (${info?.hostname})` : ''}</dd>
-          <dt className="text-muted-foreground col-span-2 sm:col-span-1"><Network size={13} className="inline mr-1" /> IP addresses</dt>
-          <dd className="col-span-2 sm:col-span-1 font-mono text-xs">{(info?.internal_ips ?? []).join(', ') || '…'}</dd>
-          <dt className="text-muted-foreground col-span-2 sm:col-span-1"><Monitor size={13} className="inline mr-1" /> OS</dt>
-          <dd className="col-span-2 sm:col-span-1 font-mono text-xs">{info?.os ? `${info.os.system} ${info.os.release} (${info.os.machine})` : '…'}</dd>
-          <dt className="text-muted-foreground col-span-2 sm:col-span-1"><Terminal size={13} className="inline mr-1" /> Python</dt>
-          <dd className="col-span-2 sm:col-span-1 font-mono text-xs">{info?.os?.python ?? '…'}</dd>
-          <dt className="text-muted-foreground col-span-2 sm:col-span-1"><Clock size={13} className="inline mr-1" /> App uptime</dt>
-          <dd className="col-span-2 sm:col-span-1 font-mono text-xs">
+          <dt className="text-muted-foreground col-span-2 @xl:col-span-1"><Globe size={13} className="inline mr-1" /> Hostname</dt>
+          <dd className="col-span-2 @xl:col-span-1 font-mono text-xs">{info?.fqdn ?? '…'}{info?.hostname !== info?.fqdn ? ` (${info?.hostname})` : ''}</dd>
+          <dt className="text-muted-foreground col-span-2 @xl:col-span-1"><Network size={13} className="inline mr-1" /> IP addresses</dt>
+          <dd className="col-span-2 @xl:col-span-1 font-mono text-xs">{(info?.internal_ips ?? []).join(', ') || '…'}</dd>
+          <dt className="text-muted-foreground col-span-2 @xl:col-span-1"><Monitor size={13} className="inline mr-1" /> OS</dt>
+          <dd className="col-span-2 @xl:col-span-1 font-mono text-xs">{info?.os ? `${info.os.system} ${info.os.release} (${info.os.machine})` : '…'}</dd>
+          <dt className="text-muted-foreground col-span-2 @xl:col-span-1"><Terminal size={13} className="inline mr-1" /> Python</dt>
+          <dd className="col-span-2 @xl:col-span-1 font-mono text-xs">{info?.os?.python ?? '…'}</dd>
+          <dt className="text-muted-foreground col-span-2 @xl:col-span-1"><Clock size={13} className="inline mr-1" /> App uptime</dt>
+          <dd className="col-span-2 @xl:col-span-1 font-mono text-xs">
             {info ? formatUptime(info.process_uptime_seconds) : '…'}
           </dd>
-          <dt className="text-muted-foreground col-span-2 sm:col-span-1"><Server size={13} className="inline mr-1" /> Working directory</dt>
-          <dd className="col-span-2 sm:col-span-1 font-mono text-xs truncate">{info?.working_directory ?? '…'}</dd>
-          <dt className="text-muted-foreground col-span-2 sm:col-span-1"><ShieldCheck size={13} className="inline mr-1" /> Running as</dt>
-          <dd className="col-span-2 sm:col-span-1 font-mono text-xs">{info?.running_user ?? '…'}{info?.docker ? ' (Docker)' : ''}</dd>
-          <dt className="text-muted-foreground col-span-2 sm:col-span-1"><FileText size={13} className="inline mr-1" /> PDF reports</dt>
-          <dd className="col-span-2 sm:col-span-1 font-mono text-xs">
+          <dt className="text-muted-foreground col-span-2 @xl:col-span-1"><Server size={13} className="inline mr-1" /> Working directory</dt>
+          <dd className="col-span-2 @xl:col-span-1 font-mono text-xs truncate">{info?.working_directory ?? '…'}</dd>
+          <dt className="text-muted-foreground col-span-2 @xl:col-span-1"><ShieldCheck size={13} className="inline mr-1" /> Running as</dt>
+          <dd className="col-span-2 @xl:col-span-1 font-mono text-xs">{info?.running_user ?? '…'}{info?.docker ? ' (Docker)' : ''}</dd>
+          <dt className="text-muted-foreground col-span-2 @xl:col-span-1"><FileText size={13} className="inline mr-1" /> PDF reports</dt>
+          <dd className="col-span-2 @xl:col-span-1 font-mono text-xs">
             {info == null ? '…' : info.latex_engine
               ? `LaTeX (${info.latex_engine})`
               : 'HTML fallback — no LaTeX engine'}
@@ -490,6 +491,7 @@ export default function SystemPage() {
 
       {/* ── Confirm dialog ───────────────────────────────────────── */}
       {confirming && (
+        <BodyPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setConfirming(false)}>
           <div className="card p-6 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
             <h3 className="font-semibold flex items-center gap-2"><Download size={18} /> Update to v{check?.latest}?</h3>
@@ -506,10 +508,12 @@ export default function SystemPage() {
             </div>
           </div>
         </div>
+        </BodyPortal>
       )}
 
       {/* ── Confirm restart ──────────────────────────────────────── */}
       {confirmRestart && (
+        <BodyPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setConfirmRestart(false)}>
           <div className="card p-6 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
             <h3 className="font-semibold flex items-center gap-2"><Power size={18} /> Restart the application?</h3>
@@ -525,10 +529,12 @@ export default function SystemPage() {
             </div>
           </div>
         </div>
+        </BodyPortal>
       )}
 
       {/* ── Install dependency modal ──────────────────────────────── */}
       {installDep && (
+        <BodyPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-[2px] p-4" onClick={() => setInstallDep(null)}>
           <div className="card p-5 max-w-lg w-full shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-start justify-between mb-4">
@@ -563,6 +569,7 @@ export default function SystemPage() {
             </div>
           </div>
         </div>
+        </BodyPortal>
       )}
     </div>
   );

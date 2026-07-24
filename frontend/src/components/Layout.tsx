@@ -237,7 +237,9 @@ export default function Layout() {
     <GraphPaneCtx.Provider value={{ graphOpen, toggleGraph }}>
     <SelectedReqCtx.Provider value={{ selectedReqId, selectReq }}>
       <div className="h-screen flex flex-col bg-background">
-        <header className="h-14 border-b bg-card flex items-center px-3 gap-2 shrink-0 z-40">
+        {/* overflow-x-auto: at very narrow windows the icon row degrades to a
+            horizontal scroll instead of buttons overlapping each other. */}
+        <header className="h-14 border-b bg-card flex items-center px-3 gap-2 shrink-0 z-40 overflow-x-auto overflow-y-hidden">
           <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity shrink-0">
             <img src="/reqmesh-mark.png" alt="reqmesh" className="w-7 h-7" />
             <InstanceName />
@@ -476,7 +478,7 @@ export default function Layout() {
               the canvas is closed or off-project). */}
           {(!isInProject || contextOpen) && (
             <main
-              className="overflow-auto"
+              className="overflow-auto @container"
               style={{
                 flex: isInProject ? `${1 - graphFrac} 1 0%` : '1 1 0%',
                 minWidth: 0,

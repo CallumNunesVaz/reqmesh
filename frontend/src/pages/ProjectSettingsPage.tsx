@@ -222,7 +222,7 @@ export default function ProjectSettingsPage() {
                 <code className="text-xs bg-muted px-2 py-0.5 rounded font-mono">{example(rule)}</code>
                 <span className="text-[10px] text-muted-foreground/50">(preview)</span>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 @xl:grid-cols-3 gap-2">
                 <div>
                   <label className="label text-[10px]">Prefix hint</label>
                   <input className="input text-xs font-mono" value={rule.prefix_hint}

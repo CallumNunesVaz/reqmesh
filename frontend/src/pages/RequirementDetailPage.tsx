@@ -303,7 +303,7 @@ export default function RequirementDetailPage() {
           <CheckCircle2 size={14} /> Saved
         </div>
       )}
-      <div className="flex items-center gap-3 mb-6">
+      <div className="flex flex-wrap items-center gap-3 mb-6">
         <button onClick={() => navigate(`/project/${projectId}/requirements`)} className="btn-secondary p-2">
           <ArrowLeft size={16} />
         </button>
@@ -348,8 +348,8 @@ export default function RequirementDetailPage() {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
+      <div className="grid grid-cols-1 @4xl:grid-cols-3 gap-6">
+        <div className="@4xl:col-span-2 space-y-6">
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="card p-5">
             <label className="label">Name</label>
             <input
@@ -389,7 +389,7 @@ export default function RequirementDetailPage() {
             {editable && (
             <div className="flex items-end gap-1.5 mb-4">
               <div className="flex-1 bg-muted/40 rounded-lg p-2.5 border">
-                <div className="flex items-center gap-1.5 text-[11px]">
+                <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
                   <span className="font-mono font-semibold text-foreground">{req.id}</span>
                   <ArrowRight size={12} className="text-muted-foreground shrink-0" />
                   <select className="bg-transparent text-[11px] font-medium text-primary border-b border-dashed border-primary/30 px-0.5 py-px outline-none cursor-pointer" value={newRelType} onChange={(e) => setNewRelType(e.target.value)}>
@@ -402,7 +402,7 @@ export default function RequirementDetailPage() {
                   </select>
                   <ArrowRight size={12} className="text-muted-foreground shrink-0" />
                   <AutocompleteInput
-                    className="bg-transparent flex-1 text-[11px] font-mono outline-none min-w-0 placeholder:text-muted-foreground/50"
+                    className="bg-transparent flex-1 text-[11px] font-mono outline-none min-w-[110px] placeholder:text-muted-foreground/50"
                     placeholder="target ID..."
                     value={newRelTarget}
                     onChange={setNewRelTarget}

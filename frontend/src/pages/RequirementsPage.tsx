@@ -13,6 +13,7 @@ import { useSelectedReq } from '../components/Layout';
 import LoadingSplash from '../components/LoadingSplash';
 import RichTextEditor from '../components/RichTextEditor';
 import { useConfirm } from '../components/ConfirmDialog';
+import BodyPortal from '../components/BodyPortal';
 
 const statusStyles: Record<string, { dot: string; text: string }> = {
   proposed: { dot: 'bg-cs-blue', text: 'text-cs-blue' },
@@ -292,7 +293,7 @@ export default function RequirementsPage() {
     <div className="relative max-w-4xl mx-auto px-6 py-6 min-h-[50vh]">
       {loading && requirements.length === 0 && <LoadingSplash label="Loading requirements…" />}
       {/* Header */}
-      <div className="flex items-center justify-between mb-5">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-5">
         <div>
           <h1 className="text-xl font-bold tracking-tight text-foreground">Requirements</h1>
           <p className="text-xs text-muted-foreground mt-0.5">
@@ -302,15 +303,18 @@ export default function RequirementsPage() {
         {editMode && (
           <button onClick={() => setShowCreate(true)} className="btn-primary">
             <Plus size={15} />
-            New Requirement
+            <span className="hidden @sm:inline">New Requirement</span>
+            <span className="@sm:hidden">New</span>
           </button>
         )}
       </div>
 
       {/* Toolbar */}
       <div className="sticky top-0 z-10 -mx-2 px-2 py-2 bg-background/95 backdrop-blur-sm">
-        <div className="flex gap-2">
-          <div className="relative flex-1">
+        {/* flex-wrap + min-w on the search: on a narrow pane the fixed-width
+            selects fold onto extra rows instead of crushing the search box. */}
+        <div className="flex flex-wrap gap-2">
+          <div className="relative flex-1 min-w-[180px]">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input
               ref={searchRef}
@@ -452,14 +456,18 @@ export default function RequirementsPage() {
 
                 <TypeIcon size={13} className={`shrink-0 ${typeCls}`} />
 
-                <span className="font-mono text-[11px] text-muted-foreground shrink-0 w-[4.8rem]">{req.id}</span>
+                <span className="font-mono text-[11px] text-muted-foreground shrink-0 w-auto @md:w-[4.8rem]">{req.id}</span>
 
-                <span className={`text-[13px] truncate shrink-0 max-w-[45%] ${childCount > 0 ? 'font-semibold' : 'font-medium'} text-foreground`}>
+                {/* min-w-0 (not shrink-0): on a narrow pane the name compresses
+                    and truncates instead of pushing the row past the edge. */}
+                <span className={`text-[13px] truncate min-w-0 max-w-[45%] ${childCount > 0 ? 'font-semibold' : 'font-medium'} text-foreground`}>
                   {req.name || 'Untitled'}
                 </span>
 
+                {/* Pane-width tiers: description only on wide panes; priority
+                    chip and the status *word* drop next, leaving the dot. */}
                 {req.description && (
-                  <span className="text-xs text-muted-foreground/70 truncate flex-1 min-w-0 hidden md:inline">
+                  <span className="text-xs text-muted-foreground/70 truncate flex-1 min-w-0 hidden @2xl:inline">
                     {stripHtml(req.description)}
                   </span>
                 )}
@@ -471,11 +479,11 @@ export default function RequirementsPage() {
                     <span className="text-[10px] text-muted-foreground bg-secondary rounded-full px-1.5 py-px">{childCount}</span>
                   )}
                   {priorityChips[req.priority] && (
-                    <span className={`badge border text-[10px] px-1.5 py-px ${priorityChips[req.priority]}`}>{req.priority}</span>
+                    <span className={`badge border text-[10px] px-1.5 py-px hidden @sm:inline-flex ${priorityChips[req.priority]}`}>{req.priority}</span>
                   )}
-                  <span className="flex items-center gap-1.5 w-[5.6rem]">
+                  <span className="flex items-center gap-1.5 w-auto @md:w-[5.6rem]" title={req.status}>
                     <span className={`w-1.5 h-1.5 rounded-full ${status.dot}`} />
-                    <span className="text-[11px] text-muted-foreground capitalize">{req.status}</span>
+                    <span className="text-[11px] text-muted-foreground capitalize hidden @md:inline">{req.status}</span>
                   </span>
                   {req.verification_status === 'passed' && <span className="w-1.5 h-1.5 rounded-full bg-cs-green" title="Verification passed" />}
                   {req.verification_status === 'failed' && <span className="w-1.5 h-1.5 rounded-full bg-cs-red" title="Verification failed" />}
@@ -533,7 +541,7 @@ export default function RequirementsPage() {
       </div>
 
       {selectedIds.size > 0 && editMode && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-card border rounded-xl shadow-2xl px-4 py-3">
+        <div className="sticky bottom-6 z-40 mx-auto w-fit max-w-full flex flex-wrap items-center justify-center gap-3 bg-card border rounded-xl shadow-2xl px-4 py-3">
           <span className="text-xs font-medium text-foreground">{selectedIds.size} selected</span>
           <button onClick={() => setShowBulkEdit(true)} className="btn-primary text-xs">
             <SlidersHorizontal size={13} /> Bulk Edit
@@ -659,6 +667,7 @@ function CreateRequirementModal({
   const parentOptions = [...requirements].sort((a, b) => a.id.localeCompare(b.id));
 
   return (
+    <BodyPortal>
     <AnimatePresence>
       {open && (
         <motion.div
@@ -754,6 +763,7 @@ function CreateRequirementModal({
         </motion.div>
       )}
     </AnimatePresence>
+    </BodyPortal>
   );
 }
 
@@ -881,6 +891,7 @@ function BulkEditModal({
   }).length;
 
   return (
+    <BodyPortal>
     <AnimatePresence>
       {open && (
         <motion.div
@@ -1144,5 +1155,6 @@ function BulkEditModal({
         </motion.div>
       )}
     </AnimatePresence>
+    </BodyPortal>
   );
 }

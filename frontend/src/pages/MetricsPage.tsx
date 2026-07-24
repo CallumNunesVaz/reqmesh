@@ -56,7 +56,7 @@ export default function MetricsPage() {
       <h1 className="text-2xl font-bold text-foreground mb-1">Metrics & Analysis</h1>
       <HelpTip>High-level project health dashboard. Summary cards show overall counts. Quality scores measure completeness (descriptions, rationales, sources). Traceability shows shallow vs deep coverage. Gap analysis flags requirements missing key fields. Parametric constraints show pass/fail from the evaluation engine.</HelpTip>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 @3xl:grid-cols-4 gap-4 mb-6">
         {[
           { label: 'Total Requirements', value: metrics.total, icon: FileWarning, color: 'text-blue-400 bg-blue-400/10' },
           { label: 'Coverage', value: `${coverage.coverage_pct}%`, icon: Shield, color: 'text-emerald-400 bg-emerald-400/10' },
@@ -75,7 +75,7 @@ export default function MetricsPage() {
         })}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 @3xl:grid-cols-2 gap-6">
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }} className="card p-5">
           <h2 className="font-semibold text-sm text-card-foreground mb-4 flex items-center gap-2"><TrendingUp size={16} /> Quality Scores</h2>
           <div className="space-y-3">

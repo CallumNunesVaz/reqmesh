@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Users, Plus, Trash2, ShieldCheck, User as UserIcon, KeyRound, X, Loader, Search, Filter, Pencil, Check, Clock, Ban, CircleCheck, Unlock, LogOut, UserPlus, Download, Upload, Copy, Lock } from 'lucide-react';
 import { api, type ManagedUser } from '../api/client';
 import { useAuthStore } from '../store/auth';
+import BodyPortal from '../components/BodyPortal';
 
 const ROLE_LABELS: Record<string, string> = { admin: 'Administrator', editor: 'Standard', viewer: 'Viewer' };
 const ROLE_BADGE: Record<string, string> = {
@@ -303,7 +304,7 @@ export default function UsersPage() {
               <button type="button" onClick={() => { setEditingSelf(false); setSelfForm((f) => ({ ...f, password: '' })); }} className="btn-secondary">Cancel</button>
             </form>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+            <div className="grid grid-cols-2 @xl:grid-cols-4 gap-3 text-xs">
               <div><span className="text-muted-foreground">Username</span><div className="font-mono text-card-foreground">{username}</div></div>
               <div><span className="text-muted-foreground">Name</span><div className="text-card-foreground">{selfForm.full_name || <span className="italic text-muted-foreground/50">not set</span>}</div></div>
               <div><span className="text-muted-foreground">Email</span><div className="text-card-foreground">{selfForm.email || <span className="italic text-muted-foreground/50">not set</span>}</div></div>
@@ -414,7 +415,7 @@ export default function UsersPage() {
               <p className="text-sm text-muted-foreground mt-1">{loadError}</p>
             </div>
           ) : (
-            <div className="card overflow-hidden">
+            <div className="card overflow-x-auto">
               <table className="w-full text-left">
                 <thead>
                   <tr className="border-b bg-muted/30">
@@ -423,11 +424,11 @@ export default function UsersPage() {
                     </th>
                     <th className="px-4 py-2.5"><SortHead col="username" label="Username" /></th>
                     <th className="px-4 py-2.5"><SortHead col="full_name" label="Name" /></th>
-                    <th className="px-4 py-2.5 hidden md:table-cell"><span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Email</span></th>
+                    <th className="px-4 py-2.5 hidden @3xl:table-cell"><span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Email</span></th>
                     <th className="px-4 py-2.5"><SortHead col="role" label="Role" /></th>
                     <th className="px-4 py-2.5"><span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Status</span></th>
-                    <th className="px-4 py-2.5 hidden lg:table-cell"><SortHead col="last_active" label="Last active" /></th>
-                    <th className="px-4 py-2.5 hidden lg:table-cell"><SortHead col="joined" label="Joined" /></th>
+                    <th className="px-4 py-2.5 hidden @4xl:table-cell"><SortHead col="last_active" label="Last active" /></th>
+                    <th className="px-4 py-2.5 hidden @4xl:table-cell"><SortHead col="joined" label="Joined" /></th>
                     <th className="px-4 py-2.5 w-0" />
                   </tr>
                 </thead>
@@ -456,7 +457,7 @@ export default function UsersPage() {
                             <input className="input text-xs !py-1 w-full" value={editForm.full_name} onChange={(e) => setEditForm({ ...editForm, full_name: e.target.value })} autoFocus />
                           ) : (u.full_name || <span className="text-muted-foreground/40 italic">—</span>)}
                         </td>
-                        <td className="px-4 py-2.5 text-xs text-card-foreground hidden md:table-cell">
+                        <td className="px-4 py-2.5 text-xs text-card-foreground hidden @3xl:table-cell">
                           {isEditing ? (
                             <input className="input text-xs !py-1 w-full" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} />
                           ) : (u.email || <span className="text-muted-foreground/40 italic">—</span>)}
@@ -475,10 +476,10 @@ export default function UsersPage() {
                           </select>
                         </td>
                         <td className="px-4 py-2.5"><StatusBadge u={u} /></td>
-                        <td className="px-4 py-2.5 text-[11px] text-muted-foreground hidden lg:table-cell">
+                        <td className="px-4 py-2.5 text-[11px] text-muted-foreground hidden @4xl:table-cell">
                           {u.last_active ? <span className="flex items-center gap-1"><Clock size={10} />{fmtLast(u.last_active)}</span> : <span className="text-muted-foreground/40 italic">—</span>}
                         </td>
-                        <td className="px-4 py-2.5 text-[11px] text-muted-foreground hidden lg:table-cell">{fmtDate(u.joined)}</td>
+                        <td className="px-4 py-2.5 text-[11px] text-muted-foreground hidden @4xl:table-cell">{fmtDate(u.joined)}</td>
                         <td className="px-4 py-2.5">
                           <div className="flex items-center gap-0.5">
                             {isEditing ? (
@@ -514,6 +515,7 @@ export default function UsersPage() {
       )}
 
       {/* Invite modal */}
+      <BodyPortal>
       <AnimatePresence>
         {showInvite && (
           <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -550,8 +552,10 @@ export default function UsersPage() {
           </div>
         )}
       </AnimatePresence>
+      </BodyPortal>
 
       {/* CSV import modal */}
+      <BodyPortal>
       <AnimatePresence>
         {importText !== null && (
           <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -584,8 +588,10 @@ export default function UsersPage() {
           </div>
         )}
       </AnimatePresence>
+      </BodyPortal>
 
       {/* Reset password modal */}
+      <BodyPortal>
       <AnimatePresence>
         {resetFor && (
           <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -605,6 +611,7 @@ export default function UsersPage() {
           </div>
         )}
       </AnimatePresence>
+      </BodyPortal>
     </div>
   );
 }

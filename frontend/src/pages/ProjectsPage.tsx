@@ -111,7 +111,7 @@ export default function ProjectsPage() {
           <p className="text-sm text-muted-foreground mt-1">Create a new project to get started.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 @2xl:grid-cols-2 @4xl:grid-cols-3 gap-4">
           {projects.map((project, i) => (
             <motion.div
               key={project.id}

@@ -116,7 +116,7 @@ export default function PublishPage() {
 
       {/* Reports */}
       <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Reports</h2>
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 @2xl:grid-cols-2 @4xl:grid-cols-4 gap-4 mb-6">
         {formats.map((fmt) => {
           const Icon = fmt.icon;
           const active = selectedFormat === fmt.id;
@@ -140,7 +140,7 @@ export default function PublishPage() {
 
       {/* Data Exports */}
       <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Data Exports</h2>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 @3xl:grid-cols-3 gap-4 mb-6">
         {dataFormats.map((fmt) => {
           const Icon = fmt.icon;
           const active = selectedFormat === fmt.id;
@@ -164,7 +164,7 @@ export default function PublishPage() {
 
       {/* Interchange Formats */}
       <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Interchange Formats</h2>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+      <div className="grid grid-cols-1 @3xl:grid-cols-2 gap-4 mb-6">
         {interchangeFormats.map((fmt) => {
           const Icon = fmt.icon;
           const active = selectedFormat === fmt.id;
@@ -203,8 +203,8 @@ export default function PublishPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-1">
+      <div className="grid grid-cols-1 @4xl:grid-cols-3 gap-6">
+        <div className="@4xl:col-span-1">
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="card p-4">
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-semibold text-sm text-card-foreground">
@@ -267,7 +267,7 @@ export default function PublishPage() {
           </motion.div>
         </div>
 
-        <div className="lg:col-span-2">
+        <div className="@4xl:col-span-2">
           <div className="card p-12 text-center">
             <FileDown size={48} className="mx-auto text-muted-foreground/40 mb-4" />
             <p className="text-card-foreground font-medium">Select format and sections, then download</p>

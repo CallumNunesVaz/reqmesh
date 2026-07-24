@@ -421,9 +421,9 @@ interface SavedView {
 }
 const VIEW_SLOTS = 3;
 
-interface GraphPaneProps { projectId: string; compact?: boolean; }
+interface GraphPaneProps { projectId: string; }
 
-export default function GraphPane({ projectId, compact }: GraphPaneProps) {
+export default function GraphPane({ projectId }: GraphPaneProps) {
   const navigate = useNavigate();
   // ReactFlow defaults to colorMode="light", which stamps a `.light` class on
   // its container and re-scopes our theme CSS variables inside the graph.
@@ -1425,7 +1425,7 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
 
   return (
     <div
-      className="w-full h-full bg-background relative"
+      className="w-full h-full bg-background relative @container"
       // Subtle centre glow for depth so node blooms read against some atmosphere.
       // ReactFlow is transparent, so this backdrop shows through behind the nodes.
       style={{ background: 'radial-gradient(ellipse at 50% 38%, hsl(var(--foreground) / 0.035), transparent 62%), hsl(var(--background))' }}
@@ -1475,19 +1475,24 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
           showZoom showFitView showInteractive={false}
         />
 
+        {/* Hidden below @lg (512px): on a narrow pane the minimap eats a third
+            of the canvas and collides with the bottom status text. */}
         <MiniMap
           nodeColor={(node) => statusMinimapColors[(node.data?.status as string) || 'proposed'] || '#64748b'}
           bgColor="hsl(var(--graph-minimap))"
           maskColor="hsl(var(--graph-minimap) / 0.9)"
-          className="!bg-graph-minimap !border-graph-border rounded-lg overflow-hidden shadow-lg"
+          className="!bg-graph-minimap !border-graph-border rounded-lg overflow-hidden shadow-lg !hidden @lg:!block"
           nodeBorderRadius={3} pannable zoomable
         />
 
-        <Panel position="top-left" className="ml-2 mt-2 flex items-center gap-2">
+        {/* flex-wrap + max-w: the toolbar folds to extra rows on a narrow pane
+            instead of overflowing off-canvas. The @2xl cap reserves ~200px on
+            the right for the legend once it becomes visible. */}
+        <Panel position="top-left" className="ml-2 mt-2 mr-2 flex flex-wrap items-center gap-2 max-w-[calc(100%-1rem)] @2xl:max-w-[calc(100%-14rem)]">
           <div className="relative">
             <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-graph-muted" />
             <input
-              className="pl-7 pr-2.5 py-1.5 w-44 rounded-lg bg-graph-panel border border-graph-border text-xs text-graph-text placeholder:text-graph-muted outline-none focus:ring-1 focus:ring-ring/20 transition-all shadow-sm"
+              className="pl-7 pr-2.5 py-1.5 w-32 @lg:w-44 rounded-lg bg-graph-panel border border-graph-border text-xs text-graph-text placeholder:text-graph-muted outline-none focus:ring-1 focus:ring-ring/20 transition-all shadow-sm"
               placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)}
             />
           </div>
@@ -1509,7 +1514,7 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
               )}
             </button>
             {showFilters && (
-              <div className="absolute top-full left-0 mt-1.5 z-50 w-60 rounded-xl bg-graph-panel border border-graph-border shadow-2xl p-4">
+              <div className="absolute top-full left-0 mt-1.5 z-50 w-60 max-w-[calc(100cqw-1.5rem)] rounded-xl bg-graph-panel border border-graph-border shadow-2xl p-4">
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-[11px] font-semibold text-graph-text uppercase tracking-wider">Filters</span>
                   <button onClick={() => setShowFilters(false)} className="text-graph-muted hover:text-graph-text">
@@ -1567,7 +1572,7 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
               <SlidersHorizontal size={13} />
             </button>
             {showSettings && (
-              <div className="absolute top-full left-0 mt-1.5 z-50 w-64 rounded-xl bg-graph-panel border border-graph-border shadow-2xl p-4">
+              <div className="absolute top-full left-0 mt-1.5 z-50 w-64 max-w-[calc(100cqw-1.5rem)] rounded-xl bg-graph-panel border border-graph-border shadow-2xl p-4">
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-[11px] font-semibold text-graph-text uppercase tracking-wider">Layout Settings</span>
                   <button onClick={() => setShowSettings(false)} className="text-graph-muted hover:text-graph-text">
@@ -1634,9 +1639,11 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
             </button>
           </div>
           {/* Highlight radius: how many relationship hops out from the selected
-              node stay lit (1 = direct neighbours only, up to 3). */}
+              node stay lit (1 = direct neighbours only, up to 3). Hidden on
+              very narrow panes — it's a persisted power-user pref, and the
+              toolbar must fold to two rows at the 320px floor, not three. */}
           <div
-            className="flex items-center rounded-lg bg-graph-panel border border-graph-border shadow-sm overflow-hidden"
+            className="hidden @md:flex items-center rounded-lg bg-graph-panel border border-graph-border shadow-sm overflow-hidden"
             title="Highlight radius — hops from the selected node to keep lit"
           >
             <span className="pl-2 pr-1 text-graph-muted" aria-hidden><Waypoints size={13} /></span>
@@ -1658,7 +1665,7 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
               neighbours, not just the radial paths from the focused node. */}
           <button
             onClick={toggleAllLinks}
-            className={`p-1.5 rounded-lg border shadow-sm transition-all ${
+            className={`hidden @md:block p-1.5 rounded-lg border shadow-sm transition-all ${
               showAllLinks
                 ? 'bg-primary text-primary-foreground border-graph-border'
                 : 'bg-graph-panel border-graph-border text-graph-text hover:bg-graph-control-hover'
@@ -1673,7 +1680,7 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
           {/* Saved view slots: click a filled slot to jump to it, an empty slot
               to save the current view. Shift-click overwrites; right-click clears. */}
           <div
-            className="flex items-center rounded-lg bg-graph-panel border border-graph-border shadow-sm overflow-hidden"
+            className="hidden @lg:flex items-center rounded-lg bg-graph-panel border border-graph-border shadow-sm overflow-hidden"
             title="Saved views — click to jump, shift-click to save, right-click to clear"
           >
             <span className="pl-2 pr-1 text-graph-muted" aria-hidden><Save size={13} /></span>
@@ -1704,7 +1711,9 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
           </button>
         </Panel>
 
-        <Panel position="top-right" className="mr-2 mt-2">
+        {/* Relations legend — reference chrome; below @2xl it would collide
+            with the (wrapping) toolbar, so it only appears on wider panes. */}
+        <Panel position="top-right" className="mr-2 mt-2 hidden @2xl:block">
           <div className="rounded-lg bg-graph-panel/85 border border-graph-border px-2.5 py-1.5 shadow-sm opacity-75 hover:opacity-100 transition-opacity">
             <div className="text-[9px] font-semibold uppercase tracking-wider text-graph-muted mb-1">Relations</div>
             <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
@@ -1718,15 +1727,18 @@ export default function GraphPane({ projectId, compact }: GraphPaneProps) {
           </div>
         </Panel>
 
-        <Panel position="bottom-center" className="mb-3">
-          <div className="text-[10px] text-graph-text bg-graph-panel border border-graph-border rounded-lg px-2.5 py-1.5 shadow-sm flex items-center gap-2">
+        <Panel position="bottom-center" className="mb-3 max-w-[94cqw]">
+          <div className="text-[10px] text-graph-text bg-graph-panel border border-graph-border rounded-lg px-2.5 py-1.5 shadow-sm flex items-center gap-2 whitespace-nowrap overflow-hidden">
             {layoutMode === 'uml' && (
               <>
                 <ZoomLevelChip />
                 <span className="opacity-40">|</span>
               </>
             )}
-            <span>{filteredReqs.length}{filteredReqs.length !== reqs.length ? ` / ${reqs.length}` : ''} requirements · {initialEdges.length} edges · click to select · dbl-click expand</span>
+            <span>
+              {filteredReqs.length}{filteredReqs.length !== reqs.length ? ` / ${reqs.length}` : ''} requirements · {initialEdges.length} edges
+              <span className="hidden @xl:inline"> · click to select · dbl-click expand</span>
+            </span>
           </div>
         </Panel>
       </ReactFlow>

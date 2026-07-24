@@ -214,7 +214,7 @@ export default function TraceMatrixPage() {
           <button className="text-xs text-primary hover:underline mt-2" onClick={() => { setSearch(''); setFilterLinkType(''); }}>Clear filters</button>
         </div>
       ) : viewMode === 'list' ? (
-        <div className="card mt-6 overflow-hidden">
+        <div className="card mt-6 overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/50">

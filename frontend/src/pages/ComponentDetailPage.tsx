@@ -234,9 +234,9 @@ export default function ComponentDetailPage() {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 @4xl:grid-cols-3 gap-6">
         {/* Main content area */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="@4xl:col-span-2 space-y-6">
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="card p-5">
             <label className="label">Name</label>
             <input

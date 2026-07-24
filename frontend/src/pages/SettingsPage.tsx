@@ -140,8 +140,8 @@ export default function SettingsPage() {
         );
       })}
 
-      {/* Sticky save bar */}
-      <div className="fixed bottom-0 left-0 right-0 border-t bg-card/95 backdrop-blur px-6 py-3 flex items-center justify-end gap-3 z-30">
+      {/* Sticky save bar — pane-anchored (sticks to the inspector's scrollport) */}
+      <div className="sticky bottom-0 -mx-6 border-t bg-card/95 backdrop-blur px-6 py-3 flex flex-wrap items-center justify-end gap-3 z-30">
         {saved && <span className="text-xs text-emerald-500 flex items-center gap-1"><CheckCircle2 size={14} /> Saved</span>}
         {dirty && <span className="text-xs text-muted-foreground">{Object.keys(draft).length} unsaved change(s)</span>}
         <button className="btn-primary" onClick={save} disabled={!dirty || saving}>
@@ -162,7 +162,7 @@ function SettingRow({ setting, value, onChange }: {
   if (setting.type === 'list') {
     const teams = Array.isArray(value) ? value : [];
     return (
-      <div className="flex items-start gap-3">
+      <div className="flex flex-wrap items-start gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 text-sm">
             {setting.label}
@@ -177,7 +177,7 @@ function SettingRow({ setting, value, onChange }: {
 
   if (setting.key === 'report_logo_url') {
     return (
-      <div className="flex items-start gap-3">
+      <div className="flex flex-wrap items-start gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 text-sm">
             {setting.label}
@@ -191,7 +191,7 @@ function SettingRow({ setting, value, onChange }: {
   }
 
   return (
-    <div className="flex items-start gap-3">
+    <div className="flex flex-wrap items-start gap-3">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 text-sm">
           {setting.label}
@@ -199,7 +199,7 @@ function SettingRow({ setting, value, onChange }: {
         </div>
         {setting.help && <div className="text-[11px] text-muted-foreground">{setting.help}</div>}
       </div>
-      <div className="shrink-0 w-56">
+      <div className="shrink-0 w-56 max-w-full">
         {setting.type === 'bool' ? (
           <button
             role="switch"
@@ -240,7 +240,7 @@ function TeamList({ teams, onChange, locked }: { teams: string[]; onChange: (v: 
   };
 
   return (
-    <div className="shrink-0 w-64 space-y-2">
+    <div className="shrink-0 w-64 max-w-full space-y-2">
       <div className="flex flex-wrap gap-1">
         {teams.map((t) => (
           <span key={t} className="inline-flex items-center gap-1 rounded-full bg-accent px-2 py-0.5 text-xs">
@@ -302,7 +302,7 @@ function LogoInput({ value, onChange, locked }: { value: string; onChange: (v: s
   };
 
   return (
-    <div className="shrink-0 w-64 space-y-2">
+    <div className="shrink-0 w-64 max-w-full space-y-2">
       {value ? (
         <div className="flex items-center gap-2">
           <img src={value} alt="Logo preview" className="max-h-10 max-w-[7rem] rounded border border-border bg-white/5 object-contain" />
