@@ -279,6 +279,38 @@ class YamlStore:
         stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%f")
         self._write_yaml(d / f"{stamp}.yaml", entry)
 
+    def list_all_history(self, since: str = "", until: str = "") -> list[dict]:
+        """Every audit entry across every item, oldest first.
+
+        ``since``/``until`` are inclusive ISO date (or datetime) bounds; an
+        empty string means unbounded. Each returned entry carries the owning
+        ``item_id`` (the history subdirectory name, which ``safe_id`` leaves
+        equal to the item's id).
+        """
+        root = self._root / "history"
+        if not root.exists():
+            return []
+        # A bare end date means "that whole day", not midnight — otherwise a
+        # range ending today would exclude everything done today.
+        if until and len(until) == 10:
+            until = until + "T23:59:59.999999+00:00"
+        out: list[dict] = []
+        for item_dir in root.iterdir():
+            if not item_dir.is_dir():
+                continue
+            for f in item_dir.glob("*.yaml"):
+                entry = self._read_yaml(f)
+                if not entry:
+                    continue
+                ts = str(entry.get("timestamp", ""))
+                if since and ts < since:
+                    continue
+                if until and ts > until:
+                    continue
+                entry["item_id"] = item_dir.name
+                out.append(entry)
+        return sorted(out, key=lambda e: str(e.get("timestamp", "")))
+
     # --- Bulk ---
 
     def all_data(self) -> dict:

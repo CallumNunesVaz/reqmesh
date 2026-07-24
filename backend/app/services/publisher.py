@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import shutil
 import subprocess
 import tempfile
@@ -239,7 +240,10 @@ a.entity-link:hover { text-decoration: underline; }
 
 
 class Publisher:
+    # Default (full) report. "changelog" is deliberately absent — it is an
+    # opt-in, date-bounded section, so an unqualified export never carries one.
     _all_latex_sections = [
+        "cover", "summary", "requirements", "components", "verification", "risks",
         "traceability", "specifications", "baselines", "changes",
         "quality", "gaps", "decisions", "glossary", "conflicts",
         "parameters", "verification_details", "system_states",
@@ -318,6 +322,109 @@ class Publisher:
 
     def _anchor(self, prefix: str, entity_id: str) -> str:
         return f'id="{prefix}-{esc(entity_id, quote=True)}"'
+
+    # ── Changelog (optional date-bounded diff report) ────────────────────────────
+
+    def _entity_label(self, item_id: str) -> tuple[str, str]:
+        """(kind, name) for an audited item id — history is keyed by id alone."""
+        if item_id in self._all_req_ids:
+            return "Requirement", self._all_req_ids[item_id].get("name", "")
+        if item_id in self._vc_by_id:
+            return "Verification", self._vc_by_id[item_id].get("name", "")
+        if item_id in self._comp_by_id:
+            return "Component", self._comp_by_id[item_id].get("name", "")
+        if item_id in self._spec_by_id:
+            return "Specification", self._spec_by_id[item_id].get("name", "")
+        for kind, key in (("Risk", "risks"), ("Change Request", "change_requests"), ("Decision", "decisions")):
+            try:
+                for it in self.store.list_items(key):
+                    if it.get("id") == item_id:
+                        return kind, it.get("title", "") or it.get("name", "")
+            except Exception:
+                pass
+        # Deleted items keep their audit trail but no longer resolve to a record.
+        return "Item", ""
+
+    @staticmethod
+    def _fmt_value(v) -> str:
+        """One-line rendering of a before/after value for the changelog."""
+        if v is None or v == "":
+            return "—"
+        if isinstance(v, bool):
+            return "yes" if v else "no"
+        if isinstance(v, (list, tuple)):
+            if not v:
+                return "—"
+            parts = [Publisher._fmt_value(x) for x in v]
+            return ", ".join(parts)
+        if isinstance(v, dict):
+            return ", ".join(f"{k}={Publisher._fmt_value(x)}" for k, x in v.items())
+        text = re.sub(r"<[^>]+>", "", str(v))          # descriptions are HTML
+        text = " ".join(text.split())
+        return text
+
+    def changelog(self, since: str = "", until: str = "") -> dict:
+        """Audit entries in [since, until], newest first, with item context.
+
+        Returns ``{entries, counts, items, since, until}`` — shared by the
+        LaTeX and HTML renderers so both read identically.
+        """
+        raw = self.store.list_all_history(since, until)
+        # Only report on items inside the current subsystem filter, so a
+        # filtered report's changelog matches the rest of the document.
+        scoped = self._all_req_ids
+        entries = []
+        counts: dict[str, int] = {}
+        for e in raw:
+            item_id = e.get("item_id", "")
+            # Requirement ids outside the filter are dropped; non-requirement
+            # items (components, risks, …) are never subsystem-scoped.
+            if scoped and item_id not in scoped and self._entity_label(item_id)[0] == "Requirement":
+                continue
+            kind, name = self._entity_label(item_id)
+            action = str(e.get("action", "update"))
+            counts[action] = counts.get(action, 0) + 1
+            raw_changes = e.get("changes") or {}
+            if not name:
+                # A deleted item no longer resolves to a record — recover its
+                # name from the audit entry, which is precisely the case a
+                # changelog reader needs spelled out.
+                for key in ("name", "title"):
+                    ba = raw_changes.get(key)
+                    if isinstance(ba, dict):
+                        name = str(ba.get("before") or ba.get("after") or "")
+                        if name:
+                            break
+            # A create diffs nothing→everything and a delete everything→nothing,
+            # so the field list is the whole record with every value pointing at
+            # "—". The action badge already says it; listing 20 empty
+            # transitions only buries the real edits.
+            changes = {} if action in ("create", "delete") else raw_changes
+            fields = []
+            for field, ba in sorted(changes.items()):
+                if not isinstance(ba, dict):
+                    continue
+                fields.append({
+                    "field": field.replace("_", " "),
+                    "before": self._fmt_value(ba.get("before")),
+                    "after": self._fmt_value(ba.get("after")),
+                })
+            entries.append({
+                "timestamp": str(e.get("timestamp", "")),
+                "date": str(e.get("timestamp", ""))[:10],
+                "time": str(e.get("timestamp", ""))[11:16],
+                "item_id": item_id, "kind": kind, "name": name,
+                "action": action, "user": str(e.get("user", "")) or "—",
+                "fields": fields,
+            })
+        entries.reverse()  # newest first
+        return {
+            "entries": entries,
+            "counts": counts,
+            "items": len({e["item_id"] for e in entries}),
+            "since": since,
+            "until": until,
+        }
 
     # ── Report header config ────────────────────────────────────────────────────
 
@@ -683,7 +790,46 @@ class Publisher:
 
     # ── Main build ──────────────────────────────────────────────────────────────
 
-    def build_html(self, sections: list | None = None) -> str:
+    def _changelog_html(self, since: str, until: str) -> str:
+        log = self.changelog(since, until)
+        entries = log["entries"]
+        span = esc(f"{since or 'project start'} to {until or self.now.strftime('%Y-%m-%d')}")
+        html = ('<h1 id="sec-changelog">Changelog</h1>'
+                f'<p style="color:#64748b;font-size:10pt;">Every recorded change between '
+                f'<strong>{span}</strong>, newest first.</p>')
+        self._add_toc(1, "Changelog", "sec-changelog")
+        if not entries:
+            return html + '<p>No changes were recorded in this period.</p>'
+        acts = log["counts"]
+        html += f"""<div class="summary-grid">
+          <div class="summary-card"><div class="num">{len(entries)}</div><div class="label">Changes</div></div>
+          <div class="summary-card"><div class="num">{log['items']}</div><div class="label">Items</div></div>
+          <div class="summary-card"><div class="num">{acts.get('create', 0)}</div><div class="label">Created</div></div>
+        </div>"""
+        html += ('<table><thead><tr><th>Date</th><th>Item</th><th>Name</th>'
+                 '<th>Action</th><th>User</th></tr></thead><tbody>')
+        for e in entries:
+            detail = ""
+            if e["fields"]:
+                rows = "".join(
+                    f'<div class="field"><strong>{esc(f["field"])}</strong> '
+                    f'<span style="color:#dc2626;">{esc(_truncate_words(f["before"], 90))}</span> → '
+                    f'<span style="color:#16a34a;">{esc(_truncate_words(f["after"], 90))}</span></div>'
+                    for f in e["fields"][:12])
+                extra = (f'<div class="field"><em>+{len(e["fields"]) - 12} more fields</em></div>'
+                         if len(e["fields"]) > 12 else "")
+                detail = (f'<tr><td colspan="5" style="padding-top:0;">{rows}{extra}</td></tr>')
+            html += f"""<tr>
+              <td style="white-space:nowrap;">{esc(e['date'])} {esc(e['time'])}</td>
+              <td>{self._link(e['item_id'])}</td>
+              <td>{esc(_truncate_words(e['name'] or e['kind'], 60))}</td>
+              <td>{self._badge(e['action'])}</td>
+              <td>{esc(e['user'])}</td>
+            </tr>{detail}"""
+        return html + '</tbody></table>'
+
+    def build_html(self, sections: list | None = None,
+                   changelog_from: str = "", changelog_to: str = "") -> str:
         if sections is None:
             sections = ["cover", "summary", "requirements", "components", "specifications",
                         "verification", "traceability", "quality", "gaps", "risks", "changes", "conflicts"]
@@ -725,6 +871,9 @@ class Publisher:
             html += self._summary_section()
 
         html += self._toc_html()
+
+        if "changelog" in sections:
+            html += self._changelog_html(changelog_from, changelog_to)
 
         if "requirements" in sections:
             html += f"""<h1 id="sec-requirements">Requirements Hierarchy</h1>
@@ -828,7 +977,70 @@ class Publisher:
                 md += f"**Parent:** {parent}\n\n"
         return md
 
-    def build_latex(self, sections: list[str] | None = None) -> str:
+    def _latex_changelog(self, since: str, until: str) -> list[str]:
+        """The optional diff report: every audited change in a date window."""
+        log = self.changelog(since, until)
+        entries = log["entries"]
+        L: list[str] = [r"\section{Changelog}"]
+
+        span = f"{since or 'project start'} to {until or self.now.strftime('%Y-%m-%d')}"
+        L.append(f"Every recorded change between \\textbf{{{_latex_escape(span)}}}, newest first.")
+        if not entries:
+            L.append(r"\vspace{0.5em}\par No changes were recorded in this period.")
+            L.append(r"\newpage")
+            return L
+
+        # Headline counts, reusing the overview's stat cards. The blank line
+        # ends the intro paragraph — without it the cards are typeset inline
+        # and run past the right margin.
+        acts = log["counts"]
+        L.append("")
+        L.append(r"\vspace{0.4em}")
+        L.append(r"\begin{tabularx}{\textwidth}{*{4}{>{\centering\arraybackslash}X}}")
+        L.append(r"\toprule")
+        L.append(f"\\statcard{{{len(entries)}}}{{CHANGES}} & \\statcard{{{log['items']}}}{{ITEMS}} & "
+                 f"\\statcard{{{acts.get('create', 0)}}}{{CREATED}} & "
+                 f"\\statcard{{{acts.get('delete', 0)}}}{{DELETED}} \\\\")
+        L.append(r"\bottomrule")
+        L.append(r"\end{tabularx}")
+        L.append(r"\vspace{0.8em}")
+
+        L.append(r"\begin{longtable}{@{}>{\raggedright\arraybackslash}p{2.1cm} "
+                 r">{\raggedright\arraybackslash}p{2.6cm} >{\raggedright\arraybackslash}p{4.4cm} "
+                 r">{\raggedright\arraybackslash}p{2.2cm} >{\raggedright\arraybackslash}p{2.4cm}@{}}")
+        hdr = (r"\rowcolor{tabhead}\textbf{Date} & \textbf{Item} & \textbf{Name} & "
+               r"\textbf{Action} & \textbf{User} \\")
+        L.append(r"\toprule" + hdr + r"\midrule\endfirsthead")
+        L.append(r"\toprule" + hdr + r"\midrule\endhead\bottomrule\endfoot")
+
+        for e in entries:
+            when = _latex_escape(f"{e['date']} {e['time']}".strip())
+            item = self._latex_link(e["item_id"])
+            name = _latex_escape(_truncate_words(e["name"] or e["kind"], 60))
+            L.append(f"\\texttt{{\\footnotesize {when}}} & \\texttt{{{item}}} & {name} & "
+                     f"\\statusbadge{{{e['action']}}} & {_latex_escape(e['user'])} \\\\")
+            # Field-level detail spans the full width beneath its header row —
+            # the same pattern the requirements tables use for descriptions.
+            if e["fields"]:
+                rows = []
+                for f in e["fields"][:12]:
+                    before = _latex_escape(_truncate_words(f["before"], 90))
+                    after = _latex_escape(_truncate_words(f["after"], 90))
+                    rows.append(f"\\textbf{{{_latex_escape(f['field'])}}}: "
+                                f"\\textcolor{{rej}}{{{before}}} $\\rightarrow$ "
+                                f"\\textcolor{{appr}}{{{after}}}")
+                if len(e["fields"]) > 12:
+                    rows.append(f"\\textit{{+{len(e['fields']) - 12} more fields}}")
+                detail = " \\newline ".join(rows)
+                L.append(f"\\multicolumn{{5}}{{@{{}}p{{\\dimexpr\\textwidth-\\tabcolsep\\relax}}@{{}}}}"
+                         f"{{\\footnotesize {detail}}} \\\\")
+            L.append(r"\midrule")
+        L.append(r"\end{longtable}")
+        L.append(r"\newpage")
+        return L
+
+    def build_latex(self, sections: list[str] | None = None,
+                    changelog_from: str = "", changelog_to: str = "") -> str:
         import os as _os
         if sections is None:
             sections = self._all_latex_sections
@@ -1035,6 +1247,11 @@ class Publisher:
         L.append(r"    {closed}{\pill{depr}{closed}}%")
         L.append(r"    {mitigated}{\pill{appr}{mitigated}}%")
         L.append(r"    {deprecated}{\pill{depr}{deprecated}}%")
+        # Changelog actions.
+        L.append(r"    {create}{\pill{appr}{created}}%")
+        L.append(r"    {update}{\pill{prop}{updated}}%")
+        L.append(r"    {delete}{\pill{rej}{deleted}}%")
+        L.append(r"    {review}{\pill{impl}{reviewed}}%")
         L.append(r"  }[\pill{depr}{#1}]%")
         L.append(r"}")
         L.append(r"\newcommand{\prioritybadge}[1]{%")
@@ -1049,7 +1266,26 @@ class Publisher:
         L.append(r"\begin{document}")
         L.append(r"\color{ink}")
 
+        # Section gating. cover/summary/requirements/components/verification/
+        # risks used to render unconditionally, so a narrow export (e.g. the
+        # changelog-only diff report) still emitted the whole document.
+        # These blocks emit into `L` across dozens of statements, so rather
+        # than re-indent them all under an `if`, each records a mark and rolls
+        # `L` back when its section is deselected — the emitted strings are
+        # just discarded.
+        want = set(sections)
+        marks: list[int] = []
+
+        def begin_section() -> None:
+            marks.append(len(L))
+
+        def end_section(section_id: str) -> None:
+            start = marks.pop()
+            if section_id not in want:
+                del L[start:]
+
         # ── Title page ────────────────────────────────────────────────────
+        begin_section()
         L.append(r"\begin{titlepage}")
         L.append(r"\thispagestyle{empty}")
         L.append(r"\centering")
@@ -1149,6 +1385,7 @@ class Publisher:
                 L.append(f"  \\item {who}")
             L.append(r"\end{itemize}")
         L.append(r"\clearpage")
+        end_section("cover")
 
         # ── Table of Contents ─────────────────────────────────────────────
         # \tableofcontents emits its own (accent-styled) heading; TOC entries in
@@ -1158,6 +1395,7 @@ class Publisher:
         L.append(r"\clearpage")
 
         # ── 1. Introduction (ISO/IEC/IEEE 29148 structure) ────────────────
+        begin_section()
         L.append(r"\section{Introduction}")
 
         L.append(r"\subsection{Purpose}")
@@ -1274,8 +1512,14 @@ class Publisher:
         L.append(r"\subsection{Type Distribution}")
         L.extend(dist_table("Type", type_dist, {}))
         L.append(r"\newpage")
+        end_section("summary")
+
+        # ── Changelog (opt-in diff report over a date range) ───────────────
+        if "changelog" in want:
+            L.extend(self._latex_changelog(changelog_from, changelog_to))
 
         # ── 3. Requirements by Type ───────────────────────────────────────
+        begin_section()
         L.append(r"\section{Requirements by Type}")
 
         grouped: dict[str, list[dict]] = {}
@@ -1359,8 +1603,10 @@ class Publisher:
 
             L.append(r"\end{longtable}")
             L.append(r"\newpage")
+        end_section("requirements")
 
         # ── 4. Components ─────────────────────────────────────────────────
+        begin_section()
         if self.components:
             L.append(r"\section{Components}")
             L.append(r"\begin{longtable}{@{}>{\raggedright\arraybackslash}p{3cm} >{\raggedright\arraybackslash}p{3.5cm} >{\raggedright\arraybackslash}p{2.5cm} >{\raggedright\arraybackslash}p{3cm} >{\raggedright\arraybackslash}p{2cm}@{}}")
@@ -1388,8 +1634,10 @@ class Publisher:
                 L.append(r"\midrule")
             L.append(r"\end{longtable}")
             L.append(r"\newpage")
+        end_section("components")
 
         # ── 5. Verification Cases ─────────────────────────────────────────
+        begin_section()
         if self.vcs:
             L.append(r"\section{Verification Cases}")
             L.append(r"\begin{longtable}{@{}>{\raggedright\arraybackslash}p{2.5cm} >{\raggedright\arraybackslash}p{3cm} >{\raggedright\arraybackslash}p{2cm} >{\raggedright\arraybackslash}p{2cm} >{\raggedright\arraybackslash}p{4cm}@{}}")
@@ -1417,8 +1665,10 @@ class Publisher:
                 L.append(r"\midrule")
             L.append(r"\end{longtable}")
             L.append(r"\newpage")
+        end_section("verification")
 
         # ── 6. Risks ──────────────────────────────────────────────────────
+        begin_section()
         if risks_list:
             L.append(r"\section{Risk Register}")
             L.append(r"\begin{longtable}{@{}>{\raggedright\arraybackslash}p{2.5cm} >{\raggedright\arraybackslash}p{3.5cm} >{\raggedright\arraybackslash}p{2cm} >{\raggedright\arraybackslash}p{2cm} >{\raggedright\arraybackslash}p{2cm} >{\raggedright\arraybackslash}p{2.5cm}@{}}")
@@ -1444,6 +1694,7 @@ class Publisher:
                 L.append(f"\\texttt{{{rid}}} & {title} & \\prioritybadge{{{sev}}} & {prob} & \\statusbadge{{{status}}} & {mitigation} \\\\")
                 L.append(r"\midrule")
             L.append(r"\end{longtable}")
+        end_section("risks")
 
         # ── Traceability Matrix ───────────────────────────────────────────
         if "traceability" in sections:

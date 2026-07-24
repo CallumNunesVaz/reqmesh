@@ -257,12 +257,8 @@ function CircularNode({ data, selected }: NodeProps) {
         </div>
       )}
 
-      <style>{`
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(-4px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-      `}</style>
+      {/* fadeIn keyframes live in GraphPane's shared <style> block — a
+          per-node <style> tag here multiplied by every visible node. */}
     </div>
   );
 }

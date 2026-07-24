@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, useRef, createContext, useContext } from 'react';
+import { useCallback, useEffect, useMemo, useState, useRef, createContext, useContext, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ReactFlow,
@@ -374,7 +374,10 @@ function FloatingEdge({ id, source, target, data, style, markerEnd }: EdgeProps)
   );
 }
 
-const edgeTypes = { floating: FloatingEdge, ortho: OrthoEdge };
+// memo: edge components re-render whenever the edges array is rebuilt (every
+// selection/hover restyle). Unchanged edges should bail out, not re-derive
+// their geometry.
+const edgeTypes = { floating: memo(FloatingEdge), ortho: OrthoEdge };
 
 const blockNodeTypes = { requirementNode: BlockNode };
 const circleNodeTypes = { requirementNode: CircularNode };
@@ -420,6 +423,16 @@ interface SavedView {
   viewport: { x: number; y: number; zoom: number } | null;
 }
 const VIEW_SLOTS = 3;
+
+// Plain-text cache for HTML descriptions (see stripHtml in the node build).
+const stripHtmlCache = new Map<string, string>();
+
+// Above this many visible nodes the canvas drops to performance mode:
+// viewport culling on, per-node glow filters / infinite animations off, hover
+// neighbourhood highlighting off (click still highlights), minimap off. The
+// cost that matters at scale is paint (drop-shadows defeat GPU compositing)
+// and the all-node re-render a hover triggers — both are gated here.
+const PERF_NODE_LIMIT = 100;
 
 interface GraphPaneProps { projectId: string; }
 
@@ -783,8 +796,15 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
     const visIds = new Set([...visibleNodeIds].filter(id => filteredIds.has(id)));
 
     const fmt = (v: number) => (Number.isInteger(v) ? String(v) : String(Math.round(v * 100) / 100));
-    const stripHtml = (html: string) =>
-      new DOMParser().parseFromString(html || '', 'text/html').body.textContent?.trim() ?? '';
+    // DOMParser is ~50µs a call — cached so the frequent node rebuilds
+    // (collapse/expand/filter) don't re-parse every description each time.
+    const stripHtml = (html: string) => {
+      const hit = stripHtmlCache.get(html);
+      if (hit !== undefined) return hit;
+      const text = new DOMParser().parseFromString(html || '', 'text/html').body.textContent?.trim() ?? '';
+      stripHtmlCache.set(html, text);
+      return text;
+    };
 
     const nodes: Node[] = filteredReqs.filter(r => visIds.has(r.id)).map(req => {
       // Parametric compartments: prefer evaluated values (derived params get
@@ -1369,6 +1389,9 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
 
   const hasSelection = !!(selectedReqId || hoveredNodeId);
 
+  // Fidelity drops automatically on big graphs — see PERF_NODE_LIMIT.
+  const perfMode = initialNodes.length > PERF_NODE_LIMIT;
+
   const dimmedEdges = useMemo(() => {
     if (!hasSelection) return edges;
     return edges.map((e) => {
@@ -1385,16 +1408,17 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
         ...e,
         data: { ...e.data, showLabel: connected },
         // Highlighted dashed relations drift slowly along their direction.
-        className: connected && dashed ? 'rt-drift' : undefined,
+        className: connected && dashed && !perfMode ? 'rt-drift' : undefined,
         style: {
           ...((e.style as Record<string, any>) || {}),
           opacity: connected ? Math.max((e.style as any)?.opacity || 0.55, 0.9) : 0.04,
           // A hint of bloom on active edges — just enough to trace them.
-          filter: connected && stroke ? `drop-shadow(0 0 2px ${stroke})` : undefined,
+          // (Skipped in perf mode: SVG filters force slow re-rasterisation.)
+          filter: connected && stroke && !perfMode ? `drop-shadow(0 0 2px ${stroke})` : undefined,
         },
       };
     });
-  }, [edges, hasSelection, connectedIds, focus, showAllLinks]);
+  }, [edges, hasSelection, connectedIds, focus, showAllLinks, perfMode]);
 
   const onNodeClick = useCallback(
     (_: React.MouseEvent, node: Node) => {
@@ -1419,13 +1443,24 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
 
   const onPaneClick = useCallback(() => { selectReq(null); setHoveredNodeId(null); }, [selectReq]);
   const handleNodeEnter = useCallback((_: React.MouseEvent, node: Node) => {
+    // Hover-highlighting recomputes the BFS neighbourhood, restyles every edge
+    // and re-renders every node (they all read the selection context). Fine on
+    // small graphs, a stutter machine on big ones — clicking still highlights.
+    if (perfMode) return;
     if (!selectedReqId && !animatingRef.current) setHoveredNodeId(node.id);
-  }, [selectedReqId]);
+  }, [selectedReqId, perfMode]);
   const handleNodeLeave = useCallback(() => { setHoveredNodeId(null); }, []);
+
+  // Stable context value: without the memo every GraphPane render hands all
+  // nodes a fresh object and forces a full node re-render pass.
+  const selectionCtxValue = useMemo(
+    () => ({ connectedIds, selectedReqId, hasSelection }),
+    [connectedIds, selectedReqId, hasSelection],
+  );
 
   return (
     <div
-      className="w-full h-full bg-background relative @container"
+      className={`w-full h-full bg-background relative @container${perfMode ? ' rt-perf' : ''}`}
       // Subtle centre glow for depth so node blooms read against some atmosphere.
       // ReactFlow is transparent, so this backdrop shows through behind the nodes.
       style={{ background: 'radial-gradient(ellipse at 50% 38%, hsl(var(--foreground) / 0.035), transparent 62%), hsl(var(--background))' }}
@@ -1434,7 +1469,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
         splash must survive the swap so the old diagram fades straight into
         the new one with no uncovered frame in between. */}
     <div className="w-full h-full">
-    <GraphSelectionCtx.Provider value={{ connectedIds, selectedReqId, hasSelection }}>
+    <GraphSelectionCtx.Provider value={selectionCtxValue}>
       <ReactFlow
         nodes={nodes}
         edges={dimmedEdges}
@@ -1461,6 +1496,10 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
         nodesDraggable={false}
         nodesConnectable={false}
         elementsSelectable
+        // Viewport culling: on big graphs only nodes/edges inside the view
+        // are mounted, so zoomed-in work stays fast no matter the graph size.
+        // Off for small graphs — the per-move visibility pass isn't free.
+        onlyRenderVisibleElements={perfMode}
         proOptions={{ hideAttribution: true }}
         defaultEdgeOptions={{ type: 'floating' }}
         defaultViewport={{ x: 0, y: 0, zoom: 0.75 }}
@@ -1476,14 +1515,18 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
         />
 
         {/* Hidden below @lg (512px): on a narrow pane the minimap eats a third
-            of the canvas and collides with the bottom status text. */}
-        <MiniMap
-          nodeColor={(node) => statusMinimapColors[(node.data?.status as string) || 'proposed'] || '#64748b'}
-          bgColor="hsl(var(--graph-minimap))"
-          maskColor="hsl(var(--graph-minimap) / 0.9)"
-          className="!bg-graph-minimap !border-graph-border rounded-lg overflow-hidden shadow-lg !hidden @lg:!block"
-          nodeBorderRadius={3} pannable zoomable
-        />
+            of the canvas and collides with the bottom status text. Skipped
+            entirely in perf mode — it redraws every node on every viewport
+            move, which is exactly the work a big graph can't afford. */}
+        {!perfMode && (
+          <MiniMap
+            nodeColor={(node) => statusMinimapColors[(node.data?.status as string) || 'proposed'] || '#64748b'}
+            bgColor="hsl(var(--graph-minimap))"
+            maskColor="hsl(var(--graph-minimap) / 0.9)"
+            className="!bg-graph-minimap !border-graph-border rounded-lg overflow-hidden shadow-lg !hidden @lg:!block"
+            nodeBorderRadius={3} pannable zoomable
+          />
+        )}
 
         {/* flex-wrap + max-w: the toolbar folds to extra rows on a narrow pane
             instead of overflowing off-canvas. The @2xl cap reserves ~200px on
@@ -1739,6 +1782,14 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
               {filteredReqs.length}{filteredReqs.length !== reqs.length ? ` / ${reqs.length}` : ''} requirements · {initialEdges.length} edges
               <span className="hidden @xl:inline"> · click to select · dbl-click expand</span>
             </span>
+            {perfMode && (
+              <span
+                className="text-graph-muted"
+                title={`Performance mode — over ${PERF_NODE_LIMIT} nodes on screen: glow/animations off, offscreen nodes unrendered, hover highlight off (click still highlights)`}
+              >
+                · ⚡ perf
+              </span>
+            )}
           </div>
         </Panel>
       </ReactFlow>
@@ -1766,6 +1817,32 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
           0% { transform: scale(1); opacity: 0.6; }
           100% { transform: scale(2.5); opacity: 0; }
         }
+        /* Shared node keyframes, hoisted here so BlockNode/CircularNode don't
+           each inject a per-instance <style> tag (one per node adds up). */
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(-4px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes scrollDesc {
+          0%, 15% { transform: translateY(0); }
+          85%, 100% { transform: translateY(min(0px, calc(-100% + var(--desc-h, 46px)))); }
+        }
+        /* Nodes are absolutely positioned islands: containment tells the
+           browser a node's internal layout/style can't leak out, shrinking
+           invalidation scope during pan/zoom. (No 'paint' — tooltips and side
+           labels intentionally overflow node bounds.) */
+        .react-flow__node { contain: layout style; }
+        /* Performance mode (rt-perf, set above PERF_NODE_LIMIT nodes): kill the
+           per-node drop-shadow glows — SVG-style filters force every frame of
+           a pan/zoom to re-rasterise instead of compositing on the GPU — and
+           every infinite animation (desc scrollers, pulse rings, edge drift).
+           !important is required to beat the inline styles. */
+        .rt-perf .react-flow__node div {
+          filter: none !important;
+          animation: none !important;
+          transition: none !important;
+        }
+        .rt-perf .react-flow__edge-path { animation: none !important; filter: none !important; }
       `}</style>
     </div>
   );

@@ -335,12 +335,8 @@ function BlockNode({ data }: NodeProps) {
           {footer}
         </>,
       )}
-      {level === 5 && d.desc && (
-        // -100% is the inner text's own (wrapped) height; adding back one window
-        // height (--desc-h) lands on the last line. min(0px, …) keeps text that
-        // already fits from bobbing.
-        <style>{`@keyframes scrollDesc { 0%, 15% { transform: translateY(0); } 85%, 100% { transform: translateY(min(0px, calc(-100% + var(--desc-h, 46px)))); } }`}</style>
-      )}
+      {/* The scrollDesc keyframes live in GraphPane's shared <style> block —
+          a per-node <style> tag here multiplied by every visible node. */}
     </>
   );
 }

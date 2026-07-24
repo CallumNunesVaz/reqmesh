@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, FileDown, FileText, FileCode, File, Download, Loader, FileSpreadsheet, Globe, FileType, AlertTriangle } from 'lucide-react';
+import { X, FileDown, FileText, FileCode, File, Download, Loader, FileSpreadsheet, Globe, FileType, AlertTriangle, History } from 'lucide-react';
 import { api, type RequirementTreeNode } from '../api/client';
 
 interface ExportDialogProps {
@@ -27,6 +27,8 @@ const interchangeFormats = [
   { id: 'sysml', label: 'SysML v2', icon: FileCode, desc: 'SysML v2 textual notation for MBSE tools', ext: '.sysml' },
 ];
 
+// The changelog is deliberately absent from the default selection — it is an
+// opt-in, date-bounded section (see CHANGELOG_SECTION).
 const allSections = [
   { id: 'cover', label: 'Cover Page' },
   { id: 'summary', label: 'Project Summary' },
@@ -47,6 +49,14 @@ const allSections = [
   { id: 'system_states', label: 'System States' },
   { id: 'glossary', label: 'Glossary' },
 ];
+
+const CHANGELOG_SECTION = 'changelog';
+
+/** Local (not UTC) YYYY-MM-DD — toISOString() would roll the date backwards
+ *  for anyone west of Greenwich in the evening. */
+function isoDate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 function collectSubtreeIds(nodes: RequirementTreeNode[], selected: Set<string>): Set<string> {
   const ids = new Set<string>();
@@ -93,6 +103,16 @@ export default function ExportDialog({ open, onClose, projectId }: ExportDialogP
   const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set());
   const [groupSelectAll, setGroupSelectAll] = useState(true);
   const [latexAvail, setLatexAvail] = useState(false);
+  // Changelog ("diff report"): opt-in, with its own date window. Defaults to
+  // the last 30 days ending today.
+  const [changelogOn, setChangelogOn] = useState(false);
+  const [changelogFrom, setChangelogFrom] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    return isoDate(d);
+  });
+  const [changelogTo, setChangelogTo] = useState(() => isoDate(new Date()));
+  const datesInvalid = changelogOn && !!changelogFrom && !!changelogTo && changelogFrom > changelogTo;
 
   useEffect(() => {
     api.getLatexStatus().then(s => setLatexAvail(s.available)).catch(() => {});
@@ -159,10 +179,14 @@ export default function ExportDialog({ open, onClose, projectId }: ExportDialogP
       // to silently export everything when the user picked "None".
       const hasGroupFilter = !groupSelectAll;
       const subsystems = [...selectedGroups].join(',');
-      const secsParam = isReportFormat(format) ? `&sections=${encodeURIComponent(sections.join(','))}` : '';
+      const wanted = changelogOn ? [...sections, CHANGELOG_SECTION] : sections;
+      const secsParam = isReportFormat(format) ? `&sections=${encodeURIComponent(wanted.join(','))}` : '';
+      const logParam = (isReportFormat(format) && changelogOn)
+        ? `&changelog_from=${encodeURIComponent(changelogFrom)}&changelog_to=${encodeURIComponent(changelogTo)}`
+        : '';
       const qs = hasGroupFilter
-        ? `?format=${format}&subsystems=${encodeURIComponent(subsystems)}${secsParam}`
-        : `?format=${format}${secsParam}`;
+        ? `?format=${format}&subsystems=${encodeURIComponent(subsystems)}${secsParam}${logParam}`
+        : `?format=${format}${secsParam}${logParam}`;
       const auth = (() => { try { return localStorage.getItem('rt-token'); } catch { return null; } })();
       const headers: Record<string, string> = {};
       if (auth) headers['Authorization'] = `Bearer ${auth}`;
@@ -332,6 +356,62 @@ export default function ExportDialog({ open, onClose, projectId }: ExportDialogP
                         </label>
                       ))}
                     </div>
+
+                    {/* Changelog — opt-in, and the only section with its own
+                        parameters. It sits outside the scrolling list so the
+                        toggle and its date window stay together on screen. */}
+                    <div className={`mt-2 rounded-lg border p-2.5 transition-colors ${
+                      changelogOn ? 'border-primary/40 bg-primary/5' : 'bg-muted/30'
+                    }`}>
+                      <label className={`flex items-center gap-2 cursor-pointer text-xs ${
+                        changelogOn ? 'text-primary' : 'text-muted-foreground'
+                      }`}>
+                        <input
+                          type="checkbox"
+                          checked={changelogOn}
+                          onChange={() => setChangelogOn(v => !v)}
+                          className="rounded"
+                        />
+                        <History size={12} className="shrink-0" />
+                        <span className="font-medium">Changelog (diff report)</span>
+                      </label>
+
+                      {changelogOn && (
+                      <div className="mt-2 space-y-2">
+                        <p className="text-[10px] text-muted-foreground leading-relaxed">
+                          Lists every recorded change between these dates. Deselect the other
+                          sections above for a changes-only review document.
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          <div className="flex-1 min-w-[120px]">
+                            <label className="block text-[10px] text-muted-foreground mb-0.5">From</label>
+                            <input
+                              type="date"
+                              className="input text-xs h-8"
+                              value={changelogFrom}
+                              max={changelogTo || undefined}
+                              onChange={(e) => setChangelogFrom(e.target.value)}
+                            />
+                          </div>
+                          <div className="flex-1 min-w-[120px]">
+                            <label className="block text-[10px] text-muted-foreground mb-0.5">To</label>
+                            <input
+                              type="date"
+                              className="input text-xs h-8"
+                              value={changelogTo}
+                              min={changelogFrom || undefined}
+                              onChange={(e) => setChangelogTo(e.target.value)}
+                            />
+                          </div>
+                        </div>
+                        {datesInvalid && (
+                          <p className="text-[10px] text-destructive">
+                            The start date must not be after the end date.
+                          </p>
+                        )}
+                      </div>
+                      )}
+                    </div>
                   </div>
                 ) : (
                   <div>
@@ -402,9 +482,10 @@ export default function ExportDialog({ open, onClose, projectId }: ExportDialogP
               <div className="flex gap-2 pt-2 border-t">
                 <button
                   onClick={handleDownload}
-                  disabled={downloading || selectedCount === 0}
+                  disabled={downloading || selectedCount === 0 || datesInvalid}
                   className="btn-primary flex-1 justify-center"
-                  title={selectedCount === 0 ? 'Select at least one subsystem' : undefined}
+                  title={selectedCount === 0 ? 'Select at least one subsystem'
+                    : datesInvalid ? 'Fix the changelog date range' : undefined}
                 >
                   {downloading ? (
                     <><Loader size={14} className="animate-spin" /> Generating…</>

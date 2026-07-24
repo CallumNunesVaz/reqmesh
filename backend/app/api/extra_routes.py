@@ -873,7 +873,8 @@ async def publish_project(project_id: str, data: PublishRequest, user: dict = De
 
 
 @router.get("/projects/{project_id}/publish/download")
-async def download_report(project_id: str, format: str = "html", subsystems: str | None = None, sections: str = ""):
+async def download_report(project_id: str, format: str = "html", subsystems: str | None = None,
+                          sections: str | None = None, changelog_from: str = "", changelog_to: str = ""):
     import os
     import tempfile
 
@@ -894,7 +895,9 @@ async def download_report(project_id: str, format: str = "html", subsystems: str
 
     fd, path = tempfile.mkstemp(suffix=f".{ext}")
     os.close(fd)
-    sec_list = [s.strip() for s in sections.split(",") if s.strip()] if sections else None
+    # Same absent-vs-empty distinction as `subsystems`: an unset param means
+    # "the default full report", an explicitly empty one means "no sections".
+    sec_list = [s.strip() for s in sections.split(",") if s.strip()] if sections is not None else None
     fallback = None  # message explaining why a preferred pipeline was bypassed
     try:
         if format == "reqif":
@@ -904,17 +907,17 @@ async def download_report(project_id: str, format: str = "html", subsystems: str
             from app.services.sysml_export import export_sysml_v2
             Path(path).write_text(export_sysml_v2(store))
         elif format == "html":
-            Path(path).write_text(pub.build_html(sec_list))
+            Path(path).write_text(pub.build_html(sec_list, changelog_from, changelog_to))
         elif format == "pdf":
-            latex = pub.build_latex(sec_list)
+            latex = pub.build_latex(sec_list, changelog_from, changelog_to)
             if not compile_latex_to_pdf(latex, path):
                 from weasyprint import HTML as WHTML
-                WHTML(string=pub.build_html(sec_list)).write_pdf(path)
+                WHTML(string=pub.build_html(sec_list, changelog_from, changelog_to)).write_pdf(path)
                 fallback = "LaTeX→PDF (tectonic/pdflatex) not available — rendered via HTML→PDF weasyprint (tables, badges, and table-of-contents omitted)"
         elif format == "md":
             pub.to_markdown_file(path)
         elif format == "latex":
-            Path(path).write_text(pub.build_latex(sec_list))
+            Path(path).write_text(pub.build_latex(sec_list, changelog_from, changelog_to))
         elif format in ("csv", "tsv"):
             from app.services.table_io import export_table
             Path(path).write_text(export_table(store, format))
