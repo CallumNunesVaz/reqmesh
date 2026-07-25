@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, X, Sigma, CheckCircle2, XCircle, HelpCircle, AlertTriangle, MinusCircle, FlaskConical, Ruler, Boxes, ArrowUp, ArrowDown } from 'lucide-react';
+import { Plus, X, Sigma, CheckCircle2, XCircle, HelpCircle, AlertTriangle, MinusCircle, FlaskConical, Ruler, Boxes, ArrowUp, ArrowDown, Beaker } from 'lucide-react';
 import type {
   Parameter, Constraint, Definition,
   EvaluatedRequirement, EvaluatedConstraint, EvalVerdict, ConstraintStatus,
 } from '../api/client';
 import { KNOWN_UNITS } from '../api/client';
 import { EntityLink } from './entities';
+import { useWhatIf } from './WhatIfContext';
 
 /** Shared <datalist> of known units for parameter-unit autocomplete. */
 const UNITS_LIST_ID = 'rm-known-units';
@@ -44,7 +45,7 @@ export function VerdictBadge({ status, prefix }: { status: EvalVerdict | Constra
 }
 
 /** `margin.value` headroom, signed; shown beside a comparison constraint. */
-function MarginTag({ margin }: { margin: NonNullable<EvaluatedConstraint['margin']> }) {
+export function MarginTag({ margin }: { margin: NonNullable<EvaluatedConstraint['margin']> }) {
   const ok = margin.value >= 0;
   return (
     <span className={`text-[10px] font-mono ${ok ? 'text-emerald-400' : 'text-red-400'}`}>
@@ -77,6 +78,11 @@ export function ParametricsCard({ reqId, parameters, constraints, evaluated, edi
   const constraintDefs = definitions.filter((d) => d.type === 'constraint');
   const [defDraft, setDefDraft] = useState<{ id: string; bindings: Record<string, string> }>({ id: '', bindings: {} });
   const selectedDef = constraintDefs.find((d) => d.id === defDraft.id);
+  // useWhatIf() must be called unconditionally (Rules of Hooks); `editable`
+  // toggles with edit mode, so a conditional call would change the hook count.
+  const whatIfCtx = useWhatIf();
+  const whatIf = editable ? whatIfCtx : null;
+  const [whatIfOpen, setWhatIfOpen] = useState<Set<string>>(new Set());
 
   const addDefConstraint = () => {
     if (!selectedDef) return;
@@ -146,18 +152,72 @@ export function ParametricsCard({ reqId, parameters, constraints, evaluated, edi
         <div className="space-y-1 mb-3">
           {parameters.map((p, i) => {
             const ev = evalParams.get(p.name);
+            const ref = `${reqId}.${p.name}`;
+            const isLiteral = !p.expr && !p.calc_def && p.value != null;
+            const isOverridden = whatIf && whatIf.overrides[ref] !== undefined;
+            const origVal = whatIf?.base[ref];
+            const whatIfOpenNow = whatIfOpen.has(ref);
             return (
-              <div key={`${p.name}-${i}`} className="flex items-center gap-2 text-xs py-1.5 px-2 rounded hover:bg-accent group">
+              <div key={`${p.name}-${i}`} className={`flex items-center gap-2 text-xs py-1.5 px-2 rounded hover:bg-accent group ${isOverridden ? 'ring-1 ring-dashed ring-blue-400/50 bg-blue-500/5' : ''}`}>
                 <span className="font-mono font-medium text-foreground w-28 shrink-0 truncate">{p.name}</span>
-                {p.expr ? (
+                {p.expr || p.calc_def ? (
                   <span className="flex-1 min-w-0 truncate">
-                    <span className="font-mono text-muted-foreground">= {p.expr}</span>
+                    <span className="font-mono text-muted-foreground">= {p.expr || p.calc_def}</span>
                     <span className="font-mono text-cs-teal ml-2">
                       {ev?.value != null ? `→ ${ev.value}` : ev?.detail ? `(${ev.detail})` : ''}
                     </span>
                   </span>
                 ) : (
-                  <span className="flex-1 font-mono text-foreground">{p.value ?? '—'}</span>
+                  <span className="flex-1 min-w-0">
+                    {isOverridden ? (
+                      <span className="flex items-center gap-1.5">
+                        <span className="font-mono text-muted-foreground line-through">{origVal}</span>
+                        <span className="text-[9px] text-muted-foreground">→</span>
+                        <span className="font-mono text-blue-400 font-semibold">{whatIf!.overrides[ref]}</span>
+                      </span>
+                    ) : (
+                      <span className="font-mono text-foreground">{p.value ?? '—'}</span>
+                    )}
+                    {whatIf && isLiteral && (
+                      <span className="inline-flex items-center gap-1 ml-1.5">
+                        {whatIfOpenNow && (
+                          <input
+                            className="input w-20 text-xs font-mono py-0.5 px-1"
+                            type="number"
+                            step="any"
+                            value={whatIf.overrides[ref] ?? ''}
+                            placeholder={String(p.value ?? '')}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) => {
+                              const n = parseFloat(e.target.value);
+                              if (!isNaN(n)) {
+                                whatIf.setOverride(ref, n, p.value ?? 0);
+                              }
+                            }}
+                          />
+                        )}
+                        <button
+                          className={`shrink-0 ${whatIfOpenNow ? 'text-blue-400' : 'text-muted-foreground hover:text-blue-400'} opacity-0 group-hover:opacity-100 transition-all`}
+                          title="What-if override"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setWhatIfOpen((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(ref)) {
+                                next.delete(ref);
+                                whatIf.removeOverride(ref);
+                              } else {
+                                next.add(ref);
+                              }
+                              return next;
+                            });
+                          }}
+                        >
+                          <Beaker size={13} />
+                        </button>
+                      </span>
+                    )}
+                  </span>
                 )}
                 <span className="text-muted-foreground shrink-0 w-12 truncate">{p.unit}</span>
                 {ev?.measured !== undefined && (

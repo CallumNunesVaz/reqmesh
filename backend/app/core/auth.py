@@ -172,14 +172,14 @@ def authenticate(username: str, password: str) -> dict:
     user["locked_until"] = 0
     user["last_active"] = time.strftime("%Y-%m-%dT%H:%M:%SZ")
     save_users(users)
-    role = user.get("role", "viewer")
+    role = user.get("role", "guest")
     tv = int(user.get("token_version", 0))
     audit_logger.info("Login successful: user=%s role=%s", username, role)
     return {"status": "ok", "username": username, "role": role,
             "token": create_token(username, role, tv)}
 
 
-def register_user(username: str, password: str, role: str = "editor") -> dict | None:
+def register_user(username: str, password: str, role: str = "contributor") -> dict | None:
     users = load_users()
     if username in users:
         return None
@@ -211,16 +211,17 @@ def get_user_from_token(token: str) -> dict | None:
     stored_version = user.get("token_version", 0)
     if token_version != stored_version:
         return None
-    return {"username": username, "role": user.get("role", "viewer"),
+    return {"username": username, "role": user.get("role", "guest"),
             "full_name": user.get("full_name", ""),
             "email_verified": user.get("email_verified", False)}
 
 
 # --- User administration (admin-only management) ---
 
-# "editor" = standard read/write user; "admin" = administrator. "viewer" is the
-# read-only role that unauthenticated guests get and is kept for compatibility.
-ALLOWED_ROLES = ("viewer", "editor", "admin")
+# "contributor" = standard read/write user; "maintainer" = elevated read/write
+# with project-level privileges; "admin" = administrator. "guest" is the
+# read-only role that unauthenticated users get.
+ALLOWED_ROLES = ("guest", "contributor", "maintainer", "admin")
 
 
 def public_users() -> list[dict]:
@@ -231,7 +232,7 @@ def public_users() -> list[dict]:
     for name, u in users.items():
         locked_until = int(u.get("locked_until", 0) or 0)
         out.append({
-            "username": name, "role": u.get("role", "viewer"),
+            "username": name, "role": u.get("role", "guest"),
             "full_name": u.get("full_name", ""),
             "email": u.get("email", ""), "email_verified": u.get("email_verified", False),
             "last_active": u.get("last_active", ""),
@@ -245,7 +246,7 @@ def public_users() -> list[dict]:
     return sorted(out, key=lambda x: x["username"].lower())
 
 
-def create_invited_user(username: str, role: str = "editor", email: str = "",
+def create_invited_user(username: str, role: str = "contributor", email: str = "",
                         full_name: str = "") -> str | None:
     """Create an account with a random password that must be set via an invite
     link. Returns a set-password token, or None if the username is taken."""
@@ -338,7 +339,7 @@ def delete_user(username: str) -> bool:
     return True
 
 
-GUEST_USER = {"username": "guest", "role": "viewer"}
+GUEST_USER = {"username": "guest", "role": "guest"}
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

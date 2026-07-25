@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.core.config import settings
 from app.core import auth
-from app.core.dependencies import require_edit, require_admin
+from app.core.dependencies import require_edit, require_maintain, require_admin
 
 
 @pytest.fixture()
@@ -28,6 +28,7 @@ def client(workspace):
     """Client authenticated as an admin (auth dependencies overridden)."""
     admin = {"username": "tester", "role": "admin"}
     app.dependency_overrides[require_edit] = lambda: admin
+    app.dependency_overrides[require_maintain] = lambda: admin
     app.dependency_overrides[require_admin] = lambda: admin
     with TestClient(app) as c:
         yield c

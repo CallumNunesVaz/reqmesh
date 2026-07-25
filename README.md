@@ -13,6 +13,7 @@ An open-source, web-based requirements management tool with:
 - **Real-time collaboration** — live change streaming over SSE with a presence roster of who's viewing each project
 - **Design/function split** — components (the synthesised design) mapped onto the requirements they satisfy, with hierarchical budget rollups
 - **SysML-style parametrics** — typed parameters, evaluable constraints, measured verdicts, margin computation — no SysML knowledge required
+- **Live what-if preview** — try a new parameter value and watch the recalculation propagate through downstream requirements, animated in the inspector and highlighted live on the canvas, then confirm or restore — nothing is written until you commit
 - **Deep traceability** — shallow and deep coverage analysis, code-to-requirement tag scanning, cycle detection via Tarjan's SCC
 - **Fingerprint-based review** — content-hash auto-invalidates reviews when normative content changes; no manual bookkeeping
 - **Quality linting** — inline requirement writing feedback (weak words, placeholders, measurability checks) based on INCOSE / EARS / ISO 29148
@@ -30,7 +31,7 @@ reqmesh/                    # THE TOOL (this repo)
 │   ├── app/models/        # Pydantic models for all 10 entity types
 │   ├── app/services/      # YAML store, integrity, tracing, fingerprint, evaluation,
 │   │                      # code_scan, quality, table_io, email, publisher, workflow…
-│   ├── tests/             # 163 integration + unit tests (pytest)
+│   ├── tests/             # 259 integration + unit tests (pytest)
 │   ├── gen_schemas.py     # JSON Schema generator
 │   └── requirements.txt   # All deps pinned to exact versions
 ├── frontend/              # React 18 + TypeScript + Vite + TailwindCSS
@@ -39,7 +40,7 @@ reqmesh/                    # THE TOOL (this repo)
 │   │   ├── components/    # Layout, nav, graph, editor, parametrics, helpers, palette…
 │   │   ├── pages/         # 12 route pages (projects, requirements, components, metrics…)
 │   │   └── store/         # Zustand state (auth, data, helpers toggle)
-│   └── tests/             # 59 unit tests (vitest)
+│   └── tests/             # 80 unit tests (vitest)
 ├── schemas/               # JSON Schemas for all project YAML formats
 ├── desktop/               # Electron shell for native desktop app
 ├── Dockerfile.prod        # Multi-stage production build
@@ -129,7 +130,7 @@ backend/.venv/bin/python seed_cessna.py --force
 
 ### Tests
 
-**Backend** — 163 tests covering API, storage, auth, integrity, quality, tracing, code scan, fingerprint, table I/O, evaluation, and deployment:
+**Backend** — 259 tests covering API, storage, auth, integrity, quality, tracing, code scan, fingerprint, table I/O, evaluation, what-if impact, and deployment:
 
 ```bash
 cd backend
@@ -137,7 +138,7 @@ cd backend
 .venv/bin/python -m pytest tests/
 ```
 
-**Frontend** — 59 tests covering stores, API client, entities, and auto-linking:
+**Frontend** — 80 tests covering stores, API client, entities, and auto-linking:
 
 ```bash
 cd frontend
@@ -233,6 +234,16 @@ constraints:
 - **Safe evaluation** — expressions are parsed against a strict whitelist; YAML content can never execute arbitrary code. Derivation chains resolve across requirements with cycle detection.
 
 Evaluate via `GET /api/projects/{id}/evaluation`. In the UI: the **Parameters & Constraints** card on a requirement shows live verdicts and margins; components carry their parameters; verification cases record measurements; a **Parametrics Guide** (togglable via the Guided button) explains everything in plain English.
+
+### Live what-if preview
+
+In edit mode, each literal parameter carries a **what-if** control: enter a hypothetical value and the change is evaluated ad-hoc — without writing anything — so you can see its blast radius before committing.
+
+- **Animated cascade** — a panel over the inspector steps through every affected parameter and constraint in dependency order, substituting values and revealing each new result and verdict; minimize it to a floating bar to stack more overrides across several requirements.
+- **Live canvas** — downstream requirements whose verdict actually changes light up on the graph (red = newly broken, green = newly fixed, blue = the value you're editing) while unaffected nodes dim, and the active step pulses its node in sync with the panel.
+- **Confirm or restore** — commit all overrides at once (writing real parameter values) or discard them; because nothing persists until you confirm, careful data entry can never silently break a threshold.
+
+Powered by `POST /api/projects/{id}/evaluation/impact`, which reuses the same evaluator with hypothetical overrides and returns a dependency-ordered impact trace plus the list of requirements whose verdict changed.
 
 ## Deep Traceability & Coverage
 
@@ -369,6 +380,7 @@ Key environment variables:
 | GET | `/api/projects/{id}/quality` | Per-requirement quality scores and findings |
 | GET | `/api/projects/{id}/backlog` | Prioritized backlog with effort rollup |
 | GET | `/api/projects/{id}/evaluation` | Parametric constraint evaluation (design + measured) |
+| POST | `/api/projects/{id}/evaluation/impact` | What-if preview: re-evaluate with hypothetical overrides + dependency-ordered impact trace |
 | GET | `/api/projects/{id}/requirements/{rid}/impact` | Impact analysis (dependents + cascades) |
 | GET | `/api/projects/{id}/requirements/{rid}/history` | Field-level change history |
 

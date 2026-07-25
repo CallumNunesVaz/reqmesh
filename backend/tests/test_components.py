@@ -69,11 +69,10 @@ def test_rejects_unsafe_id(client, project):
 
 
 def test_non_editor_cannot_create(client, project, guest_client):
-    # The `client` fixture overrides require_edit app-wide to authenticate as an
-    # admin; drop it so the real guard runs against the guest's viewer role.
-    from app.core.dependencies import require_edit
+    from app.core.dependencies import require_edit, require_maintain
     from app.main import app
-    app.dependency_overrides.pop(require_edit)
+    app.dependency_overrides.pop(require_edit, None)
+    app.dependency_overrides.pop(require_maintain, None)
 
     res = guest_client.post(f"/api/projects/{project}/components", json={"id": "C-001", "name": "X"})
     assert res.status_code == 403

@@ -59,7 +59,7 @@ class LoginRequest(BaseModel):
 class RegisterRequest(BaseModel):
     username: str
     password: str
-    role: str = "editor"
+    role: str = "contributor"
 
 
 @router.post("/auth/login")
@@ -95,9 +95,9 @@ async def register(data: RegisterRequest, authorization: Optional[str] = Header(
     if not settings.allow_self_registration and not is_admin:
         raise HTTPException(status_code=403, detail="Self-registration is disabled. Ask an administrator for an account.")
     # Only an authenticated admin may grant elevated roles; self-registration
-    # is always an editor.
-    role = "editor"
-    if data.role != "editor":
+    # is always a contributor.
+    role = "contributor"
+    if data.role != "contributor":
         if not is_admin:
             raise HTTPException(status_code=403, detail="Only admins can assign roles")
         role = data.role
@@ -118,7 +118,7 @@ async def whoami(user: dict = Depends(get_current_user)):
     u = users.get(user.get("username", ""), {})
     return {
         "username": user.get("username", "guest"),
-        "role": user.get("role", "viewer"),
+        "role": user.get("role", "guest"),
         "full_name": u.get("full_name", ""),
         "email": u.get("email", ""),
         "email_verified": u.get("email_verified", False),
@@ -244,7 +244,7 @@ async def resend_verification(user: dict = Depends(get_current_user), _rate: Non
 class CreateUserRequest(BaseModel):
     username: str
     password: str
-    role: str = "editor"
+    role: str = "contributor"
     email: str = ""
     full_name: str = ""
 
@@ -297,7 +297,7 @@ async def update_user(username: str, data: UpdateUserRequest, admin: dict = Depe
 
     if data.role is not None:
         _validate_role(data.role)
-        old_role = users[username].get("role", "viewer")
+        old_role = users[username].get("role", "guest")
         demoting_admin = users[username].get("role") == "admin" and data.role != "admin"
         if demoting_admin and count_admins(users) <= 1:
             raise HTTPException(status_code=400, detail="Cannot demote the last administrator")
@@ -319,7 +319,7 @@ async def update_user(username: str, data: UpdateUserRequest, admin: dict = Depe
         save_users(users)
 
     users = load_users()
-    return {"username": username, "role": users[username].get("role", "viewer"),
+    return {"username": username, "role": users[username].get("role", "guest"),
             "email": users[username].get("email", ""),
             "full_name": users[username].get("full_name", ""),
             "created": users[username].get("created", "")}
@@ -381,7 +381,7 @@ async def force_logout(username: str, admin: dict = Depends(require_admin)):
 class InviteRequest(BaseModel):
     username: str
     email: str = ""
-    role: str = "editor"
+    role: str = "contributor"
     full_name: str = ""
 
 
@@ -460,10 +460,10 @@ async def bulk_user_action(data: BulkUserRequest, admin: dict = Depends(require_
             if is_last_admin and data.role != "admin":
                 skipped.append(username)
                 continue
-            old_role = users[username].get("role", "viewer")
-            set_user_role(username, data.role or "editor")
+            old_role = users[username].get("role", "guest")
+            set_user_role(username, data.role or "contributor")
             audit_logger.info("Role changed: user=%s old=%s new=%s by=%s",
-                              username, old_role, data.role or "editor", me)
+                              username, old_role, data.role or "contributor", me)
         applied.append(username)
         users = load_users()  # refresh admin count after a mutation
     return {"applied": applied, "skipped": skipped}
@@ -505,9 +505,9 @@ async def import_users_csv(data: ImportUsersRequest, admin: dict = Depends(requi
         if not username or not USERNAME_RE.match(username):
             skipped.append(username or "(blank)")
             continue
-        role = (row.get("role") or "editor").strip()
+        role = (row.get("role") or "contributor").strip()
         if role not in ALLOWED_ROLES:
-            role = "editor"
+            role = "contributor"
         email = (row.get("email") or "").strip()
         token = create_invited_user(username, role, email, (row.get("full_name") or "").strip())
         if token is None:

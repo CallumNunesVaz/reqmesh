@@ -13,7 +13,7 @@ const EMPTY_DRAFT = { id: '', name: '', type: 'assembly', parent: '' };
 export default function ComponentsPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
-  const editable = useAuthStore((s) => s.editMode && s.user !== null && s.user.role !== 'viewer');
+  const editable = useAuthStore((s) => s.canEdit());
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkParent, setBulkParent] = useState('');
   const dataVersion = useStore((s) => s.dataVersion);

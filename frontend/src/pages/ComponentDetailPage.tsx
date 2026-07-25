@@ -68,7 +68,7 @@ function LinkEditor({ label, hint, kind, linked, options, editable, onAdd, onRem
 export default function ComponentDetailPage() {
   const { projectId, componentId } = useParams<{ projectId: string; componentId: string }>();
   const navigate = useNavigate();
-  const editable = useAuthStore((s) => s.editMode && s.user !== null && s.user.role !== 'viewer');
+  const editable = useAuthStore((s) => s.canEdit());
   const bumpGraphVersion = useStore((s) => s.bumpGraphVersion);
   const entityKinds = useEntityKinds(projectId);
 

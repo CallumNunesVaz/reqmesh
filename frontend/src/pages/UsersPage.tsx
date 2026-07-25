@@ -5,11 +5,12 @@ import { api, type ManagedUser } from '../api/client';
 import { useAuthStore } from '../store/auth';
 import BodyPortal from '../components/BodyPortal';
 
-const ROLE_LABELS: Record<string, string> = { admin: 'Administrator', editor: 'Standard', viewer: 'Viewer' };
+const ROLE_LABELS: Record<string, string> = { admin: 'Administrator', maintainer: 'Maintainer', contributor: 'Contributor', guest: 'Guest' };
 const ROLE_BADGE: Record<string, string> = {
   admin: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
-  editor: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
-  viewer: 'bg-muted text-muted-foreground border-border',
+  maintainer: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+  contributor: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
+  guest: 'bg-muted text-muted-foreground border-border',
 };
 
 /** Compact account-status badge (disabled / locked / invited / active). */
@@ -43,7 +44,7 @@ export default function UsersPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [newUsername, setNewUsername] = useState('');
   const [newPassword, setNewPassword] = useState('');
-  const [newRole, setNewRole] = useState('editor');
+  const [newRole, setNewRole] = useState('contributor');
   const [newFullName, setNewFullName] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [creating, setCreating] = useState(false);
@@ -61,7 +62,7 @@ export default function UsersPage() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [showInvite, setShowInvite] = useState(false);
-  const [invite, setInvite] = useState({ username: '', email: '', full_name: '', role: 'editor' });
+  const [invite, setInvite] = useState({ username: '', email: '', full_name: '', role: 'contributor' });
   const [inviting, setInviting] = useState(false);
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [importText, setImportText] = useState<string | null>(null);
@@ -129,7 +130,7 @@ export default function UsersPage() {
     try {
       await api.createUser({ username: newUsername.trim(), password: newPassword, role: newRole, full_name: newFullName.trim(), email: newEmail.trim() });
       setShowCreate(false);
-      setNewUsername(''); setNewPassword(''); setNewRole('editor'); setNewFullName(''); setNewEmail('');
+      setNewUsername(''); setNewPassword(''); setNewRole('contributor'); setNewFullName(''); setNewEmail('');
       load();
     } catch (err: any) { setError(err.message); }
     finally { setCreating(false); }
@@ -172,7 +173,7 @@ export default function UsersPage() {
       const res = await api.inviteUser({ username: invite.username.trim(), email: invite.email.trim(), role: invite.role, full_name: invite.full_name.trim() });
       if (res.invite_link) setInviteLink(res.invite_link);
       else { setShowInvite(false); }
-      setInvite({ username: '', email: '', full_name: '', role: 'editor' });
+      setInvite({ username: '', email: '', full_name: '', role: 'contributor' });
       load();
     } catch (err: any) { setError(err.message); }
     finally { setInviting(false); }
@@ -308,7 +309,7 @@ export default function UsersPage() {
               <div><span className="text-muted-foreground">Username</span><div className="font-mono text-card-foreground">{username}</div></div>
               <div><span className="text-muted-foreground">Name</span><div className="text-card-foreground">{selfForm.full_name || <span className="italic text-muted-foreground/50">not set</span>}</div></div>
               <div><span className="text-muted-foreground">Email</span><div className="text-card-foreground">{selfForm.email || <span className="italic text-muted-foreground/50">not set</span>}</div></div>
-              <div><span className="text-muted-foreground">Role</span><div><span className={`badge border text-[10px] ${ROLE_BADGE[currentUser?.role || 'viewer']}`}>{ROLE_LABELS[currentUser?.role || 'viewer']}</span></div></div>
+              <div><span className="text-muted-foreground">Role</span><div><span className={`badge border text-[10px] ${ROLE_BADGE[currentUser?.role || 'guest']}`}>{ROLE_LABELS[currentUser?.role || 'guest']}</span></div></div>
             </div>
           )}
         </div>
@@ -348,7 +349,7 @@ export default function UsersPage() {
                 <div className="min-w-[130px]">
                   <label className="label text-[10px]">Role</label>
                   <select className="input text-sm" value={newRole} onChange={(e) => setNewRole(e.target.value)}>
-                    <option value="editor">Standard</option>
+                    <option value="contributor">Contributor</option>
                     <option value="admin">Administrator</option>
                   </select>
                 </div>
@@ -373,8 +374,8 @@ export default function UsersPage() {
               <select className="input text-xs !w-auto !py-1.5" value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
                 <option value="all">All roles</option>
                 <option value="admin">Administrator</option>
-                <option value="editor">Standard</option>
-                <option value="viewer">Viewer</option>
+                <option value="contributor">Contributor</option>
+                <option value="guest">Guest</option>
               </select>
               <select className="input text-xs !w-auto !py-1.5" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
                 <option value="all">All statuses</option>
@@ -398,9 +399,9 @@ export default function UsersPage() {
                 <button onClick={() => handleBulk('enable')} className="btn-ghost text-xs"><CircleCheck size={13} /> Enable</button>
                 <select className="input text-xs !w-auto !py-1" defaultValue="" onChange={(e) => { if (e.target.value) { handleBulk('set_role', e.target.value); e.target.value = ''; } }}>
                   <option value="">Set role…</option>
-                  <option value="editor">Standard</option>
+                  <option value="contributor">Contributor</option>
                   <option value="admin">Administrator</option>
-                  <option value="viewer">Viewer</option>
+                  <option value="guest">Guest</option>
                 </select>
                 <button onClick={() => handleBulk('delete')} className="btn-ghost text-xs text-destructive"><Trash2 size={13} /> Delete</button>
                 <button onClick={() => setSelected(new Set())} className="btn-ghost text-xs"><X size={13} /></button>
@@ -470,9 +471,9 @@ export default function UsersPage() {
                             onChange={(e) => handleRoleChange(u.username, e.target.value)}
                             disabled={isSelf && u.role === 'admin'}
                           >
-                            <option value="editor">Standard</option>
+                            <option value="contributor">Contributor</option>
                             <option value="admin">Administrator</option>
-                            <option value="viewer">Viewer (read-only)</option>
+                            <option value="guest">Guest (read-only)</option>
                           </select>
                         </td>
                         <td className="px-4 py-2.5"><StatusBadge u={u} /></td>
@@ -540,7 +541,7 @@ export default function UsersPage() {
                   <div><label className="label text-[10px]">Full name</label><input className="input text-sm" value={invite.full_name} onChange={(e) => setInvite({ ...invite, full_name: e.target.value })} placeholder="Jane Doe" /></div>
                   <div><label className="label text-[10px]">Role</label>
                     <select className="input text-sm" value={invite.role} onChange={(e) => setInvite({ ...invite, role: e.target.value })}>
-                      <option value="editor">Standard</option><option value="admin">Administrator</option><option value="viewer">Viewer</option>
+                      <option value="contributor">Contributor</option><option value="admin">Administrator</option><option value="guest">Guest</option>
                     </select>
                   </div>
                   <button type="submit" className="btn-primary w-full justify-center" disabled={inviting || !invite.username.trim()}>

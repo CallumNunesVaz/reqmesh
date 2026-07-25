@@ -10,7 +10,7 @@ from typing import Optional
 from fastapi import APIRouter, Header, HTTPException, Query, Depends
 from pydantic import BaseModel
 
-from app.core.dependencies import get_store, require_edit, require_admin
+from app.core.dependencies import get_store, require_maintain, require_admin
 from app.core.ids import safe_id
 from app.core.tree_utils import build_flat_tree
 from app.models.requirement import RequirementCreate, RequirementUpdate
@@ -76,7 +76,7 @@ async def list_projects():
 
 
 @router.post("/projects", status_code=201)
-async def create_project(data: ProjectCreate, user: dict = Depends(require_edit)):
+async def create_project(data: ProjectCreate, user: dict = Depends(require_maintain)):
     from app.core.config import settings
 
     project_id = safe_id(data.id, "project id")
@@ -123,7 +123,7 @@ class ProjectSettings(BaseModel):
 
 
 @router.patch("/projects/{project_id}")
-async def update_project_settings(project_id: str, data: ProjectSettings, user: dict = Depends(require_edit)):
+async def update_project_settings(project_id: str, data: ProjectSettings, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     meta = store.read_meta()
     updates = {}
@@ -286,7 +286,7 @@ async def get_requirement(project_id: str, req_id: str):
 
 
 @router.post("/projects/{project_id}/requirements", status_code=201)
-async def create_requirement(project_id: str, data: RequirementCreate, user: dict = Depends(require_edit)):
+async def create_requirement(project_id: str, data: RequirementCreate, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     safe_id(data.id, "requirement id")
     if store.get_requirement(data.id):
@@ -302,7 +302,7 @@ async def create_requirement(project_id: str, data: RequirementCreate, user: dic
 
 
 @router.put("/projects/{project_id}/requirements/{req_id}")
-async def update_requirement(project_id: str, req_id: str, data: RequirementUpdate, user: dict = Depends(require_edit), skip_workflow: bool = Query(False)):
+async def update_requirement(project_id: str, req_id: str, data: RequirementUpdate, user: dict = Depends(require_maintain), skip_workflow: bool = Query(False)):
     store = get_store(project_id)
     update_dict = data.model_dump(mode="json", exclude_unset=True)
 
@@ -342,7 +342,7 @@ async def update_requirement(project_id: str, req_id: str, data: RequirementUpda
 
 
 @router.delete("/projects/{project_id}/requirements/{req_id}")
-async def delete_requirement(project_id: str, req_id: str, user: dict = Depends(require_edit)):
+async def delete_requirement(project_id: str, req_id: str, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     before = store.get_requirement(req_id)
     if not store.delete_requirement(req_id):
@@ -354,7 +354,7 @@ async def delete_requirement(project_id: str, req_id: str, user: dict = Depends(
 # ── Cascade Operations ───────────────────────────────────────────────────────
 
 @router.post("/projects/{project_id}/requirements/{req_id}/cascade")
-async def cascade_requirement(project_id: str, req_id: str, user: dict = Depends(require_edit)):
+async def cascade_requirement(project_id: str, req_id: str, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     source = store.get_requirement(req_id)
     if source is None:
@@ -386,7 +386,7 @@ async def cascade_requirement(project_id: str, req_id: str, user: dict = Depends
 
 
 @router.post("/projects/{project_id}/requirements/{req_id}/break-cascade")
-async def break_cascade(project_id: str, req_id: str, data: BreakCascade | None = None, user: dict = Depends(require_edit)):
+async def break_cascade(project_id: str, req_id: str, data: BreakCascade | None = None, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     req = store.get_requirement(req_id)
     if req is None:
@@ -437,7 +437,7 @@ async def get_specification(project_id: str, spec_id: str):
 
 
 @router.post("/projects/{project_id}/specifications", status_code=201)
-async def create_specification(project_id: str, data: SpecificationCreate, user: dict = Depends(require_edit)):
+async def create_specification(project_id: str, data: SpecificationCreate, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     safe_id(data.id, "specification id")
     if store.get_specification(data.id):
@@ -451,7 +451,7 @@ async def create_specification(project_id: str, data: SpecificationCreate, user:
 
 
 @router.put("/projects/{project_id}/specifications/{spec_id}")
-async def update_specification(project_id: str, spec_id: str, data: SpecificationUpdate, user: dict = Depends(require_edit)):
+async def update_specification(project_id: str, spec_id: str, data: SpecificationUpdate, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     before = store.get_specification(spec_id)
     update_dict = data.model_dump(mode="json", exclude_unset=True)
@@ -463,7 +463,7 @@ async def update_specification(project_id: str, spec_id: str, data: Specificatio
 
 
 @router.delete("/projects/{project_id}/specifications/{spec_id}")
-async def delete_specification(project_id: str, spec_id: str, user: dict = Depends(require_edit)):
+async def delete_specification(project_id: str, spec_id: str, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     before = store.get_specification(spec_id)
     if not store.delete_specification(spec_id):
@@ -486,7 +486,7 @@ async def list_baselines(project_id: str):
 
 
 @router.post("/projects/{project_id}/baselines")
-async def create_baseline(project_id: str, data: BaselineCreate, user: dict = Depends(require_edit)):
+async def create_baseline(project_id: str, data: BaselineCreate, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     name = safe_id(data.name, "baseline name")
     updated = 0
@@ -503,7 +503,7 @@ async def create_baseline(project_id: str, data: BaselineCreate, user: dict = De
 
 
 @router.patch("/projects/{project_id}/baselines/{name}")
-async def rename_baseline(project_id: str, name: str, data: RenameBaseline, user: dict = Depends(require_edit)):
+async def rename_baseline(project_id: str, name: str, data: RenameBaseline, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     safe_id(name, "baseline name")
     new_name = data.name
@@ -530,7 +530,7 @@ async def rename_baseline(project_id: str, name: str, data: RenameBaseline, user
 
 
 @router.delete("/projects/{project_id}/baselines/{name}")
-async def delete_baseline(project_id: str, name: str, user: dict = Depends(require_edit)):
+async def delete_baseline(project_id: str, name: str, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     store.delete_item("baselines", name)
     updated = 0
@@ -562,7 +562,7 @@ async def list_definitions(
 
 
 @router.post("/projects/{project_id}/definitions", status_code=201)
-async def create_definition(project_id: str, data: DefinitionCreate, user: dict = Depends(require_edit)):
+async def create_definition(project_id: str, data: DefinitionCreate, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     def_id = safe_id(data.id, "definition id")
     if store.get_item("definitions", def_id) is not None:
@@ -573,7 +573,7 @@ async def create_definition(project_id: str, data: DefinitionCreate, user: dict 
 
 
 @router.put("/projects/{project_id}/definitions/{def_id}")
-async def update_definition(project_id: str, def_id: str, data: DefinitionUpdate, user: dict = Depends(require_edit)):
+async def update_definition(project_id: str, def_id: str, data: DefinitionUpdate, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     existing = store.get_item("definitions", def_id)
     if existing is None:
@@ -583,7 +583,7 @@ async def update_definition(project_id: str, def_id: str, data: DefinitionUpdate
 
 
 @router.delete("/projects/{project_id}/definitions/{def_id}")
-async def delete_definition(project_id: str, def_id: str, user: dict = Depends(require_edit)):
+async def delete_definition(project_id: str, def_id: str, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     store.delete_item("definitions", def_id)
     return {"ok": True}
@@ -608,7 +608,7 @@ async def list_analysis_cases(
 
 
 @router.post("/projects/{project_id}/analysis", status_code=201)
-async def create_analysis_case(project_id: str, data: AnalysisCaseCreate, user: dict = Depends(require_edit)):
+async def create_analysis_case(project_id: str, data: AnalysisCaseCreate, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     case_id = safe_id(data.id, "analysis case id")
     if store.get_item("analysis_cases", case_id) is not None:
@@ -619,7 +619,7 @@ async def create_analysis_case(project_id: str, data: AnalysisCaseCreate, user: 
 
 
 @router.put("/projects/{project_id}/analysis/{case_id}")
-async def update_analysis_case(project_id: str, case_id: str, data: AnalysisCaseUpdate, user: dict = Depends(require_edit)):
+async def update_analysis_case(project_id: str, case_id: str, data: AnalysisCaseUpdate, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     existing = store.get_item("analysis_cases", case_id)
     if existing is None:
@@ -629,7 +629,7 @@ async def update_analysis_case(project_id: str, case_id: str, data: AnalysisCase
 
 
 @router.delete("/projects/{project_id}/analysis/{case_id}")
-async def delete_analysis_case(project_id: str, case_id: str, user: dict = Depends(require_edit)):
+async def delete_analysis_case(project_id: str, case_id: str, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     store.delete_item("analysis_cases", case_id)
     return {"ok": True}
@@ -673,7 +673,7 @@ async def get_verification_case(project_id: str, vc_id: str):
 
 
 @router.post("/projects/{project_id}/verification", status_code=201)
-async def create_verification_case(project_id: str, data: VerificationCaseCreate, user: dict = Depends(require_edit)):
+async def create_verification_case(project_id: str, data: VerificationCaseCreate, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     safe_id(data.id, "verification case id")
     if store.get_verification_case(data.id):
@@ -688,7 +688,7 @@ async def create_verification_case(project_id: str, data: VerificationCaseCreate
 
 
 @router.put("/projects/{project_id}/verification/{vc_id}")
-async def update_verification_case(project_id: str, vc_id: str, data: VerificationCaseUpdate, user: dict = Depends(require_edit)):
+async def update_verification_case(project_id: str, vc_id: str, data: VerificationCaseUpdate, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     before = store.get_verification_case(vc_id)
     update_dict = data.model_dump(mode="json", exclude_unset=True)
@@ -700,7 +700,7 @@ async def update_verification_case(project_id: str, vc_id: str, data: Verificati
 
 
 @router.delete("/projects/{project_id}/verification/{vc_id}")
-async def delete_verification_case(project_id: str, vc_id: str, user: dict = Depends(require_edit)):
+async def delete_verification_case(project_id: str, vc_id: str, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     before = store.get_verification_case(vc_id)
     if not store.delete_verification_case(vc_id):
@@ -710,7 +710,7 @@ async def delete_verification_case(project_id: str, vc_id: str, user: dict = Dep
 
 
 @router.post("/projects/{project_id}/verification/{vc_id}/run")
-async def run_verification(project_id: str, vc_id: str, data: RunVerification, user: dict = Depends(require_edit)):
+async def run_verification(project_id: str, vc_id: str, data: RunVerification, user: dict = Depends(require_maintain)):
     """Record a test execution run with optional step results and new status."""
     store = get_store(project_id)
     vc = store.get_verification_case(vc_id)
@@ -763,7 +763,7 @@ async def get_traces(project_id: str):
 
 
 @router.put("/projects/{project_id}/traces")
-async def update_traces(project_id: str, data: TraceMatrix, user: dict = Depends(require_edit)):
+async def update_traces(project_id: str, data: TraceMatrix, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     store.write_traces(data.model_dump(mode="json"))
     return data

@@ -36,7 +36,7 @@ const ENTITY_LABELS: Record<string, string> = {
 export default function ProjectSettingsPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
-  const editable = useAuthStore((s) => s.editMode && s.user !== null && s.user.role !== 'viewer');
+  const editable = useAuthStore((s) => s.canEdit());
 
   const [projectName, setProjectName] = useState('');
   const [naming, setNaming] = useState<Record<string, NamingRule>>({});

@@ -63,7 +63,7 @@ export default function RequirementsPage() {
   const dataVersion = useStore((s) => s.dataVersion);
   const bumpGraphVersion = useStore((s) => s.bumpGraphVersion);
   const bumpDataVersion = useStore((s) => s.bumpDataVersion);
-  const editMode = useAuthStore((s) => s.editMode && s.user !== null && s.user.role !== 'viewer');
+  const editMode = useAuthStore((s) => s.canEdit());
   const showConfirm = useConfirm();
   const { selectedReqId, selectReq } = useSelectedReq();
 

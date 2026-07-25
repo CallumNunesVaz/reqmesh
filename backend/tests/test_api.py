@@ -171,7 +171,7 @@ def test_self_registration_cannot_grant_admin(guest_client):
     res = guest_client.post("/api/auth/register",
                             json={"username": "alice", "password": "TestPass1!secure"})
     assert res.status_code == 200
-    assert res.json()["role"] == "editor"
+    assert res.json()["role"] == "contributor"
 
 
 def test_project_delete_requires_admin(guest_client):
@@ -392,8 +392,8 @@ def test_project_git_settings_roundtrip_and_visibility(client, project):
     assert "git" not in anon.json()
 
     # A signed-in editor gets it back for the settings page.
-    auth_mod.register_user("ed", "Password123!", "editor")
-    tok = auth_mod.create_token("ed", "editor")
+    auth_mod.register_user("ed", "Password123!", "contributor")
+    tok = auth_mod.create_token("ed", "contributor")
     seen = client.get(f"/api/projects/{project}",
                       headers={"Authorization": f"Bearer {tok}"}).json()
     assert seen["git"]["push_interval_minutes"] == 5
@@ -402,13 +402,13 @@ def test_project_git_settings_roundtrip_and_visibility(client, project):
 def test_profile_email_change_resets_verification(client, workspace):
     from app.core import auth as auth_mod
 
-    auth_mod.register_user("pat", "Password123!", "editor")
+    auth_mod.register_user("pat", "Password123!", "contributor")
     users = auth_mod.load_users()
     users["pat"]["email"] = "old@example.com"
     users["pat"]["email_verified"] = True
     auth_mod.save_users(users)
 
-    tok = auth_mod.create_token("pat", "editor")
+    tok = auth_mod.create_token("pat", "contributor")
     res = client.patch("/api/auth/profile", json={"email": "new@example.com"},
                        headers={"Authorization": f"Bearer {tok}"})
     assert res.status_code == 200

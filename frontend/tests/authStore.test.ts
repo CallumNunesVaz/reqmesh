@@ -52,7 +52,7 @@ describe('useAuthStore init', () => {
     const useAuthStore = await freshStore();
     expect(useAuthStore.getState().token).toBeNull();
     // Writes must not throw either — the store is the app's boot path.
-    expect(() => useAuthStore.getState().login('bob', 't', 'editor')).not.toThrow();
+    expect(() => useAuthStore.getState().login('bob', 't', 'contributor')).not.toThrow();
     expect(useAuthStore.getState().user?.username).toBe('bob');
   });
 });
@@ -80,7 +80,7 @@ describe('loginGuest', () => {
     useAuthStore.getState().loginGuest();
 
     const s = useAuthStore.getState();
-    expect(s.user).toEqual({ username: 'guest', role: 'viewer' });
+    expect(s.user).toEqual({ username: 'guest', role: 'guest' });
     expect(s.token).toBeNull();
     expect(s.isGuest).toBe(true);
     expect(data.has('rt-token')).toBe(false);
@@ -114,22 +114,51 @@ describe('setToken', () => {
 });
 
 describe('canEdit', () => {
-  it('requires a non-viewer user with edit mode switched on', async () => {
+  it('requires maintainer or admin with edit mode switched on', async () => {
     installStorage();
     const useAuthStore = await freshStore();
     const { login, setEditMode, loginGuest } = useAuthStore.getState();
 
     expect(useAuthStore.getState().canEdit()).toBe(false); // logged out
 
-    login('bob', 't', 'editor');
+    login('bob', 't', 'maintainer');
     expect(useAuthStore.getState().canEdit()).toBe(false); // edit mode off
     setEditMode(true);
     expect(useAuthStore.getState().canEdit()).toBe(true);
 
-    // A viewer can never edit, even with the toggle forced on.
+    // Admin can edit too.
+    login('alice', 't', 'admin');
+    setEditMode(true);
+    expect(useAuthStore.getState().canEdit()).toBe(true);
+
+    // A guest can never edit, even with the toggle forced on.
     loginGuest();
     setEditMode(true);
     expect(useAuthStore.getState().canEdit()).toBe(false);
+
+    // A contributor cannot edit requirements.
+    login('charlie', 't', 'contributor');
+    setEditMode(true);
+    expect(useAuthStore.getState().canEdit()).toBe(false);
+  });
+});
+
+describe('canPropose', () => {
+  it('allows contributor, maintainer, and admin with edit mode on', async () => {
+    installStorage();
+    const useAuthStore = await freshStore();
+    const { login, setEditMode, loginGuest } = useAuthStore.getState();
+
+    expect(useAuthStore.getState().canPropose()).toBe(false); // logged out
+
+    loginGuest();
+    setEditMode(true);
+    expect(useAuthStore.getState().canPropose()).toBe(false); // guest blocked
+
+    login('bob', 't', 'contributor');
+    expect(useAuthStore.getState().canPropose()).toBe(false); // edit mode off
+    setEditMode(true);
+    expect(useAuthStore.getState().canPropose()).toBe(true);
   });
 });
 
@@ -140,7 +169,7 @@ describe('isLoggedIn', () => {
     expect(useAuthStore.getState().isLoggedIn()).toBe(false);
     useAuthStore.getState().loginGuest();
     expect(useAuthStore.getState().isLoggedIn()).toBe(false);
-    useAuthStore.getState().login('bob', 't', 'editor');
+    useAuthStore.getState().login('bob', 't', 'contributor');
     expect(useAuthStore.getState().isLoggedIn()).toBe(true);
   });
 });

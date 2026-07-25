@@ -32,6 +32,7 @@ import { zoomLevel, LEVEL_LABELS } from './semanticZoom';
 import { useTheme } from './ThemeProvider';
 import { useSelectedReq } from './Layout';
 import { useStore } from '../store';
+import { useWhatIf } from './WhatIfContext';
 
 const edgeColors: Record<string, string> = {
   refines: 'hsl(207,90%,64%)',
@@ -442,9 +443,8 @@ interface GraphPaneProps { projectId: string; }
 
 export default function GraphPane({ projectId }: GraphPaneProps) {
   const navigate = useNavigate();
-  // ReactFlow defaults to colorMode="light", which stamps a `.light` class on
-  // its container and re-scopes our theme CSS variables inside the graph.
   const { theme } = useTheme();
+  const whatIf = useWhatIf();
   const [reqs, setReqs] = useState<Requirement[]>([]);
   const [traces, setTraces] = useState<TraceLink[]>([]);
   const [components, setComponents] = useState<Component[]>([]);
@@ -818,8 +818,6 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
     const visIds = new Set([...visibleNodeIds].filter(id => filteredIds.has(id)));
 
     const fmt = (v: number) => (Number.isInteger(v) ? String(v) : String(Math.round(v * 100) / 100));
-    // DOMParser is ~50µs a call — cached so the frequent node rebuilds
-    // (collapse/expand/filter) don't re-parse every description each time.
     const stripHtml = (html: string) => {
       const hit = stripHtmlCache.get(html);
       if (hit !== undefined) return hit;
@@ -827,6 +825,31 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
       stripHtmlCache.set(html, text);
       return text;
     };
+
+    const wfEval = whatIf.impact?.evaluation;
+    const wfRoots = whatIf.impact?.roots ?? [];
+    const wfAffected = new Set(whatIf.impact?.affected ?? []);
+    const wfStepOwner = whatIf.impact?.steps[whatIf.stepIndex]?.owner ?? null;
+    const wfRootOwners = new Set(wfRoots.map((r) => r.split('.')[0]));
+
+    const previewByReq = new Map<string, { verdict: string; delta: string | null }>();
+    if (wfEval) {
+      const baseVMap = new Map<string, string>();
+      for (const er of evaluated.values()) {
+        if (er.verdict !== 'none') baseVMap.set(er.id, er.verdict);
+      }
+      for (const er of wfEval.requirements) {
+        if (er.verdict === 'none') continue;
+        const base = baseVMap.get(er.id);
+        let delta: string | null = null;
+        if (base && base !== er.verdict) {
+          if (er.verdict === 'fail') delta = 'broke';
+          else if (base === 'fail' && er.verdict === 'pass') delta = 'fixed';
+          else delta = 'changed';
+        }
+        previewByReq.set(er.id, { verdict: er.verdict, delta });
+      }
+    }
 
     const nodes: Node[] = filteredReqs.filter(r => visIds.has(r.id)).map(req => {
       // Parametric compartments: prefer evaluated values (derived params get
@@ -925,6 +948,10 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
           },
           params, constraints,
           verdict: ev && ev.verdict !== 'none' ? ev.verdict : null,
+          previewVerdict: previewByReq.get(req.id)?.verdict ?? null,
+          previewDelta: previewByReq.get(req.id)?.delta ?? null,
+          isOverrideRoot: wfRootOwners.has(req.id),
+          pulseActive: wfStepOwner === req.id,
           vcCount: (req.verification_cases ?? []).length,
           desc: stripHtml(req.description).slice(0, 320),
           hasMissingInfo: !req.description || !req.name || !req.rationale || (req.verification_cases?.length ?? 0) === 0,
@@ -975,7 +1002,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
     }
 
     return { initialNodes: nodes, initialEdges: edges };
-  }, [reqs, filteredReqs, traces, visibleNodeIds, childCounts, collapsed, entranceDone, evaluated]);
+  }, [reqs, filteredReqs, traces, visibleNodeIds, childCounts, collapsed, entranceDone, evaluated, whatIf.impact, whatIf.stepIndex]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
@@ -1497,9 +1524,20 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
   }, [selectedReqId, hoveredNodeId, initialEdges, hopDepth, linkDir]);
   // A live derivation trace replaces the hop-radius highlight entirely.
   const derivationActive = !!derived && derived.root === selectedReqId;
-  const connectedIds = derivationActive ? derived!.ids : focus.ids;
 
-  const hasSelection = derivationActive || !!(selectedReqId || hoveredNodeId);
+  const wfActive = !!whatIf.impact;
+  const wfConnectedIds = useMemo(() => {
+    if (!whatIf.impact) return new Set<string>();
+    const roots = whatIf.impact.roots ?? [];
+    const owners = new Set(roots.map((r: string) => r.split('.')[0]));
+    const affected = whatIf.impact.affected ?? [];
+    return new Set([...owners, ...affected]);
+  }, [whatIf.impact]);
+
+  const connectedIds = wfActive ? wfConnectedIds
+    : derivationActive ? derived!.ids : focus.ids;
+
+  const hasSelection = wfActive || derivationActive || !!(selectedReqId || hoveredNodeId);
 
   // Fidelity drops automatically on big graphs — see PERF_NODE_LIMIT.
   const perfMode = initialNodes.length > PERF_NODE_LIMIT;
@@ -1992,6 +2030,13 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
         @keyframes scrollDesc {
           0%, 15% { transform: translateY(0); }
           85%, 100% { transform: translateY(min(0px, calc(-100% + var(--desc-h, 46px)))); }
+        }
+        @keyframes rtPulse {
+          0%, 100% { filter: drop-shadow(0 0 4px currentColor) drop-shadow(0 0 8px currentColor); }
+          50% { filter: drop-shadow(0 0 12px currentColor) drop-shadow(0 0 20px currentColor); }
+        }
+        .rt-pulse {
+          animation: rtPulse 0.6s ease-in-out infinite;
         }
         /* Nodes are absolutely positioned islands: containment tells the
            browser a node's internal layout/style can't leak out, shrinking

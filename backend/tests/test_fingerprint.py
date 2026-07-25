@@ -34,9 +34,13 @@ def test_unreviewed_detected(client, project):
     store.create_requirement({"id": "REQ-F1", "name": "F1", "description": "Do X"})
 
     unreviewed = check_unreviewed(store)
-    assert len(unreviewed) == 0
+    assert len(unreviewed) == 1
+    assert unreviewed[0]["reviewed"] is None
 
     review_item(store, "REQ-F1")
+    unreviewed = check_unreviewed(store)
+    assert len(unreviewed) == 0
+
     store.update_requirement("REQ-F1", {"description": "Changed"})
     unreviewed = check_unreviewed(store)
     assert len(unreviewed) == 1

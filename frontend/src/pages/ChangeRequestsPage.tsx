@@ -25,7 +25,7 @@ export default function ChangeRequestsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [error, setError] = useState('');
   const [form, setForm] = useState({ id: '', title: '', description: '' });
-  const editable = useAuthStore((s) => s.editMode && s.user !== null && s.user.role !== 'viewer');
+  const editable = useAuthStore((s) => s.editMode && s.user !== null && s.user.role !== 'guest');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const dataVersion = useStore((s) => s.dataVersion);
   const entityKinds = useEntityKinds(projectId);

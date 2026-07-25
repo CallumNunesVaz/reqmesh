@@ -13,7 +13,7 @@ import { useEntityKinds } from '../components/entityIndex';
 export default function SpecificationsPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const { specifications, setSpecifications } = useStore();
-  const editable = useAuthStore((s) => s.editMode && s.user !== null && s.user.role !== 'viewer');
+  const editable = useAuthStore((s) => s.canEdit());
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const dataVersion = useStore((s) => s.dataVersion);
   const [showCreate, setShowCreate] = useState(false);

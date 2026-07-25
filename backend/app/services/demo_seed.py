@@ -308,7 +308,7 @@ def _requirements() -> list[dict]:
         " range from idle (600 RPM) to full power (2700 RPM),"
         " with mixture control adjustable by the pilot via a"
         " vernier control cable.</p>",
-        "functional", "approved", "high",
+        "functional", "implemented", "high",
         "Precision fuel injection eliminates the carburetor icing"
         " hazard and provides cylinder-to-cylinder mixture balance"
         " within 0.5 GPH, improving efficiency and reducing CHT"
@@ -547,7 +547,7 @@ def _requirements() -> list[dict]:
         " Deviation Indicator) display on both PFD and standby"
         " instrument.  GS capture shall be from above or below"
         " with automatic sensitivity scaling.</p>",
-        "functional", "approved", "high",
+        "functional", "verified", "high",
         "While GPS is the primary navigation source, VOR/ILS"
         " provides a dissimilar-technology backup that is immune"
         " to GPS jamming/outages.  ILS capability also enables"
@@ -1233,6 +1233,24 @@ VERIFICATION_CASES = [
      "description": "Parking brake holding force verified at full static run-up (1800 RPM)"},
     {"id": "VCEV0001", "name": "CO Detector Validation", "method": "test",
      "description": "CO detector activation at 50 ±10 ppm, aural/visual alert verified"},
+    {"id": "VCPR0003", "name": "Propeller Balance Test", "method": "test",
+     "description": "Dynamic balance of propeller assembly to ≤0.2 IPS per SAE ARP 4162"},
+    {"id": "VCPR0004", "name": "Fuel Injection Calibration", "method": "test",
+     "description": "Verify fuel flow balance within 0.5 GPH across all cylinders at 75 % power"},
+    {"id": "VCAV0003", "name": "VHF COM Range Test", "method": "test",
+     "description": "Voice quality and range test: 100 NM at 5000 ft AGL per TSO-C169a"},
+    {"id": "VCEL0003", "name": "Emergency Power Transfer Test", "method": "test",
+     "description": "Essential bus transfer < 10 ms during alternator failure; battery-only endurance ≥ 30 min"},
+    {"id": "VCFC0003", "name": "Pitch Trim Range Test", "method": "inspection",
+     "description": "Full trim wheel travel verified: ±30 lb stick force relief at all speeds"},
+    {"id": "VCLG0001", "name": "Nose Gear Shimmy Test", "method": "test",
+     "description": "Nose gear damping verification: no sustained shimmy at 0-40 kn taxi speeds"},
+    {"id": "VCEN0001", "name": "Cabin Temperature Profile", "method": "analysis",
+     "description": "FEA cabin temperature distribution with OAT -18 °C, heat full on"},
+    {"id": "VCAF0003", "name": "Fuel Tank Leak Test", "method": "test",
+     "description": "Integral wing tank pressurised to 3.5 psi submerged, zero leakage in 10 min per FAR 23.965"},
+    {"id": "VCLG0002", "name": "Brake Energy Absorption", "method": "analysis",
+     "description": "Kinetic energy capacity verification for rejected takeoff at MTOW 1157 kg"},
 ]
 
 VC_LINKS: dict[str, list[str]] = {
@@ -1251,6 +1269,15 @@ VC_LINKS: dict[str, list[str]] = {
     "VCSF0002": ["SAFE0003"],
     "VCCB0001": ["LNDG0003"],
     "VCEV0001": ["ENVR0001", "AD2024001"],
+    "VCPR0003": ["PROP0005"],
+    "VCPR0004": ["PROP0002"],
+    "VCAV0003": ["AVNC0007"],
+    "VCEL0003": ["ELEC0002", "ELEC0003"],
+    "VCFC0003": ["FLTC0007"],
+    "VCLG0001": ["LNDG0002"],
+    "VCEN0001": ["ENVR0001"],
+    "VCAF0003": ["AFRM0006"],
+    "VCLG0002": ["LNDG0003"],
 }
 
 # ── components (the synthesised design) ───────────────────────────────────────
@@ -1613,6 +1640,23 @@ RELATIONS = [
     ("AVNC0000", "FLTC0000", "satisfies"),       # G1000 provides flight control feedback (trim, flaps)
     ("SAFE0004", "ELEC0000", "depends"),         # Lighting needs electrical power
 
+    # New cross-system relationships
+    ("PROP0001", "AFRM0001", "satisfies"),       # Engine mass affects fuselage design
+    ("AVNC0001", "AVNC0002", "duplicates"),       # PFD and MFD share same GDU hardware
+    ("PROP0005", "PROP0001", "satisfies"),        # Propeller must match engine power rating
+    ("FLTC0003", "FLTC0007", "depends"),          # Elevator control depends on trim system
+    ("ELEC0002", "ELEC0001", "satisfies"),        # Battery provides backup when alternator offline
+    ("LNDG0003", "LNDG0001", "refines"),          # Braking system is part of main gear
+    ("AVNC0003", "AVNC0000", "satisfies"),        # Navigation fulfils avionics mission
+    ("ENVR0002", "ENVR0001", "depends"),          # Ventilation depends on cabin heat ducting
+    ("SAFE0002", "PROP0001", "satisfies"),        # Fire detection monitors engine bay
+    ("AFRM0006", "PROP0006", "satisfies"),        # Wing tanks satisfy fuel storage need
+    ("FLTC0005", "FLTC0001", "refines"),          # Flaps are part of primary flight controls
+    ("ELEC0003", "PROP0003", "satisfies"),        # Bus powers magneto impulse coupling
+    ("LNDG0002", "FLTC0004", "satisfies"),        # Nose gear steering aids rudder control
+    ("AVNC0008", "AVNC0000", "satisfies"),        # ADS-B fulfils avionics surveillance need
+    ("SAFE0001", "AFRM0004", "derives"),          # Stall horn placement derives from wing geometry
+
     # Cycle demonstration (intentional: used to exercise cycle detection)
     # No cycles are intentional — the graph is a DAG.
 ]
@@ -1962,6 +2006,173 @@ def seed_demo_project(data_root: Path, force: bool = False) -> bool:
     reqs["SAFE0003"]["constraints"] = [
         {"expr": "battery_life_h >= 24", "assume": None}]
 
+    # ── Expanded parametrics: more subsystem budget rollups and cross-req chains ──
+
+    # Landing gear: max taxi mass bound and brake energy
+    reqs["LNDG0000"]["parameters"] = [
+        {"name": "design_mass", "value": None, "unit": "kg",
+         "expr": "rollup('GEAR', 'mass')"},
+        {"name": "max_load_kg", "value": 1220, "unit": "kg", "expr": None},
+    ]
+    reqs["LNDG0000"]["constraints"] = [
+        {"expr": "max_load_kg >= ACFT0000.mtow", "assume": None},
+        # The gear mass budget: assembled weight must fit within 65 kg
+        {"expr": "design_mass <= 65", "assume": None},
+    ]
+    reqs["LNDG0000"]["subject"] = "C172"
+
+    # Propeller: torque margin and balance
+    reqs["PROP0005"]["parameters"] = [
+        {"name": "rated_rpm", "value": 2700, "unit": "RPM", "expr": None},
+        {"name": "max_torque_nm", "value": 280, "unit": "N·m", "expr": None},
+        {"name": "operating_torque", "value": None, "unit": "N·m",
+         "expr": "PROP0001.rated_power_hp * 7124 / rated_rpm"},
+    ]
+    reqs["PROP0005"]["constraints"] = [
+        {"expr": "operating_torque <= max_torque_nm", "assume": None},
+    ]
+    vcs["VCPR0003"]["measurements"] = [
+        {"parameter": "PROP0005.operating_torque", "value": 474, "unit": "N·m"}]
+
+    # Fuel injection: flow balance measured by calibration test
+    reqs["PROP0002"]["parameters"] = [
+        {"name": "max_flow_imbalance_gph", "value": 0.5, "unit": "GPH", "expr": None},
+    ]
+    reqs["PROP0002"]["constraints"] = [
+        {"expr": "max_flow_imbalance_gph <= 0.5", "assume": None},
+    ]
+    vcs["VCPR0004"]["measurements"] = [
+        {"parameter": "PROP0002.max_flow_imbalance_gph", "value": 0.3, "unit": "GPH"}]
+
+    # Magneto: RPM drop at run-up
+    reqs["PROP0003"]["parameters"] = [
+        {"name": "magneto_drop_rpm", "value": 125, "unit": "RPM", "expr": None},
+    ]
+    reqs["PROP0003"]["constraints"] = [
+        {"expr": "magneto_drop_rpm <= 150", "assume": None},
+    ]
+
+    # Fuselage: structural load from component rollup
+    reqs["AFRM0001"]["parameters"] = [
+        {"name": "fuselage_mass", "value": None, "unit": "kg",
+         "expr": "rollup('FUSE', 'mass')"},
+        {"name": "max_fuselage_mass", "value": 310, "unit": "kg", "expr": None},
+    ]
+    reqs["AFRM0001"]["constraints"] = [
+        {"expr": "fuselage_mass <= max_fuselage_mass", "assume": None},
+    ]
+    reqs["AFRM0001"]["subject"] = "C172"
+
+    # Flaps: deployment time
+    reqs["FLTC0006"]["parameters"] = [
+        {"name": "deploy_time_s", "value": 4.2, "unit": "s", "expr": None},
+    ]
+    reqs["FLTC0006"]["constraints"] = [
+        {"expr": "deploy_time_s <= 5", "assume": None},
+    ]
+
+    # Brakes: energy absorption for rejected takeoff
+    reqs["LNDG0003"]["parameters"] = [
+        {"name": "ke_absorption_mj", "value": 3.8, "unit": "MJ", "expr": None},
+        {"name": "rejected_takeoff_ke", "value": None, "unit": "MJ",
+         "expr": "0.5 * ACFT0000.mtow * (50 / 3.6) ** 2 / 1000000"},
+    ]
+    reqs["LNDG0003"]["constraints"] = [
+        {"expr": "ke_absorption_mj >= rejected_takeoff_ke", "assume": None},
+    ]
+
+    # Avionics: total current budget from rollup
+    reqs["AVNC0000"]["parameters"] = [
+        {"name": "total_current_a", "value": None, "unit": "A",
+         "expr": "rollup('AVIO', 'current')"},
+        {"name": "max_current_a", "value": 25, "unit": "A", "expr": None},
+    ]
+    reqs["AVNC0000"]["constraints"] = [
+        {"expr": "total_current_a <= max_current_a", "assume": None},
+    ]
+    reqs["AVNC0000"]["subject"] = "C172"
+
+    # Navigation: GPS outage endurance (cross-req chain with fuel)
+    reqs["AVNC0004"]["parameters"] = [
+        {"name": "waas_accuracy_m", "value": 3.5, "unit": "m", "expr": None},
+    ]
+    reqs["AVNC0004"]["constraints"] = [
+        {"expr": "waas_accuracy_m <= 5", "assume": None},
+        {"expr": "PROP0006.endurance >= 4", "assume": None},
+    ]
+
+    # COM range: measured transmit power
+    reqs["AVNC0007"]["parameters"] = [
+        {"name": "tx_power_w", "value": 16, "unit": "W", "expr": None},
+    ]
+    reqs["AVNC0007"]["constraints"] = [
+        {"expr": "tx_power_w >= 10", "assume": None},
+    ]
+    vcs["VCAV0003"]["measurements"] = [
+        {"parameter": "AVNC0007.tx_power_w", "value": 16.5, "unit": "W"}]
+
+    # Total electrical budget: sum all current draws
+    reqs["ELEC0000"]["parameters"] = [
+        {"name": "total_current_a", "value": None, "unit": "A",
+         "expr": "rollup('C172', 'current')"},
+        {"name": "alternator_limit", "value": None, "unit": "A",
+         "expr": "ELEC0001.alternator_amps"},
+    ]
+    reqs["ELEC0000"]["constraints"] = [
+        {"expr": "total_current_a <= alternator_limit", "assume": None},
+    ]
+    reqs["ELEC0000"]["subject"] = "C172"
+
+    # Flight controls: aileron deflection range
+    reqs["FLTC0002"]["parameters"] = [
+        {"name": "up_deflection_deg", "value": 20, "unit": "deg", "expr": None},
+        {"name": "down_deflection_deg", "value": 15, "unit": "deg", "expr": None},
+    ]
+    reqs["FLTC0002"]["constraints"] = [
+        {"expr": "up_deflection_deg >= 18", "assume": None},
+        {"expr": "down_deflection_deg >= 12", "assume": None},
+    ]
+
+    # Elevator control surface range
+    reqs["FLTC0003"]["parameters"] = [
+        {"name": "up_deflection_deg", "value": 25, "unit": "deg", "expr": None},
+        {"name": "down_deflection_deg", "value": 15, "unit": "deg", "expr": None},
+    ]
+    reqs["FLTC0003"]["constraints"] = [
+        {"expr": "up_deflection_deg >= 22", "assume": None},
+        {"expr": "down_deflection_deg >= 13", "assume": None},
+    ]
+
+    # Rudder control range
+    reqs["FLTC0004"]["parameters"] = [
+        {"name": "deflection_deg", "value": 27, "unit": "deg", "expr": None},
+    ]
+    reqs["FLTC0004"]["constraints"] = [
+        {"expr": "deflection_deg >= 24", "assume": None},
+    ]
+
+    # Fire detection: temperature thresholds
+    reqs["SAFE0002"]["parameters"] = [
+        {"name": "alarm_temp_c", "value": 175, "unit": "degC", "expr": None},
+        {"name": "normal_max_c", "value": 120, "unit": "degC", "expr": None},
+    ]
+    reqs["SAFE0002"]["constraints"] = [
+        {"expr": "150 <= alarm_temp_c <= 200", "assume": None},
+        {"expr": "alarm_temp_c >= normal_max_c + 30", "assume": None},
+    ]
+
+    # Nose gear: max steering angle
+    reqs["LNDG0002"]["parameters"] = [
+        {"name": "steer_angle_deg", "value": 12, "unit": "deg", "expr": None},
+    ]
+    reqs["LNDG0002"]["constraints"] = [
+        {"expr": "steer_angle_deg >= 10", "assume": None},
+    ]
+
+    # Cabin heat: measured temperature rise from test
+    vcs["VCEN0001"]["measurements"] = [
+        {"parameter": "ENVR0001.temp_rise_c", "value": 26, "unit": "degC"}]
+
     # Write everything to disk
     for r in reqs.values():
         store.create_requirement(r)
@@ -2017,6 +2228,25 @@ def seed_demo_project(data_root: Path, force: bool = False) -> bool:
         "expr": "capacity - draw", "unit": "A",
         "doc": "Headroom between a load draw and its supply capacity.",
     })
+    store.write_item("definitions", "TorqueMargin", {
+        "id": "TorqueMargin", "type": "calc",
+        "name": "Torque margin", "parameters": ["max", "actual"],
+        "expr": "max - actual", "unit": "N·m",
+        "doc": "Safety margin between maximum rated torque and operating torque.",
+    })
+    store.write_item("definitions", "TempEnvelope", {
+        "id": "TempEnvelope", "type": "constraint",
+        "name": "Temperature operating envelope",
+        "parameters": ["min_temp", "actual", "max_temp"],
+        "expr": "min_temp <= actual and actual <= max_temp", "unit": "",
+        "doc": "Verify a measured value falls within a specified temperature range.",
+    })
+    store.write_item("definitions", "SpeedMargin", {
+        "id": "SpeedMargin", "type": "calc",
+        "name": "Speed margin above stall", "parameters": ["actual", "stall"],
+        "expr": "actual - stall", "unit": "kn",
+        "doc": "Compute knot margin above stall speed for safety analysis.",
+    })
 
     # A what-if analysis case: does the empty-weight budget still hold if the
     # avionics upgrade adds 12 kg? Scoped to the mass-budget requirement.
@@ -2025,6 +2255,30 @@ def seed_demo_project(data_root: Path, force: bool = False) -> bool:
         "doc": "Explore the empty-weight budget with a heavier avionics fit.",
         "scope": ["AFRM0000"],
         "overrides": {"AFRM0000.empty_mass": 779},
+    })
+    store.write_item("analysis_cases", "cold-weather-ops", {
+        "id": "cold-weather-ops", "name": "Cold weather operations (-35 °C)",
+        "doc": "Verify cabin heat meets the arctic clause when OAT drops below design point.",
+        "scope": ["ENVR0001"],
+        "overrides": {"ENVR0001.oat_c": -35},
+    })
+    store.write_item("analysis_cases", "heavy-config", {
+        "id": "heavy-config", "name": "Heavy configuration (793 kg empty)",
+        "doc": "Test mass budget when extra equipment pushes empty mass near the 780 kg limit.",
+        "scope": ["AFRM0000", "ACFT0000"],
+        "overrides": {"AFRM0000.empty_mass": 793},
+    })
+    store.write_item("analysis_cases", "high-power-avionics", {
+        "id": "high-power-avionics", "name": "High-power avionics fit",
+        "doc": "Check electrical budget if avionics total draw increases to 22 A.",
+        "scope": ["ELEC0001", "AVNC0000"],
+        "overrides": {"AVNC0000.max_current_a": 22},
+    })
+    store.write_item("analysis_cases", "reduced-power-engine", {
+        "id": "reduced-power-engine", "name": "Reduced-power engine (160 hp)",
+        "doc": "Impact on propeller torque margin if engine is de-rated to minimum spec.",
+        "scope": ["PROP0001", "PROP0005"],
+        "overrides": {"PROP0001.rated_power_hp": 160},
     })
 
     return True

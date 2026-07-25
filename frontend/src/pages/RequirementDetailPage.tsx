@@ -1,7 +1,8 @@
-import { useEffect, useState, useMemo } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { GuardedLink as Link } from '../components/navGuard';
 import { motion } from 'framer-motion';
-import { Trash2, ArrowLeft, Plus, X, ArrowRight, ArrowLeftRight, Sparkles, ShieldCheck, ExternalLink, ChevronRight, Waypoints, AlertTriangle, CheckCircle2, GitFork } from 'lucide-react';
+import { Trash2, ArrowLeft, Plus, X, ArrowRight, ArrowLeftRight, Sparkles, ShieldCheck, ExternalLink, ChevronRight, Waypoints, AlertTriangle, CheckCircle2, GitFork, Loader, Save, Undo2 } from 'lucide-react';
 import { api, type Requirement, type VerificationCase, type QualityItem, type Component, type Specification, type ChangeRequest, type Risk, type EvaluatedRequirement, type Definition, type Comment, type DecisionRecord } from '../api/client';
 import { ParametricsCard } from '../components/parametrics';
 import RichTextEditor from '../components/RichTextEditor';
@@ -51,13 +52,18 @@ export default function RequirementDetailPage() {
   const { user, editMode } = useAuthStore();
   const bumpGraphVersion = useStore((s) => s.bumpGraphVersion);
   const bumpDataVersion = useStore((s) => s.bumpDataVersion);
-  const editable = user !== null && user.role !== 'viewer' && editMode;
+  const setNavGuard = useStore((s) => s.setNavGuard);
+  const editable = user !== null && user.role !== 'guest' && editMode;
   const showConfirm = useConfirm();
   const [workflow, setWorkflow] = useState<{ states: string[]; transitions: Record<string, string[]> } | null>(null);
   const [qualityResult, setQualityResult] = useState<QualityItem | null>(null);
   const [unreviewedIds, setUnreviewedIds] = useState<Set<string>>(new Set());
   const [saveError, setSaveError] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const savedRef = useRef<Requirement | null>(null);
   const [projectBaselines, setProjectBaselines] = useState<string[]>([]);
   const statusOptions = workflow?.states || ['proposed', 'approved', 'implemented', 'verified', 'rejected', 'deprecated'];
 
@@ -127,6 +133,13 @@ export default function RequirementDetailPage() {
       api.listVerificationCases(projectId),
     ]).then(([data, all, vcs]) => {
       setReq(data);
+      // Re-anchor the saved baseline (and clear dirty) to the freshly loaded
+      // requirement. This effect only re-runs on navigation, and the page is
+      // not remounted per-requirement (no route key), so without this the
+      // previous requirement's baseline would leak across and corrupt the
+      // dirty/discard/undo diffing.
+      savedRef.current = data;
+      setDirty(false);
       setAllReqs(all.filter((r) => r.id !== reqId));
       setAllVcs(vcs);
       setLoading(false);
@@ -159,34 +172,98 @@ export default function RequirementDetailPage() {
     api.listDecisions(projectId).then((decs) => setDecisions(decs.filter((d) => d.linked_requirements?.includes(reqId)))).catch(() => setDecisions([]));
   }, [projectId, reqId]);
 
-  const save = async (updates: Partial<Requirement>) => {
-    if (!projectId || !reqId || !req || !editable) return;
-    const beforeFields: Record<string, any> = {};
-    for (const k of Object.keys(updates)) {
-      beforeFields[k] = (req as any)[k];
+  const save = (updates: Partial<Requirement>) => {
+    if (!req || !editable || !savedRef.current) return;
+    const next = { ...req, ...updates } as Requirement;
+    setReq(next);
+    for (const key of Object.keys(updates)) {
+      const cur = JSON.stringify((next as any)[key]);
+      const was = JSON.stringify((savedRef.current as any)[key]);
+      if (cur !== was) { setDirty(true); return; }
     }
+  };
+
+  const discardChanges = () => {
+    if (!savedRef.current) return;
+    setReq(savedRef.current);
+    setDirty(false);
+    setSaveError('');
+    setSaveSuccess(false);
+  };
+
+  const commitSave = useCallback(async () => {
+    if (!projectId || !reqId || !req || !editable) return;
+    const saved = savedRef.current;
+    if (!saved) return;
+    const diff: Record<string, any> = {};
+    for (const key of Object.keys(req)) {
+      if (key === 'modified' || key === 'created') continue;
+      if (JSON.stringify((req as any)[key]) !== JSON.stringify((saved as any)[key])) {
+        diff[key] = (req as any)[key];
+      }
+    }
+    if (Object.keys(diff).length === 0) { setDirty(false); return; }
+
+    const beforeFields: Record<string, any> = {};
+    for (const k of Object.keys(diff)) {
+      beforeFields[k] = (saved as any)[k];
+    }
+    setSaving(true);
     try {
-      const updated = await api.updateRequirement(projectId, reqId, updates);
+      const updated = await api.updateRequirement(projectId, reqId, diff);
       useUndoStore.getState().push({
         description: `Update ${reqId}`,
         undo: async () => { await api.updateRequirementSkipWorkflow(projectId, reqId, beforeFields); },
-        redo: async () => { await api.updateRequirement(projectId, reqId, updates); },
+        redo: async () => { await api.updateRequirement(projectId, reqId, diff); },
       });
       setReq(updated);
+      savedRef.current = updated;
       setSaveError('');
       setSaveSuccess(true);
+      setDirty(false);
       setTimeout(() => setSaveSuccess(false), 2000);
       bumpGraphVersion();
-      if (updates.parameters || updates.constraints) {
+      if (diff.parameters || diff.constraints) {
         api.getEvaluation(projectId)
           .then((ev) => setEvaluated(ev.requirements.find((r) => r.id === reqId)))
           .catch(() => {});
       }
+      api.getUnreviewed(projectId).then((u) => {
+        setUnreviewedIds(new Set(u.items.map((r) => r.id)));
+      }).catch(() => {});
     } catch (err: any) {
       setSaveError(err?.message || 'Save failed');
       setTimeout(() => setSaveError(''), 5000);
+    } finally {
+      setSaving(false);
     }
-  };
+  }, [projectId, reqId, req, editable, dirty, bumpGraphVersion]);
+
+  // Unsaved-changes guard. `dirty` is read through a ref so the registered
+  // guard and the beforeunload handler stay stable while always seeing the
+  // current value. Returns true when it's safe to leave.
+  const dirtyRef = useRef(dirty);
+  dirtyRef.current = dirty;
+  const confirmLeave = useCallback(async () => {
+    if (!dirtyRef.current) return true;
+    return showConfirm('You have unsaved changes. Discard them and leave?', 'Discard changes');
+  }, [showConfirm]);
+
+  // Register the in-app guard so the requirement nav tree (and any other
+  // navigator) prompts before discarding edits; clear it on unmount.
+  useEffect(() => {
+    setNavGuard(confirmLeave);
+    return () => setNavGuard(null);
+  }, [confirmLeave, setNavGuard]);
+
+  // Browser-level guard for reload / tab close / external navigation.
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (dirtyRef.current) { e.preventDefault(); e.returnValue = ''; }
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, []);
 
   const handleDelete = async () => {
     if (!projectId || !reqId || !req) return;
@@ -205,9 +282,12 @@ export default function RequirementDetailPage() {
   };
 
   useKeyboardShortcuts(projectId, {
-    onDetailSave: () => req && save({}),
+    onDetailSave: () => req && commitSave(),
     onDetailDelete: handleDelete,
-    onDetailEscape: () => { if (window.history.length > 1) navigate(-1); else navigate(`/project/${projectId}/requirements`); },
+    onDetailEscape: async () => {
+      if (!(await confirmLeave())) return;
+      if (window.history.length > 1) navigate(-1); else navigate(`/project/${projectId}/requirements`);
+    },
   });
 
   if (loading) {
@@ -310,7 +390,7 @@ export default function RequirementDetailPage() {
         </div>
       )}
       <div className="flex flex-wrap items-center gap-3 mb-6">
-        <button onClick={() => navigate(`/project/${projectId}/requirements`)} className="btn-secondary p-2">
+        <button onClick={async () => { if (await confirmLeave()) navigate(`/project/${projectId}/requirements`); }} className="btn-secondary p-2">
           <ArrowLeft size={16} />
         </button>
         <div className="flex-1 min-w-0">
@@ -343,21 +423,61 @@ export default function RequirementDetailPage() {
         >
           <GitFork size={14} /> Show derivation
         </button>
-        {editable && (
+        {editable && unreviewedIds.has(req.id) && (
           <button
             onClick={async () => {
-              await api.reviewRequirement(projectId!, reqId!);
-              const updated = await api.getRequirement(projectId!, reqId!);
-              setReq(updated);
-              setUnreviewedIds((prev) => { const next = new Set(prev); next.delete(reqId!); return next; });
+              const ok = await showConfirm(
+                'Record this requirement as reviewed? Its current content will be snapshotted — if any tracked fields change later, a "Needs re-review" warning will appear.',
+                'Mark Reviewed',
+              );
+              if (!ok) return;
+              setReviewing(true);
+              setSaveError('');
+              setSaveSuccess(false);
+              try {
+                await api.reviewRequirement(projectId!, reqId!);
+                const updated = await api.getRequirement(projectId!, reqId!);
+                setReq(updated);
+                setUnreviewedIds((prev) => { const next = new Set(prev); next.delete(reqId!); return next; });
+                setSaveSuccess(true);
+                setTimeout(() => setSaveSuccess(false), 2000);
+              } catch (err: any) {
+                setSaveError(err.message || 'Review failed');
+              } finally {
+                setReviewing(false);
+              }
             }}
             className="btn-secondary text-xs mr-2"
+            disabled={reviewing}
           >
-            <ShieldCheck size={14} /> Review
+            {reviewing ? (
+              <><Loader size={14} className="animate-spin" /> Reviewing…</>
+            ) : (
+              <><ShieldCheck size={14} /> Mark Reviewed</>
+            )}
           </button>
         )}
+        {dirty && (
+          <>
+            <button
+              onClick={commitSave}
+              className="btn-primary text-xs p-2"
+              disabled={saving}
+              title="Save changes"
+            >
+              {saving ? <Loader size={14} className="animate-spin" /> : <Save size={14} />}
+            </button>
+            <button
+              onClick={discardChanges}
+              className="btn-secondary text-xs p-2"
+              title="Discard changes"
+            >
+              <Undo2 size={14} />
+            </button>
+          </>
+        )}
         <button onClick={handleDelete} className="btn-danger" disabled={!editable}>
-          <Trash2 size={14} /> Delete
+          <Trash2 size={14} />
         </button>
       </div>
 

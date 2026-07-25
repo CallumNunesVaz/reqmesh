@@ -36,7 +36,7 @@ const statusIcons: Record<string, React.ComponentType<any>> = {
 export default function VerificationPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const { verificationCases, setVerificationCases } = useStore();
-  const editable = useAuthStore((s) => s.editMode && s.user !== null && s.user.role !== 'viewer');
+  const editable = useAuthStore((s) => s.canEdit());
   const [showCreate, setShowCreate] = useState(false);
   const [newVC, setNewVC] = useState({ id: '', name: '', description: '', method: 'test' });
   const [requirements, setRequirements] = useState<Requirement[]>([]);

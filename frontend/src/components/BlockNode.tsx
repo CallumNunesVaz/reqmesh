@@ -59,6 +59,10 @@ export interface BlockNodeData {
   params: BlockParam[];
   constraints: BlockConstraint[];
   verdict: string | null;
+  previewVerdict?: string | null;
+  previewDelta?: 'broke' | 'fixed' | 'changed' | null;
+  isOverrideRoot?: boolean;
+  pulseActive?: boolean;
   vcCount: number;
   desc: string;
 }
@@ -91,6 +95,24 @@ function BlockNode({ data }: NodeProps) {
     : hover
       ? `drop-shadow(0 0 7px ${glow(colors.fill, 0.28)}) drop-shadow(0 2px 6px rgba(0,0,0,0.3))`
       : `drop-shadow(0 0 3px ${glow(colors.fill, 0.13)}) drop-shadow(0 1px 3px rgba(0,0,0,0.22))`;
+
+  const previewRingColor = d.previewDelta === 'broke' ? 'hsl(0,84%,68%)'
+    : d.previewDelta === 'fixed' ? 'hsl(145,55%,42%)'
+    : d.previewDelta === 'changed' ? 'hsl(28,100%,53%)'
+    : d.isOverrideRoot ? 'hsl(207,90%,64%)'
+    : null;
+
+  const borderColor = previewRingColor
+    ? previewRingColor
+    : isSelected ? colors.fill
+    : hover ? 'hsl(var(--foreground) / 0.3)'
+    : 'hsl(var(--border))';
+
+  const pulseGlow = previewRingColor
+    ? `drop-shadow(0 0 9px ${glow(previewRingColor, 0.45)}) drop-shadow(0 3px 8px rgba(0,0,0,0.35))`
+    : glowFilter;
+
+  const pulseClass = d.pulseActive ? 'rt-pulse' : '';
 
   const handles = (
     <>
@@ -129,14 +151,14 @@ function BlockNode({ data }: NodeProps) {
       <div
         onMouseEnter={() => setHover(true)}
         onMouseLeave={() => setHover(false)}
-        className={`relative rounded-md border bg-card ${clip ? 'overflow-hidden' : ''}`}
+        className={`relative rounded-md border bg-card ${clip ? 'overflow-hidden' : ''} ${pulseClass}`}
         style={{
           width: BLOCK_W,
           minHeight: minNodeH,
           opacity: dimmed ? 0.18 : 1,
-          filter: glowFilter,
-          borderColor: isSelected ? colors.fill : hover ? 'hsl(var(--foreground) / 0.3)' : 'hsl(var(--border))',
-          boxShadow: isSelected ? `0 0 0 1px ${colors.fill}` : undefined,
+          filter: pulseGlow,
+          borderColor,
+          boxShadow: isSelected && !previewRingColor ? `0 0 0 1px ${colors.fill}` : undefined,
           transition: 'opacity 0.25s ease, filter 0.25s ease, border-color 0.2s ease',
           cursor: 'pointer',
         }}
@@ -266,6 +288,13 @@ function BlockNode({ data }: NodeProps) {
       {verdictColor && (
         <span className="flex items-center gap-0.5 text-[8.5px] font-semibold" style={{ color: verdictColor }} title={`Parametric constraints: ${d.verdict}`}>
           <Sigma size={8.5} /> {d.verdict === 'not_applicable' ? 'n/a' : d.verdict}
+        </span>
+      )}
+      {d.previewVerdict && !d.verdict && (
+        <span className="flex items-center gap-0.5 text-[8.5px] font-semibold"
+          style={{ color: constraintColors[d.previewVerdict] || constraintColors.unknown }}
+          title={`Preview: ${d.previewVerdict}`}>
+          <Sigma size={8.5} /> {d.previewVerdict === 'not_applicable' ? 'n/a' : d.previewVerdict}
         </span>
       )}
       {d.hasMissingInfo && (

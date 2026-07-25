@@ -93,7 +93,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 export default function ProjectOverview() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
-  const editable = useAuthStore((s) => s.editMode && s.user !== null && s.user.role !== 'viewer');
+  const editable = useAuthStore((s) => s.canEdit());
   const [project, setProject] = useState<{ id: string; name: string; path: string } | null>(null);
   const [stats, setStats] = useState<ProjectStats | null>(null);
 

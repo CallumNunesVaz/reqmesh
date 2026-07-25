@@ -9,7 +9,7 @@ import { useAuthStore } from '../store/auth';
 export default function ProjectsPage() {
   const navigate = useNavigate();
   const { projects, setProjects } = useStore();
-  const editable = useAuthStore((s) => s.editMode && s.user !== null && s.user.role !== 'viewer');
+  const editable = useAuthStore((s) => s.canEdit());
   const [showCreate, setShowCreate] = useState(false);
   const [newId, setNewId] = useState('');
   const [newName, setNewName] = useState('');

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Link, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
+import { GuardedLink } from './navGuard';
 import {
   ClipboardList, CheckCircle2, Boxes, FileText, GitPullRequest, AlertTriangle,
   Box, Layers, Cog, Binary, Plug, Link2, Check,
@@ -164,7 +165,7 @@ export function EntityLink({ kind, id, name, projectId, showIcon = true, classNa
   if (!pid) return <span className={`font-mono ${className}`}>{id}</span>;
 
   return (
-    <Link
+    <GuardedLink
       to={meta.path(pid, id)}
       onClick={(e) => { e.stopPropagation(); endPreview(); }}
       onMouseEnter={startPreview}
@@ -176,7 +177,7 @@ export function EntityLink({ kind, id, name, projectId, showIcon = true, classNa
       <span className="font-mono whitespace-nowrap">{id}</span>
       {name && <span className="truncate">{name}</span>}
       {preview && anchor && <HoverPreview entity={preview} anchor={anchor} />}
-    </Link>
+    </GuardedLink>
   );
 }
 

@@ -450,6 +450,35 @@ export interface UpdateStatus {
   backup?: { tag: string; projects: string[]; created_at?: string };
 }
 
+export interface ImpactStepParam {
+  kind: 'param';
+  ref: string;
+  owner: string;
+  name: string;
+  expr: string;
+  unit: string;
+  inputs: string[];
+  before: number | null;
+  after: number | null;
+}
+
+export interface ImpactStepConstraint {
+  kind: 'constraint';
+  owner: string;
+  expr: string;
+  before: { status: ConstraintStatus; margin?: { value: number; pct?: number } };
+  after: { status: ConstraintStatus; margin?: { value: number; pct?: number } };
+}
+
+export type ImpactStep = ImpactStepParam | ImpactStepConstraint;
+
+export interface ImpactResultData {
+  evaluation: EvaluationData;
+  steps: ImpactStep[];
+  affected: string[];
+  roots: string[];
+}
+
 export const api = {
   // Build metadata (version, git sha, build time)
   getVersion: () => request<BuildInfo>('/version'),
@@ -481,7 +510,7 @@ export const api = {
   // Auth
   login: (username: string, password: string) =>
     request<{ username: string; role: string; token: string }>('/auth/login', { method: 'POST', body: { username, password } }),
-  register: (username: string, password: string, role: string = 'editor') =>
+  register: (username: string, password: string, role: string = 'contributor') =>
     request<{ username: string; role: string; token: string }>('/auth/register', { method: 'POST', body: { username, password, role } }),
   loginAsGuest: () =>
     request<{ username: string; role: string }>('/auth/guest', { method: 'POST' }),
@@ -800,4 +829,8 @@ export const api = {
     const qs = sort ? `?sort=${sort}` : '';
     return request<{ items: { id: string; name: string; status: string; effort: number | null; priorities: Record<string, number>; combined_priority: number }[]; total_effort: number; completed_effort: number }>(`/projects/${projectId}/backlog${qs}`);
   },
+
+  // What-if impact preview
+  getEvaluationImpact: (projectId: string, overrides: Record<string, number>) =>
+    request<ImpactResultData>(`/projects/${projectId}/evaluation/impact`, { method: 'POST', body: { overrides } }),
 };

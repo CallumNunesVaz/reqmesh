@@ -49,14 +49,13 @@ def check_unreviewed(store) -> list[dict]:
     reqs = store.list_requirements()
     unreviewed = []
     for r in reqs:
-        if r.get("reviewed") is None:
-            continue
         current = compute_fingerprint(r)
-        if r["reviewed"] != current:
+        stored = r.get("reviewed")
+        if stored is None or stored != current:
             unreviewed.append({
                 "id": r["id"],
                 "name": r.get("name", ""),
-                "reviewed": r.get("reviewed"),
+                "reviewed": stored,
                 "current_fingerprint": current,
             })
     return unreviewed

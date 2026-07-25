@@ -28,7 +28,7 @@ export default function TraceMatrixPage() {
   const [newLink, setNewLink] = useState({ source: '', target: '', type: 'satisfies' });
   const [error, setError] = useState('');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
-  const editable = useAuthStore((s) => s.editMode && s.user !== null && s.user.role !== 'viewer');
+  const editable = useAuthStore((s) => s.canEdit());
   const dataVersion = useStore((s) => s.dataVersion);
   const [search, setSearch] = useState('');
   const [filterLinkType, setFilterLinkType] = useState('');

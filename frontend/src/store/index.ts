@@ -13,6 +13,9 @@ interface AppState {
   dataVersion: number;
   refocusGraph: number;
   helpersEnabled: boolean;
+  /** A page with unsaved edits registers a guard here; navigators await it and
+   *  abort when it resolves false (user chose to keep editing). Null = free. */
+  navGuard: (() => boolean | Promise<boolean>) | null;
 
   setProjects: (projects: Project[]) => void;
   setCurrentProject: (project: Project | null) => void;
@@ -24,6 +27,7 @@ interface AppState {
   bumpGraphVersion: () => void;
   bumpDataVersion: () => void;
   toggleHelpers: () => void;
+  setNavGuard: (fn: (() => boolean | Promise<boolean>) | null) => void;
 }
 
 export const useStore = create<AppState>((set) => ({
@@ -38,6 +42,7 @@ export const useStore = create<AppState>((set) => ({
   dataVersion: 0,
   refocusGraph: 0,
   helpersEnabled: false,
+  navGuard: null,
 
   setProjects: (projects) => set({ projects }),
   setCurrentProject: (project) => set({ currentProject: project }),
@@ -49,4 +54,5 @@ export const useStore = create<AppState>((set) => ({
   bumpGraphVersion: () => set((s) => ({ graphVersion: s.graphVersion + 1, refocusGraph: s.refocusGraph + 1 })),
   bumpDataVersion: () => set((s) => ({ dataVersion: s.dataVersion + 1 })),
   toggleHelpers: () => set((s) => ({ helpersEnabled: !s.helpersEnabled })),
+  setNavGuard: (navGuard) => set({ navGuard }),
 }));

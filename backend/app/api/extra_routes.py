@@ -10,7 +10,7 @@ from fastapi import APIRouter, HTTPException, Query, Depends, File, Form, Upload
 from pydantic import BaseModel, ValidationError
 
 from app.core.config import settings
-from app.core.dependencies import get_store, require_edit, get_current_user
+from app.core.dependencies import get_store, require_edit, require_maintain, get_current_user
 from app.core.ids import safe_id
 from app.models.change_request import ChangeRequestCreate, ChangeRequestUpdate
 from app.models.component import ComponentCreate, ComponentUpdate
@@ -310,7 +310,7 @@ async def delete_decision(project_id: str, dec_id: str, user: dict = Depends(req
 # ── Bulk Operations ───────────────────────────────────────────────────────────
 
 @router.post("/projects/{project_id}/requirements/bulk")
-async def bulk_update_requirements(project_id: str, data: dict, user: dict = Depends(require_edit)):
+async def bulk_update_requirements(project_id: str, data: dict, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     ids = data.get("ids", [])
     try:
@@ -341,7 +341,7 @@ async def bulk_update_requirements(project_id: str, data: dict, user: dict = Dep
 
 
 @router.post("/projects/{project_id}/requirements/bulk-delete")
-async def bulk_delete_requirements(project_id: str, data: dict, user: dict = Depends(require_edit)):
+async def bulk_delete_requirements(project_id: str, data: dict, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     deleted = 0
     for req_id in data.get("ids", []):
@@ -367,7 +367,7 @@ def _bulk_delete(store, ids: list[str], get_fn, delete_fn, record_type: str, use
 
 
 @router.post("/projects/{project_id}/components/bulk")
-async def bulk_update_components(project_id: str, data: dict, user: dict = Depends(require_edit)):
+async def bulk_update_components(project_id: str, data: dict, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     ids = data.get("ids", [])
     try:
@@ -384,7 +384,7 @@ async def bulk_update_components(project_id: str, data: dict, user: dict = Depen
 
 
 @router.post("/projects/{project_id}/components/bulk-delete")
-async def bulk_delete_components(project_id: str, data: dict, user: dict = Depends(require_edit)):
+async def bulk_delete_components(project_id: str, data: dict, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     deleted = 0
     for comp_id in data.get("ids", []):
@@ -403,7 +403,7 @@ async def bulk_delete_components(project_id: str, data: dict, user: dict = Depen
 
 
 @router.post("/projects/{project_id}/components/bulk-reparent")
-async def bulk_reparent_components(project_id: str, data: dict, user: dict = Depends(require_edit)):
+async def bulk_reparent_components(project_id: str, data: dict, user: dict = Depends(require_maintain)):
     """Assign multiple components to a new parent (set parent=None to detach)."""
     store = get_store(project_id)
     ids = data.get("ids", [])
@@ -416,7 +416,7 @@ async def bulk_reparent_components(project_id: str, data: dict, user: dict = Dep
 
 
 @router.post("/projects/{project_id}/verification/bulk")
-async def bulk_update_verification_cases(project_id: str, data: dict, user: dict = Depends(require_edit)):
+async def bulk_update_verification_cases(project_id: str, data: dict, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     ids = data.get("ids", [])
     try:
@@ -433,14 +433,14 @@ async def bulk_update_verification_cases(project_id: str, data: dict, user: dict
 
 
 @router.post("/projects/{project_id}/verification/bulk-delete")
-async def bulk_delete_verification_cases(project_id: str, data: dict, user: dict = Depends(require_edit)):
+async def bulk_delete_verification_cases(project_id: str, data: dict, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     deleted = _bulk_delete(store, data.get("ids", []), store.get_verification_case, store.delete_verification_case, "verification", user.get("username", ""))
     return {"deleted": deleted}
 
 
 @router.post("/projects/{project_id}/specifications/bulk")
-async def bulk_update_specifications(project_id: str, data: dict, user: dict = Depends(require_edit)):
+async def bulk_update_specifications(project_id: str, data: dict, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     ids = data.get("ids", [])
     try:
@@ -457,14 +457,14 @@ async def bulk_update_specifications(project_id: str, data: dict, user: dict = D
 
 
 @router.post("/projects/{project_id}/specifications/bulk-delete")
-async def bulk_delete_specifications(project_id: str, data: dict, user: dict = Depends(require_edit)):
+async def bulk_delete_specifications(project_id: str, data: dict, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     deleted = _bulk_delete(store, data.get("ids", []), store.get_specification, store.delete_specification, "specification", user.get("username", ""))
     return {"deleted": deleted}
 
 
 @router.post("/projects/{project_id}/risks/bulk")
-async def bulk_update_risks(project_id: str, data: dict, user: dict = Depends(require_edit)):
+async def bulk_update_risks(project_id: str, data: dict, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     ids = data.get("ids", [])
     try:
@@ -481,7 +481,7 @@ async def bulk_update_risks(project_id: str, data: dict, user: dict = Depends(re
 
 
 @router.post("/projects/{project_id}/risks/bulk-delete")
-async def bulk_delete_risks(project_id: str, data: dict, user: dict = Depends(require_edit)):
+async def bulk_delete_risks(project_id: str, data: dict, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     deleted = 0
     for risk_id in data.get("ids", []):
@@ -495,7 +495,7 @@ async def bulk_delete_risks(project_id: str, data: dict, user: dict = Depends(re
 
 
 @router.post("/projects/{project_id}/change-requests/bulk")
-async def bulk_update_change_requests(project_id: str, data: dict, user: dict = Depends(require_edit)):
+async def bulk_update_change_requests(project_id: str, data: dict, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     ids = data.get("ids", [])
     try:
@@ -512,7 +512,7 @@ async def bulk_update_change_requests(project_id: str, data: dict, user: dict = 
 
 
 @router.post("/projects/{project_id}/change-requests/bulk-delete")
-async def bulk_delete_change_requests(project_id: str, data: dict, user: dict = Depends(require_edit)):
+async def bulk_delete_change_requests(project_id: str, data: dict, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     deleted = 0
     for cr_id in data.get("ids", []):
@@ -542,7 +542,7 @@ def _leading_prefix(item_id: str) -> str:
 
 
 @router.post("/projects/{project_id}/requirements/bulk-reparent")
-async def bulk_reparent_requirements(project_id: str, data: dict, user: dict = Depends(require_edit)):
+async def bulk_reparent_requirements(project_id: str, data: dict, user: dict = Depends(require_maintain)):
     """Move selected requirements under a new parent and optionally re-prefix IDs.
 
     With ``re_prefix`` set and the new parent's prefix differing from a moved
@@ -738,7 +738,7 @@ async def git_log(project_id: str, limit: int = Query(50, ge=1, le=500)):
 
 
 @router.post("/projects/{project_id}/git/restore")
-async def git_restore(project_id: str, data: dict, user: dict = Depends(require_edit)):
+async def git_restore(project_id: str, data: dict, user: dict = Depends(require_maintain)):
     from app.services import git_service
 
     commit_hash = data.get("hash", "").strip()
@@ -854,7 +854,7 @@ async def prioritized_backlog(project_id: str, sort: str = "priority"):
 # ── Publishing ────────────────────────────────────────────────────────────────
 
 @router.post("/projects/{project_id}/publish")
-async def publish_project(project_id: str, data: PublishRequest, user: dict = Depends(require_edit)):
+async def publish_project(project_id: str, data: PublishRequest, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     pub = Publisher(store, data.subsystems)
     fmt = data.format
@@ -944,7 +944,7 @@ async def download_report(project_id: str, format: str = "html", subsystems: str
 
 
 @router.post("/projects/{project_id}/scan")
-async def scan_code(project_id: str, code_root: str = Form(""), user: dict = Depends(require_edit)):
+async def scan_code(project_id: str, code_root: str = Form(""), user: dict = Depends(require_maintain)):
     from app.services.code_scan import scan_tree, merge_references
     store = get_store(project_id)
 
@@ -991,6 +991,35 @@ async def parametric_evaluation(project_id: str):
     return evaluate_project(get_store(project_id))
 
 
+class ImpactRequest(BaseModel):
+    overrides: dict = {}
+
+
+@router.post("/projects/{project_id}/evaluation/impact")
+async def evaluation_impact(project_id: str, data: ImpactRequest):
+    """Returns the evaluation with hypothetical overrides plus a
+    dependency-ordered trace of every parameter and constraint that
+    changes — so the frontend can animate the what-if cascade."""
+    from app.services.evaluation import evaluate_project, build_impact
+
+    store = get_store(project_id)
+    overrides = {}
+    for ref, val in (data.overrides or {}).items():
+        try:
+            overrides[ref] = float(val)
+        except (ValueError, TypeError):
+            pass
+
+    evaluation = evaluate_project(store, extra_overrides=overrides)
+    impact = build_impact(store, overrides)
+    return {
+        "evaluation": evaluation,
+        "steps": impact["steps"],
+        "affected": impact["affected"],
+        "roots": impact["roots"],
+    }
+
+
 # ── Validation ────────────────────────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/validate")
@@ -1009,7 +1038,7 @@ async def get_suspect_links(project_id: str):
 
 
 @router.post("/projects/{project_id}/suspect-links/clear")
-async def clear_suspects(project_id: str, data: dict | None = None, user: dict = Depends(require_edit)):
+async def clear_suspects(project_id: str, data: dict | None = None, user: dict = Depends(require_maintain)):
     from app.services.fingerprint import review_all
     return {"ok": True, **review_all(get_store(project_id), user.get("username", ""))}
 
@@ -1017,7 +1046,7 @@ async def clear_suspects(project_id: str, data: dict | None = None, user: dict =
 # ── Git Hooks ─────────────────────────────────────────────────────────────────
 
 @router.post("/projects/{project_id}/hooks/install")
-async def install_git_hook(project_id: str, user: dict = Depends(require_edit)):
+async def install_git_hook(project_id: str, user: dict = Depends(require_maintain)):
     try:
         path = install_hook(str(get_store(project_id).root))
         return {"installed": True, "path": path}
@@ -1026,7 +1055,7 @@ async def install_git_hook(project_id: str, user: dict = Depends(require_edit)):
 
 
 @router.post("/projects/{project_id}/hooks/uninstall")
-async def uninstall_git_hook(project_id: str, user: dict = Depends(require_edit)):
+async def uninstall_git_hook(project_id: str, user: dict = Depends(require_maintain)):
     uninstall_hook(str(get_store(project_id).root))
     return {"installed": False}
 
@@ -1034,7 +1063,7 @@ async def uninstall_git_hook(project_id: str, user: dict = Depends(require_edit)
 # ── Review Workflow ───────────────────────────────────────────────────────────
 
 @router.post("/projects/{project_id}/requirements/{req_id}/review")
-async def submit_review(project_id: str, req_id: str, data: ReviewRequest, user: dict = Depends(require_edit)):
+async def submit_review(project_id: str, req_id: str, data: ReviewRequest, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     req = store.get_requirement(req_id)
     if not req:
@@ -1056,7 +1085,7 @@ async def submit_review(project_id: str, req_id: str, data: ReviewRequest, user:
 
 
 @router.post("/projects/{project_id}/review-all")
-async def review_all_endpoint(project_id: str, user: dict = Depends(require_edit)):
+async def review_all_endpoint(project_id: str, user: dict = Depends(require_maintain)):
     from app.services.fingerprint import review_all
     return review_all(get_store(project_id), user.get("username", ""))
 
@@ -1070,7 +1099,7 @@ async def get_unreviewed(project_id: str):
 # ── Baselines (Enhanced) ──────────────────────────────────────────────────────
 
 @router.post("/projects/{project_id}/baselines/{name}/freeze")
-async def freeze_baseline(project_id: str, name: str, user: dict = Depends(require_edit)):
+async def freeze_baseline(project_id: str, name: str, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     safe_id(name, "baseline name")
     reqs = store.list_requirements()
@@ -1135,7 +1164,7 @@ async def import_project(
     file: UploadFile = File(...),
     format: str = Form("auto"),
     mode: str = Form("merge"),
-    user: dict = Depends(require_edit),
+    user: dict = Depends(require_maintain),
 ):
     """Import requirements from a ReqIF 1.2 or SysML v2 file.
 

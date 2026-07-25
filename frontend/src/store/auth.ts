@@ -19,6 +19,8 @@ interface AuthState {
   logout: () => void;
   isLoggedIn: () => boolean;
   canEdit: () => boolean;
+  canPropose: () => boolean;
+  canToggleEdit: () => boolean;
 }
 
 const storage = {
@@ -50,7 +52,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   loginGuest: () => {
     storage.remove('rt-token');
     storage.set('rt-guest', 'true');
-    set({ user: { username: 'guest', role: 'viewer' }, token: null, isGuest: true, editMode: false });
+    set({ user: { username: 'guest', role: 'guest' }, token: null, isGuest: true, editMode: false });
   },
 
   logout: () => {
@@ -62,6 +64,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   isLoggedIn: () => get().token !== null,
   canEdit: () => {
     const s = get();
-    return s.user !== null && s.user.role !== 'viewer' && s.editMode;
+    return s.user !== null && (s.user.role === 'maintainer' || s.user.role === 'admin') && s.editMode;
+  },
+  canPropose: () => {
+    const s = get();
+    return s.user !== null && s.user.role !== 'guest' && s.editMode;
+  },
+  canToggleEdit: () => {
+    const s = get();
+    return s.user !== null && (s.user.role === 'maintainer' || s.user.role === 'admin');
   },
 }));

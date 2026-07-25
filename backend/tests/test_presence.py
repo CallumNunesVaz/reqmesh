@@ -11,11 +11,11 @@ def test_event_bus_presence_join_leave():
     bus = EventBus()
     assert bus.roster("proj") == []
 
-    bus.join("proj", "c1", "alice", "editor")
-    bus.join("proj", "c2", "bob", "viewer")
+    bus.join("proj", "c1", "alice", "contributor")
+    bus.join("proj", "c2", "bob", "guest")
     roster = bus.roster("proj")
     assert {u["username"] for u in roster} == {"alice", "bob"}
-    assert {u["role"] for u in roster} == {"editor", "viewer"}
+    assert {u["role"] for u in roster} == {"contributor", "guest"}
 
     bus.leave("proj", "c1")
     assert {u["username"] for u in bus.roster("proj")} == {"bob"}
@@ -28,7 +28,7 @@ def test_event_bus_join_broadcasts_presence():
     async def scenario():
         bus = EventBus()
         q = bus.subscribe("proj")
-        bus.join("proj", "c1", "alice", "editor")
+        bus.join("proj", "c1", "alice", "contributor")
         return await asyncio.wait_for(q.get(), timeout=1.0)
 
     event = asyncio.run(scenario())

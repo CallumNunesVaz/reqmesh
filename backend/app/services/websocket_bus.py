@@ -21,14 +21,14 @@ async def websocket_handler(websocket: WebSocket, project_id: str, token: str | 
     queue: asyncio.Queue = bus.subscribe(project_id)
     client_id = uuid.uuid4().hex
     username = "guest"
-    role = "viewer"
+    role = "guest"
 
     try:
         if token:
             user = get_user_from_token(token)
             if user:
                 username = user.get("username", "guest")
-                role = user.get("role", "viewer")
+                role = user.get("role", "guest")
 
         if not token:
             try:
@@ -39,7 +39,7 @@ async def websocket_handler(websocket: WebSocket, project_id: str, token: str | 
                     user = get_user_from_token(client_token)
                     if user:
                         username = user.get("username", "guest")
-                        role = user.get("role", "viewer")
+                        role = user.get("role", "guest")
             except (asyncio.TimeoutError, json.JSONDecodeError, WebSocketDisconnect):
                 pass
 

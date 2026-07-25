@@ -1,4 +1,5 @@
-import { Outlet, Link, useParams } from 'react-router-dom';
+import { Outlet, useParams } from 'react-router-dom';
+import { GuardedLink as Link } from './navGuard';
 import { PanelRight, PanelRightClose, PanelRightOpen, LogIn, LogOut, User, Pencil, Eye, FileDown, FileUp, Users, Search, HelpCircle, BookOpen, Server, SlidersHorizontal, Undo2, Redo2 } from 'lucide-react';
 import { useState, useEffect, useCallback, createContext, useContext, useRef } from 'react';
 import { ThemeToggle } from './ThemeToggle';
@@ -16,6 +17,8 @@ import { useAuthStore } from '../store/auth';
 import { useStore } from '../store';
 import { useUndoStore } from '../store/undo';
 import { api, type PresenceUser } from '../api/client';
+import { WhatIfProvider } from './WhatIfContext';
+import WhatIfPanel from './WhatIfPanel';
 
 const GraphPaneCtx = createContext({ graphOpen: false, toggleGraph: () => {} });
 export function useGraphPane() { return useContext(GraphPaneCtx); }
@@ -243,7 +246,7 @@ export default function Layout() {
     // useKeyboardShortcuts instance — a second handler here would fire twice.
   });
 
-  const canToggleEdit = user && user.role !== 'viewer';
+  const canToggleEdit = useAuthStore((s) => s.canToggleEdit());
 
   return (
     <GraphPaneCtx.Provider value={{ graphOpen, toggleGraph }}>
@@ -440,9 +443,9 @@ export default function Layout() {
 
         {/* Workspace order follows the MBSE anatomy: model browser (left),
             diagram canvas (centre), page content as the inspector surface. */}
-        <div className="flex flex-1 min-h-0 overflow-hidden">
-          {isInProject && (
-            <>
+        {isInProject ? (
+          <WhatIfProvider projectId={projectId!}>
+            <div className="flex flex-1 min-h-0 overflow-hidden">
               <div
                 className="shrink-0 overflow-hidden bg-sidebar"
                 style={{
@@ -459,48 +462,54 @@ export default function Layout() {
                   title="Drag to resize"
                 />
               )}
-            </>
-          )}
-          {isInProject && graphOpen && (
-            <>
-              <div
-                className="overflow-hidden bg-background"
-                style={{
-                  // When the inspector is open the canvas and inspector split the
-                  // shared pool by flex-grow weight, so a window resize keeps their
-                  // proportions; the nav-collapse bonus rides as a canvas-only
-                  // basis. When the inspector is closed the canvas takes it all.
-                  flex: contextOpen ? `${graphFrac} 1 ${canvasBonus}px` : '1 1 0%',
-                  minWidth: 0,
-                  transition: resizing ? 'none' : 'flex-grow 0.3s ease',
-                }}
-              >
-                <GraphPane projectId={projectId!} />
-              </div>
-              {contextOpen && (
-                <div
-                  onPointerDown={startGraphResize}
-                  className={`w-1 shrink-0 cursor-col-resize transition-colors ${resizing === 'graph' ? 'bg-primary/60' : 'bg-border/60 hover:bg-primary/40'}`}
-                  title="Drag to resize the canvas"
-                />
+              {isInProject && graphOpen && (
+                <>
+                  <div
+                    className="overflow-hidden bg-background"
+                    style={{
+                      flex: contextOpen ? `${graphFrac} 1 ${canvasBonus}px` : '1 1 0%',
+                      minWidth: 0,
+                      transition: resizing ? 'none' : 'flex-grow 0.3s ease',
+                    }}
+                  >
+                    <GraphPane projectId={projectId!} />
+                  </div>
+                  {contextOpen && (
+                    <div
+                      onPointerDown={startGraphResize}
+                      className={`w-1 shrink-0 cursor-col-resize transition-colors ${resizing === 'graph' ? 'bg-primary/60' : 'bg-border/60 hover:bg-primary/40'}`}
+                      title="Drag to resize the canvas"
+                    />
+                  )}
+                </>
               )}
-            </>
-          )}
-          {/* The inspector takes the remaining share of the pool (all of it when
-              the canvas is closed or off-project). */}
-          {(!isInProject || contextOpen) && (
-            <main
-              className="overflow-auto @container"
-              style={{
-                flex: isInProject ? `${1 - graphFrac} 1 0%` : '1 1 0%',
-                minWidth: 0,
-                transition: resizing ? 'none' : 'flex-grow 0.3s ease',
-              }}
-            >
-              <Outlet />
-            </main>
-          )}
-        </div>
+              {(!isInProject || contextOpen) && (
+                <main
+                  className="overflow-auto @container relative"
+                  style={{
+                    flex: isInProject ? `${1 - graphFrac} 1 0%` : '1 1 0%',
+                    minWidth: 0,
+                    transition: resizing ? 'none' : 'flex-grow 0.3s ease',
+                  }}
+                >
+                  <Outlet />
+                  {isInProject && <WhatIfPanel />}
+                </main>
+              )}
+            </div>
+          </WhatIfProvider>
+        ) : (
+          <div className="flex flex-1 min-h-0 overflow-hidden">
+            {(!isInProject || contextOpen) && (
+              <main
+                className="overflow-auto @container"
+                style={{ flex: '1 1 0%', minWidth: 0 }}
+              >
+                <Outlet />
+              </main>
+            )}
+          </div>
+        )}
         {/* Capture pointer events over the canvas while resizing */}
         {resizing && <div className="fixed inset-0 z-50 cursor-col-resize" />}
       </div>

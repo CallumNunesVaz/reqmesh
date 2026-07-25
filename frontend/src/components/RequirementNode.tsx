@@ -33,6 +33,10 @@ interface RequirementNodeData {
   hasChildren: boolean;
   collapsed: boolean;
   childCount?: number;
+  previewVerdict?: string | null;
+  previewDelta?: 'broke' | 'fixed' | 'changed' | null;
+  isOverrideRoot?: boolean;
+  pulseActive?: boolean;
 }
 
 const BOX_W = 172;
@@ -52,6 +56,23 @@ function RequirementNode({ data, selected }: NodeProps) {
   const dimmed = hasSelection && !connectedIds.has(nodeData.label);
   const isSelected = selectedReqId === nodeData.label;
   const hasKids = nodeData.hasChildren;
+
+  const previewRingColor = nodeData.previewDelta === 'broke' ? 'hsl(0,84%,68%)'
+    : nodeData.previewDelta === 'fixed' ? 'hsl(145,55%,42%)'
+    : nodeData.previewDelta === 'changed' ? 'hsl(28,100%,53%)'
+    : nodeData.isOverrideRoot ? 'hsl(207,90%,64%)'
+    : null;
+
+  const pulseGlow = previewRingColor
+    ? `drop-shadow(0 0 9px ${glow(previewRingColor, 0.45)}) drop-shadow(0 3px 8px rgba(0,0,0,0.35)) brightness(1.03)`
+    : isSelected
+      ? `drop-shadow(0 0 9px ${glow(colors.fill, 0.4)}) drop-shadow(0 3px 8px rgba(0,0,0,0.35)) brightness(1.03)`
+      : hover
+        ? `drop-shadow(0 0 7px ${glow(colors.fill, 0.28)}) drop-shadow(0 2px 6px rgba(0,0,0,0.3)) brightness(1.06)`
+        : `drop-shadow(0 0 3px ${glow(colors.fill, 0.13)}) drop-shadow(0 1px 3px rgba(0,0,0,0.22))`;
+
+  const ringColor = previewRingColor || (isSelected ? colors.fill : undefined);
+  const ringPulseClass = nodeData.pulseActive ? 'rt-pulse' : '';
 
   const w = BOX_W;
   const h = BOX_H;
@@ -73,14 +94,14 @@ function RequirementNode({ data, selected }: NodeProps) {
 
   return (
     <div
-      className="relative"
+      className={`relative ${ringPulseClass}`}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{
         width: w,
         height: h,
         opacity: dimmed ? 0.22 : 1,
-        filter: glowFilter,
+        filter: pulseGlow,
         transform: hover && !dimmed ? 'scale(1.03)' : 'scale(1)',
         transition: 'opacity 0.25s ease, filter 0.25s ease, transform 0.2s ease',
         cursor: 'pointer',
@@ -101,18 +122,18 @@ function RequirementNode({ data, selected }: NodeProps) {
         </defs>
 
         {/* Selection ring — clean, glowing (bloom comes from the wrapper filter) */}
-        {isSelected && (
+        {ringColor && (
           <rect
             x={-2.5} y={-2.5} width={w + 5} height={h + 5} rx={7} ry={7}
-            fill="none" stroke={colors.fill} strokeWidth={1.6} opacity={0.9}
+            fill="none" stroke={ringColor} strokeWidth={1.6} opacity={0.9}
           />
         )}
 
         {/* Card body */}
         <rect x={0} y={0} width={w} height={h} rx={5} ry={5}
           fill="hsl(var(--card))"
-          stroke={isSelected ? colors.fill : hover ? 'hsl(var(--foreground) / 0.25)' : 'hsl(var(--border))'}
-          strokeWidth={hover || isSelected ? 1.2 : 0.8}
+          stroke={ringColor || (isSelected ? colors.fill : hover ? 'hsl(var(--foreground) / 0.25)' : 'hsl(var(--border))')}
+          strokeWidth={hover || ringColor || isSelected ? 1.2 : 0.8}
         />
         {/* Faint status tint over the card for a hint of colour */}
         <rect x={0} y={0} width={w} height={h} rx={5} ry={5} fill={colors.fill} opacity={hover || isSelected ? 0.08 : 0.05} />

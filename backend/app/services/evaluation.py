@@ -526,3 +526,213 @@ def run_analysis_case(store, case: dict) -> dict:
     result["case"] = {"id": case.get("id"), "name": case.get("name", ""),
                       "scope": case.get("scope") or [], "overrides": case.get("overrides") or {}}
     return result
+
+
+# ---- impact trace builder ------------------------------------------------
+
+
+def _refs_in_expr(text: str, owner: str, env: dict[str, str],
+                  definitions: dict, collecting: set[str], stack: frozenset) -> set[str]:
+    if not text:
+        return set()
+    try:
+        tree = ast.parse(text, mode="eval")
+    except SyntaxError:
+        return set()
+    return _collect_refs(tree.body, owner, env, definitions, collecting, stack)
+
+
+def _collect_refs(node: ast.AST, owner: str, env: dict[str, str],
+                  definitions: dict, collecting: set[str], stack: frozenset) -> set[str]:
+    refs: set[str] = set()
+    if isinstance(node, ast.Constant):
+        pass
+    elif isinstance(node, ast.Name):
+        if node.id in env:
+            refs.add(env[node.id])
+        else:
+            refs.add(f"{owner}.{node.id}")
+    elif isinstance(node, ast.Attribute):
+        if isinstance(node.value, ast.Name):
+            refs.add(f"{node.value.id}.{node.attr}")
+    elif isinstance(node, ast.BinOp):
+        refs.update(_collect_refs(node.left, owner, env, definitions, collecting, stack))
+        refs.update(_collect_refs(node.right, owner, env, definitions, collecting, stack))
+    elif isinstance(node, ast.UnaryOp):
+        refs.update(_collect_refs(node.operand, owner, env, definitions, collecting, stack))
+    elif isinstance(node, ast.Compare):
+        refs.update(_collect_refs(node.left, owner, env, definitions, collecting, stack))
+        for comp in node.comparators:
+            refs.update(_collect_refs(comp, owner, env, definitions, collecting, stack))
+    elif isinstance(node, ast.BoolOp):
+        for v in node.values:
+            refs.update(_collect_refs(v, owner, env, definitions, collecting, stack))
+    elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+        if node.func.id == "rollup":
+            if (len(node.args) == 2
+                    and all(isinstance(a, ast.Constant) and isinstance(a.value, str)
+                            for a in node.args)):
+                refs.add(f"{node.args[0].value}.{node.args[1].value}")
+        else:
+            for a in node.args:
+                refs.update(_collect_refs(a, owner, env, definitions, collecting, stack))
+    return refs
+
+
+def _resolve_safe(evaluator: Evaluator, ref: str) -> Optional[float]:
+    try:
+        return evaluator.resolve(ref)
+    except Exception:
+        return None
+
+
+def build_impact(store, overrides: dict[str, float]) -> dict:
+    requirements = store.list_requirements()
+    components = store.list_components()
+    try:
+        definitions_list = store.list_items("definitions")
+    except Exception:
+        definitions_list = []
+    defs = {d["id"]: d for d in definitions_list if d.get("id")}
+
+    base = Evaluator(requirements, components, definitions=definitions_list)
+    over = Evaluator(requirements, components, overrides=overrides, definitions=definitions_list)
+
+    all_refs = set(base.params.keys())
+    roots = set(overrides.keys())
+
+    affected_refs: set[str] = set()
+    for ref in all_refs:
+        b = _resolve_safe(base, ref)
+        o = _resolve_safe(over, ref)
+        if b != o or ref in roots:
+            affected_refs.add(ref)
+
+    deps: dict[str, set[str]] = {}
+    for ref in all_refs:
+        param = base.params.get(ref)
+        if param is None:
+            deps[ref] = set()
+            continue
+        owner = ref.rsplit(".", 1)[0]
+        if param.get("calc_def"):
+            cd = defs.get(param["calc_def"])
+            if cd:
+                text = cd.get("expr", "")
+                bindings = param.get("bindings") or {}
+                deps[ref] = _refs_in_expr(text, owner, bindings, defs, set(), frozenset())
+            else:
+                deps[ref] = set()
+        elif param.get("expr"):
+            deps[ref] = _refs_in_expr(param["expr"], owner, {}, defs, set(), frozenset())
+        else:
+            deps[ref] = set()
+
+    constraint_deps: list[tuple[str, str, dict, set[str]]] = []
+    for entity in [*requirements, *components]:
+        owner = entity["id"]
+        for c in entity.get("constraints", []) or []:
+            cid = f"{owner}.#{len(constraint_deps)}"
+            c_refs: set[str] = set()
+            if c.get("constraint_def"):
+                cd = defs.get(c["constraint_def"])
+                if cd:
+                    bindings = c.get("bindings") or {}
+                    c_refs = _refs_in_expr(cd.get("expr", ""), owner, bindings, defs, set(), frozenset())
+            elif c.get("expr"):
+                c_refs = _refs_in_expr(c["expr"], owner, {}, defs, set(), frozenset())
+            if c.get("assume"):
+                c_refs |= _refs_in_expr(c["assume"], owner, {}, defs, set(), frozenset())
+            constraint_deps.append((cid, owner, c, c_refs))
+
+    affected_refs_in_order = list(affected_refs)
+    in_degree: dict[str, int] = {}
+    out_edges: dict[str, list[str]] = {}
+    for ref in affected_refs_in_order:
+        in_degree[ref] = 0
+        out_edges[ref] = []
+    for ref in affected_refs_in_order:
+        for dep in deps.get(ref, set()):
+            if dep in in_degree:
+                out_edges.setdefault(dep, []).append(ref)
+                in_degree[ref] = in_degree.get(ref, 0) + 1
+
+    ordered: list[str] = []
+    q = [r for r in affected_refs_in_order if in_degree.get(r, 0) == 0]
+    fallback = list(affected_refs_in_order)
+    while q:
+        n = q.pop(0)
+        ordered.append(n)
+        for child in out_edges.get(n, []):
+            if child in in_degree:
+                in_degree[child] -= 1
+                if in_degree[child] == 0:
+                    q.append(child)
+    for ref in fallback:
+        if ref not in ordered:
+            ordered.append(ref)
+
+    steps: list[dict] = []
+    for ref in ordered:
+        param = base.params.get(ref)
+        if param is None:
+            continue
+        b_val = _resolve_safe(base, ref)
+        o_val = _resolve_safe(over, ref)
+        if b_val == o_val:
+            continue
+        owner = ref.rsplit(".", 1)[0]
+        inputs = sorted(deps.get(ref, set()))
+        step: dict = {
+            "kind": "param",
+            "ref": ref,
+            "owner": owner,
+            "name": param.get("name", ""),
+            "expr": param.get("expr") or "",
+            "unit": param.get("unit", ""),
+            "inputs": inputs,
+            "before": round(b_val, 6) if b_val is not None else None,
+            "after": round(o_val, 6) if o_val is not None else None,
+        }
+        steps.append(step)
+
+    # Evaluate every constraint once under base and once under the overrides.
+    # The per-owner status lists feed both the changed-constraint step trace and
+    # the affected-requirement diff, so we never re-run a full evaluate_project.
+    owner_base: dict[str, list[str]] = {}
+    owner_over: dict[str, list[str]] = {}
+    for cid, owner, c, c_refs in constraint_deps:
+        b_verdict = _constraint_verdict(base, c, owner)
+        o_verdict = _constraint_verdict(over, c, owner)
+        owner_base.setdefault(owner, []).append(b_verdict["status"])
+        owner_over.setdefault(owner, []).append(o_verdict["status"])
+        if not (c_refs & affected_refs):
+            continue
+        if c.get("constraint_def"):
+            cd = defs.get(c["constraint_def"])
+            display = (f"{c['constraint_def']}("
+                       f"{', '.join(f'{k}={v}' for k, v in (c.get('bindings') or {}).items())})"
+                       if cd else "")
+        else:
+            display = c.get("expr") or ""
+        if (b_verdict.get("status") == o_verdict.get("status")
+                and b_verdict.get("margin") == o_verdict.get("margin")):
+            continue
+        steps.append({
+            "kind": "constraint",
+            "owner": owner,
+            "expr": display,
+            "before": {"status": b_verdict["status"], "margin": b_verdict.get("margin")},
+            "after": {"status": o_verdict["status"], "margin": o_verdict.get("margin")},
+        })
+
+    affected = sorted(
+        owner for owner in owner_base
+        if _aggregate(owner_base[owner]) != _aggregate(owner_over.get(owner, []))
+    )
+
+    return {
+        "steps": steps,
+        "affected": affected,
+        "roots": list(roots),
+    }

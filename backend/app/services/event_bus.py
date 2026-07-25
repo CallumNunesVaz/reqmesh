@@ -48,7 +48,7 @@ class EventBus:
         roster = self._presence.setdefault(project_id, {})
         roster[client_id] = {
             "username": username or "guest",
-            "role": role or "viewer",
+            "role": role or "guest",
             "since": datetime.now(timezone.utc).isoformat(),
         }
         self._broadcast_presence(project_id)

@@ -13,7 +13,7 @@ import io
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 
-from app.core.dependencies import get_store, require_edit
+from app.core.dependencies import get_store, require_maintain
 from app.core.ids import safe_id
 from app.core.tree_utils import build_flat_tree
 from app.models.component import ComponentCreate, ComponentUpdate
@@ -143,7 +143,7 @@ async def get_component(project_id: str, component_id: str):
 
 
 @router.post("/projects/{project_id}/components", status_code=201)
-async def create_component(project_id: str, data: ComponentCreate, user: dict = Depends(require_edit)):
+async def create_component(project_id: str, data: ComponentCreate, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     safe_id(data.id, "component id")
     if store.get_component(data.id):
@@ -157,7 +157,7 @@ async def create_component(project_id: str, data: ComponentCreate, user: dict = 
 
 @router.put("/projects/{project_id}/components/{component_id}")
 async def update_component(
-    project_id: str, component_id: str, data: ComponentUpdate, user: dict = Depends(require_edit)
+    project_id: str, component_id: str, data: ComponentUpdate, user: dict = Depends(require_maintain)
 ):
     store = get_store(project_id)
     before = store.get_component(component_id)
@@ -177,7 +177,7 @@ async def update_component(
 
 
 @router.delete("/projects/{project_id}/components/{component_id}")
-async def delete_component(project_id: str, component_id: str, user: dict = Depends(require_edit)):
+async def delete_component(project_id: str, component_id: str, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     doomed = store.get_component(component_id)
     if doomed is None:

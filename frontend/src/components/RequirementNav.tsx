@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useParams, useLocation } from 'react-router-dom';
+import { useGuardedNavigate } from './navGuard';
 import { motion } from 'framer-motion';
 import {
   PanelLeftClose,
@@ -232,7 +233,9 @@ interface RequirementNavProps {
 
 export default function RequirementNav({ width = 300, collapsed, onToggleCollapse }: RequirementNavProps) {
   const { projectId } = useParams<{ projectId: string }>();
-  const navigate = useNavigate();
+  // All tree navigation goes through the shared guard, so leaving a requirement
+  // with unsaved edits prompts before discarding them.
+  const navigate = useGuardedNavigate();
   const location = useLocation();
   const [tree, setTree] = useState<RequirementTreeNode[]>([]);
   // Items are tagged with the section they were loaded for, so switching

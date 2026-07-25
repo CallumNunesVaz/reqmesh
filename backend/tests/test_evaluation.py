@@ -310,4 +310,4 @@ def test_demo_seed_parametrics(tmp_path):
     # Cross-requirement tank capacity bound.
     assert by_id["AFRM0006"]["verdict"] == "pass"
 
-    assert data["measurement_count"] == 4
+    assert data["measurement_count"] == 8

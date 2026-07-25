@@ -22,7 +22,7 @@ export default function MetricsPage() {
   const [unreviewedCount, setUnreviewedCount] = useState(0);
   const [evaluation, setEvaluation] = useState<EvaluationData | null>(null);
   const { user, editMode } = useAuthStore();
-  const editable = user !== null && user.role !== 'viewer' && editMode;
+  const editable = user !== null && user.role !== 'guest' && editMode;
 
   useEffect(() => {
     if (!projectId) return;

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useGuardedNavigate } from './navGuard';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search } from 'lucide-react';
 import { ENTITY_META } from './entities';
@@ -24,7 +24,7 @@ export const OPEN_PALETTE_EVENT = 'rt-open-palette';
  * path between any two things in the app.
  */
 export default function CommandPalette({ projectId }: { projectId: string }) {
-  const navigate = useNavigate();
+  const navigate = useGuardedNavigate();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [entities, setEntities] = useState<IndexedEntity[]>([]);
