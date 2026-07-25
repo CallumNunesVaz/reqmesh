@@ -150,13 +150,28 @@ npm run typecheck
 
 A default `admin` user is created on first run with a password from `RT_ADMIN_PASSWORD`. If the env var is unset or `"admin"`, a random 16-character password is generated and logged. **Set `RT_ADMIN_PASSWORD` before first launch.**
 
-Roles:
+Roles (each is a tier; higher tiers include everything below):
 
-- `viewer` — read-only (unauthenticated guests get this)
-- `editor` — standard user: create/update/delete entities; self-registration creates editors
-- `admin` — administrator: everything, including deleting projects and managing users
+- `guest` — read-only (unauthenticated users get this)
+- `contributor` — *propose* tier: create/update change requests, risks, comments, and decisions. Self-registration creates contributors.
+- `maintainer` — *edit* tier: everything a contributor can do, plus editing requirements, components, specifications, baselines, bulk operations, review, and import/publish.
+- `admin` — administrator: everything, including creating/deleting projects and managing users.
 
 Passwords must be at least 12 characters and contain an uppercase letter, lowercase letter, digit, and special character.
+
+### Per-project permissions
+
+Each project's `_meta.yaml` carries a `permissions:` map from role to permission level (`view` < `propose` < `edit` < `admin`), letting a project grant or restrict beyond the role defaults. Defaults:
+
+```yaml
+permissions:
+  guest: view
+  contributor: propose
+  maintainer: edit
+  admin: admin
+```
+
+For example, setting `contributor: edit` lets contributors edit requirements in that project. Global admins always resolve to `admin` regardless of a project's map, and roles absent from the map (including any legacy roles) resolve to `view`.
 
 ### Token management
 

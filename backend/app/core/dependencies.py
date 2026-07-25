@@ -31,7 +31,12 @@ def get_project_permissions(project_id: str) -> dict:
 
 def _user_permission_level(user: dict, project_id: str) -> int:
     role = user.get("role", "guest")
+    # A project's permissions map can never demote a global admin.
+    if role == "admin":
+        return PERMISSION_LEVELS["admin"]
     perms = get_project_permissions(project_id)
+    # Unknown/legacy roles (e.g. pre-migration "viewer"/"editor") aren't in the
+    # map and fall through to view (0), so they can neither propose nor edit.
     perm = perms.get(role, "view")
     return PERMISSION_LEVELS.get(perm, 0)
 
@@ -57,14 +62,29 @@ def get_current_user(authorization: Optional[str] = Header(None)) -> dict:
     return user
 
 
-def require_edit(authorization: Optional[str] = Header(None)) -> dict:
+def require_edit(project_id: str, authorization: Optional[str] = Header(None)) -> dict:
+    """Propose tier — the user's effective permission in this project must be at
+    least ``propose`` (change requests, risks, comments, decisions). Resolved
+    per-project via the ``permissions`` map, so a project can grant/deny beyond
+    the role defaults."""
     user = get_current_user(authorization)
-    if user["role"] == "guest":
-        raise HTTPException(status_code=403, detail="Edit permission required")
+    if _user_permission_level(user, project_id) < PERMISSION_LEVELS["propose"]:
+        raise HTTPException(status_code=403, detail="Propose permission required")
     return user
 
 
-def require_maintain(authorization: Optional[str] = Header(None)) -> dict:
+def require_maintain(project_id: str, authorization: Optional[str] = Header(None)) -> dict:
+    """Edit tier — effective permission must be at least ``edit`` (requirements,
+    components, specs, baselines, bulk ops, review, import/publish)."""
+    user = get_current_user(authorization)
+    if _user_permission_level(user, project_id) < PERMISSION_LEVELS["edit"]:
+        raise HTTPException(status_code=403, detail="Maintainer or admin permission required")
+    return user
+
+
+def require_maintain_global(authorization: Optional[str] = Header(None)) -> dict:
+    """Maintainer tier for actions that aren't scoped to an existing project
+    (currently only project creation), so there's no per-project map to consult."""
     user = get_current_user(authorization)
     if user["role"] not in ("maintainer", "admin"):
         raise HTTPException(status_code=403, detail="Maintainer or admin permission required")

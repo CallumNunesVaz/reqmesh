@@ -144,21 +144,26 @@ describe('canEdit', () => {
 });
 
 describe('canPropose', () => {
-  it('allows contributor, maintainer, and admin with edit mode on', async () => {
+  it('allows contributor, maintainer, and admin — independent of edit mode', async () => {
     installStorage();
     const useAuthStore = await freshStore();
-    const { login, setEditMode, loginGuest } = useAuthStore.getState();
+    const { login, loginGuest } = useAuthStore.getState();
 
     expect(useAuthStore.getState().canPropose()).toBe(false); // logged out
 
     loginGuest();
-    setEditMode(true);
     expect(useAuthStore.getState().canPropose()).toBe(false); // guest blocked
 
+    // Propose-tier actions do NOT require the maintainer-only edit-mode toggle.
     login('bob', 't', 'contributor');
-    expect(useAuthStore.getState().canPropose()).toBe(false); // edit mode off
-    setEditMode(true);
     expect(useAuthStore.getState().canPropose()).toBe(true);
+
+    login('mo', 't', 'maintainer');
+    expect(useAuthStore.getState().canPropose()).toBe(true);
+
+    // Legacy/unknown roles are not on the allowlist.
+    login('old', 't', 'editor');
+    expect(useAuthStore.getState().canPropose()).toBe(false);
   });
 });
 

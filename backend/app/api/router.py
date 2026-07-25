@@ -10,7 +10,7 @@ from typing import Optional
 from fastapi import APIRouter, Header, HTTPException, Query, Depends
 from pydantic import BaseModel
 
-from app.core.dependencies import get_store, require_maintain, require_admin
+from app.core.dependencies import get_store, require_maintain, require_maintain_global, require_admin
 from app.core.ids import safe_id
 from app.core.tree_utils import build_flat_tree
 from app.models.requirement import RequirementCreate, RequirementUpdate
@@ -76,7 +76,7 @@ async def list_projects():
 
 
 @router.post("/projects", status_code=201)
-async def create_project(data: ProjectCreate, user: dict = Depends(require_maintain)):
+async def create_project(data: ProjectCreate, user: dict = Depends(require_maintain_global)):
     from app.core.config import settings
 
     project_id = safe_id(data.id, "project id")
@@ -104,11 +104,12 @@ async def get_project(project_id: str, authorization: Optional[str] = Header(Non
         "baselines": meta.get("baselines", []),
     }
     # Git settings can hold a credentialed remote URL, so unlike the rest of
-    # the project metadata they are only shown to signed-in editors.
+    # the project metadata they are only shown to those who manage settings
+    # (the maintainer tier that the settings page itself requires).
     if authorization and authorization.startswith("Bearer "):
         from app.core.auth import get_user_from_token
         user = get_user_from_token(authorization.removeprefix("Bearer "))
-        if user and user.get("role") in ("editor", "admin"):
+        if user and user.get("role") in ("maintainer", "admin"):
             out["git"] = meta.get("git", {})
     return out
 

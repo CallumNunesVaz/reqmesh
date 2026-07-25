@@ -67,8 +67,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     return s.user !== null && (s.user.role === 'maintainer' || s.user.role === 'admin') && s.editMode;
   },
   canPropose: () => {
+    // Propose-tier actions (change requests, risks, comments) are available to
+    // contributors and up, and — unlike edit-tier actions — do NOT require the
+    // maintainer-only edit-mode toggle. An allowlist also excludes legacy/unknown roles.
     const s = get();
-    return s.user !== null && s.user.role !== 'guest' && s.editMode;
+    return s.user !== null && ['contributor', 'maintainer', 'admin'].includes(s.user.role);
   },
   canToggleEdit: () => {
     const s = get();

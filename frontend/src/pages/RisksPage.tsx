@@ -23,7 +23,10 @@ export default function RisksPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [error, setError] = useState('');
   const [form, setForm] = useState({ id: '', title: '', description: '', severity: 'medium', probability: 'medium' });
-  const editable = useAuthStore((s) => s.canEdit());
+  const editable = useAuthStore((s) => s.canPropose());
+  // Bulk operations are maintainer-tier (backend require_maintain), unlike
+  // individual create/edit/delete which are propose-tier.
+  const canBulk = useAuthStore((s) => s.canEdit());
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const dataVersion = useStore((s) => s.dataVersion);
   const entityKinds = useEntityKinds(projectId);
@@ -159,7 +162,7 @@ export default function RisksPage() {
           <motion.div key={r.id} id={`entity-${r.id}`} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.03 }}
             className={`card p-4 hover:shadow-md transition-shadow group ${focusId === r.id ? 'ring-2 ring-primary/50' : ''}`}>
             <div className="flex items-center gap-3">
-              {editable && (
+              {canBulk && (
                 <span className="shrink-0">
                   {selectedIds.has(r.id) ? (
                     <CheckSquare size={14} className="text-primary cursor-pointer" onClick={() => toggleRisk(r.id)} />
@@ -190,7 +193,7 @@ export default function RisksPage() {
           </motion.div>
         ))}
       </div>
-      {selectedIds.size > 0 && editable && (
+      {selectedIds.size > 0 && canBulk && (
         <div className="sticky bottom-6 z-40 mx-auto w-fit max-w-full flex flex-wrap items-center justify-center gap-3 bg-card border rounded-xl shadow-2xl px-4 py-3">
           <span className="text-xs font-medium text-foreground">{selectedIds.size} selected</span>
           <select

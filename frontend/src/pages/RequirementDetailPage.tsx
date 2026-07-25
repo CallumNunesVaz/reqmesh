@@ -49,11 +49,14 @@ export default function RequirementDetailPage() {
   const [newRelTarget, setNewRelTarget] = useState('');
   const [reverseAdd, setReverseAdd] = useState(false);
   const [newVC, setNewVC] = useState('');
-  const { user, editMode } = useAuthStore();
+  const { user } = useAuthStore();
   const bumpGraphVersion = useStore((s) => s.bumpGraphVersion);
   const bumpDataVersion = useStore((s) => s.bumpDataVersion);
   const setNavGuard = useStore((s) => s.setNavGuard);
-  const editable = user !== null && user.role !== 'guest' && editMode;
+  // Requirement fields are edit-tier (maintainer + edit mode); comments are
+  // propose-tier (contributor+, no edit-mode gate).
+  const editable = useAuthStore((s) => s.canEdit());
+  const canPropose = useAuthStore((s) => s.canPropose());
   const showConfirm = useConfirm();
   const [workflow, setWorkflow] = useState<{ states: string[]; transitions: Record<string, string[]> } | null>(null);
   const [qualityResult, setQualityResult] = useState<QualityItem | null>(null);
@@ -803,11 +806,11 @@ export default function RequirementDetailPage() {
             </motion.div>
           )}
 
-          {comments.length > 0 && (
+          {(comments.length > 0 || canPropose) && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.26 }} className="card p-5">
               <h2 className="font-semibold text-sm text-card-foreground mb-3 flex items-center justify-between">
                 <span>Comments ({comments.length})</span>
-                <AddCommentForm projectId={projectId!} reqId={reqId!} onAdded={() => api.listComments(projectId!, reqId).then(setComments).catch(() => {})} disabled={!editable} />
+                <AddCommentForm projectId={projectId!} reqId={reqId!} onAdded={() => api.listComments(projectId!, reqId).then(setComments).catch(() => {})} disabled={!canPropose} />
               </h2>
               <div className="space-y-3">
                 {comments.map((c) => (

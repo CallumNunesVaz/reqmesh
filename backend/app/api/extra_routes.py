@@ -1224,7 +1224,7 @@ async def project_events(project_id: str, user: dict = Depends(get_current_user)
     queue: asyncio.Queue = bus.subscribe(project_id)
     client_id = uuid.uuid4().hex
     username = user.get("username", "guest")
-    role = user.get("role", "viewer")
+    role = user.get("role", "guest")
 
     async def event_stream():
         try:

@@ -21,8 +21,8 @@ export default function MetricsPage() {
   const [qualityAvg, setQualityAvg] = useState(0);
   const [unreviewedCount, setUnreviewedCount] = useState(0);
   const [evaluation, setEvaluation] = useState<EvaluationData | null>(null);
-  const { user, editMode } = useAuthStore();
-  const editable = user !== null && user.role !== 'guest' && editMode;
+  // Definitions and analysis cases are maintainer-tier (backend require_maintain).
+  const editable = useAuthStore((s) => s.canEdit());
 
   useEffect(() => {
     if (!projectId) return;

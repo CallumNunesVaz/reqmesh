@@ -391,9 +391,16 @@ def test_project_git_settings_roundtrip_and_visibility(client, project):
     anon = client.get(f"/api/projects/{project}", headers={"Authorization": ""})
     assert "git" not in anon.json()
 
-    # A signed-in editor gets it back for the settings page.
-    auth_mod.register_user("ed", "Password123!", "contributor")
-    tok = auth_mod.create_token("ed", "contributor")
+    # A contributor can't manage settings, so they don't get the credentialed block.
+    auth_mod.register_user("cont", "Password123!", "contributor")
+    ctok = auth_mod.create_token("cont", "contributor")
+    cseen = client.get(f"/api/projects/{project}",
+                       headers={"Authorization": f"Bearer {ctok}"}).json()
+    assert "git" not in cseen
+
+    # A maintainer gets it back for the settings page.
+    auth_mod.register_user("maint", "Password123!", "maintainer")
+    tok = auth_mod.create_token("maint", "maintainer")
     seen = client.get(f"/api/projects/{project}",
                       headers={"Authorization": f"Bearer {tok}"}).json()
     assert seen["git"]["push_interval_minutes"] == 5
