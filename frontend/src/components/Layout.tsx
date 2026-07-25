@@ -62,8 +62,14 @@ function VersionBadge() {
 interface SelectedReqCtxValue {
   selectedReqId: string | null;
   selectReq: (id: string | null) => void;
+  /** Ask the canvas to trace everything feeding into a requirement. The nonce
+   *  lets the same id be re-traced (the button is idempotent otherwise). */
+  derivationReq: { id: string; nonce: number } | null;
+  showDerivation: (id: string) => void;
 }
-const SelectedReqCtx = createContext<SelectedReqCtxValue>({ selectedReqId: null, selectReq: () => {} });
+const SelectedReqCtx = createContext<SelectedReqCtxValue>({
+  selectedReqId: null, selectReq: () => {}, derivationReq: null, showDerivation: () => {},
+});
 export function useSelectedReq() { return useContext(SelectedReqCtx); }
 
 const GRAPH_MIN = 320;    // px floor for the canvas column
@@ -112,6 +118,12 @@ export default function Layout() {
 
   const selectReq = useCallback((id: string | null) => {
     setSelectedReqId(id);
+  }, []);
+
+  const [derivationReq, setDerivationReq] = useState<{ id: string; nonce: number } | null>(null);
+  const showDerivation = useCallback((id: string) => {
+    setSelectedReqId(id);
+    setDerivationReq((prev) => ({ id, nonce: (prev?.nonce ?? 0) + 1 }));
   }, []);
 
   // The divider sits between the canvas and the inspector. Dragging it sets the
@@ -235,7 +247,7 @@ export default function Layout() {
 
   return (
     <GraphPaneCtx.Provider value={{ graphOpen, toggleGraph }}>
-    <SelectedReqCtx.Provider value={{ selectedReqId, selectReq }}>
+    <SelectedReqCtx.Provider value={{ selectedReqId, selectReq, derivationReq, showDerivation }}>
       <div className="h-screen flex flex-col bg-background">
         {/* overflow-x-auto: at very narrow windows the icon row degrades to a
             horizontal scroll instead of buttons overlapping each other. */}

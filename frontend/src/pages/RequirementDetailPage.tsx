@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Trash2, ArrowLeft, Plus, X, ArrowRight, ArrowLeftRight, Sparkles, ShieldCheck, ExternalLink, ChevronRight, Waypoints, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Trash2, ArrowLeft, Plus, X, ArrowRight, ArrowLeftRight, Sparkles, ShieldCheck, ExternalLink, ChevronRight, Waypoints, AlertTriangle, CheckCircle2, GitFork } from 'lucide-react';
 import { api, type Requirement, type VerificationCase, type QualityItem, type Component, type Specification, type ChangeRequest, type Risk, type EvaluatedRequirement, type Definition, type Comment, type DecisionRecord } from '../api/client';
 import { ParametricsCard } from '../components/parametrics';
 import RichTextEditor from '../components/RichTextEditor';
@@ -41,7 +41,7 @@ export default function RequirementDetailPage() {
   const [decisions, setDecisions] = useState<DecisionRecord[]>([]);
   const entityKinds = useEntityKinds(projectId);
   const { graphOpen, toggleGraph } = useGraphPane();
-  const { selectReq } = useSelectedReq();
+  const { selectReq, showDerivation } = useSelectedReq();
   const [newAttrKey, setNewAttrKey] = useState('');
   const [newAttrVal, setNewAttrVal] = useState('');
   const [newRelType, setNewRelType] = useState('refines');
@@ -98,6 +98,12 @@ export default function RequirementDetailPage() {
     if (!req) return;
     if (!graphOpen) toggleGraph();
     selectReq(req.id);
+  };
+
+  const traceDerivation = () => {
+    if (!req) return;
+    if (!graphOpen) toggleGraph();
+    showDerivation(req.id);
   };
 
   const incomingRelations = useMemo(() => {
@@ -329,6 +335,13 @@ export default function RequirementDetailPage() {
         </div>
         <button onClick={showInGraph} className="btn-secondary text-xs" title="Select this requirement in the graph pane">
           <Waypoints size={14} /> Show in graph
+        </button>
+        <button
+          onClick={traceDerivation}
+          className="btn-secondary text-xs"
+          title="Highlight everything that derives from this requirement — all incoming links, and their incoming links, expanding any collapsed groups on the way"
+        >
+          <GitFork size={14} /> Show derivation
         </button>
         {editable && (
           <button

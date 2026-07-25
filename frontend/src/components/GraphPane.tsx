@@ -21,7 +21,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { forceSimulation, forceLink, forceManyBody, forceCollide, forceX, forceY } from 'd3-force';
-import { Search, RotateCw, ListTree, Orbit, SlidersHorizontal, ChevronsUpDown, ChevronsDownUp, Filter, Waypoints, Share2, Save } from 'lucide-react';
+import { Search, RotateCw, ListTree, Orbit, SlidersHorizontal, ChevronsUpDown, ChevronsDownUp, Filter, Waypoints, Share2, Save, ArrowLeftRight, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
 import { api, type Requirement, type TraceLink, type EvaluatedRequirement, type EvaluatedParameter, type Component } from '../api/client';
 import CircularNode from './CircularNode';
 import BlockNode, { BLOCK_W, STACK_OVERHANG, type BlockParam, type BlockConstraint } from './BlockNode';
@@ -416,6 +416,7 @@ interface SavedView {
   graphSettings: Record<string, any>;
   hopDepth: number;
   showAllLinks: boolean;
+  linkDir?: LinkDir;
   filters: {
     search: string; status: string; priority: string; baseline: string; type: string;
     verStatus: string; verMethod: string; allocated: string; component: string; kind: string;
@@ -423,6 +424,9 @@ interface SavedView {
   viewport: { x: number; y: number; zoom: number } | null;
 }
 const VIEW_SLOTS = 3;
+
+/** Which way the highlight walks out from the focused node. */
+type LinkDir = 'both' | 'in' | 'out';
 
 // Plain-text cache for HTML descriptions (see stripHtml in the node build).
 const stripHtmlCache = new Map<string, string>();
@@ -477,7 +481,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
   const [filterComponent, setFilterComponent] = useState('');
   const [filterKind, setFilterKind] = useState('');
   const [showFilters, setShowFilters] = useState(false);
-  const { selectedReqId, selectReq } = useSelectedReq();
+  const { selectedReqId, selectReq, derivationReq } = useSelectedReq();
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   // How many relationship hops out from the focused node stay highlighted.
   const [hopDepth, setHopDepth] = useState(() => {
@@ -500,6 +504,24 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
       return next;
     });
   }, []);
+  // Which way the highlight walks from the focused node: both directions
+  // (default), only links arriving at it, or only links leaving it.
+  const [linkDir, setLinkDir] = useState<LinkDir>(() => {
+    const saved = localStorage.getItem('rt-graph-link-dir');
+    return saved === 'in' || saved === 'out' ? saved : 'both';
+  });
+  const setLinkDirPersist = useCallback((d: LinkDir) => {
+    setLinkDir(d);
+    try { localStorage.setItem('rt-graph-link-dir', d); } catch {}
+  }, []);
+
+  // "Show derivation" (driven from the requirement inspector): the transitive
+  // closure of everything feeding into a requirement. Overrides the normal
+  // hop-radius highlight until the selection changes.
+  const [derived, setDerived] = useState<{ root: string; ids: Set<string> } | null>(null);
+  // Set while a trace's expansion is settling, so the expand choreography
+  // doesn't grab the selection/camera out from under it.
+  const derivingRef = useRef(false);
 
   // Saved view slots (persisted per project) and a nonce that forces the layout
   // effect to re-run on restore even when nothing it depends on changed.
@@ -987,6 +1009,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
       graphSettings,
       hopDepth,
       showAllLinks,
+      linkDir,
       filters: {
         search, status: filterStatus, priority: filterPriority, baseline: filterBaseline,
         type: filterType, verStatus: filterVerStatus, verMethod: filterVerMethod,
@@ -1000,7 +1023,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
       persistViews(next);
       return next;
     });
-  }, [collapsed, groupsOnly, selectedReqId, layoutMode, graphSettings, hopDepth, showAllLinks, search,
+  }, [collapsed, groupsOnly, selectedReqId, layoutMode, graphSettings, hopDepth, showAllLinks, linkDir, search,
       filterStatus, filterPriority, filterBaseline, filterType, filterVerStatus, filterVerMethod,
       filterAllocated, filterComponent, filterKind, persistViews]);
 
@@ -1029,6 +1052,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
     setHopDepthPersist(v.hopDepth ?? 1);
     setShowAllLinks(v.showAllLinks ?? false);
     try { localStorage.setItem('rt-graph-all-links', v.showAllLinks ? '1' : '0'); } catch { /* ignore */ }
+    setLinkDirPersist(v.linkDir ?? 'both');
     const f = v.filters || ({} as SavedView['filters']);
     setSearch(f.search ?? '');
     setFilterStatus(f.status ?? '');
@@ -1216,12 +1240,17 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
                 animatingRef.current = false;
                 const expandedParents = new Set([...newChildrenIds].map(cid => initialNodes.find(n => n.id === cid)?.data?.parent).filter(Boolean) as string[]);
                 const expandedNodeId = [...expandedParents][0];
-                if (expandedNodeId) {
+                // A derivation trace expands many groups at once and owns both
+                // the selection and the camera; without this guard the usual
+                // "focus what you just expanded" behaviour would steal them
+                // and silently cancel the trace.
+                if (expandedNodeId && !derivingRef.current) {
                   selectReq(expandedNodeId);
                   requestAnimationFrame(() => {
                     rfRef.current?.fitView({ nodes: initialNodes.filter(n => n.id === expandedNodeId), padding: 0.2, maxZoom: gs.maxZoom, duration: 500 });
                   });
                 }
+                derivingRef.current = false;
               }, cleanupMs);
             }, 400);
           }, 350);
@@ -1360,6 +1389,83 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
     return () => cancelAnimationFrame(raf);
   }, [selectedReqId, entranceDone]);
 
+  // ── "Show derivation" (triggered from the requirement inspector) ─────────
+  // Walk incoming relations transitively from the target: everything that
+  // links *into* it, everything that links into those, and so on. Then reveal
+  // the whole closure — any collapsed ancestor along the way is expanded, so
+  // nothing in the trace stays hidden inside a folded group.
+  useEffect(() => {
+    if (!derivationReq) return;
+    const root = derivationReq.id;
+
+    // Relation edges only. Composition (parent→child) edges describe where a
+    // requirement *lives*, not what it derives from; following them would drag
+    // in whole sibling subtrees and drown the trace.
+    const incoming = new Map<string, string[]>();
+    for (const r of reqs) {
+      for (const rel of r.relations || []) {
+        const list = incoming.get(rel.target);
+        if (list) list.push(r.id); else incoming.set(rel.target, [r.id]);
+      }
+    }
+    for (const link of traces) {
+      const list = incoming.get(link.target);
+      if (list) list.push(link.source); else incoming.set(link.target, [link.source]);
+    }
+
+    const ids = new Set<string>([root]);
+    const queue = [root];
+    while (queue.length) {
+      const id = queue.shift()!;
+      for (const src of incoming.get(id) || []) {
+        if (!ids.has(src)) { ids.add(src); queue.push(src); }
+      }
+    }
+
+    // Reveal every node in the trace: un-collapse each of its ancestors, and
+    // clear groups-only on them (that mode hides non-parent children).
+    const byId = new Map(reqs.map((r) => [r.id, r]));
+    const ancestors = new Set<string>();
+    for (const id of ids) {
+      let p = byId.get(id)?.parent ?? null;
+      while (p) { ancestors.add(p); p = byId.get(p)?.parent ?? null; }
+    }
+    if (ancestors.size) {
+      derivingRef.current = true;
+      setCollapsed((prev) => {
+        const next = new Set(prev);
+        let changed = false;
+        for (const a of ancestors) if (next.delete(a)) changed = true;
+        return changed ? next : prev;
+      });
+      setGroupsOnly((prev) => {
+        const next = new Set(prev);
+        let changed = false;
+        for (const a of ancestors) if (next.delete(a)) changed = true;
+        return changed ? next : prev;
+      });
+    }
+
+    setDerived({ root, ids });
+    // Frame the trace once the expansion has laid out.
+    refocusRef.current = null;
+    const t = setTimeout(() => {
+      const subset = [...ids].map((id) => ({ id }));
+      if (subset.length) {
+        rfRef.current?.fitView({ nodes: subset, padding: 0.25, duration: 600, maxZoom: gs.maxZoom });
+      }
+    }, ancestors.size ? 420 : 60);
+    // Backstop: if this expansion never produced new children, the choreography
+    // that normally clears the guard won't run, so release it here.
+    const release = setTimeout(() => { derivingRef.current = false; }, 2500);
+    return () => { clearTimeout(t); clearTimeout(release); };
+  }, [derivationReq, reqs, traces, gs.maxZoom]);
+
+  // A derivation trace belongs to one node — drop it as soon as focus moves.
+  useEffect(() => {
+    if (derived && derived.root !== selectedReqId) setDerived(null);
+  }, [selectedReqId, derived]);
+
   // BFS out `hopDepth` rings from the focused node, recording each reached
   // node's hop distance so edges can be classed as radial (distances differ)
   // vs same-level cross-links (distances equal).
@@ -1371,7 +1477,11 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
       const list = adj.get(a);
       if (list) list.push(b); else adj.set(a, [b]);
     };
-    for (const edge of initialEdges) { link(edge.source, edge.target); link(edge.target, edge.source); }
+    // 'out' walks source→target, 'in' walks target→source, 'both' is undirected.
+    for (const edge of initialEdges) {
+      if (linkDir !== 'in') link(edge.source, edge.target);
+      if (linkDir !== 'out') link(edge.target, edge.source);
+    }
     const dist = new Map<string, number>([[highlightId, 0]]);
     let frontier = [highlightId];
     for (let d = 0; d < hopDepth && frontier.length; d++) {
@@ -1384,10 +1494,12 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
       frontier = next;
     }
     return { ids: new Set(dist.keys()), dist };
-  }, [selectedReqId, hoveredNodeId, initialEdges, hopDepth]);
-  const connectedIds = focus.ids;
+  }, [selectedReqId, hoveredNodeId, initialEdges, hopDepth, linkDir]);
+  // A live derivation trace replaces the hop-radius highlight entirely.
+  const derivationActive = !!derived && derived.root === selectedReqId;
+  const connectedIds = derivationActive ? derived!.ids : focus.ids;
 
-  const hasSelection = !!(selectedReqId || hoveredNodeId);
+  const hasSelection = derivationActive || !!(selectedReqId || hoveredNodeId);
 
   // Fidelity drops automatically on big graphs — see PERF_NODE_LIMIT.
   const perfMode = initialNodes.length > PERF_NODE_LIMIT;
@@ -1400,8 +1512,18 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
       // fanning out from the focus. With "show all links" on, same-distance
       // cross-links between neighbours light too.
       const bothIn = connectedIds.has(e.source) && connectedIds.has(e.target);
-      const connected = bothIn && (showAllLinks ||
-        focus.dist.get(e.source) !== focus.dist.get(e.target));
+      // In a derivation trace every link inside the closure is part of the
+      // story, so they all light. Otherwise: radial edges only by default,
+      // and "radial" respects the chosen direction — with an incoming/outgoing
+      // filter an edge must also point the way the walk travelled.
+      const ds = focus.dist.get(e.source);
+      const dt = focus.dist.get(e.target);
+      const radial = linkDir === 'out' ? dt === (ds ?? -99) + 1
+        : linkDir === 'in' ? ds === (dt ?? -99) + 1
+        : ds !== dt;
+      const connected = derivationActive
+        ? bothIn
+        : bothIn && (showAllLinks || radial);
       const stroke = (e.style as any)?.stroke as string | undefined;
       const dashed = ((e.style as any)?.strokeDasharray ?? 'none') !== 'none';
       return {
@@ -1418,7 +1540,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
         },
       };
     });
-  }, [edges, hasSelection, connectedIds, focus, showAllLinks, perfMode]);
+  }, [edges, hasSelection, connectedIds, focus, showAllLinks, perfMode, linkDir, derivationActive]);
 
   const onNodeClick = useCallback(
     (_: React.MouseEvent, node: Node) => {
@@ -1704,6 +1826,30 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
               </button>
             ))}
           </div>
+          {/* Link direction: whether the highlight follows relationships out
+              of the focused node, into it, or both ways (the default). */}
+          <div
+            className="hidden @md:flex items-center rounded-lg bg-graph-panel border border-graph-border shadow-sm overflow-hidden"
+            title="Link direction — which relationships the highlight follows"
+          >
+            {([
+              { id: 'both', icon: ArrowLeftRight, label: 'Both directions' },
+              { id: 'in', icon: ArrowDownLeft, label: 'Incoming links only' },
+              { id: 'out', icon: ArrowUpRight, label: 'Outgoing links only' },
+            ] as const).map(({ id, icon: Icon, label }, i) => (
+              <button
+                key={id}
+                onClick={() => setLinkDirPersist(id)}
+                className={`p-1.5 transition-colors ${i > 0 ? 'border-l border-graph-border' : ''} ${
+                  linkDir === id ? 'bg-primary text-primary-foreground' : 'text-graph-text hover:bg-graph-control-hover'
+                }`}
+                title={label}
+                aria-pressed={linkDir === id}
+              >
+                <Icon size={13} />
+              </button>
+            ))}
+          </div>
           {/* Toggle: also light cross-links between same-distance highlighted
               neighbours, not just the radial paths from the focused node. */}
           <button
@@ -1770,8 +1916,28 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
           </div>
         </Panel>
 
-        <Panel position="bottom-center" className="mb-3 max-w-[94cqw]">
-          <div className="text-[10px] text-graph-text bg-graph-panel border border-graph-border rounded-lg px-2.5 py-1.5 shadow-sm flex items-center gap-2 whitespace-nowrap overflow-hidden">
+        <Panel position="bottom-center" className="mb-3 max-w-[94cqw] flex flex-col items-center gap-1.5">
+          {/* A derivation trace is a modal-ish view: say so, and give it an
+              exit that isn't "click something else and hope". It rides above
+              the status chip — the top-left toolbar wraps into the top-centre
+              slot on narrow panes, so a banner up there would collide. */}
+          {derivationActive && (
+            <div className="flex items-center gap-2 rounded-lg bg-primary/15 border border-primary/40 px-2.5 py-1.5 shadow-sm text-[11px] text-foreground max-w-full">
+              <Waypoints size={12} className="text-primary shrink-0" />
+              <span className="truncate">
+                Derivation of <span className="font-mono">{derived!.root}</span> —{' '}
+                {derived!.ids.size - 1} contributing requirement{derived!.ids.size === 2 ? '' : 's'}
+              </span>
+              <button
+                onClick={() => setDerived(null)}
+                className="shrink-0 rounded px-1 text-graph-muted hover:text-foreground hover:bg-graph-control-hover"
+                title="Clear derivation trace"
+              >
+                <svg width="11" height="11" viewBox="0 0 14 14" fill="none"><path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>
+              </button>
+            </div>
+          )}
+          <div className="text-[10px] text-graph-text bg-graph-panel border border-graph-border rounded-lg px-2.5 py-1.5 shadow-sm flex items-center gap-2 whitespace-nowrap overflow-hidden max-w-full">
             {layoutMode === 'uml' && (
               <>
                 <ZoomLevelChip />
