@@ -506,7 +506,7 @@ async def bulk_update_change_requests(project_id: str, data: dict, user: dict = 
         raise HTTPException(status_code=400, detail="ids and updates required")
     updated = 0
     for cr_id in ids:
-        if store.update_item("change-requests", cr_id, updates):
+        if store.update_item("change_requests", cr_id, updates):
             updated += 1
     return {"updated": updated}
 
@@ -516,10 +516,10 @@ async def bulk_delete_change_requests(project_id: str, data: dict, user: dict = 
     store = get_store(project_id)
     deleted = 0
     for cr_id in data.get("ids", []):
-        before = store.get_item("change-requests", cr_id)
+        before = store.get_item("change_requests", cr_id)
         if before is None:
             continue
-        if store.delete_item("change-requests", cr_id):
+        if store.delete_item("change_requests", cr_id):
             record_change(store, cr_id, "delete", before, None, user.get("username", ""))
             deleted += 1
     return {"deleted": deleted}
