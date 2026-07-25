@@ -5,9 +5,10 @@
 **Priorities as requested:** scalability, bug fixing, security
 **Date:** 2026-07-25
 
-> ⚠️ **Before committing this file:** SEC-1 below is a working, unauthenticated exploit
-> against the current code. If this repository is or becomes public, land the SEC-1 fix
-> before pushing this document, or keep it out of version control until then.
+> ✅ **SEC-1 is FIXED** (see below) — the exploit no longer reproduces, and a regression test
+> guards it. This document is now safe to commit alongside that fix. Do not push it *ahead* of
+> the fix: the remote `github.com/CallumNunesVaz/reqmesh` is public, and §SEC-1 contains a
+> working exploit against any unpatched deployment.
 
 ## Confidence legend
 
@@ -32,9 +33,14 @@ Verified findings: **SEC-1, BUG-1, BUG-2, PERF-1**.
 
 # 1. Security
 
-## SEC-1 — Anonymous requests can run git commands in any repo on the host ✅ VERIFIED
+## SEC-1 — Anonymous requests can run git commands in any repo on the host ✅ VERIFIED · 🛠 FIXED
 
 **Severity: CRITICAL. Unauthenticated. Enabled by default.**
+
+> **Status: fixed** in `backend/app/main.py:118-141`. The second `unquote` is gone, the segment
+> is validated with `safe_id`, and the resolved path is checked to stay inside `data_root`.
+> Regression test: `backend/tests/test_path_traversal.py` (6 tests). Confirmed the tests **fail**
+> against the pre-fix code and pass after, and that legitimate auto-commit still works.
 
 **Where:** `backend/app/main.py:119` (`git_autocommit_middleware`)
 
@@ -304,9 +310,14 @@ run pip with `--require-hashes` or `--no-index --find-links <bundle/wheels>`.
 
 # 2. Correctness
 
-## BUG-1 — Both bulk change-request endpoints 500 on every call ✅ VERIFIED
+## BUG-1 — Both bulk change-request endpoints 500 on every call ✅ VERIFIED · 🛠 FIXED
 
 **Severity: HIGH**
+
+> **Status: fixed.** Collection renamed to `change_requests` in all three places
+> (`extra_routes.py:509,519,522`), and `_item_path` now raises `HTTPException(400)` instead of a
+> bare `ValueError` so the next typo is a bad request, not a 500.
+> Tests: `backend/tests/test_corrupt_and_bulk.py::TestBulkChangeRequests` (4).
 **Where:** `backend/app/api/extra_routes.py:509,519,522`
 
 Collection named `"change-requests"` (hyphen); the store registers `"change_requests"`
@@ -331,9 +342,20 @@ Shipped and **entirely untested** — no test touches these routes.
 
 ---
 
-## BUG-2 — One malformed YAML file takes down five endpoints ✅ VERIFIED
+## BUG-2 — One malformed YAML file takes down five endpoints ✅ VERIFIED · 🛠 FIXED
 
 **Severity: HIGH**
+
+> **Status: fixed.** `_parse_yaml` now raises on malformed content; `_read_yaml` stays tolerant
+> only for structural files (meta, traces, history). `list_items` genuinely skips unparseable
+> files *and* files missing an `id`, logging the real error. Two follow-ons that fell out of the
+> same defect:
+> - `update_item` refuses (**409**) rather than merging into a file it couldn't parse — that path
+>   would otherwise have replaced the user's recoverable broken file with just the patch fields.
+> - New `store.corrupt_files()` surfaces skipped files through `/validate` as a `corrupt_file`
+>   issue, so corruption is **reported** instead of silently vanishing from the UI.
+>
+> Tests: `backend/tests/test_corrupt_and_bulk.py::TestCorruptYamlIsSkippedNotFatal` (5).
 **Where:** `backend/app/services/yaml_store.py:132-143`
 
 `_read_yaml` (`:91-98`) catches everything and returns `{}`, so the outer
@@ -666,8 +688,8 @@ already are); `git add -- <changed paths>` instead of `-A`.
 
 # 4. Suggested order
 
-- [ ] **1.** Patch **SEC-1** — remove the second `unquote`, validate with `safe_id` *(~10 min)*
-- [ ] **2.** Fix **BUG-1** and **BUG-2** — broken endpoint + 500-on-corrupt-file, with tests *(~1 hr)*
+- [x] **1.** Patch **SEC-1** — remove the second `unquote`, validate with `safe_id` — **DONE**, 6 regression tests added
+- [x] **2.** Fix **BUG-1** and **BUG-2** — broken endpoint + 500-on-corrupt-file — **DONE**, 9 regression tests added
 - [ ] **3.** Fix **BUG-3** trace deletion; stop `mode=replace` deleting before it parses (**BUG-5**) *(~1 hr)*
 - [ ] **4.** Sanitise descriptions server-side; restrict the WeasyPrint fetcher (**SEC-2/3**) *(~2 hrs)*
 - [ ] **5.** **PERF-1** — fast loader on the read path + mtime cache, comments preserved *(~half day)*

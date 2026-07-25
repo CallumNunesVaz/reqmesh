@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+from fastapi import HTTPException
 from ruamel.yaml import YAML
 
 from app.core.ids import safe_id
@@ -88,13 +89,30 @@ class YamlStore:
             (self._root / name).mkdir(parents=True, exist_ok=True)
         self._traces_file.parent.mkdir(parents=True, exist_ok=True)
 
+    def _parse_yaml(self, path: Path) -> dict:
+        """Parse one YAML file, **raising** on malformed content.
+
+        Callers that can meaningfully skip or refuse (entity collections,
+        read-modify-write) use this; structural reads that have a sensible
+        empty value use :meth:`_read_yaml`.
+        """
+        with open(path) as f:
+            data = yaml.load(f)
+        if data is None:
+            return {}
+        if not isinstance(data, dict):
+            raise ValueError(f"expected a mapping, got {type(data).__name__}")
+        return data
+
     def _read_yaml(self, path: Path) -> dict:
+        """Tolerant read for structural files (meta, traces, history) where an
+        empty mapping is a reasonable fallback. Never use this for entity files:
+        an unparseable requirement must be skipped, not turned into ``{}``."""
         try:
-            with open(path) as f:
-                return yaml.load(f) or {}
-        except Exception:
+            return self._parse_yaml(path)
+        except Exception as exc:
             import logging
-            logging.getLogger(__name__).warning("Failed to read YAML: %s", path)
+            logging.getLogger(__name__).warning("Failed to read YAML %s: %s", path, exc)
             return {}
 
     def _write_yaml(self, path: Path, data: dict) -> None:
@@ -126,7 +144,9 @@ class YamlStore:
 
     def _item_path(self, collection: str, item_id: str) -> Path:
         if collection not in COLLECTIONS:
-            raise ValueError(f"Unknown collection: {collection}")
+            # A 400 rather than a bare ValueError: an unknown collection is a
+            # bad request, and a typo in a route must not surface as a 500.
+            raise HTTPException(status_code=400, detail=f"Unknown collection: {collection}")
         return self._root / collection / f"{safe_id(item_id)}.yaml"
 
     def list_items(self, collection: str) -> list[dict]:
@@ -135,12 +155,44 @@ class YamlStore:
             return []
         items = []
         for f in sorted(d.glob("*.yaml")):
+            # A hand-edited file that no longer parses is skipped, not coerced
+            # into `{}` — an empty dict flows downstream and raises KeyError
+            # on `item["id"]`, taking out evaluation/validate/metrics with a
+            # 500 that never mentions the offending file. See corrupt_files().
             try:
-                items.append(self._read_yaml(f))
-            except Exception:
+                item = self._parse_yaml(f)
+            except Exception as exc:
                 import logging
-                logging.getLogger(__name__).warning("Corrupt YAML skipped: %s", f)
+                logging.getLogger(__name__).warning("Skipping corrupt YAML %s: %s", f, exc)
+                continue
+            if not item.get("id"):
+                import logging
+                logging.getLogger(__name__).warning("Skipping %s: no 'id' field", f)
+                continue
+            items.append(item)
         return items
+
+    def corrupt_files(self, collection: Optional[str] = None) -> list[dict]:
+        """Entity files that ``list_items`` had to skip.
+
+        Without this, corruption is invisible: the file simply stops appearing
+        in the UI. Surfaced through the integrity check so it is reported
+        rather than silently dropped.
+        """
+        out: list[dict] = []
+        for name in ([collection] if collection else COLLECTIONS):
+            d = self._root / name
+            if not d.exists():
+                continue
+            for f in sorted(d.glob("*.yaml")):
+                try:
+                    item = self._parse_yaml(f)
+                except Exception as exc:
+                    out.append({"path": f"{name}/{f.name}", "error": str(exc)})
+                    continue
+                if not item.get("id"):
+                    out.append({"path": f"{name}/{f.name}", "error": "missing 'id' field"})
+        return out
 
     def get_item(self, collection: str, item_id: str) -> Optional[dict]:
         path = self._item_path(collection, item_id)
@@ -162,7 +214,17 @@ class YamlStore:
         with _file_lock(path):
             if not path.exists():
                 return None
-            existing = self._read_yaml(path)
+            # Refuse to merge into a file we couldn't parse — `_read_yaml`
+            # would hand back `{}` and the write would silently replace the
+            # user's (recoverable) broken file with only the patch fields.
+            try:
+                existing = self._parse_yaml(path)
+            except Exception as exc:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Cannot update {item_id}: {collection}/{item_id}.yaml is not valid "
+                           f"YAML ({exc}). Fix the file and retry.",
+                )
             existing.update(data)
             existing["modified"] = _now()
             existing["id"] = item_id

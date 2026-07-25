@@ -4,15 +4,15 @@ import re
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
-from urllib.parse import unquote
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.core.config import settings
+from app.core.ids import safe_id
 from app.core.version import get_version, get_build_info
 from app.api.router import router
 from app.api.extra_routes import router as extra_router
@@ -116,9 +116,30 @@ async def git_autocommit_middleware(request: Request, call_next):
     if request.method in {"POST", "PUT", "PATCH", "DELETE"} and response.status_code < 400:
         m = _PROJECT_PATH_RE.match(request.url.path)
         if m:
-            project_id = unquote(m.group(1))
-            project_root = Path(settings.data_root) / project_id
-            action = unquote(m.group(2) or "").strip("/") or "project"
+            # `request.url.path` has ALREADY been percent-decoded by the ASGI
+            # server, so decoding again here turns "%252e%252e%252f" into "../"
+            # and escapes the data root. Nothing else guards this path: a
+            # trailing-slash 307 satisfies the `status_code < 400` check above
+            # without any route handler, auth dependency or `safe_id` running.
+            # Validate the segment; never decode it a second time.
+            try:
+                project_id = safe_id(m.group(1), "project id")
+            except HTTPException:
+                return response
+
+            data_root = Path(settings.data_root).resolve()
+            project_root = data_root / project_id
+            # Defence in depth: refuse anything that resolves outside the root
+            # (e.g. a symlinked project directory).
+            try:
+                if not project_root.resolve().is_relative_to(data_root):
+                    return response
+            except OSError:
+                return response
+
+            # Only used to build the commit message; strip anything that could
+            # break out of a single-line message.
+            action = re.sub(r"[^\w./ -]", "", (m.group(2) or "").strip("/"))[:80] or "project"
 
             if settings.git_autocommit and project_root.is_dir():
                 # Per-project git settings from _meta.yaml override global config

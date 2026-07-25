@@ -28,6 +28,7 @@ class IntegrityChecker:
         self._check_suspect_links()
         self._check_unreviewed()
         self._check_component_links()
+        self._check_corrupt_files()
         return {
             "issues": self.issues,
             "suspect_links": self.suspect_links,
@@ -35,6 +36,23 @@ class IntegrityChecker:
             "suspect_count": len(self.suspect_links),
             "valid": len(self.issues) == 0,
         }
+
+    def _check_corrupt_files(self):
+        """Entity files that couldn't be parsed. These are skipped by every
+        ``list_*`` call, so without this they'd just silently disappear from
+        the UI with no indication that data is missing."""
+        try:
+            corrupt = self.store.corrupt_files()
+        except Exception:
+            return
+        for c in corrupt:
+            self.issues.append({
+                "type": "corrupt_file",
+                "id": c["path"],
+                "name": c["path"],
+                "detail": c["error"],
+                "severity": "error",
+            })
 
     def _check_dangling_links(self):
         for r in self.reqs:
