@@ -3,6 +3,8 @@
 // (or pass fullscreen for viewport-level loads). The overlay fades in after a
 // beat so fast loads never flash it.
 
+import useLoadingMessage from '../lib/useLoadingMessage';
+
 interface LoadingSplashProps {
   label?: string;
   fullscreen?: boolean;
@@ -11,6 +13,8 @@ interface LoadingSplashProps {
 }
 
 export default function LoadingSplash({ label, fullscreen = false, leaving = false }: LoadingSplashProps) {
+  const tagline = useLoadingMessage();
+
   return (
     <div
       className={`${fullscreen ? 'fixed' : 'absolute'} inset-0 z-[70] flex flex-col items-center justify-center gap-3 bg-background/40 backdrop-blur-sm rm-splash ${leaving ? 'rm-splash-leave' : ''}`}
@@ -19,6 +23,9 @@ export default function LoadingSplash({ label, fullscreen = false, leaving = fal
     >
       <img src="/reqmesh-mark.png" alt="" className="w-12 h-12 rm-splash-spin" draggable={false} />
       {label && <div className="text-xs text-muted-foreground font-medium">{label}</div>}
+      <div className="text-xs text-muted-foreground/60 italic max-w-xs text-center px-4 rm-splash-tagline">
+        {tagline}
+      </div>
       <style>{`
         .rm-splash {
           opacity: 0;
@@ -41,6 +48,13 @@ export default function LoadingSplash({ label, fullscreen = false, leaving = fal
         @keyframes rm-splash-spin {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
+        }
+        .rm-splash-tagline {
+          animation: rm-splash-crossfade 0.5s ease;
+        }
+        @keyframes rm-splash-crossfade {
+          from { opacity: 0; transform: translateY(2px); }
+          to { opacity: 1; transform: translateY(0); }
         }
       `}</style>
     </div>

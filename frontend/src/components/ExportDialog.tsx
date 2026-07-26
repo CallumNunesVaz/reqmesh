@@ -187,10 +187,8 @@ export default function ExportDialog({ open, onClose, projectId }: ExportDialogP
       const qs = hasGroupFilter
         ? `?format=${format}&subsystems=${encodeURIComponent(subsystems)}${secsParam}${logParam}`
         : `?format=${format}${secsParam}${logParam}`;
-      const auth = (() => { try { return localStorage.getItem('rt-token'); } catch { return null; } })();
-      const headers: Record<string, string> = {};
-      if (auth) headers['Authorization'] = `Bearer ${auth}`;
-      const res = await fetch(`/api/projects/${projectId}/publish/download${qs}`, { headers });
+      // Auth is an HttpOnly cookie now — no bearer token to attach.
+      const res = await fetch(`/api/projects/${projectId}/publish/download${qs}`, { credentials: 'include' });
       if (!res.ok) throw new Error((await res.json().catch(() => ({ detail: 'Export failed' }))).detail || 'Export failed');
       const fb = res.headers.get('X-Render-Fallback');
       if (fb) setFallbackMessage(fb);

@@ -175,17 +175,23 @@ export default function Layout() {
     window.addEventListener('pointerup', onUp);
   }, []);
 
-  const { user, token, editMode, isGuest, setUser, setEditMode, logout } = useAuthStore();
+  const { user, editMode, isGuest, setEditMode, logout } = useAuthStore();
 
   // Clear undo stack when switching projects
   const clearUndo = useUndoStore((s) => s.clear);
   useEffect(() => { clearUndo(); }, [projectId]);
 
-  useEffect(() => {
-    if (token) {
-      api.whoami().then(u => setUser(u)).catch(() => logout());
-    }
-  }, []);
+  // Session restoration lives in <AuthInit>, which resolves whoami() from the
+  // HttpOnly cookie before the app renders. The old effect here keyed off a
+  // localStorage token that no longer exists.
+
+  // Signing out must reach the server: the session cookie is HttpOnly, so
+  // clearing client state alone leaves a valid session that whoami() would
+  // silently restore on the next load.
+  const signOut = useCallback(async () => {
+    try { await api.logout(); } catch { /* clear locally regardless */ }
+    logout();
+  }, [logout]);
 
   // SSE listener for real-time collaboration: live data refresh + presence.
   const bumpGraphVersion = useStore((s) => s.bumpGraphVersion);
@@ -415,7 +421,7 @@ export default function Layout() {
                 {user.username}
                 {editMode && <span className="ml-1 text-amber-400 text-[10px]">edit</span>}
               </span>
-              <button onClick={logout} className="btn-ghost p-2 rounded-lg text-muted-foreground hover:text-destructive" title="Sign out">
+              <button onClick={signOut} className="btn-ghost p-2 rounded-lg text-muted-foreground hover:text-destructive" title="Sign out">
                 <LogOut size={15} />
               </button>
             </div>
@@ -426,7 +432,7 @@ export default function Layout() {
                   <span className="text-xs text-muted-foreground hidden sm:inline">
                     <Eye size={12} className="inline mr-1" /> Guest
                   </span>
-                  <button onClick={() => { logout(); setLoginOpen(true); }} className="btn-ghost p-2 rounded-lg text-muted-foreground" title="Sign in">
+                  <button onClick={() => { void signOut().then(() => setLoginOpen(true)); }} className="btn-ghost p-2 rounded-lg text-muted-foreground" title="Sign in">
                     <LogIn size={15} />
                   </button>
                 </div>

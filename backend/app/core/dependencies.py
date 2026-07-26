@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import Header, HTTPException
+from fastapi import Header, HTTPException, Request
 from typing import Optional
 
 from app.core.auth import get_user_from_token, GUEST_USER
@@ -52,47 +52,88 @@ def get_store(project_id: str) -> YamlStore:
     return YamlStore(project_root)
 
 
-def get_current_user(authorization: Optional[str] = Header(None)) -> dict:
-    if not authorization or not authorization.startswith("Bearer "):
-        return GUEST_USER
-    token = authorization.replace("Bearer ", "")
-    user = get_user_from_token(token)
-    if not user:
-        return GUEST_USER
+def get_current_user(
+    request: Request,
+    authorization: Optional[str] = Header(None),
+) -> dict:
+    """Resolve the current user from cookie (preferred) or Authorization header.
+
+    Always returns GUEST_USER when no valid credential is found; enforcement
+    is the caller's job via the ``require_*`` guards, which reject the guest
+    role. ``RT_REQUIRE_AUTH`` is applied by :func:`require_auth`, not here.
+    """
+    # 1. HttpOnly cookie (preferred — not readable by JS, sent automatically)
+    token = request.cookies.get("token")
+    if token:
+        user = get_user_from_token(token)
+        if user:
+            return user
+
+    # 2. Authorization: Bearer <token> header (backward compat + SSE/WS)
+    if authorization and authorization.startswith("Bearer "):
+        user = get_user_from_token(authorization.removeprefix("Bearer "))
+        if user:
+            return user
+
+    return GUEST_USER
+
+
+def require_auth(
+    request: Request,
+    authorization: Optional[str] = Header(None),
+) -> dict:
+    """Require a valid session. Returns 401 when ``RT_REQUIRE_AUTH`` is set
+    and no valid token is present."""
+    from app.core.config import settings
+
+    user = get_current_user(request=request, authorization=authorization)
+    is_authenticated = user.get("role", "guest") != "guest"
+
+    if settings.require_auth and not is_authenticated:
+        raise HTTPException(status_code=401, detail="Authentication required")
     return user
 
 
-def require_edit(project_id: str, authorization: Optional[str] = Header(None)) -> dict:
+# NB: CSRF is enforced globally by ``main.csrf_middleware`` so it cannot be
+# forgotten on a new route. Deliberately not also a dependency — two
+# implementations of the same check drift apart.
+
+
+def require_edit(project_id: str, request: Request,
+                 authorization: Optional[str] = Header(None)) -> dict:
     """Propose tier — the user's effective permission in this project must be at
     least ``propose`` (change requests, risks, comments, decisions). Resolved
     per-project via the ``permissions`` map, so a project can grant/deny beyond
     the role defaults."""
-    user = get_current_user(authorization)
+    user = get_current_user(request=request, authorization=authorization)
     if _user_permission_level(user, project_id) < PERMISSION_LEVELS["propose"]:
         raise HTTPException(status_code=403, detail="Propose permission required")
     return user
 
 
-def require_maintain(project_id: str, authorization: Optional[str] = Header(None)) -> dict:
+def require_maintain(project_id: str, request: Request,
+                     authorization: Optional[str] = Header(None)) -> dict:
     """Edit tier — effective permission must be at least ``edit`` (requirements,
     components, specs, baselines, bulk ops, review, import/publish)."""
-    user = get_current_user(authorization)
+    user = get_current_user(request=request, authorization=authorization)
     if _user_permission_level(user, project_id) < PERMISSION_LEVELS["edit"]:
         raise HTTPException(status_code=403, detail="Maintainer or admin permission required")
     return user
 
 
-def require_maintain_global(authorization: Optional[str] = Header(None)) -> dict:
+def require_maintain_global(request: Request,
+                            authorization: Optional[str] = Header(None)) -> dict:
     """Maintainer tier for actions that aren't scoped to an existing project
     (currently only project creation), so there's no per-project map to consult."""
-    user = get_current_user(authorization)
+    user = get_current_user(request=request, authorization=authorization)
     if user["role"] not in ("maintainer", "admin"):
         raise HTTPException(status_code=403, detail="Maintainer or admin permission required")
     return user
 
 
-def require_admin(authorization: Optional[str] = Header(None)) -> dict:
-    user = get_current_user(authorization)
+def require_admin(request: Request,
+                  authorization: Optional[str] = Header(None)) -> dict:
+    user = get_current_user(request=request, authorization=authorization)
     if user["role"] != "admin":
         raise HTTPException(status_code=403, detail="Admin permission required")
     return user

@@ -13,6 +13,13 @@ def workspace(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "data_root", str(tmp_path / "projects"))
     monkeypatch.setattr(settings, "git_autocommit", False)
     monkeypatch.setattr(settings, "seed_demo", False)
+    monkeypatch.setattr(settings, "allow_self_registration", True)
+    monkeypatch.setattr(settings, "require_auth", False)
+    # Reset module-level rate limiter state so tests don't interfere with
+    # each other through the shared in-memory counters.
+    from app.core import rate_limit
+    rate_limit._window_attempts.clear()
+    rate_limit._last_eviction = 0.0
     monkeypatch.setattr(auth, "USERS_FILE", tmp_path / "users.yaml")
     monkeypatch.setattr(auth, "SECRET_FILE", tmp_path / "secret")
     monkeypatch.setattr(auth, "RESET_TOKENS_FILE", tmp_path / "reset_tokens.yaml")

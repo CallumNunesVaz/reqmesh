@@ -29,7 +29,7 @@ export default function LoginModal({ open, onClose }: LoginModalProps) {
       } else {
         result = await api.register(username, password);
       }
-      login(result.username, result.token, result.role);
+      login(result.username, result.role, result.csrf_token, undefined, result.password_change_required);
       onClose();
     } catch (err: any) {
       setError(err.message || 'Authentication failed');
@@ -39,9 +39,13 @@ export default function LoginModal({ open, onClose }: LoginModalProps) {
   };
 
   const handleGuest = async () => {
-    await api.loginAsGuest();
-    loginGuest();
-    onClose();
+    try {
+      const result = await api.loginAsGuest();
+      loginGuest(result.csrf_token);
+      onClose();
+    } catch (err: any) {
+      setError(err.message || 'Guest access is not available');
+    }
   };
 
   return (
@@ -83,7 +87,7 @@ export default function LoginModal({ open, onClose }: LoginModalProps) {
                 <label className="label">Password</label>
                 <div className="relative">
                   <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                  <input type={showPw ? 'text' : 'password'} className="input pl-9 pr-9" placeholder="password" value={password} onChange={e => setPassword(e.target.value)} required minLength={mode === 'register' ? 8 : 1} />
+                  <input type={showPw ? 'text' : 'password'} className="input pl-9 pr-9" placeholder="password" value={password} onChange={e => setPassword(e.target.value)} required minLength={mode === 'register' ? 12 : 1} />
                   <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                     {showPw ? <EyeOff size={14} /> : <Eye size={14} />}
                   </button>

@@ -35,8 +35,11 @@ def get_secret() -> str:
             return _secret_cache
     SECRET_FILE.parent.mkdir(parents=True, exist_ok=True)
     _secret_cache = secrets.token_hex(32)
-    SECRET_FILE.write_text(_secret_cache)
-    SECRET_FILE.chmod(0o600)
+    fd = os.open(str(SECRET_FILE), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        os.write(fd, _secret_cache.encode())
+    finally:
+        os.close(fd)
     return _secret_cache
 
 from ruamel.yaml import YAML
@@ -49,13 +52,22 @@ def load_users() -> dict:
         USERS_FILE.parent.mkdir(parents=True, exist_ok=True)
         env_pw = os.environ.get("RT_ADMIN_PASSWORD", "")
         if not env_pw or env_pw == "admin":
-            import logging
             env_pw = secrets.token_urlsafe(16)
+            from app.core.config import settings
+            pw_file = Path(settings.data_root) / ".initial-admin"
+            pw_file.parent.mkdir(parents=True, exist_ok=True)
+            fd = os.open(str(pw_file), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            try:
+                os.write(fd, env_pw.encode())
+                os.write(fd, b"\n")
+            finally:
+                os.close(fd)
             logging.getLogger("auth").warning(
                 "No RT_ADMIN_PASSWORD set (or it is 'admin'). "
-                "A random admin password was generated: %s. "
+                "A random admin password has been written to %s. "
+                "Delete this file after first login. "
                 "Set RT_ADMIN_PASSWORD to override.",
-                env_pw,
+                str(pw_file),
             )
         default = {
             "admin": {
@@ -65,6 +77,7 @@ def load_users() -> dict:
                 "full_name": "Administrator",
                 "email": "",
                 "email_verified": True,
+                "password_change_required": True,
                 "created": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
             }
         }
@@ -135,6 +148,12 @@ def authenticate(username: str, password: str) -> dict:
     """
     from app.core.config import settings
 
+    # bcrypt 5.0 raises on passwords > 72 bytes. Reject early so it never 500s
+    # and the timing profile matches other invalid-credential paths.
+    if len(password.encode()) > 72:
+        audit_logger.warning("Login failed: user=%s reason=invalid_password", username)
+        return {"status": "invalid"}
+
     users = load_users()
     user = users.get(username)
     if not user:
@@ -175,11 +194,15 @@ def authenticate(username: str, password: str) -> dict:
     role = user.get("role", "guest")
     tv = int(user.get("token_version", 0))
     audit_logger.info("Login successful: user=%s role=%s", username, role)
+    needs_pw_change = bool(user.get("password_change_required", False))
     return {"status": "ok", "username": username, "role": role,
-            "token": create_token(username, role, tv)}
+            "token": create_token(username, role, tv),
+            "password_change_required": needs_pw_change}
 
 
 def register_user(username: str, password: str, role: str = "contributor") -> dict | None:
+    if len(password.encode()) > 72:
+        return None
     users = load_users()
     if username in users:
         return None
@@ -326,6 +349,7 @@ def set_user_password(username: str, password: str) -> bool:
     users[username]["invited"] = False
     users[username]["locked_until"] = 0
     users[username]["failed_attempts"] = 0
+    users[username]["password_change_required"] = False
     save_users(users)
     return True
 
@@ -340,6 +364,87 @@ def delete_user(username: str) -> bool:
 
 
 GUEST_USER = {"username": "guest", "role": "guest"}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# CSRF tokens + auth cookie helpers
+# ═══════════════════════════════════════════════════════════════════════════════
+# Stateless double-submit: the token is a random value echoed in a JS-readable
+# cookie and compared against the X-CSRF-Token header (see main.csrf_middleware).
+# Nothing is stored server-side, so this holds across workers and restarts.
+
+
+def create_csrf_token(username: str) -> str:
+    """Generate a CSRF token for *username*.
+
+    Verification is the stateless double-submit check in
+    ``main.csrf_middleware``: the value is echoed in a JS-readable cookie and
+    compared against the ``X-CSRF-Token`` header. A cross-origin attacker can
+    make the browser send the cookie but cannot read it to set the header, and
+    cannot set the header at all without a CORS preflight the server refuses.
+
+    That means the token only needs to be unguessable, not server-verifiable —
+    so there is no per-user server-side store to keep, which is what lets this
+    work across multiple workers and survive a restart.
+    """
+    return secrets.token_urlsafe(32)
+
+
+def _cookie_domain() -> str | None:
+    """Return the cookie domain, or None (browser default)."""
+    from app.core.config import settings
+    base = settings.base_url
+    if base and "://" in base:
+        host = base.split("://", 1)[1].split(":")[0]
+        if host not in ("localhost", "127.0.0.1", "0.0.0.0"):
+            return host
+    return None
+
+
+def set_auth_cookies(response, username: str, token: str) -> str:
+    """Set auth cookies on a FastAPI/Starlette *response*.
+
+    Returns the CSRF token that the caller should also return in the response
+    body so the frontend can store it in-memory for WebSocket/cross-tab use.
+    """
+    from app.core.config import settings
+
+    ttl = _token_ttl()
+    secure = settings.cookie_secure
+    domain = _cookie_domain()
+    same_site = "strict" if secure else "lax"
+
+    response.set_cookie(
+        key="token",
+        value=token,
+        max_age=ttl,
+        httponly=True,
+        secure=secure,
+        samesite=same_site,
+        path="/api",
+        domain=domain,
+    )
+
+    csrf_token = create_csrf_token(username)
+    response.set_cookie(
+        key="csrftoken",
+        value=csrf_token,
+        max_age=ttl,
+        httponly=False,
+        secure=secure,
+        samesite=same_site,
+        path="/api",
+        domain=domain,
+    )
+
+    return csrf_token
+
+
+def clear_auth_cookies(response) -> None:
+    """Remove auth cookies (logout)."""
+    domain = _cookie_domain()
+    response.delete_cookie("token", path="/api", domain=domain)
+    response.delete_cookie("csrftoken", path="/api", domain=domain)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

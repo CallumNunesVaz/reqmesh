@@ -1,143 +1,95 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 /**
- * The auth store reads localStorage at module-init time (to rehydrate a token
- * across reloads), so each test installs a fresh stub and re-imports the module
- * rather than sharing one instance.
+ * The auth store no longer uses localStorage — tokens are in HttpOnly cookies.
+ * Each test imports a fresh module to avoid shared state.
  */
-function installStorage(seed: Record<string, string> = {}) {
-  const data = new Map(Object.entries(seed));
-  const store = {
-    getItem: (k: string) => data.get(k) ?? null,
-    setItem: (k: string, v: string) => void data.set(k, v),
-    removeItem: (k: string) => void data.delete(k),
-    clear: () => data.clear(),
-    key: (i: number) => [...data.keys()][i] ?? null,
-    get length() { return data.size; },
-  };
-  vi.stubGlobal('localStorage', store);
-  return data;
-}
 
 async function freshStore() {
   vi.resetModules();
   return (await import('../src/store/auth')).useAuthStore;
 }
 
-beforeEach(() => {
-  vi.unstubAllGlobals();
-});
-
 describe('useAuthStore init', () => {
-  it('rehydrates a persisted token and the guest flag', async () => {
-    installStorage({ 'rt-token': 'abc', 'rt-guest': 'true' });
+  it('starts with no user or token', async () => {
     const s = (await freshStore()).getState();
-    expect(s.token).toBe('abc');
-    expect(s.isGuest).toBe(true);
-  });
-
-  it('starts empty when nothing is persisted', async () => {
-    installStorage();
-    const s = (await freshStore()).getState();
-    expect(s.token).toBeNull();
+    expect(s.user).toBeNull();
+    expect(s.csrfToken).toBeNull();
     expect(s.isGuest).toBe(false);
-  });
-
-  it('survives localStorage being unavailable', async () => {
-    vi.stubGlobal('localStorage', {
-      getItem: () => { throw new Error('denied'); },
-      setItem: () => { throw new Error('denied'); },
-      removeItem: () => { throw new Error('denied'); },
-    });
-    const useAuthStore = await freshStore();
-    expect(useAuthStore.getState().token).toBeNull();
-    // Writes must not throw either — the store is the app's boot path.
-    expect(() => useAuthStore.getState().login('bob', 't', 'contributor')).not.toThrow();
-    expect(useAuthStore.getState().user?.username).toBe('bob');
+    expect(s.passwordChangeRequired).toBe(false);
   });
 });
 
 describe('login', () => {
-  it('persists the token, clears guest mode and starts in view mode', async () => {
-    const data = installStorage({ 'rt-guest': 'true' });
+  it('sets user, csrfToken, and clears guest mode', async () => {
     const useAuthStore = await freshStore();
-    useAuthStore.getState().login('alice', 'tok123', 'admin');
+    useAuthStore.getState().login('alice', 'admin', 'csrf123');
 
     const s = useAuthStore.getState();
-    expect(s.user).toEqual({ username: 'alice', role: 'admin', token: 'tok123' });
-    expect(s.token).toBe('tok123');
+    expect(s.user).toEqual({ username: 'alice', role: 'admin' });
+    expect(s.csrfToken).toBe('csrf123');
     expect(s.isGuest).toBe(false);
     expect(s.editMode).toBe(false);
-    expect(data.get('rt-token')).toBe('tok123');
-    expect(data.get('rt-guest')).toBe('false');
+  });
+
+  it('supports wsToken and passwordChangeRequired', async () => {
+    const useAuthStore = await freshStore();
+    useAuthStore.getState().login('alice', 'admin', 'csrf123', 'ws456', true);
+
+    const s = useAuthStore.getState();
+    expect(s.wsToken).toBe('ws456');
+    expect(s.passwordChangeRequired).toBe(true);
   });
 });
 
 describe('loginGuest', () => {
-  it('drops any token and marks the session as a viewer guest', async () => {
-    const data = installStorage({ 'rt-token': 'stale' });
+  it('marks the session as a viewer guest with csrf token', async () => {
     const useAuthStore = await freshStore();
-    useAuthStore.getState().loginGuest();
+    useAuthStore.getState().loginGuest('guestCsrf123');
 
     const s = useAuthStore.getState();
     expect(s.user).toEqual({ username: 'guest', role: 'guest' });
-    expect(s.token).toBeNull();
+    expect(s.csrfToken).toBe('guestCsrf123');
     expect(s.isGuest).toBe(true);
-    expect(data.has('rt-token')).toBe(false);
-    expect(data.get('rt-guest')).toBe('true');
   });
 });
 
 describe('logout', () => {
-  it('clears both state and storage', async () => {
-    const data = installStorage();
+  it('clears all state', async () => {
     const useAuthStore = await freshStore();
-    useAuthStore.getState().login('alice', 'tok123', 'admin');
+    useAuthStore.getState().login('alice', 'admin', 'csrf123');
     useAuthStore.getState().logout();
 
     const s = useAuthStore.getState();
     expect(s.user).toBeNull();
-    expect(s.token).toBeNull();
+    expect(s.csrfToken).toBeNull();
+    expect(s.wsToken).toBeNull();
     expect(s.isGuest).toBe(false);
-    expect(data.size).toBe(0);
-  });
-});
-
-describe('setToken', () => {
-  it('removes the persisted token when set to null', async () => {
-    const data = installStorage({ 'rt-token': 'abc' });
-    const useAuthStore = await freshStore();
-    useAuthStore.getState().setToken(null);
-    expect(useAuthStore.getState().token).toBeNull();
-    expect(data.has('rt-token')).toBe(false);
+    expect(s.passwordChangeRequired).toBe(false);
   });
 });
 
 describe('canEdit', () => {
   it('requires maintainer or admin with edit mode switched on', async () => {
-    installStorage();
     const useAuthStore = await freshStore();
     const { login, setEditMode, loginGuest } = useAuthStore.getState();
 
-    expect(useAuthStore.getState().canEdit()).toBe(false); // logged out
+    expect(useAuthStore.getState().canEdit()).toBe(false);
 
-    login('bob', 't', 'maintainer');
-    expect(useAuthStore.getState().canEdit()).toBe(false); // edit mode off
+    login('bob', 'maintainer', 't');
+    expect(useAuthStore.getState().canEdit()).toBe(false);
     setEditMode(true);
     expect(useAuthStore.getState().canEdit()).toBe(true);
 
-    // Admin can edit too.
-    login('alice', 't', 'admin');
+    login('alice', 'admin', 't');
     setEditMode(true);
     expect(useAuthStore.getState().canEdit()).toBe(true);
 
-    // A guest can never edit, even with the toggle forced on.
-    loginGuest();
+    loginGuest('t');
     setEditMode(true);
     expect(useAuthStore.getState().canEdit()).toBe(false);
 
-    // A contributor cannot edit requirements.
-    login('charlie', 't', 'contributor');
+    login('charlie', 'contributor', 't');
     setEditMode(true);
     expect(useAuthStore.getState().canEdit()).toBe(false);
   });
@@ -145,36 +97,32 @@ describe('canEdit', () => {
 
 describe('canPropose', () => {
   it('allows contributor, maintainer, and admin — independent of edit mode', async () => {
-    installStorage();
     const useAuthStore = await freshStore();
     const { login, loginGuest } = useAuthStore.getState();
 
-    expect(useAuthStore.getState().canPropose()).toBe(false); // logged out
+    expect(useAuthStore.getState().canPropose()).toBe(false);
 
-    loginGuest();
-    expect(useAuthStore.getState().canPropose()).toBe(false); // guest blocked
+    loginGuest('t');
+    expect(useAuthStore.getState().canPropose()).toBe(false);
 
-    // Propose-tier actions do NOT require the maintainer-only edit-mode toggle.
-    login('bob', 't', 'contributor');
+    login('bob', 'contributor', 't');
     expect(useAuthStore.getState().canPropose()).toBe(true);
 
-    login('mo', 't', 'maintainer');
+    login('mo', 'maintainer', 't');
     expect(useAuthStore.getState().canPropose()).toBe(true);
 
-    // Legacy/unknown roles are not on the allowlist.
-    login('old', 't', 'editor');
+    login('old', 'editor', 't');
     expect(useAuthStore.getState().canPropose()).toBe(false);
   });
 });
 
 describe('isLoggedIn', () => {
-  it('tracks the token, not the guest user object', async () => {
-    installStorage();
+  it('checks user role is not guest', async () => {
     const useAuthStore = await freshStore();
     expect(useAuthStore.getState().isLoggedIn()).toBe(false);
-    useAuthStore.getState().loginGuest();
+    useAuthStore.getState().loginGuest('t');
     expect(useAuthStore.getState().isLoggedIn()).toBe(false);
-    useAuthStore.getState().login('bob', 't', 'contributor');
+    useAuthStore.getState().login('bob', 'contributor', 't');
     expect(useAuthStore.getState().isLoggedIn()).toBe(true);
   });
 });
