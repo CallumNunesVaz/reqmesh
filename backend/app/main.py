@@ -110,6 +110,47 @@ async def content_length_cap_middleware(request: Request, call_next):
     return await call_next(request)
 
 
+# Endpoints reachable without a session — the ones used to *obtain* one, plus
+# build metadata for probes. Everything else under /api is gated when
+# RT_REQUIRE_AUTH is on.
+_PUBLIC_API_PATHS = frozenset({
+    "/api/auth/login",
+    "/api/auth/register",
+    "/api/auth/guest",
+    "/api/auth/whoami",          # answers "guest" rather than 401, so the SPA can boot
+    "/api/auth/forgot-password",
+    "/api/auth/reset-password",
+    "/api/auth/verify-email",
+    "/api/auth/resend-verification",
+    "/api/version",
+})
+
+
+@app.middleware("http")
+async def require_auth_middleware(request: Request, call_next):
+    """Enforce ``RT_REQUIRE_AUTH`` across the API.
+
+    Previously this setting only refused *guest logins*, so every read endpoint
+    stayed anonymous and "no anonymous read" was never true. Applied as
+    middleware rather than a per-route dependency because there are ~148 routes
+    and none of the ~90 GETs carried a guard — one that has to be remembered on
+    each new route is one that eventually isn't.
+    """
+    if not settings.require_auth or request.method == "OPTIONS":
+        return await call_next(request)
+
+    path = request.url.path
+    if not path.startswith("/api/") or path in _PUBLIC_API_PATHS:
+        return await call_next(request)
+
+    from app.core.dependencies import get_current_user
+    user = get_current_user(request=request,
+                            authorization=request.headers.get("Authorization"))
+    if user.get("role", "guest") == "guest":
+        return JSONResponse(status_code=401, content={"detail": "Authentication required"})
+    return await call_next(request)
+
+
 # Auth routes that don't require CSRF (they create the token):
 _CSRF_EXEMPT_PATHS = frozenset({
     "/api/auth/login",

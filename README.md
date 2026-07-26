@@ -148,7 +148,21 @@ npm run typecheck
 
 ## Authentication
 
-A default `admin` user is created on first run with a password from `RT_ADMIN_PASSWORD`. If the env var is unset or `"admin"`, a random 16-character password is generated and logged. **Set `RT_ADMIN_PASSWORD` before first launch.**
+A default `admin` user is created on first run with a password from `RT_ADMIN_PASSWORD`. If the env var is unset or `"admin"`, a random password is generated and written to `<RT_DATA_ROOT>/.initial-admin` (mode `0600`) — delete that file after first login. **Set `RT_ADMIN_PASSWORD` before first launch.**
+
+Sessions are an **HttpOnly cookie**, not a JS-readable token, with double-submit CSRF protection on every mutating request. The browser never sees the session value, so an XSS bug can't exfiltrate it.
+
+### Deployment profiles
+
+`RT_PROFILE` sets the security posture. Any individual `RT_*` variable you set explicitly always overrides the profile.
+
+| Profile | Anonymous read | Self-registration | `Secure` cookies | Also |
+|---|---|---|---|---|
+| `personal` | yes | yes | no (works over plain HTTP) | Local single user — the desktop app and `./start.sh` default to this |
+| `team` *(default)* | no — login required | no, admin creates accounts | yes (needs TLS) | Shared instance |
+| `hardened` | no | no | yes | Requires verified email; adds `upgrade-insecure-requests` to the CSP |
+
+Because `team` is the default, a server started with no configuration requires a login. Use `RT_PROFILE=personal` for a localhost-only instance, or set `RT_REQUIRE_AUTH=false` to allow anonymous reads on any profile. (reqmesh has no MFA yet, so no profile can require it.)
 
 Roles (each is a tier; higher tiers include everything below):
 
@@ -351,6 +365,11 @@ Key environment variables:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `RT_PROFILE` | `team` | Security posture: `personal`, `team`, or `hardened` |
+| `RT_REQUIRE_AUTH` | (per profile) | Require a session for every API route |
+| `RT_COOKIE_SECURE` | (per profile) | `Secure` flag on the session cookie — set `false` for plain HTTP |
+| `RT_ALLOW_SELF_REGISTRATION` | (per profile) | Let users create their own accounts |
+| `RT_ALLOWED_HOSTS` | `["*"]` | Reject requests whose `Host` header doesn't match |
 | `RT_SECRET` | (generated) | JWT signing key |
 | `RT_ADMIN_PASSWORD` | (generated) | Initial admin password |
 | `RT_DATA_ROOT` | `~/.reqmesh/projects` | Project storage directory |

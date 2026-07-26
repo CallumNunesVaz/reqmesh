@@ -76,6 +76,10 @@ function startBackend(port) {
     // Serve the built SPA from the same origin as the API so the renderer's
     // relative `/api` calls resolve without CORS.
     RT_STATIC_DIR: process.env.RT_STATIC_DIR || FRONTEND_DIST,
+    // The desktop app is a single user on their own machine, which is exactly
+    // the "personal" posture: no login wall, no Secure-cookie requirement.
+    // Without this it inherits the "team" default and demands credentials.
+    RT_PROFILE: process.env.RT_PROFILE || 'personal',
   };
   const args = ['-m', 'uvicorn', 'app.main:app', '--host', HOST, '--port', String(port)];
   backendProc = spawn(python, args, { cwd: BACKEND_DIR, env, stdio: ['ignore', 'pipe', 'pipe'] });

@@ -6,12 +6,53 @@ from pydantic import SecretStr
 from pydantic_settings import BaseSettings
 
 
+# Per-profile defaults, applied in `Settings.model_post_init` to any field the
+# operator has *not* set explicitly. Anything given via env/.env always wins, so
+# a profile is a starting posture rather than a straitjacket.
+PROFILE_PRESETS: dict[str, dict] = {
+    # Single user on localhost: anonymous read, open registration, and plain
+    # HTTP assumed (Secure cookies would be dropped over http:// on a LAN address).
+    "personal": {
+        "require_auth": False,
+        "allow_self_registration": True,
+        "cookie_secure": False,
+    },
+    # Shared instance behind TLS: log in to read, admin creates accounts.
+    "team": {
+        "require_auth": True,
+        "allow_self_registration": False,
+        "cookie_secure": True,
+    },
+    # As team, plus verified email addresses and an upgrade-insecure-requests CSP.
+    "hardened": {
+        "require_auth": True,
+        "allow_self_registration": False,
+        "cookie_secure": True,
+        "require_email_verification": True,
+        "csp_default": (
+            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; "
+            "base-uri 'none'; form-action 'self'; object-src 'none'; "
+            "upgrade-insecure-requests"
+        ),
+    },
+}
+
+PROFILES = tuple(PROFILE_PRESETS)
+
+
 class Settings(BaseSettings):
     # ── Deployment profile ─────────────────────────────────────────────────
-    # personal  – single-user localhost, anonymous read, self-registration on
-    # team      – authenticated, TLS assumed, self-registration off (default)
-    # hardened  – MFA mandatory, no self-registration, no anonymous read,
-    #             strict CSP, audit-everything
+    # Sets the default posture for auth, registration and cookies; see
+    # PROFILE_PRESETS above for exactly what each one changes. Explicit
+    # RT_* env vars always override the profile.
+    #
+    # personal  – localhost single user: anonymous read, self-registration on,
+    #             non-Secure cookies (works over plain HTTP)
+    # team      – shared + TLS: login required, self-registration off (default)
+    # hardened  – team, plus mandatory email verification and a stricter CSP
+    #
+    # NB: there is no MFA in reqmesh yet, so no profile can require it.
     profile: str = "team"
 
     data_root: str = str(Path.home() / ".reqmesh" / "projects")
@@ -123,6 +164,30 @@ class Settings(BaseSettings):
     # plain str to smtp_password are re-coerced back into a SecretStr, so the field
     # is always masked regardless of how it was set.
     model_config = {"env_prefix": "RT_", "env_file": ".env", "validate_assignment": True}
+
+    def model_post_init(self, __context) -> None:
+        """Apply the deployment profile's defaults.
+
+        Only fields the operator left alone are touched — ``model_fields_set``
+        holds everything supplied via env/.env, so an explicit
+        ``RT_COOKIE_SECURE=false`` survives regardless of profile. Without this
+        the profile was documentation only: it named a posture that no code
+        ever applied.
+        """
+        preset = PROFILE_PRESETS.get(self.profile)
+        if preset is None:
+            import logging
+            logging.getLogger("security").warning(
+                "Unknown RT_PROFILE %r — falling back to 'team'. Valid: %s",
+                self.profile, ", ".join(PROFILES),
+            )
+            preset = PROFILE_PRESETS["team"]
+        explicit = self.model_fields_set
+        for field, value in preset.items():
+            if field not in explicit:
+                # object.__setattr__ bypasses validate_assignment, which would
+                # otherwise mark these as explicitly-set and defeat the check.
+                object.__setattr__(self, field, value)
 
 
 settings = Settings()
