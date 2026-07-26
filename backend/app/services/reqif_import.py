@@ -16,8 +16,12 @@ turns that into persisted YAML.
 
 from __future__ import annotations
 
+import re
+
 from xml.etree.ElementTree import Element, fromstring, tostring
 from xml.etree.ElementTree import ParseError as _XMLParseError
+
+_DOCTYPE_RE = re.compile(r"<!DOCTYPE", re.IGNORECASE)
 
 
 class ReqIFParseError(ValueError):
@@ -170,6 +174,18 @@ def parse_reqif(content: str | bytes) -> dict:
     """Parse ReqIF XML text into ``{"requirements": [...], "traces": [...]}``."""
     if isinstance(content, bytes):
         content = content.decode("utf-8", errors="replace")
+
+    # Refuse a DTD outright. ElementTree already ignores *external* entities
+    # (no XXE), but internal entity definitions still expand — a few nested
+    # ones exhaust memory ("billion laughs"). ReqIF has no legitimate use for
+    # a DOCTYPE, so rejecting it removes the amplification vector without
+    # pulling in a parser dependency.
+    if _DOCTYPE_RE.search(content):
+        raise ReqIFParseError(
+            "ReqIF file contains a DOCTYPE declaration, which is not accepted "
+            "(entity expansion risk). Remove the DTD and retry."
+        )
+
     try:
         root = fromstring(content)
     except _XMLParseError as exc:

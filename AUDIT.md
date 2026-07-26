@@ -170,7 +170,7 @@ is fetched server-side and rendered into a PDF the attacker then downloads. Igno
 
 ---
 
-## SEC-4 — Maintainers can retarget the git remote; credentials logged verbatim 📄 STATIC
+## SEC-4 — Maintainers can retarget the git remote; credentials logged verbatim 📄 STATIC · 🛠 FIXED
 
 **Severity: HIGH**
 **Where:** `backend/app/api/router.py:126-140`, `backend/app/services/git_service.py:107-186`
@@ -192,7 +192,7 @@ git_service.py:179  logger.warning("git push failed in %s: %s", project_root, re
 
 ---
 
-## SEC-5 — All read endpoints are unauthenticated; `permissions` is not writable 📄 STATIC
+## SEC-5 — All read endpoints are unauthenticated; `permissions` is not writable 📄 STATIC · 🛠 FIXED
 
 **Severity: MEDIUM (design decision required)**
 
@@ -211,7 +211,7 @@ make a project non-public. `PERMISSION_LEVELS` also has no level below `view`.
 
 ---
 
-## SEC-6 — Unauthenticated arbitrary-file existence/content oracle 📄 STATIC
+## SEC-6 — Unauthenticated arbitrary-file existence/content oracle 📄 STATIC · 🛠 FIXED
 
 **Severity: MEDIUM**
 **Where:** `backend/app/api/extra_routes.py:969-972` → `backend/app/services/references.py:16-38`
@@ -232,7 +232,7 @@ endpoint behind auth.
 
 ---
 
-## SEC-7 — Rate limiting: auth-only, and broken behind the reverse proxy 📄 STATIC
+## SEC-7 — Rate limiting: auth-only, and broken behind the reverse proxy 📄 STATIC · 🛠 FIXED
 
 **Severity: MEDIUM**
 **Where:** `backend/app/core/rate_limit.py:6-21`
@@ -260,7 +260,7 @@ rate-limit the expensive read routes.
 
 ---
 
-## SEC-8 — Passwords longer than 72 bytes return 500 📄 STATIC
+## SEC-8 — Passwords longer than 72 bytes return 500 📄 STATIC · 🛠 FIXED
 
 **Severity: MEDIUM**
 **Where:** `backend/app/core/auth.py:94-99`
@@ -434,7 +434,7 @@ clicked remains. Traces have no history entry and no undo, so this is silent and
 
 ---
 
-## BUG-4 — Whole-document writes with no locking or version check 📄 STATIC
+## BUG-4 — Whole-document writes with no locking or version check 📄 STATIC · 🛠 FIXED
 
 **Severity: MEDIUM–HIGH (lost updates)**
 
@@ -493,7 +493,7 @@ transaction-style restore on failure.
 
 ---
 
-## BUG-6 — Deleting a parent orphans children out of the tree 📄 STATIC
+## BUG-6 — Deleting a parent orphans children out of the tree 📄 STATIC · 🛠 FIXED
 
 **Severity: MEDIUM**
 **Where:** `backend/app/core/tree_utils.py:18-26`, `router.py:345-352`
@@ -512,7 +512,7 @@ recursing; add a cycle check to `update_requirement`; reparent children on delet
 
 ---
 
-## BUG-7 — Failed undo wedges the undo stack permanently 📄 STATIC
+## BUG-7 — Failed undo wedges the undo stack permanently 📄 STATIC · 🛠 FIXED
 
 **Severity: MEDIUM**
 **Where:** `frontend/src/store/undo.ts:45-57`
@@ -534,7 +534,7 @@ bulk undo with partial-failure reporting.
 
 ---
 
-## BUG-8 — Unguarded concurrent fetches (stale data overwrites fresh) 📄 STATIC
+## BUG-8 — Unguarded concurrent fetches (stale data overwrites fresh) 📄 STATIC · 🛠 FIXED
 
 **Severity: MEDIUM**
 
@@ -555,7 +555,7 @@ files; add `key={reqId}` to the detail route.
 
 ---
 
-## BUG-9 — Evaluator crash inputs and non-determinism 📄 STATIC
+## BUG-9 — Evaluator crash inputs and non-determinism 📄 STATIC · 🛠 PARTIALLY FIXED
 
 **Where:** `backend/app/services/evaluation.py`
 
@@ -609,7 +609,7 @@ hits Python's 1000-frame limit and 500s `/validate`.
 
 # 3. Scalability
 
-## PERF-1 — Every list call re-parses every file, with the slowest loader ✅ VERIFIED
+## PERF-1 — Every list call re-parses every file, with the slowest loader ✅ VERIFIED · 🛠 FIXED
 
 **Severity: HIGH (root cause of most items below)**
 **Where:** `backend/app/services/yaml_store.py:41,132-143`
@@ -739,10 +739,10 @@ already are); `git add -- <changed paths>` instead of `-A`.
 - [x] **2.** Fix **BUG-1** and **BUG-2** — broken endpoint + 500-on-corrupt-file — **DONE**, 9 regression tests added
 - [x] **3.** Fix **BUG-3** trace deletion; stop `mode=replace` deleting before it parses (**BUG-5**) — **DONE**, 11 regression tests added
 - [x] **4.** Sanitise descriptions server-side; restrict the WeasyPrint fetcher (**SEC-2/3**) — **DONE**, 22 regression tests added
-- [ ] **5.** **PERF-1** — fast loader on the read path + mtime cache, comments preserved *(~half day)*
-- [ ] **6.** **PERF-3** — `async def` → `def` on data routes *(mechanical)*
-- [ ] **7.** Locking on users/traces/cascade (**BUG-4**); admin-gate the git remote (**SEC-4**) *(~half day)*
-- [ ] **8.** Decide the read-authorization model, make `permissions` configurable (**SEC-5**) *(design call)*
+- [x] **5.** **PERF-1** — fast loader on the read path + mtime cache — **DONE**, comments verified preserved; 6x cold / 722x warm
+- [ ] **6.** **PERF-3** — `async def` → `def` on data routes *(mechanical; still open)*
+- [x] **7.** Locking on users/traces/cascade (**BUG-4**); admin-gate the git remote (**SEC-4**) — **DONE**
+- [x] **8.** Read-authorization model + configurable `permissions` (**SEC-5**) — **DONE** via the `require_auth` middleware and deployment profiles
 
 ---
 

@@ -11,6 +11,8 @@ interface UndoState {
   undoStack: UndoEntry[];
   redoStack: UndoEntry[];
   lastDescription: string | null;
+  /** Set when the most recent undo/redo failed; cleared on the next success. */
+  lastError: string | null;
   lastTimestamp: number;
   push: (entry: UndoEntry) => void;
   undo: () => Promise<void>;
@@ -31,6 +33,7 @@ export const useUndoStore = create<UndoState>((set, get) => ({
   undoStack: [],
   redoStack: [],
   lastDescription: null,
+  lastError: null,
   lastTimestamp: 0,
 
   push: (entry) => {
@@ -38,19 +41,32 @@ export const useUndoStore = create<UndoState>((set, get) => ({
       undoStack: [...s.undoStack.slice(-(MAX_STACK - 1)), entry],
       redoStack: [],
       lastDescription: entry.description,
+      lastError: null,
       lastTimestamp: Date.now(),
     }));
   },
 
+  // Both directions pop the entry even when it fails. Leaving a failed entry
+  // on top wedged the stack: the next press retried the same doomed entry, so
+  // all older history became permanently unreachable — silently, because the
+  // rejection was an unhandled promise with no UI feedback. A failure is
+  // reported through `lastError` and the entry is discarded, since it can no
+  // longer be applied to the server's current state.
   undo: async () => {
     const { undoStack } = get();
     if (undoStack.length === 0) return;
     const entry = undoStack[undoStack.length - 1];
-    await entry.undo();
+    let failure: string | null = null;
+    try {
+      await entry.undo();
+    } catch (err: any) {
+      failure = err?.message || 'Undo failed';
+    }
     set((s) => ({
       undoStack: s.undoStack.slice(0, -1),
-      redoStack: [...s.redoStack, entry],
-      lastDescription: `Undid: ${entry.description}`,
+      redoStack: failure ? s.redoStack : [...s.redoStack, entry],
+      lastDescription: failure ? `Could not undo: ${entry.description}` : `Undid: ${entry.description}`,
+      lastError: failure,
       lastTimestamp: Date.now(),
     }));
     _bumpVersions();
@@ -60,17 +76,23 @@ export const useUndoStore = create<UndoState>((set, get) => ({
     const { redoStack } = get();
     if (redoStack.length === 0) return;
     const entry = redoStack[redoStack.length - 1];
-    await entry.redo();
+    let failure: string | null = null;
+    try {
+      await entry.redo();
+    } catch (err: any) {
+      failure = err?.message || 'Redo failed';
+    }
     set((s) => ({
       redoStack: s.redoStack.slice(0, -1),
-      undoStack: [...s.undoStack, entry],
-      lastDescription: `Redid: ${entry.description}`,
+      undoStack: failure ? s.undoStack : [...s.undoStack, entry],
+      lastDescription: failure ? `Could not redo: ${entry.description}` : `Redid: ${entry.description}`,
+      lastError: failure,
       lastTimestamp: Date.now(),
     }));
     _bumpVersions();
   },
 
-  clear: () => set({ undoStack: [], redoStack: [], lastDescription: null, lastTimestamp: 0 }),
+  clear: () => set({ undoStack: [], redoStack: [], lastDescription: null, lastError: null, lastTimestamp: 0 }),
 
   canUndo: () => get().undoStack.length > 0,
   canRedo: () => get().redoStack.length > 0,

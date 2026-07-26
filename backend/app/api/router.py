@@ -7,7 +7,7 @@ import uuid
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Header, HTTPException, Query, Depends, Request
+from fastapi import APIRouter, Header, HTTPException, Query, Depends, Request, Response
 from pydantic import BaseModel
 
 from app.core.dependencies import get_store, require_maintain, require_maintain_global, require_admin
@@ -127,6 +127,32 @@ class ProjectSettings(BaseModel):
     permissions: Optional[dict] = None
 
 
+_ALLOWED_REMOTE_SCHEMES = ("https://", "ssh://", "git@")
+
+
+def _guard_git_settings(new_git: dict, existing_git: dict, user: dict) -> None:
+    """Changing where a project pushes to is an admin decision.
+
+    ``remote_url`` decides where the entire project history is shipped, so a
+    maintainer being able to set it freely is an exfiltration primitive (and a
+    blind SSRF probe against internal hosts). Everything else under ``git`` —
+    identity, push cadence, autocommit — stays at the maintainer tier.
+    """
+    incoming = (new_git or {}).get("remote_url")
+    current = (existing_git or {}).get("remote_url")
+    if incoming == current:
+        return
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403,
+                            detail="Only an admin can change the git remote URL")
+    if incoming and not str(incoming).startswith(_ALLOWED_REMOTE_SCHEMES):
+        raise HTTPException(
+            status_code=400,
+            detail="git remote URL must start with https://, ssh:// or git@ "
+                   "(file:// and http:// are refused)",
+        )
+
+
 @router.patch("/projects/{project_id}")
 async def update_project_settings(project_id: str, data: ProjectSettings, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
@@ -138,6 +164,8 @@ async def update_project_settings(project_id: str, data: ProjectSettings, user: 
             updates[field] = val
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
+    if "git" in updates:
+        _guard_git_settings(updates["git"], meta.get("git", {}), user)
     meta.update(updates)
     store.write_meta(meta)
     return meta
@@ -315,6 +343,25 @@ async def update_requirement(project_id: str, req_id: str, data: RequirementUpda
     if before is None:
         raise HTTPException(status_code=404, detail="Requirement not found")
 
+    # Reparenting must not create a loop: nothing prevented A.parent=B and
+    # B.parent=A, which made both (and everything under them) unreachable in
+    # the tree and sent the old recursive walk in circles.
+    if "parent" in update_dict and update_dict["parent"]:
+        new_parent = update_dict["parent"]
+        if new_parent == req_id:
+            raise HTTPException(status_code=400, detail="A requirement cannot be its own parent")
+        parent_of = {r["id"]: r.get("parent") for r in store.list_requirements()}
+        parent_of[req_id] = new_parent
+        seen, cursor = {req_id}, new_parent
+        while cursor:
+            if cursor in seen:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Setting parent to {new_parent} would create a parent cycle",
+                )
+            seen.add(cursor)
+            cursor = parent_of.get(cursor)
+
     # Validate workflow transition if status is changing (skip for undo).
     if not skip_workflow and "status" in update_dict and before.get("status") != update_dict["status"]:
         from app.services.workflow import validate_transition
@@ -331,16 +378,36 @@ async def update_requirement(project_id: str, req_id: str, data: RequirementUpda
     propagated_fields = {"name", "description", "priority", "status", "type", "verification_method", "rationale", "source", "allocated_to"}
     has_propagation = any(k in update_dict for k in propagated_fields)
     if has_propagation and result.get("cascade_from") is None:
+        # Only the fields that actually changed. Writing back the whole `r`
+        # snapshot re-applied every field as it looked *before* this request,
+        # clobbering any concurrent edit to the child — the per-file lock can't
+        # help when the stale data is already in the payload.
+        patch = {f: update_dict[f] for f in propagated_fields if f in update_dict}
         changed = False
-        for r in store.list_requirements():
-            if r.get("cascade_from") == req_id:
-                child_before = dict(r)
-                for field in propagated_fields:
-                    if field in update_dict:
-                        r[field] = update_dict[field]
-                store.update_requirement(r["id"], r)
-                record_change(store, r["id"], "update", child_before, r, user.get("username", ""))
+        # Walk transitively with a visited set: a REQ → C1 → C2 chain used to
+        # stop at C1, leaving C2 permanently stale.
+        all_reqs = store.list_requirements()
+        children_of: dict[str, list[dict]] = {}
+        for r in all_reqs:
+            src = r.get("cascade_from")
+            if src:
+                children_of.setdefault(src, []).append(r)
+
+        seen: set[str] = {req_id}
+        queue = list(children_of.get(req_id, []))
+        while queue:
+            child = queue.pop(0)
+            cid = child["id"]
+            if cid in seen:
+                continue
+            seen.add(cid)
+            child_before = dict(child)
+            updated_child = store.update_requirement(cid, patch)
+            if updated_child is not None:
+                record_change(store, cid, "update", child_before, updated_child,
+                              user.get("username", ""))
                 changed = True
+            queue.extend(children_of.get(cid, []))
         if changed:
             return {"cascaded": True, **result}
     return result
@@ -762,15 +829,30 @@ async def run_verification(project_id: str, vc_id: str, data: RunVerification, u
 # ── Traces ───────────────────────────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/traces")
-async def get_traces(project_id: str):
+async def get_traces(project_id: str, response: Response):
     store = get_store(project_id)
+    # Handed back so a subsequent PUT can prove it is replacing the document it
+    # actually read; see update_traces.
+    response.headers["ETag"] = store.traces_version()
     return store.read_traces()
 
 
 @router.put("/projects/{project_id}/traces")
-async def update_traces(project_id: str, data: TraceMatrix, user: dict = Depends(require_maintain)):
+async def update_traces(project_id: str, data: TraceMatrix, response: Response,
+                        if_match: Optional[str] = Header(None, alias="If-Match"),
+                        user: dict = Depends(require_maintain)):
+    """Replace the trace matrix.
+
+    This is a whole-document write driven by a client-side snapshot, so two
+    people editing the matrix an hour apart used to mean the later save silently
+    erased the earlier one's links (traces have no history entry and no undo).
+    Send the ETag from GET as ``If-Match`` to get a 409 instead of a silent
+    overwrite; omitting it preserves the old last-writer-wins behaviour for
+    existing clients.
+    """
     store = get_store(project_id)
-    store.write_traces(data.model_dump(mode="json"))
+    store.write_traces(data.model_dump(mode="json"), expected_version=if_match)
+    response.headers["ETag"] = store.traces_version()
     return data
 
 

@@ -597,15 +597,23 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
     // NB: no releaseSplash() here — completion drives it, not a fixed timer.
   };
 
+  const loadSeqRef = useRef(0);
+
   const loadData = useCallback(() => {
     const vp = rfRef.current?.getViewport() ?? null;
     holdSplash();
+    // Sequence guard. loadData re-fires on every graphVersion bump (undo, save,
+    // any SSE change), so a slow earlier request could resolve *after* a newer
+    // one and repaint the graph with pre-undo state until the next mutation.
+    // The ELK layout below already guards this way; the data fetch did not.
+    const seq = ++loadSeqRef.current;
     Promise.all([
       api.listRequirements(projectId),
       api.getTraces(projectId),
       api.getEvaluation(projectId).catch(() => null),
       api.listComponents(projectId).catch(() => []),
     ]).then(([requirements, traceData, evaluation, compData]) => {
+      if (seq !== loadSeqRef.current) return;   // superseded
       setReqs(requirements); setTraces(traceData.links || []);
       setComponents(compData || []);
       setEvaluated(new Map((evaluation?.requirements ?? []).map((er) => [er.id, er])));
@@ -617,6 +625,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
       }
       releaseSplash();
     }).catch((err) => {
+      if (seq !== loadSeqRef.current) return;
       console.error(err);
       releaseSplash(150);
     });

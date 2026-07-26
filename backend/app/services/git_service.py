@@ -9,6 +9,18 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+# https://user:token@host/repo.git — git echoes remote URLs back in its stderr,
+# so both the URLs we log ourselves and anything git prints must be scrubbed
+# before it reaches a log file or a log shipper.
+_USERINFO_RE = re.compile(r"(?P<scheme>[a-zA-Z][a-zA-Z0-9+.-]*://)(?P<userinfo>[^/@\s]+)@")
+
+
+def redact_url(text: str) -> str:
+    """Replace credentials embedded in any URL within *text* with ``***``."""
+    if not text:
+        return text
+    return _USERINFO_RE.sub(lambda m: f"{m.group('scheme')}***@", str(text))
+
 # Fallback identity so auto-commits work in containers with no git config.
 _FALLBACK_NAME = "reqmesh"
 _FALLBACK_EMAIL = "reqmesh@localhost"
@@ -80,7 +92,7 @@ def auto_commit(project_root: Path, message: str, username: str = "") -> bool:
                                cwd=str(project_root), capture_output=True, text=True, timeout=30)
         if result.returncode != 0:
             if "nothing to commit" not in result.stdout + result.stderr:
-                logger.warning("git auto-commit failed in %s: %s", project_root, result.stderr.strip())
+                logger.warning("git auto-commit failed in %s: %s", project_root, redact_url(result.stderr.strip()))
             return False
         return True
     except (OSError, subprocess.TimeoutExpired) as exc:
@@ -120,17 +132,17 @@ def ensure_remote(project_root: Path, remote_url: str) -> bool:
             if current == remote_url:
                 return False
             _git(project_root, "remote", "set-url", "origin", remote_url)
-            logger.info("git remote origin updated to %s in %s", remote_url, project_root)
+            logger.info("git remote origin updated to %s in %s", redact_url(remote_url), project_root)
             return True
     except (OSError, subprocess.TimeoutExpired):
         pass
 
     try:
         _git(project_root, "remote", "add", "origin", remote_url)
-        logger.info("git remote origin set to %s in %s", remote_url, project_root)
+        logger.info("git remote origin set to %s in %s", redact_url(remote_url), project_root)
         return True
     except (OSError, subprocess.TimeoutExpired) as exc:
-        logger.warning("git remote add failed in %s: %s", project_root, exc)
+        logger.warning("git remote add failed in %s: %s", project_root, redact_url(str(exc)))
         return False
 
 
@@ -176,7 +188,7 @@ def push_to_remote(project_root: Path, branch: str = "main") -> bool:
 
         result = _git(project_root, "push", "-u", "origin", actual_branch)
         if result.returncode != 0:
-            logger.warning("git push failed in %s: %s", project_root, result.stderr.strip())
+            logger.warning("git push failed in %s: %s", project_root, redact_url(result.stderr.strip()))
             return False
 
         logger.info("git push succeeded in %s (%s)", project_root, actual_branch)
@@ -260,7 +272,7 @@ def restore_commit(project_root: Path, commit_hash: str, username: str = "") -> 
             cwd=str(project_root), capture_output=True, text=True, timeout=30,
         )
         if r.returncode != 0:
-            logger.warning("git checkout %s failed in %s: %s", commit_hash, project_root, r.stderr.strip())
+            logger.warning("git checkout %s failed in %s: %s", commit_hash, project_root, redact_url(r.stderr.strip()))
             return False
         subprocess.run(
             ["git", *ident, "add", "-A"],

@@ -43,8 +43,27 @@ def get_secret() -> str:
     return _secret_cache
 
 from ruamel.yaml import YAML
+import threading
 _yaml = YAML()
 _yaml.indent(mapping=2, sequence=4, offset=2)
+# See yaml_store._yaml_lock: a shared ruamel instance is not thread-safe, and
+# concurrent use corrupts it for the rest of the process.
+_yaml_lock = threading.Lock()
+
+
+def users_lock():
+    """Guard a ``load_users() → mutate → save_users()`` cycle.
+
+    Without it those cycles interleave: two admins creating accounts each write
+    back their own snapshot and one account silently never existed, and — worse
+    — a login racing ``delete_user`` writes the whole dict back including the
+    deleted entry, **resurrecting the account** with a token already issued.
+
+    Deliberately a bare lock rather than a save-on-exit transaction, so every
+    existing early-return that skips the save keeps doing exactly that.
+    """
+    from app.core.filelock import file_lock
+    return file_lock(USERS_FILE)
 
 
 def load_users() -> dict:
@@ -81,10 +100,12 @@ def load_users() -> dict:
                 "created": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
             }
         }
-        _yaml.dump(default, USERS_FILE)
+        with _yaml_lock:
+            _yaml.dump(default, USERS_FILE)
         return default
     with open(USERS_FILE) as f:
-        return _yaml.load(f) or {}
+        with _yaml_lock:
+            return _yaml.load(f) or {}
 
 
 def save_users(users: dict) -> None:
@@ -93,7 +114,8 @@ def save_users(users: dict) -> None:
     fd, tmp = tempfile.mkstemp(dir=USERS_FILE.parent, suffix=".tmp")
     try:
         with os.fdopen(fd, "w") as f:
-            _yaml.dump(users, f)
+            with _yaml_lock:
+                _yaml.dump(users, f)
         os.replace(tmp, USERS_FILE)
     except BaseException:
         try:
@@ -146,79 +168,81 @@ def authenticate(username: str, password: str) -> dict:
     email-verification. On success the token carries the user's current
     ``token_version`` so admin password resets / force-logouts invalidate it.
     """
-    from app.core.config import settings
+    with users_lock():
+        from app.core.config import settings
 
-    # bcrypt 5.0 raises on passwords > 72 bytes. Reject early so it never 500s
-    # and the timing profile matches other invalid-credential paths.
-    if len(password.encode()) > 72:
-        audit_logger.warning("Login failed: user=%s reason=invalid_password", username)
-        return {"status": "invalid"}
+        # bcrypt 5.0 raises on passwords > 72 bytes. Reject early so it never 500s
+        # and the timing profile matches other invalid-credential paths.
+        if len(password.encode()) > 72:
+            audit_logger.warning("Login failed: user=%s reason=invalid_password", username)
+            return {"status": "invalid"}
 
-    users = load_users()
-    user = users.get(username)
-    if not user:
-        audit_logger.warning("Login failed: user=%s reason=unknown_user", username)
-        return {"status": "invalid"}
+        users = load_users()
+        user = users.get(username)
+        if not user:
+            audit_logger.warning("Login failed: user=%s reason=unknown_user", username)
+            return {"status": "invalid"}
 
-    now = int(time.time())
-    locked_until = int(user.get("locked_until", 0) or 0)
-    if locked_until > now:
-        audit_logger.warning("Login failed: user=%s reason=locked", username)
-        return {"status": "locked", "until": locked_until}
+        now = int(time.time())
+        locked_until = int(user.get("locked_until", 0) or 0)
+        if locked_until > now:
+            audit_logger.warning("Login failed: user=%s reason=locked", username)
+            return {"status": "locked", "until": locked_until}
 
-    if user.get("disabled"):
-        audit_logger.warning("Login failed: user=%s reason=disabled", username)
-        return {"status": "disabled"}
+        if user.get("disabled"):
+            audit_logger.warning("Login failed: user=%s reason=disabled", username)
+            return {"status": "disabled"}
 
-    if not verify_password(password, user["password_hash"]):
-        attempts = int(user.get("failed_attempts", 0)) + 1
-        max_attempts = int(settings.lockout_max_attempts or 0)
-        if max_attempts > 0 and attempts >= max_attempts:
-            user["locked_until"] = now + int(settings.lockout_window_minutes or 0) * 60
-            user["failed_attempts"] = 0
-        else:
-            user["failed_attempts"] = attempts
+        if not verify_password(password, user["password_hash"]):
+            attempts = int(user.get("failed_attempts", 0)) + 1
+            max_attempts = int(settings.lockout_max_attempts or 0)
+            if max_attempts > 0 and attempts >= max_attempts:
+                user["locked_until"] = now + int(settings.lockout_window_minutes or 0) * 60
+                user["failed_attempts"] = 0
+            else:
+                user["failed_attempts"] = attempts
+            save_users(users)
+            audit_logger.warning("Login failed: user=%s reason=invalid_password", username)
+            return {"status": "invalid"}
+
+        if (settings.require_email_verification and not user.get("email_verified")
+                and user.get("role") != "admin"):
+            audit_logger.warning("Login failed: user=%s reason=unverified_email", username)
+            return {"status": "unverified"}
+
+        user["failed_attempts"] = 0
+        user["locked_until"] = 0
+        user["last_active"] = time.strftime("%Y-%m-%dT%H:%M:%SZ")
         save_users(users)
-        audit_logger.warning("Login failed: user=%s reason=invalid_password", username)
-        return {"status": "invalid"}
-
-    if (settings.require_email_verification and not user.get("email_verified")
-            and user.get("role") != "admin"):
-        audit_logger.warning("Login failed: user=%s reason=unverified_email", username)
-        return {"status": "unverified"}
-
-    user["failed_attempts"] = 0
-    user["locked_until"] = 0
-    user["last_active"] = time.strftime("%Y-%m-%dT%H:%M:%SZ")
-    save_users(users)
-    role = user.get("role", "guest")
-    tv = int(user.get("token_version", 0))
-    audit_logger.info("Login successful: user=%s role=%s", username, role)
-    needs_pw_change = bool(user.get("password_change_required", False))
-    return {"status": "ok", "username": username, "role": role,
-            "token": create_token(username, role, tv),
-            "password_change_required": needs_pw_change}
+        role = user.get("role", "guest")
+        tv = int(user.get("token_version", 0))
+        audit_logger.info("Login successful: user=%s role=%s", username, role)
+        needs_pw_change = bool(user.get("password_change_required", False))
+        return {"status": "ok", "username": username, "role": role,
+                "token": create_token(username, role, tv),
+                "password_change_required": needs_pw_change}
 
 
 def register_user(username: str, password: str, role: str = "contributor") -> dict | None:
-    if len(password.encode()) > 72:
-        return None
-    users = load_users()
-    if username in users:
-        return None
-    users[username] = {
-        "username": username,
-        "password_hash": hash_password(password).decode(),
-        "role": role,
-        "full_name": "",
-        "email": "",
-        "email_verified": False,
-        "token_version": 0,
-        "created": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
-    }
-    save_users(users)
-    audit_logger.info("Account created: user=%s role=%s", username, role)
-    return {"username": username, "role": role, "token": create_token(username, role)}
+    with users_lock():
+        if len(password.encode()) > 72:
+            return None
+        users = load_users()
+        if username in users:
+            return None
+        users[username] = {
+            "username": username,
+            "password_hash": hash_password(password).decode(),
+            "role": role,
+            "full_name": "",
+            "email": "",
+            "email_verified": False,
+            "token_version": 0,
+            "created": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        }
+        save_users(users)
+        audit_logger.info("Account created: user=%s role=%s", username, role)
+        return {"username": username, "role": role, "token": create_token(username, role)}
 
 
 def get_user_from_token(token: str) -> dict | None:
@@ -273,23 +297,24 @@ def create_invited_user(username: str, role: str = "contributor", email: str = "
                         full_name: str = "") -> str | None:
     """Create an account with a random password that must be set via an invite
     link. Returns a set-password token, or None if the username is taken."""
-    users = load_users()
-    if username in users:
-        return None
-    users[username] = {
-        "username": username,
-        "password_hash": hash_password(secrets.token_urlsafe(24)).decode(),
-        "role": role,
-        "full_name": full_name,
-        "email": email,
-        "email_verified": False,
-        "token_version": 0,
-        "invited": True,
-        "created": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
-    }
-    save_users(users)
-    audit_logger.info("Account created (invited): user=%s role=%s", username, role)
-    return create_reset_token(username)
+    with users_lock():
+        users = load_users()
+        if username in users:
+            return None
+        users[username] = {
+            "username": username,
+            "password_hash": hash_password(secrets.token_urlsafe(24)).decode(),
+            "role": role,
+            "full_name": full_name,
+            "email": email,
+            "email_verified": False,
+            "token_version": 0,
+            "invited": True,
+            "created": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        }
+        save_users(users)
+        audit_logger.info("Account created (invited): user=%s role=%s", username, role)
+        return create_reset_token(username)
 
 
 def count_admins(users: dict) -> int:
@@ -297,70 +322,76 @@ def count_admins(users: dict) -> int:
 
 
 def set_user_role(username: str, role: str) -> bool:
-    users = load_users()
-    if username not in users:
-        return False
-    users[username]["role"] = role
-    save_users(users)
-    return True
+    with users_lock():
+        users = load_users()
+        if username not in users:
+            return False
+        users[username]["role"] = role
+        save_users(users)
+        return True
 
 
 def set_user_disabled(username: str, disabled: bool) -> bool:
     """Enable/disable an account. A disabled account cannot log in; disabling
     also revokes existing sessions by bumping the token version."""
-    users = load_users()
-    if username not in users:
-        return False
-    users[username]["disabled"] = bool(disabled)
-    if disabled:
-        users[username]["token_version"] = users[username].get("token_version", 0) + 1
-    save_users(users)
-    return True
+    with users_lock():
+        users = load_users()
+        if username not in users:
+            return False
+        users[username]["disabled"] = bool(disabled)
+        if disabled:
+            users[username]["token_version"] = users[username].get("token_version", 0) + 1
+        save_users(users)
+        return True
 
 
 def unlock_user(username: str) -> bool:
     """Clear a failed-login lockout."""
-    users = load_users()
-    if username not in users:
-        return False
-    users[username]["locked_until"] = 0
-    users[username]["failed_attempts"] = 0
-    save_users(users)
-    return True
+    with users_lock():
+        users = load_users()
+        if username not in users:
+            return False
+        users[username]["locked_until"] = 0
+        users[username]["failed_attempts"] = 0
+        save_users(users)
+        return True
 
 
 def bump_token_version(username: str) -> bool:
     """Invalidate every existing session for a user (force sign-out everywhere)."""
-    users = load_users()
-    if username not in users:
-        return False
-    users[username]["token_version"] = users[username].get("token_version", 0) + 1
-    save_users(users)
-    return True
+    with users_lock():
+        users = load_users()
+        if username not in users:
+            return False
+        users[username]["token_version"] = users[username].get("token_version", 0) + 1
+        save_users(users)
+        return True
 
 
 def set_user_password(username: str, password: str) -> bool:
-    users = load_users()
-    if username not in users:
-        return False
-    users[username]["password_hash"] = hash_password(password).decode()
-    users[username]["token_version"] = users[username].get("token_version", 0) + 1
-    # Setting a password completes an invite and clears any lockout.
-    users[username]["invited"] = False
-    users[username]["locked_until"] = 0
-    users[username]["failed_attempts"] = 0
-    users[username]["password_change_required"] = False
-    save_users(users)
-    return True
+    with users_lock():
+        users = load_users()
+        if username not in users:
+            return False
+        users[username]["password_hash"] = hash_password(password).decode()
+        users[username]["token_version"] = users[username].get("token_version", 0) + 1
+        # Setting a password completes an invite and clears any lockout.
+        users[username]["invited"] = False
+        users[username]["locked_until"] = 0
+        users[username]["failed_attempts"] = 0
+        users[username]["password_change_required"] = False
+        save_users(users)
+        return True
 
 
 def delete_user(username: str) -> bool:
-    users = load_users()
-    if username not in users:
-        return False
-    del users[username]
-    save_users(users)
-    return True
+    with users_lock():
+        users = load_users()
+        if username not in users:
+            return False
+        del users[username]
+        save_users(users)
+        return True
 
 
 GUEST_USER = {"username": "guest", "role": "guest"}
@@ -523,20 +554,21 @@ def create_verify_token(username: str) -> str | None:
 
 
 def verify_email(token: str) -> str | None:
-    tokens = _load_token_store(VERIFY_TOKENS_FILE)
-    entry = tokens.get(token)
-    if not entry:
-        return None
-    if entry.get("expires", 0) < time.time():
+    with users_lock():
+        tokens = _load_token_store(VERIFY_TOKENS_FILE)
+        entry = tokens.get(token)
+        if not entry:
+            return None
+        if entry.get("expires", 0) < time.time():
+            del tokens[token]
+            _save_token_store(VERIFY_TOKENS_FILE, tokens)
+            return None
+        username = entry["username"]
         del tokens[token]
         _save_token_store(VERIFY_TOKENS_FILE, tokens)
+        users = load_users()
+        if username in users:
+            users[username]["email_verified"] = True
+            save_users(users)
+            return username
         return None
-    username = entry["username"]
-    del tokens[token]
-    _save_token_store(VERIFY_TOKENS_FILE, tokens)
-    users = load_users()
-    if username in users:
-        users[username]["email_verified"] = True
-        save_users(users)
-        return username
-    return None

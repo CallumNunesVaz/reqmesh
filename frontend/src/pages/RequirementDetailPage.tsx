@@ -130,11 +130,17 @@ export default function RequirementDetailPage() {
 
   useEffect(() => {
     if (!projectId || !reqId) return;
+    // Every fetch below is guarded: this page is NOT remounted per requirement
+    // (no route key), so clicking REQ-A then REQ-B quickly could let A's slower
+    // response land last and set `req`/`savedRef` while the URL says B. Delete
+    // then removed B while the undo entry snapshotted A, making B unrecoverable.
+    let alive = true;
     Promise.all([
       api.getRequirement(projectId, reqId),
       api.listRequirements(projectId),
       api.listVerificationCases(projectId),
     ]).then(([data, all, vcs]) => {
+      if (!alive) return;
       setReq(data);
       // Re-anchor the saved baseline (and clear dirty) to the freshly loaded
       // requirement. This effect only re-runs on navigation, and the page is
@@ -146,33 +152,34 @@ export default function RequirementDetailPage() {
       setAllReqs(all.filter((r) => r.id !== reqId));
       setAllVcs(vcs);
       setLoading(false);
-    }).catch(console.error);
-    api.getComponentsForRequirement(projectId, reqId).then(setSatisfiedBy).catch(() => setSatisfiedBy([]));
+    }).catch((err) => { if (alive) console.error(err); });
+    api.getComponentsForRequirement(projectId, reqId).then((v) => { if (alive) setSatisfiedBy(v); }).catch(() => { if (alive) setSatisfiedBy([]); });
     // Backlinks: everything else in the project that names this requirement.
     api.listSpecifications(projectId)
-      .then((specs) => setInSpecs(specs.filter((s) => s.requirements.includes(reqId))))
-      .catch(() => setInSpecs([]));
+      .then((specs) => { if (alive) setInSpecs(specs.filter((s) => s.requirements.includes(reqId))); })
+      .catch(() => { if (alive) setInSpecs([]); });
     api.listChangeRequests(projectId)
-      .then((crs) => setAffectingCrs(crs.filter((c) => c.affected_requirements.includes(reqId))))
-      .catch(() => setAffectingCrs([]));
+      .then((crs) => { if (alive) setAffectingCrs(crs.filter((c) => c.affected_requirements.includes(reqId))); })
+      .catch(() => { if (alive) setAffectingCrs([]); });
     api.listRisks(projectId)
-      .then((risks) => setLinkedRisks(risks.filter((r) => r.linked_requirements.includes(reqId))))
-      .catch(() => setLinkedRisks([]));
+      .then((risks) => { if (alive) setLinkedRisks(risks.filter((r) => r.linked_requirements.includes(reqId))); })
+      .catch(() => { if (alive) setLinkedRisks([]); });
     api.getEvaluation(projectId)
-      .then((ev) => setEvaluated(ev.requirements.find((r) => r.id === reqId)))
-      .catch(() => setEvaluated(undefined));
-    api.listDefinitions(projectId).then(setDefinitions).catch(() => setDefinitions([]));
-    api.getWorkflow(projectId).then((wf) => setWorkflow(wf)).catch(() => {});
+      .then((ev) => { if (alive) setEvaluated(ev.requirements.find((r) => r.id === reqId)); })
+      .catch(() => { if (alive) setEvaluated(undefined); });
+    api.listDefinitions(projectId).then((v) => { if (alive) setDefinitions(v); }).catch(() => { if (alive) setDefinitions([]); });
+    api.getWorkflow(projectId).then((wf) => { if (alive) setWorkflow(wf); }).catch(() => {});
     api.getQuality(projectId).then((q) => {
       const match = q.per_requirement.find((r) => r.id === reqId);
-      if (match) setQualityResult(match);
+      if (alive && match) setQualityResult(match);
     }).catch(() => {});
     api.getUnreviewed(projectId).then((u) => {
-      setUnreviewedIds(new Set(u.items.map((r) => r.id)));
+      if (alive) setUnreviewedIds(new Set(u.items.map((r) => r.id)));
     }).catch(() => {});
-    api.getProject(projectId).then((p: any) => setProjectBaselines(p.baselines || [])).catch(() => {});
-    api.listComments(projectId, reqId).then(setComments).catch(() => setComments([]));
-    api.listDecisions(projectId).then((decs) => setDecisions(decs.filter((d) => d.linked_requirements?.includes(reqId)))).catch(() => setDecisions([]));
+    api.getProject(projectId).then((p: any) => { if (alive) setProjectBaselines(p.baselines || []); }).catch(() => {});
+    api.listComments(projectId, reqId).then((v) => { if (alive) setComments(v); }).catch(() => { if (alive) setComments([]); });
+    api.listDecisions(projectId).then((decs) => { if (alive) setDecisions(decs.filter((d) => d.linked_requirements?.includes(reqId))); }).catch(() => { if (alive) setDecisions([]); });
+    return () => { alive = false; };
   }, [projectId, reqId]);
 
   const save = (updates: Partial<Requirement>) => {

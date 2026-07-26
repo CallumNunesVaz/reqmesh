@@ -21,6 +21,24 @@ def _strip_html(text: str) -> str:
     return _HTML_TAG.sub("", text).strip()
 
 
+# Excel/LibreOffice evaluate a cell whose text begins with one of these, so a
+# requirement named `=cmd|'/c calc'!A0` becomes a live formula in the export.
+# Quoting doesn't prevent it — the value has to be neutralised.
+_FORMULA_LEAD = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _defuse(value):
+    """Prefix a leading formula trigger with an apostrophe (the spreadsheet
+    convention for "this is literal text"). Non-strings pass through."""
+    if isinstance(value, str) and value.startswith(_FORMULA_LEAD):
+        return "'" + value
+    return value
+
+
+def _defuse_row(row: dict) -> dict:
+    return {k: _defuse(v) for k, v in row.items()}
+
+
 def _flat_columns(meta: dict | None = None) -> list[str]:
     cols = [
         "id", "type", "name", "description", "status", "priority",
@@ -147,8 +165,7 @@ def export_table(store, fmt: str) -> str:
     writer = csv.DictWriter(out, fieldnames=columns, delimiter=delimiter, quoting=csv.QUOTE_ALL)
     writer.writeheader()
     for r in reqs:
-        row = _req_to_row(r, meta)
-        writer.writerow(row)
+        writer.writerow(_defuse_row(_req_to_row(r, meta)))
     return out.getvalue()
 
 
@@ -255,7 +272,7 @@ def export_xlsx(store, path: str) -> None:
     for row_idx, r in enumerate(reqs, start=2):
         row_data = _req_to_row(r, meta)
         for col_idx, col_name in enumerate(columns, start=1):
-            ws.cell(row=row_idx, column=col_idx, value=row_data.get(col_name, ""))
+            ws.cell(row=row_idx, column=col_idx, value=_defuse(row_data.get(col_name, "")))
 
     wb.save(path)
 

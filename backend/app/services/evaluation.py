@@ -273,9 +273,11 @@ class DimensionEvaluator:
         return dim
 
     def dim_of_expr(self, text: str, owner: str, stack: frozenset[str] = frozenset()):
+        if not isinstance(text, str) or not text:
+            return None
         try:
             tree = ast.parse(text, mode="eval")
-        except SyntaxError:
+        except (SyntaxError, ValueError, TypeError):
             return None
         return self._walk(tree.body, owner, stack)
 
@@ -481,7 +483,10 @@ def evaluate_project(store, scope: Optional[set[str]] = None,
         constraints_out = []
         for c in req.get("constraints", []) or []:
             cv = _constraint_verdict(design, c, rid)
-            warning = _dimension_warning(dim_eval, c.get("expr", ""), rid)
+            # `.get(k, "")` yields None when the key exists but is null (a
+            # hand-edited `expr:`), and dim_of_expr only catches SyntaxError,
+            # so ast.parse(None) raised TypeError and 500'd the endpoint.
+            warning = _dimension_warning(dim_eval, c.get("expr") or "", rid)
             if warning:
                 cv["unit_warning"] = warning
             constraints_out.append(cv)
@@ -645,7 +650,11 @@ def build_impact(store, overrides: dict[str, float]) -> dict:
                 c_refs |= _refs_in_expr(c["assume"], owner, {}, defs, set(), frozenset())
             constraint_deps.append((cid, owner, c, c_refs))
 
-    affected_refs_in_order = list(affected_refs)
+    # Sorted, not raw set order: the seed and tie-break order of the topo
+    # sort below is otherwise the set's hash-randomised iteration order, so
+    # /evaluation/impact returned steps in a different sequence per process
+    # and the what-if animation replayed differently after every restart.
+    affected_refs_in_order = sorted(affected_refs)
     in_degree: dict[str, int] = {}
     out_edges: dict[str, list[str]] = {}
     for ref in affected_refs_in_order:
