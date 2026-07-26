@@ -137,7 +137,9 @@ def _list_files(code_root: Path) -> list[Path]:
 
     paths = []
     for entry in sorted(code_root.rglob("*")):
-        if entry.is_dir():
+        # A symlink committed into the tree points anywhere on the host, which
+        # escapes the confinement the caller established on code_root.
+        if entry.is_symlink() or entry.is_dir():
             continue
         rel = entry.relative_to(code_root)
         parts = rel.parts

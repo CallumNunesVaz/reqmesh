@@ -4,6 +4,7 @@ import contextlib
 import hashlib
 import os
 import tempfile
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -11,38 +12,65 @@ from typing import Optional
 from fastapi import HTTPException
 from ruamel.yaml import YAML
 
+from app.core.filelock import file_lock
 from app.core.ids import safe_id
 
-try:
-    import fcntl  # POSIX advisory locking
-except ImportError:  # pragma: no cover - non-POSIX (e.g. Windows)
-    fcntl = None
 
-
-@contextlib.contextmanager
-def _file_lock(target: Path):
-    """Best-effort inter-process exclusive lock guarding a read-modify-write on
-    ``target``. The lock file lives in the OS temp dir (keyed by the target's
-    absolute path) so it never lands in the project's git tree. Degrades to a
-    no-op where ``fcntl`` is unavailable."""
-    if fcntl is None:
-        yield
-        return
-    lock_dir = Path(tempfile.gettempdir()) / "reqmesh-locks"
-    lock_dir.mkdir(parents=True, exist_ok=True)
-    digest = hashlib.sha1(str(target.resolve()).encode()).hexdigest()
-    lock_file = lock_dir / f"{digest}.lock"
-    with open(lock_file, "w") as fh:
-        fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
-        try:
-            yield
-        finally:
-            fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
+# Re-exported under the original private name so existing call sites keep
+# working; the implementation moved to core so core.auth can share it.
+_file_lock = file_lock
 
 yaml = YAML()
 yaml.indent(mapping=2, sequence=4, offset=2)
 yaml.preserve_quotes = True
 yaml.width = 120
+
+# A ruamel YAML() instance carries mutable parser/emitter state, so two threads
+# using this shared object interleave into `expected DocumentEndEvent, but got
+# DocumentStartEvent` — and the instance stays broken afterwards, so every
+# later write in the process fails too. The file lock only excludes *other*
+# processes holding a different fd, so guard the shared object directly.
+# Matters now that request handlers can run on the threadpool.
+_yaml_lock = threading.Lock()
+
+# Round-trip mode is what preserves a user's comments and formatting through an
+# edit — a core promise of a git-native, hand-editable store — but it is ~6.5x
+# slower to parse than safe mode. So: round-trip on the read-modify-write path
+# (`_parse_yaml`), and this fast loader on the read-only list path, where the
+# document is never written back and comments therefore can't be lost.
+_fast_yaml = YAML(typ="safe")
+_fast_yaml_lock = threading.Lock()
+
+# Cache of parsed collections, keyed by directory. Invalidated by comparing a
+# cheap signature of the directory (each file's mtime_ns + size) — one scandir
+# instead of re-parsing every file on every call. Without it a single page load
+# re-parsed the whole project a dozen times over.
+_collection_cache: dict[str, tuple[tuple, list[dict]]] = {}
+_cache_lock = threading.Lock()
+
+
+def _dir_signature(d: Path) -> tuple:
+    """Fingerprint a collection directory: (name, mtime_ns, size) per file."""
+    try:
+        with os.scandir(d) as it:
+            entries = []
+            for e in it:
+                if not e.name.endswith(".yaml"):
+                    continue
+                st = e.stat()
+                entries.append((e.name, st.st_mtime_ns, st.st_size))
+        return tuple(sorted(entries))
+    except OSError:
+        return ()
+
+
+def invalidate_cache(path: Optional[Path] = None) -> None:
+    """Drop cached collections. Called after every write."""
+    with _cache_lock:
+        if path is None:
+            _collection_cache.clear()
+        else:
+            _collection_cache.pop(str(path), None)
 
 # Every entity type is a directory of one-YAML-file-per-item. New entity
 # types only need an entry here.
@@ -97,7 +125,8 @@ class YamlStore:
         empty value use :meth:`_read_yaml`.
         """
         with open(path) as f:
-            data = yaml.load(f)
+            with _yaml_lock:
+                data = yaml.load(f)
         if data is None:
             return {}
         if not isinstance(data, dict):
@@ -116,11 +145,16 @@ class YamlStore:
             return {}
 
     def _write_yaml(self, path: Path, data: dict) -> None:
+        # Any write invalidates the cached parse of its collection. The mtime
+        # signature would catch it anyway, but only at ~1s granularity on some
+        # filesystems — an explicit drop avoids a stale read right after a save.
+        invalidate_cache(path.parent)
         path.parent.mkdir(parents=True, exist_ok=True)
         fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
         try:
             with os.fdopen(fd, "w") as f:
-                yaml.dump(data, f)
+                with _yaml_lock:
+                    yaml.dump(data, f)
             os.replace(tmp, path)
         except BaseException:
             try:
@@ -149,10 +183,38 @@ class YamlStore:
             raise HTTPException(status_code=400, detail=f"Unknown collection: {collection}")
         return self._root / collection / f"{safe_id(item_id)}.yaml"
 
+    def _parse_fast(self, path: Path) -> dict:
+        """Parse for read-only use. Same validation as :meth:`_parse_yaml`, but
+        with the safe loader — never use the result for a write-back, as it
+        carries no comments or formatting."""
+        with open(path) as f:
+            with _fast_yaml_lock:
+                data = _fast_yaml.load(f)
+        if data is None:
+            return {}
+        if not isinstance(data, dict):
+            raise ValueError(f"expected a mapping, got {type(data).__name__}")
+        return data
+
     def list_items(self, collection: str) -> list[dict]:
         d = self._root / collection
         if not d.exists():
             return []
+
+        key = str(d)
+        signature = _dir_signature(d)
+        with _cache_lock:
+            hit = _collection_cache.get(key)
+            if hit is not None and hit[0] == signature:
+                # Copy so a caller mutating a result can't poison the cache.
+                return [dict(item) for item in hit[1]]
+
+        items = self._read_collection(d)
+        with _cache_lock:
+            _collection_cache[key] = (signature, [dict(i) for i in items])
+        return items
+
+    def _read_collection(self, d: Path) -> list[dict]:
         items = []
         for f in sorted(d.glob("*.yaml")):
             # A hand-edited file that no longer parses is skipped, not coerced
@@ -160,7 +222,7 @@ class YamlStore:
             # on `item["id"]`, taking out evaluation/validate/metrics with a
             # 500 that never mentions the offending file. See corrupt_files().
             try:
-                item = self._parse_yaml(f)
+                item = self._parse_fast(f)
             except Exception as exc:
                 import logging
                 logging.getLogger(__name__).warning("Skipping corrupt YAML %s: %s", f, exc)
@@ -204,7 +266,11 @@ class YamlStore:
         now = _now()
         data.setdefault("created", now)
         data["modified"] = now
-        self._write_yaml(self._item_path(collection, data["id"]), data)
+        path = self._item_path(collection, data["id"])
+        # Locked like update_item: a create racing an update of the same id
+        # would otherwise interleave read-modify-write against a fresh write.
+        with _file_lock(path):
+            self._write_yaml(path, data)
         return data
 
     def update_item(self, collection: str, item_id: str, data: dict) -> Optional[dict]:
@@ -233,13 +299,20 @@ class YamlStore:
 
     def delete_item(self, collection: str, item_id: str) -> bool:
         path = self._item_path(collection, item_id)
-        if not path.exists():
-            return False
-        os.remove(path)
+        with _file_lock(path):
+            if not path.exists():
+                return False
+            try:
+                os.remove(path)
+            except FileNotFoundError:
+                return False
+        invalidate_cache(path.parent)
         return True
 
     def write_item(self, collection: str, item_id: str, data: dict) -> dict:
-        self._write_yaml(self._item_path(collection, item_id), data)
+        path = self._item_path(collection, item_id)
+        with _file_lock(path):
+            self._write_yaml(path, data)
         return data
 
     # --- Requirements ---
@@ -321,8 +394,33 @@ class YamlStore:
             return {"links": []}
         return self._read_yaml(self._traces_file)
 
-    def write_traces(self, data: dict) -> None:
-        self._write_yaml(self._traces_file, data)
+    def traces_version(self) -> str:
+        """Cheap fingerprint of the trace matrix, for optimistic concurrency.
+
+        ``PUT /traces`` replaces the whole document from a client-side snapshot,
+        so without a version check a client that loaded the page an hour ago
+        silently erases every link added since.
+        """
+        try:
+            st = self._traces_file.stat()
+        except OSError:
+            return "0-0"
+        return f"{int(st.st_mtime_ns)}-{st.st_size}"
+
+    def write_traces(self, data: dict, expected_version: Optional[str] = None) -> None:
+        """Replace the trace matrix.
+
+        When ``expected_version`` is given it must still match, or the write is
+        refused with 409 so the caller can reload rather than clobber.
+        """
+        with _file_lock(self._traces_file):
+            if expected_version is not None and expected_version != self.traces_version():
+                raise HTTPException(
+                    status_code=409,
+                    detail="Trace matrix changed since you loaded it. "
+                           "Reload and reapply your change.",
+                )
+            self._write_yaml(self._traces_file, data)
 
     # --- History (append-only audit trail, one file per entry) ---
 

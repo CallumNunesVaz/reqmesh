@@ -973,9 +973,12 @@ async def scan_code(project_id: str, code_root: str = Form(""), user: dict = Dep
 
 
 @router.get("/projects/{project_id}/references/freshness")
-async def reference_freshness(project_id: str):
+async def reference_freshness(project_id: str, user: dict = Depends(get_current_user)):
     from app.services.references import check_reference_freshness
-    return check_reference_freshness(get_store(project_id), Path.cwd())
+    store = get_store(project_id)
+    # The project root, not the server's cwd: references describe files tracked
+    # alongside the project, and cwd let a reference address the whole host.
+    return check_reference_freshness(store, store.root)
 
 
 # ── Quality Analysis ──────────────────────────────────────────────────────────

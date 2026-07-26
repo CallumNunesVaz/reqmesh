@@ -250,7 +250,14 @@ export default function RequirementNav({ width = 300, collapsed, onToggleCollaps
 
   useEffect(() => {
     if (!projectId) return;
-    api.getRequirementTree(projectId).then(setTree).catch(console.error);
+    // Guarded like the panel effect below: switching projects quickly could
+    // leave project A's tree rendered under project B, and clicking a node
+    // then navigated to /project/B/requirements/<A-id> and 404'd.
+    let alive = true;
+    api.getRequirementTree(projectId)
+      .then((t) => { if (alive) setTree(t); })
+      .catch((err) => { if (alive) console.error(err); });
+    return () => { alive = false; };
   }, [projectId, dataVersion]);
 
   useEffect(() => {

@@ -186,25 +186,27 @@ async def update_profile(data: ProfileUpdateRequest, user: dict = Depends(get_cu
     username = user.get("username", "")
     if username in ("guest", ""):
         raise HTTPException(status_code=403, detail="Guests cannot update a profile")
-    users = load_users()
-    record = users.get(username)
-    if record is None:
-        raise HTTPException(status_code=404, detail="User not found")
-    if data.full_name is not None:
-        record["full_name"] = data.full_name.strip()
-    if data.email is not None:
-        email = data.email.strip()
-        if email and "@" not in email:
-            raise HTTPException(status_code=400, detail="Invalid email address")
-        if email != record.get("email", ""):
-            # A new address has not been verified yet.
-            record["email_verified"] = False
-        record["email"] = email
-    if data.password is not None:
-        _validate_password(data.password)
-        record["password_hash"] = hash_password(data.password).decode()
-        record["token_version"] = record.get("token_version", 0) + 1
-    save_users(users)
+    from app.core.auth import users_lock
+    with users_lock():
+        users = load_users()
+        record = users.get(username)
+        if record is None:
+            raise HTTPException(status_code=404, detail="User not found")
+        if data.full_name is not None:
+            record["full_name"] = data.full_name.strip()
+        if data.email is not None:
+            email = data.email.strip()
+            if email and "@" not in email:
+                raise HTTPException(status_code=400, detail="Invalid email address")
+            if email != record.get("email", ""):
+                # A new address has not been verified yet.
+                record["email_verified"] = False
+            record["email"] = email
+        if data.password is not None:
+            _validate_password(data.password)
+            record["password_hash"] = hash_password(data.password).decode()
+            record["token_version"] = record.get("token_version", 0) + 1
+        save_users(users)
     return {"ok": True}
 
 
@@ -327,13 +329,14 @@ async def create_user(data: CreateUserRequest, admin: dict = Depends(require_adm
     audit_logger.info("Account created by admin: user=%s role=%s by=%s",
                        data.username, data.role, admin.get("username", ""))
     if data.email.strip() or data.full_name.strip():
-        from app.core.auth import load_users, save_users
-        users = load_users()
-        if data.email.strip():
-            users[data.username]["email"] = data.email.strip()
-        if data.full_name.strip():
-            users[data.username]["full_name"] = data.full_name.strip()
-        save_users(users)
+        from app.core.auth import load_users, save_users, users_lock
+        with users_lock():
+            users = load_users()
+            if data.email.strip():
+                users[data.username]["email"] = data.email.strip()
+            if data.full_name.strip():
+                users[data.username]["full_name"] = data.full_name.strip()
+            save_users(users)
     return {"username": data.username, "role": data.role, "full_name": data.full_name.strip()}
 
 
@@ -358,13 +361,14 @@ async def update_user(username: str, data: UpdateUserRequest, admin: dict = Depe
         set_user_password(username, data.password)
 
     if data.email is not None or data.full_name is not None:
-        users = load_users()
-        if data.email is not None:
-            users[username]["email"] = data.email.strip()
-        if data.full_name is not None:
-            users[username]["full_name"] = data.full_name.strip()
-        from app.core.auth import save_users
-        save_users(users)
+        from app.core.auth import save_users, users_lock
+        with users_lock():
+            users = load_users()
+            if data.email is not None:
+                users[username]["email"] = data.email.strip()
+            if data.full_name is not None:
+                users[username]["full_name"] = data.full_name.strip()
+            save_users(users)
 
     users = load_users()
     return {"username": username, "role": users[username].get("role", "guest"),
