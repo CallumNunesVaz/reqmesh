@@ -11,6 +11,7 @@ from pydantic import BaseModel, ValidationError
 
 from app.core.config import settings
 from app.core.dependencies import get_store, require_edit, require_maintain, get_current_user
+from app.core.rate_limit import rate_limit
 from app.core.ids import safe_id
 from app.models.change_request import ChangeRequestCreate, ChangeRequestUpdate
 from app.models.component import ComponentCreate, ComponentUpdate
@@ -678,7 +679,7 @@ async def gap_analysis(project_id: str):
 # ── Coverage Analysis ─────────────────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/coverage")
-async def coverage_analysis(project_id: str):
+async def coverage_analysis(project_id: str, _rate: None = Depends(rate_limit(20, 60))):
     from app.services.tracing import trace_all
     items = trace_all(get_store(project_id))
     total = len(items)
@@ -777,7 +778,7 @@ async def compliance_status(project_id: str):
 # ── Metrics ───────────────────────────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/metrics")
-async def project_metrics(project_id: str):
+async def project_metrics(project_id: str, _rate: None = Depends(rate_limit(20, 60))):
     store = get_store(project_id)
     reqs = store.list_requirements()
     vcs = store.list_verification_cases()
@@ -828,7 +829,7 @@ async def project_metrics(project_id: str):
 
 
 @router.get("/projects/{project_id}/backlog")
-async def prioritized_backlog(project_id: str, sort: str = "priority"):
+async def prioritized_backlog(project_id: str, sort: str = "priority", _rate: None = Depends(rate_limit(20, 60))):
     store = get_store(project_id)
     reqs = store.list_requirements()
     results = []
@@ -854,7 +855,7 @@ async def prioritized_backlog(project_id: str, sort: str = "priority"):
 # ── Publishing ────────────────────────────────────────────────────────────────
 
 @router.post("/projects/{project_id}/publish")
-async def publish_project(project_id: str, data: PublishRequest, user: dict = Depends(require_maintain)):
+async def publish_project(project_id: str, data: PublishRequest, user: dict = Depends(require_maintain), _rate: None = Depends(rate_limit(5, 60))):
     store = get_store(project_id)
     pub = Publisher(store, data.subsystems)
     fmt = data.format
@@ -874,7 +875,8 @@ async def publish_project(project_id: str, data: PublishRequest, user: dict = De
 
 @router.get("/projects/{project_id}/publish/download")
 async def download_report(project_id: str, format: str = "html", subsystems: str | None = None,
-                          sections: str | None = None, changelog_from: str = "", changelog_to: str = ""):
+                          sections: str | None = None, changelog_from: str = "", changelog_to: str = "",
+                          _rate: None = Depends(rate_limit(5, 60))):
     import os
     import tempfile
 
@@ -948,7 +950,7 @@ async def download_report(project_id: str, format: str = "html", subsystems: str
 
 
 @router.post("/projects/{project_id}/scan")
-async def scan_code(project_id: str, code_root: str = Form(""), user: dict = Depends(require_maintain)):
+async def scan_code(project_id: str, code_root: str = Form(""), user: dict = Depends(require_maintain), _rate: None = Depends(rate_limit(20, 60))):
     from app.services.code_scan import scan_tree, merge_references
     store = get_store(project_id)
 
@@ -980,7 +982,7 @@ async def reference_freshness(project_id: str):
 
 
 @router.get("/projects/{project_id}/quality")
-async def quality_analysis(project_id: str):
+async def quality_analysis(project_id: str, _rate: None = Depends(rate_limit(20, 60))):
     from app.services.quality import project_quality
     return project_quality(get_store(project_id))
 
@@ -989,7 +991,7 @@ async def quality_analysis(project_id: str):
 
 
 @router.get("/projects/{project_id}/evaluation")
-async def parametric_evaluation(project_id: str):
+async def parametric_evaluation(project_id: str, _rate: None = Depends(rate_limit(20, 60))):
     """Evaluate every parameter, constraint and measurement in the project."""
     from app.services.evaluation import evaluate_project
     return evaluate_project(get_store(project_id))
@@ -1000,7 +1002,7 @@ class ImpactRequest(BaseModel):
 
 
 @router.post("/projects/{project_id}/evaluation/impact")
-async def evaluation_impact(project_id: str, data: ImpactRequest):
+async def evaluation_impact(project_id: str, data: ImpactRequest, _rate: None = Depends(rate_limit(20, 60))):
     """Returns the evaluation with hypothetical overrides plus a
     dependency-ordered trace of every parameter and constraint that
     changes — so the frontend can animate the what-if cascade."""
@@ -1027,7 +1029,7 @@ async def evaluation_impact(project_id: str, data: ImpactRequest):
 # ── Validation ────────────────────────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/validate")
-async def validate_project(project_id: str):
+async def validate_project(project_id: str, _rate: None = Depends(rate_limit(20, 60))):
     store = get_store(project_id)
     checker = IntegrityChecker(store)
     return checker.check_all()
@@ -1225,15 +1227,29 @@ async def project_presence(project_id: str):
     return {"users": users, "count": len({u["username"] for u in users})}
 
 
+_sse_lock: asyncio.Lock = asyncio.Lock()
+_sse_conns_by_user: dict[str, int] = {}
+_sse_conns_global: int = 0
+
+
 @router.get("/projects/{project_id}/events")
 async def project_events(project_id: str, user: dict = Depends(get_current_user)):
     """Server-Sent Events stream for real-time collaboration."""
     from app.services.event_bus import get_event_bus
 
+    username = user.get("username", "guest")
+    async with _sse_lock:
+        global _sse_conns_global
+        if _sse_conns_global >= settings.max_sse_conns_global:
+            raise HTTPException(status_code=429, detail="Too many SSE connections. Try again later.")
+        if _sse_conns_by_user.get(username, 0) >= settings.max_sse_conns_per_user:
+            raise HTTPException(status_code=429, detail="Too many SSE connections from this user. Try again later.")
+        _sse_conns_global += 1
+        _sse_conns_by_user[username] = _sse_conns_by_user.get(username, 0) + 1
+
     bus = get_event_bus()
     queue: asyncio.Queue = bus.subscribe(project_id)
     client_id = uuid.uuid4().hex
-    username = user.get("username", "guest")
     role = user.get("role", "guest")
 
     async def event_stream():
@@ -1256,6 +1272,12 @@ async def project_events(project_id: str, user: dict = Depends(get_current_user)
         finally:
             bus.leave(project_id, client_id)
             bus.unsubscribe(project_id, queue)
+            async with _sse_lock:
+                _sse_conns_by_user[username] = _sse_conns_by_user.get(username, 0) - 1
+                if _sse_conns_by_user[username] <= 0:
+                    _sse_conns_by_user.pop(username, None)
+                global _sse_conns_global
+                _sse_conns_global -= 1
 
     return StreamingResponse(
         event_stream(),

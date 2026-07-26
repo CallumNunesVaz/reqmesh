@@ -54,17 +54,20 @@ describe('request', () => {
     expect(JSON.parse(init.body as string)).toEqual({ id: 'demo', name: 'Demo' });
   });
 
-  it('attaches a bearer token when one is stored', async () => {
-    vi.stubGlobal('localStorage', { getItem: (k: string) => (k === 'rt-token' ? 'tok123' : null) });
-    const f = stubFetch({ json: async () => [] });
-    await api.listProjects();
-    expect(callOf(f).headers['Authorization']).toBe('Bearer tok123');
+  it('attaches X-CSRF-Token header on mutating requests when available', async () => {
+    const { useAuthStore } = await import('../src/store/auth');
+    useAuthStore.getState().login('alice', 'admin', 'csrf-tok-123');
+    const f = stubFetch();
+    await api.createProject({ id: 'demo', name: 'Demo' });
+    expect(callOf(f).headers['X-CSRF-Token']).toBe('csrf-tok-123');
   });
 
-  it('omits the auth header when there is no token', async () => {
+  it('omits X-CSRF-Token on GET requests', async () => {
+    const { useAuthStore } = await import('../src/store/auth');
+    useAuthStore.getState().login('alice', 'admin', 'csrf-tok-123');
     const f = stubFetch({ json: async () => [] });
     await api.listProjects();
-    expect(callOf(f).headers['Authorization']).toBeUndefined();
+    expect(callOf(f).headers['X-CSRF-Token']).toBeUndefined();
   });
 
   it('still sends the request when localStorage is unavailable', async () => {

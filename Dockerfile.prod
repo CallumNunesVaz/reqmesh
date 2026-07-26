@@ -47,13 +47,17 @@ COPY backend/ ./
 COPY --from=frontend-build /app/frontend/dist /app/frontend/dist
 
 RUN mkdir -p /data/projects && \
+    groupadd -r reqmesh && useradd -r -g reqmesh -d /app reqmesh && \
+    chown -R reqmesh:reqmesh /app /data && \
     git config --global user.email "${GIT_USER_EMAIL:-reqmesh@localhost}" && \
     git config --global user.name "${GIT_USER_NAME:-reqmesh}" && \
     git config --global init.defaultBranch main
 
 EXPOSE 8000
 
+USER reqmesh
+
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--proxy-headers", "--forwarded-allow-ips", "127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"]

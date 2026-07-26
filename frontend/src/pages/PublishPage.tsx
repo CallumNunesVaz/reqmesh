@@ -73,10 +73,8 @@ export default function PublishPage() {
     }, 8000);
     try {
       const secsParam = reportFormatIds.has(selectedFormat) ? `&sections=${encodeURIComponent(sections.join(','))}` : '';
-      const auth = (() => { try { return localStorage.getItem('rt-token'); } catch { return null; } })();
-      const headers: Record<string, string> = {};
-      if (auth) headers['Authorization'] = `Bearer ${auth}`;
-      const res = await fetch(`/api/projects/${projectId}/publish/download?format=${selectedFormat}${secsParam}`, { headers });
+      // Auth is an HttpOnly cookie now — no bearer token to attach.
+      const res = await fetch(`/api/projects/${projectId}/publish/download?format=${selectedFormat}${secsParam}`, { credentials: 'include' });
       if (!res.ok) throw new Error((await res.json().catch(() => ({ detail: 'Export failed' }))).detail || 'Export failed');
       const fb = res.headers.get('X-Render-Fallback');
       if (fb) setFallbackMessage(fb);

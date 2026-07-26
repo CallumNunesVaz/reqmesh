@@ -5,15 +5,19 @@ interface RequestOptions {
   body?: unknown;
 }
 
+function getCsrfToken(): string {
+  try { return useAuthStore.getState().csrfToken || ''; } catch { return ''; }
+}
+
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { method = 'GET', body } = options;
   const headers: Record<string, string> = {};
 
-  const token = (() => {
-    try { return localStorage.getItem('rt-token'); } catch { return null; }
-  })();
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+  if (method !== 'GET' && method !== 'HEAD') {
+    const csrf = getCsrfToken();
+    if (csrf) {
+      headers['X-CSRF-Token'] = csrf;
+    }
   }
 
   if (body && !(body instanceof FormData)) {
@@ -24,6 +28,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     method,
     headers,
     body: body instanceof FormData ? body : body ? JSON.stringify(body) : undefined,
+    credentials: 'include',
   });
 
   if (!res.ok) {
@@ -34,6 +39,8 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   if (res.status === 204) return undefined as T;
   return res.json();
 }
+
+import { useAuthStore } from '../store/auth';
 
 export interface Project {
   id: string;
@@ -509,13 +516,15 @@ export const api = {
 
   // Auth
   login: (username: string, password: string) =>
-    request<{ username: string; role: string; token: string }>('/auth/login', { method: 'POST', body: { username, password } }),
+    request<{ username: string; role: string; csrf_token: string; password_change_required?: boolean }>('/auth/login', { method: 'POST', body: { username, password } }),
   register: (username: string, password: string, role: string = 'contributor') =>
-    request<{ username: string; role: string; token: string }>('/auth/register', { method: 'POST', body: { username, password, role } }),
+    request<{ username: string; role: string; csrf_token: string; password_change_required?: boolean }>('/auth/register', { method: 'POST', body: { username, password, role } }),
   loginAsGuest: () =>
-    request<{ username: string; role: string }>('/auth/guest', { method: 'POST' }),
+    request<{ username: string; role: string; csrf_token: string }>('/auth/guest', { method: 'POST' }),
   whoami: () =>
-    request<{ username: string; role: string }>('/auth/whoami'),
+    request<{ username: string; role: string; token?: string; csrf_token?: string; password_change_required?: boolean }>('/auth/whoami'),
+  logout: () =>
+    request<{ ok: boolean }>('/auth/logout', { method: 'POST' }),
 
   // User management (admin only)
   listUsers: () => request<ManagedUser[]>('/auth/users'),

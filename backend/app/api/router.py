@@ -7,7 +7,7 @@ import uuid
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Header, HTTPException, Query, Depends
+from fastapi import APIRouter, Header, HTTPException, Query, Depends, Request
 from pydantic import BaseModel
 
 from app.core.dependencies import get_store, require_maintain, require_maintain_global, require_admin
@@ -90,7 +90,8 @@ async def create_project(data: ProjectCreate, user: dict = Depends(require_maint
 
 
 @router.get("/projects/{project_id}")
-async def get_project(project_id: str, authorization: Optional[str] = Header(None)):
+async def get_project(project_id: str, request: Request,
+                      authorization: Optional[str] = Header(None)):
     store = get_store(project_id)
     meta = store.read_meta()
     naming = meta.get("naming", {})
@@ -106,11 +107,13 @@ async def get_project(project_id: str, authorization: Optional[str] = Header(Non
     # Git settings can hold a credentialed remote URL, so unlike the rest of
     # the project metadata they are only shown to those who manage settings
     # (the maintainer tier that the settings page itself requires).
-    if authorization and authorization.startswith("Bearer "):
-        from app.core.auth import get_user_from_token
-        user = get_user_from_token(authorization.removeprefix("Bearer "))
-        if user and user.get("role") in ("maintainer", "admin"):
-            out["git"] = meta.get("git", {})
+    # Resolved through get_current_user so the HttpOnly session cookie counts —
+    # checking only the Authorization header stopped working for the UI when
+    # auth moved to cookies, silently hiding git settings from maintainers.
+    from app.core.dependencies import get_current_user
+    user = get_current_user(request=request, authorization=authorization)
+    if user.get("role") in ("maintainer", "admin"):
+        out["git"] = meta.get("git", {})
     return out
 
 
@@ -121,6 +124,7 @@ class ProjectSettings(BaseModel):
     workflow: Optional[dict] = None
     git: Optional[dict] = None
     baselines: Optional[list[str]] = None
+    permissions: Optional[dict] = None
 
 
 @router.patch("/projects/{project_id}")
@@ -128,7 +132,7 @@ async def update_project_settings(project_id: str, data: ProjectSettings, user: 
     store = get_store(project_id)
     meta = store.read_meta()
     updates = {}
-    for field in ("name", "naming", "quality", "workflow", "git", "baselines"):
+    for field in ("name", "naming", "quality", "workflow", "git", "baselines", "permissions"):
         val = getattr(data, field, None)
         if val is not None:
             updates[field] = val

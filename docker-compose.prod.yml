@@ -44,6 +44,9 @@ services:
       - RT_SEED_DEMO=${RT_SEED_DEMO:-true}
       - RT_CORS_ORIGINS=${RT_CORS_ORIGINS:-}
       - RT_OFFLINE_MODE=${RT_OFFLINE_MODE:-false}
+      - RT_PROFILE=${RT_PROFILE:-team}
+      - RT_COOKIE_SECURE=${RT_COOKIE_SECURE:-true}
+      - RT_PROXY_TRUSTED_CIDR=${RT_PROXY_TRUSTED_CIDR:-127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}
       - RT_BASE_URL=${RT_BASE_URL:-http://localhost:8000}
       - RT_SMTP_HOST=${RT_SMTP_HOST:-}
       - RT_SMTP_PORT=${RT_SMTP_PORT:-587}
@@ -55,6 +58,14 @@ services:
       # Shared with the updater sidecar. The app writes update requests here; it
       # never mounts the Docker socket itself.
       - reqmesh-control:/control
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/.reqmesh
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/health"]

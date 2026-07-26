@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import re
+import secrets
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -10,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.core.config import settings
 from app.core.ids import safe_id
@@ -39,6 +41,15 @@ async def lifespan(app: FastAPI):
         apply_overrides(settings)
     except Exception:
         logging.getLogger(__name__).exception("failed to apply runtime settings overrides")
+    security_log = logging.getLogger("security")
+    if settings.profile == "personal" and settings.host not in ("127.0.0.1", "localhost"):
+        security_log.warning("Personal profile with non-loopback host '%s' — network exposure risk", settings.host)
+    if not settings.require_auth:
+        security_log.warning("Anonymous access is enabled")
+    if settings.allow_self_registration and settings.profile != "personal":
+        security_log.warning("Self-registration enabled on non-personal profile '%s'", settings.profile)
+    if settings.profile == "hardened" and not settings.cookie_secure:
+        security_log.warning("Hardened profile with insecure cookies (cookie_secure=False)")
     root = Path(settings.data_root)
     root.mkdir(parents=True, exist_ok=True)
     # Bring existing data forward to the current schema before serving — this is
@@ -81,6 +92,57 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+if settings.allowed_hosts and settings.allowed_hosts != ["*"]:
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts)
+
+@app.middleware("http")
+async def content_length_cap_middleware(request: Request, call_next):
+    content_type = request.headers.get("content-type", "")
+    if "application/json" in content_type:
+        content_length = request.headers.get("content-length")
+        if content_length is not None:
+            try:
+                cl = int(content_length)
+            except ValueError:
+                return JSONResponse(status_code=400, content={"detail": "Invalid Content-Length"})
+            if cl > settings.max_json_body_mb * 1024 * 1024:
+                return JSONResponse(status_code=413, content={"detail": "Request body too large"})
+    return await call_next(request)
+
+
+# Auth routes that don't require CSRF (they create the token):
+_CSRF_EXEMPT_PATHS = frozenset({
+    "/api/auth/login",
+    "/api/auth/register",
+    "/api/auth/guest",
+    "/api/auth/forgot-password",
+    "/api/auth/reset-password",
+    "/api/auth/verify-email",
+})
+
+
+@app.middleware("http")
+async def csrf_middleware(request: Request, call_next):
+    if request.method in {"GET", "HEAD", "OPTIONS"}:
+        return await call_next(request)
+    if request.url.path in _CSRF_EXEMPT_PATHS:
+        return await call_next(request)
+
+    # Key the check off the *session* cookie, not the CSRF cookie. Keying off
+    # the CSRF cookie meant a request carrying a valid session cookie but no
+    # csrftoken cookie skipped the check entirely and was still authenticated.
+    # A request that isn't cookie-authenticated (bearer token, or anonymous)
+    # can't be forged cross-origin, so it needs no CSRF check.
+    if not request.cookies.get("token"):
+        return await call_next(request)
+
+    csrf_cookie = request.cookies.get("csrftoken")
+    csrf_header = request.headers.get("X-CSRF-Token") or request.headers.get("x-csrf-token")
+    if not csrf_cookie or not csrf_header or not secrets.compare_digest(csrf_cookie, csrf_header):
+        return JSONResponse(status_code=403, content={"detail": "CSRF token missing or invalid"})
+
+    return await call_next(request)
+
 
 _PROJECT_PATH_RE = re.compile(r"^/api/projects/([^/]+)(/.*)?$")
 
@@ -105,6 +167,8 @@ async def security_headers_middleware(request: Request, call_next):
     response.headers.setdefault("X-XSS-Protection", "1; mode=block")
     response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
     response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+    csp = settings.csp_default or "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'"
+    response.headers.setdefault("Content-Security-Policy", csp)
     if request.url.scheme == "https":
         response.headers.setdefault("Strict-Transport-Security", "max-age=63072000")
     return response
@@ -209,7 +273,7 @@ app.include_router(extra_router, prefix="/api")
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "version": get_version()}
+    return {"status": "ok", "version": get_version(), "profile": settings.profile}
 
 
 @app.get("/version")

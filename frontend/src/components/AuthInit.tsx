@@ -4,26 +4,31 @@ import { useAuthStore } from '../store/auth';
 import LoadingSplash from './LoadingSplash';
 
 export default function AuthInit({ children }: { children: React.ReactNode }) {
-  const { token, setUser, logout, isGuest } = useAuthStore();
+  const { csrfToken, setUser, login, loginGuest, logout } = useAuthStore();
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    if (token) {
-      api.whoami().then((u) => {
-        setUser({ username: u.username, role: u.role, token });
+    api.whoami().then((u) => {
+      if (u.role === 'guest') {
+        // No valid session cookie — try guest if server allows it
+        api.loginAsGuest().then((g) => {
+          loginGuest(g.csrf_token);
+          setReady(true);
+        }).catch(() => {
+          // Guest disabled — stay logged out
+          setReady(true);
+        });
+      } else {
+        login(u.username, u.role, u.csrf_token || '', u.token, u.password_change_required);
         setReady(true);
-      }).catch(() => { logout(); setReady(true); });
-    } else if (!isGuest) {
-      api.loginAsGuest().then(() => {
-        useAuthStore.getState().loginGuest();
-        setReady(true);
-      }).catch(() => setReady(true));
-    } else {
+      }
+    }).catch(() => {
+      // Network error or server unreachable
       setReady(true);
-    }
+    });
   }, []);
 
-  if (!ready) return <div className="h-screen"><LoadingSplash label="Starting reqmesh…" /></div>;
+  if (!ready) return <div className="h-screen"><LoadingSplash label="Starting reqmesh..." /></div>;
 
   return <>{children}</>;
 }

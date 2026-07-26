@@ -3,19 +3,21 @@ import { create } from 'zustand';
 interface AuthUser {
   username: string;
   role: string;
-  token?: string;
 }
 
 interface AuthState {
   user: AuthUser | null;
-  token: string | null;
+  csrfToken: string | null;
+  wsToken: string | null;
   editMode: boolean;
   isGuest: boolean;
+  passwordChangeRequired: boolean;
   setUser: (user: AuthUser | null) => void;
-  setToken: (token: string | null) => void;
+  setCsrfToken: (token: string | null) => void;
+  setWsToken: (token: string | null) => void;
   setEditMode: (on: boolean) => void;
-  login: (username: string, token: string, role: string) => void;
-  loginGuest: () => void;
+  login: (username: string, role: string, csrfToken: string, wsToken?: string, passwordChangeRequired?: boolean) => void;
+  loginGuest: (csrfToken: string) => void;
   logout: () => void;
   isLoggedIn: () => boolean;
   canEdit: () => boolean;
@@ -23,53 +25,61 @@ interface AuthState {
   canToggleEdit: () => boolean;
 }
 
-const storage = {
-  get: (key: string) => { try { return localStorage.getItem(key); } catch { return null; } },
-  set: (key: string, val: string) => { try { localStorage.setItem(key, val); } catch {} },
-  remove: (key: string) => { try { localStorage.removeItem(key); } catch {} },
-};
-
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
-  token: storage.get('rt-token'),
+  csrfToken: null,
+  wsToken: null,
   editMode: false,
-  isGuest: storage.get('rt-guest') === 'true',
+  isGuest: false,
+  passwordChangeRequired: false,
 
   setUser: (user) => set({ user }),
-  setToken: (token) => {
-    if (token) storage.set('rt-token', token);
-    else storage.remove('rt-token');
-    set({ token });
-  },
+  setCsrfToken: (token) => set({ csrfToken: token }),
+  setWsToken: (token) => set({ wsToken: token }),
   setEditMode: (on) => set({ editMode: on }),
 
-  login: (username, token, role) => {
-    storage.set('rt-token', token);
-    storage.set('rt-guest', 'false');
-    set({ user: { username, role, token }, token, isGuest: false, editMode: false });
+  login: (username, role, csrfToken, wsToken, passwordChangeRequired) => {
+    set({
+      user: { username, role },
+      csrfToken,
+      wsToken: wsToken ?? null,
+      isGuest: false,
+      editMode: false,
+      passwordChangeRequired: passwordChangeRequired ?? false,
+    });
   },
 
-  loginGuest: () => {
-    storage.remove('rt-token');
-    storage.set('rt-guest', 'true');
-    set({ user: { username: 'guest', role: 'guest' }, token: null, isGuest: true, editMode: false });
+  loginGuest: (csrfToken) => {
+    set({
+      user: { username: 'guest', role: 'guest' },
+      csrfToken,
+      wsToken: null,
+      isGuest: true,
+      editMode: false,
+      passwordChangeRequired: false,
+    });
   },
 
   logout: () => {
-    storage.remove('rt-token');
-    storage.remove('rt-guest');
-    set({ user: null, token: null, isGuest: false, editMode: false });
+    set({
+      user: null,
+      csrfToken: null,
+      wsToken: null,
+      isGuest: false,
+      editMode: false,
+      passwordChangeRequired: false,
+    });
   },
 
-  isLoggedIn: () => get().token !== null,
+  isLoggedIn: () => {
+    const s = get();
+    return s.user !== null && s.user.role !== 'guest';
+  },
   canEdit: () => {
     const s = get();
     return s.user !== null && (s.user.role === 'maintainer' || s.user.role === 'admin') && s.editMode;
   },
   canPropose: () => {
-    // Propose-tier actions (change requests, risks, comments) are available to
-    // contributors and up, and — unlike edit-tier actions — do NOT require the
-    // maintainer-only edit-mode toggle. An allowlist also excludes legacy/unknown roles.
     const s = get();
     return s.user !== null && ['contributor', 'maintainer', 'admin'].includes(s.user.role);
   },

@@ -12,6 +12,16 @@ localserver.reqmesh.com {
     # For a LAN-only domain that doesn't have a public DNS entry, use:
     # tls internal
 
+    header {
+        Strict-Transport-Security "max-age=63072000"
+        Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "camera=(), microphone=(), geolocation=()"
+    }
+
     reverse_proxy reqmesh:8000 {
         # Streaming flush for Server-Sent Events (real-time collaboration).
         flush_interval -1

@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import re
 import logging
+import time as _time
 
-from fastapi import APIRouter, Depends, HTTPException, Header, Request
+from fastapi import APIRouter, Depends, HTTPException, Header, Request, Response
 from pydantic import BaseModel
 from typing import Optional
 
@@ -33,6 +34,8 @@ from app.core.auth import (
     consume_reset_token,
     create_verify_token,
     verify_email,
+    set_auth_cookies,
+    clear_auth_cookies,
 )
 from app.core.dependencies import get_current_user, require_admin
 
@@ -63,24 +66,31 @@ class RegisterRequest(BaseModel):
 
 
 @router.post("/auth/login")
-async def login(data: LoginRequest, _rate: None = Depends(rate_limit(5, 60))):
-    import time as _time
+async def login(data: LoginRequest, response: Response, _rate: None = Depends(rate_limit(5, 60))):
     result = authenticate(data.username, data.password)
     status = result.get("status")
-    if status == "ok":
-        return {"username": result["username"], "role": result["role"], "token": result["token"]}
-    if status == "disabled":
-        raise HTTPException(status_code=403, detail="This account has been disabled. Contact an administrator.")
-    if status == "locked":
-        mins = max(1, (int(result.get("until", 0)) - int(_time.time())) // 60 + 1)
-        raise HTTPException(status_code=403, detail=f"Account locked after too many failed attempts. Try again in {mins} minute(s).")
-    if status == "unverified":
-        raise HTTPException(status_code=403, detail="Please verify your email address before signing in.")
-    raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    # Uniform error response for all failure paths — same status code,
+    # same message, comparable timing. Prevents user enumeration.
+    if status != "ok":
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    # Set HttpOnly cookie with the JWT and non-HttpOnly cookie for CSRF.
+    csrf_token = set_auth_cookies(response, result["username"], result["token"])
+
+    return {
+        "username": result["username"],
+        "role": result["role"],
+        "csrf_token": csrf_token,
+        "password_change_required": result.get("password_change_required", False),
+    }
 
 
 @router.post("/auth/register")
-async def register(data: RegisterRequest, authorization: Optional[str] = Header(None), _rate: None = Depends(rate_limit(3, 300))):
+async def register(data: RegisterRequest, response: Response,
+                   request: Request,
+                   authorization: Optional[str] = Header(None),
+                   _rate: None = Depends(rate_limit(3, 300))):
     if not USERNAME_RE.match(data.username):
         raise HTTPException(status_code=400, detail="Username must be 3–32 chars: letters, digits, . _ -")
     if len(data.username) < 3:
@@ -90,10 +100,16 @@ async def register(data: RegisterRequest, authorization: Optional[str] = Header(
     requester = None
     if authorization and authorization.startswith("Bearer "):
         requester = get_user_from_token(authorization.removeprefix("Bearer "))
+    # Also check cookie for authenticated admin
+    if not requester:
+        token = request.cookies.get("token")
+        if token:
+            requester = get_user_from_token(token)
     is_admin = bool(requester and requester.get("role") == "admin")
     # Self-registration can be turned off; admins can always create accounts.
     if not settings.allow_self_registration and not is_admin:
-        raise HTTPException(status_code=403, detail="Self-registration is disabled. Ask an administrator for an account.")
+        raise HTTPException(status_code=403,
+                           detail="Self-registration is disabled. Ask an administrator for an account.")
     # Only an authenticated admin may grant elevated roles; self-registration
     # is always a contributor.
     role = "contributor"
@@ -103,19 +119,43 @@ async def register(data: RegisterRequest, authorization: Optional[str] = Header(
         role = data.role
     result = register_user(data.username, data.password, role)
     if not result:
+        # Same error whether username exists or password > 72 bytes
         raise HTTPException(status_code=409, detail="Username already exists")
-    return result
+
+    csrf_token = set_auth_cookies(response, result["username"], result["token"])
+    return {
+        "username": result["username"],
+        "role": result["role"],
+        "csrf_token": csrf_token,
+        "password_change_required": False,
+    }
 
 
 @router.post("/auth/guest")
-async def login_as_guest():
-    return GUEST_USER
+async def login_as_guest(response: Response):
+    from app.core.config import settings
+    if settings.require_auth:
+        raise HTTPException(status_code=401,
+                           detail="Authentication required. Guest access is disabled.")
+    from app.core.auth import create_token
+    token = create_token("guest", "guest", 0)
+    csrf_token = set_auth_cookies(response, "guest", token)
+    return {"username": "guest", "role": "guest", "csrf_token": csrf_token}
 
 
 @router.get("/auth/whoami")
-async def whoami(user: dict = Depends(get_current_user)):
+async def whoami(request: Request, user: dict = Depends(get_current_user),
+                 authorization: Optional[str] = Header(None)):
+    from app.core.auth import create_token as _create_token
     users = load_users()
     u = users.get(user.get("username", ""), {})
+
+    # Return a short-lived JWT for WebSocket connections (in-memory use only).
+    ws_token = ""
+    if user.get("role", "guest") != "guest":
+        tv = int(u.get("token_version", 0))
+        ws_token = _create_token(user["username"], user.get("role", "guest"), tv)
+
     return {
         "username": user.get("username", "guest"),
         "role": user.get("role", "guest"),
@@ -124,7 +164,15 @@ async def whoami(user: dict = Depends(get_current_user)):
         "email_verified": u.get("email_verified", False),
         "last_active": u.get("last_active", ""),
         "joined": u.get("created", ""),
+        "token": ws_token,
+        "password_change_required": bool(u.get("password_change_required", False)),
     }
+
+
+@router.post("/auth/logout")
+async def logout(response: Response):
+    clear_auth_cookies(response)
+    return {"ok": True}
 
 
 class ProfileUpdateRequest(BaseModel):
@@ -184,15 +232,14 @@ class ResetPasswordRequest(BaseModel):
 @router.post("/auth/forgot-password")
 async def forgot_password(data: ForgotPasswordRequest, _rate: None = Depends(rate_limit(3, 300))):
     token = create_reset_token(data.username)
-    if token is None:
-        return {"ok": True}
+    # Always return the same response to prevent username enumeration
     from app.core.config import settings
     users = load_users()
     email = users.get(data.username, {}).get("email", "")
-    if email:
+    if token is not None and email:
         from app.services.email_service import send_password_reset
         send_password_reset(email, token, settings.base_url)
-    return {"ok": True}
+    return {"detail": "If an account with that username exists, a reset link has been sent."}
 
 
 @router.post("/auth/reset-password")
@@ -212,8 +259,9 @@ class VerifyEmailRequest(BaseModel):
 @router.post("/auth/verify-email")
 async def verify_email_endpoint(data: VerifyEmailRequest, _rate: None = Depends(rate_limit(5, 300))):
     username = verify_email(data.token)
+    # Uniform response regardless of token validity to prevent enumeration
     if not username:
-        raise HTTPException(status_code=400, detail="Invalid or expired verification token")
+        raise HTTPException(status_code=400, detail="Invalid or expired verification link")
     return {"ok": True, "username": username}
 
 

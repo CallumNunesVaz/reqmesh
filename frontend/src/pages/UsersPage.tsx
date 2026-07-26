@@ -203,8 +203,10 @@ export default function UsersPage() {
 
   const exportCsv = async () => {
     try {
-      const token = localStorage.getItem('rt-token');
-      const res = await fetch(api.exportUsersCsvUrl, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      // Auth is an HttpOnly cookie now — there is no bearer token to attach,
+      // so the session only travels if credentials are included.
+      const res = await fetch(api.exportUsersCsvUrl, { credentials: 'include' });
+      if (!res.ok) throw new Error('Export failed');
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
