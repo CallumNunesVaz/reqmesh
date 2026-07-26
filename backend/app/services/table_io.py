@@ -81,9 +81,16 @@ _HEADER_ALIASES: dict[str, str] = {
 
 def _row_to_req(row: dict) -> dict:
     names = {n.lower().strip().replace(" ", "_"): n for n in row}
-    get = lambda key, default: row.get(
-        names.get(key) or names.get(_HEADER_ALIASES.get(key, "")), default
-    )
+
+    def get(key, default):
+        # csv.DictReader pads a short row with None for the missing trailing
+        # columns. `row.get(col, default)` returns that None rather than the
+        # default (the key *is* present), so callers doing `.strip()` blew up
+        # on any ragged row — after `mode=replace` had already deleted
+        # everything. Coerce None to the caller's default.
+        col = names.get(key) or names.get(_HEADER_ALIASES.get(key, ""))
+        value = row.get(col, default) if col else default
+        return default if value is None else value
 
     relations = []
     rel_str = get("relations", "")
@@ -159,20 +166,35 @@ def import_table(store, content: str, fmt: str = "csv", mode: str = "merge", dry
     updated = 0
     skipped = 0
 
+    # Parse every row up-front. A malformed row used to raise *after* replace
+    # mode had already wiped the collection, emptying the project and importing
+    # nothing. Nothing is deleted until the whole file is known to be readable.
+    try:
+        parsed_rows = [_row_to_req(row) for row in rows]
+    except Exception as exc:
+        raise ValueError(f"Could not parse the table (nothing was changed): {exc}") from exc
+
     if mode == "replace":
         if dry_run:
             return {"created": 0, "updated": 0, "skipped": 0, "traces_added": 0,
                     "verification_cases": 0, "format": fmt,
                     "dry_run": True, "would_delete": len(store.list_requirements()),
                     "rows": len(rows)}
+        # Refuse to wipe the project for a file we got no usable ids out of —
+        # an unrecognised id column would otherwise delete everything and
+        # report a cheerful {"created": 0}.
+        if rows and not any(r.get("id", "").strip() for r in parsed_rows):
+            raise ValueError(
+                "No 'id' column recognised in the table — refusing to replace "
+                "the project. Check the header row."
+            )
         for req in store.list_requirements():
             store.delete_requirement(req["id"])
 
     if dry_run:
         would_create = 0
         would_update = 0
-        for row in rows:
-            req_data = _row_to_req(row)
+        for req_data in parsed_rows:
             rid = req_data.get("id", "").strip()
             if not rid:
                 skipped += 1
@@ -186,8 +208,7 @@ def import_table(store, content: str, fmt: str = "csv", mode: str = "merge", dry
                 "dry_run": True, "would_create": would_create, "would_update": would_update,
                 "rows": len(rows)}
 
-    for row in rows:
-        req_data = _row_to_req(row)
+    for req_data in parsed_rows:
         rid = req_data.get("id", "").strip()
         if not rid:
             skipped += 1

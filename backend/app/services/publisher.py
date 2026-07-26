@@ -11,6 +11,7 @@ from html import escape as esc
 from pathlib import Path
 
 from app.core.config import settings as global_settings
+from app.services.sanitize import sanitize_html
 
 logger = logging.getLogger(__name__)
 
@@ -607,7 +608,11 @@ class Publisher:
             if r.get("parent") == parent:
                 indent = depth * 20
                 rid = r["id"]
-                desc = r.get("description", "").replace("<p>", "").replace("</p>", "")
+                # The only field emitted as HTML rather than escaped, so it is
+                # the one that must be sanitised. Applied here as well as on
+                # write, because descriptions stored before sanitisation
+                # existed are still in the YAML.
+                desc = sanitize_html(r.get("description", "")).replace("<p>", "").replace("</p>", "")
                 relations = r.get("relations", [])
                 attrs = r.get("attributes", [])
 
@@ -2136,7 +2141,11 @@ class Publisher:
         if compile_latex_to_pdf(self.build_latex(), path):
             return path
         from weasyprint import HTML as WHTML
-        WHTML(string=self.build_html()).write_pdf(path)
+        from app.services.sanitize import safe_url_fetcher
+        WHTML(
+            string=self.build_html(),
+            url_fetcher=safe_url_fetcher({getattr(global_settings, "report_logo_url", "")}),
+        ).write_pdf(path)
         return path
 
     def to_markdown_file(self, path: str) -> str:

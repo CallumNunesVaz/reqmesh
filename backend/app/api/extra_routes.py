@@ -912,7 +912,11 @@ async def download_report(project_id: str, format: str = "html", subsystems: str
             latex = pub.build_latex(sec_list, changelog_from, changelog_to)
             if not compile_latex_to_pdf(latex, path):
                 from weasyprint import HTML as WHTML
-                WHTML(string=pub.build_html(sec_list, changelog_from, changelog_to)).write_pdf(path)
+                from app.services.sanitize import safe_url_fetcher
+                WHTML(
+                    string=pub.build_html(sec_list, changelog_from, changelog_to),
+                    url_fetcher=safe_url_fetcher({getattr(settings, "report_logo_url", "")}),
+                ).write_pdf(path)
                 fallback = "LaTeX→PDF (tectonic/pdflatex) not available — rendered via HTML→PDF weasyprint (tables, badges, and table-of-contents omitted)"
         elif format == "md":
             pub.to_markdown_file(path)
@@ -1181,12 +1185,18 @@ async def import_project(
     from app.services.table_io import import_table as table_import
 
     if format in ("csv", "tsv"):
-        summary = table_import(store, content.decode("utf-8", errors="replace"), fmt=format, mode=mode)
-        return summary
+        try:
+            return table_import(store, content.decode("utf-8", errors="replace"),
+                                fmt=format, mode=mode)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=f"Import failed: {exc}") from exc
 
     if format == "xlsx":
         from app.services.table_io import import_xlsx
-        return import_xlsx(store, content, mode=mode)
+        try:
+            return import_xlsx(store, content, mode=mode)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=f"Import failed: {exc}") from exc
 
     from app.services.importer import parse_and_import
     from app.services.reqif_import import ReqIFParseError

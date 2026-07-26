@@ -96,6 +96,16 @@ def import_into_store(store, parsed: dict, mode: str = "merge") -> dict:
     store.ensure_dirs()
     summary = {"created": 0, "updated": 0, "skipped": 0, "traces_added": 0, "verification_cases": 0}
 
+    # Normalise everything before touching the store. A malformed field (e.g.
+    # a non-numeric component `quantity`) used to raise *after* replace mode
+    # had deleted the requirements, verification cases and components, leaving
+    # the project empty and the import incomplete.
+    try:
+        normalised_reqs = [_normalise_requirement(r) for r in parsed.get("requirements", [])]
+        normalised_comps = [_normalise_component(c) for c in parsed.get("components", [])]
+    except Exception as exc:
+        raise ValueError(f"Could not parse the import (nothing was changed): {exc}") from exc
+
     if mode == "replace":
         for r in store.list_requirements():
             store.delete_requirement(r["id"])
@@ -104,8 +114,7 @@ def import_into_store(store, parsed: dict, mode: str = "merge") -> dict:
         for c in store.list_components():
             store.delete_component(c["id"])
 
-    for raw in parsed.get("requirements", []):
-        req = _normalise_requirement(raw)
+    for req in normalised_reqs:
         if req is None:
             summary["skipped"] += 1
             continue
@@ -137,8 +146,7 @@ def import_into_store(store, parsed: dict, mode: str = "merge") -> dict:
         summary["verification_cases"] += 1
 
     # Components (SysML part defs) — carry the design tree that rollups sum over.
-    for raw in parsed.get("components", []):
-        comp = _normalise_component(raw)
+    for comp in normalised_comps:
         if comp is None:
             summary["skipped"] += 1
             continue
