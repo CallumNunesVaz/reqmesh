@@ -57,6 +57,10 @@ run_server() {
 
   echo "[1/2] Starting backend..."
   ensure_backend_venv
+  # Local launcher: default to the "personal" posture (anonymous read, cookies
+  # that survive plain HTTP). Production goes through docker-compose.prod.yml,
+  # which pins RT_PROFILE=team. Set RT_PROFILE yourself to override.
+  export RT_PROFILE="${RT_PROFILE:-personal}"
   # `python -m uvicorn` (not the uvicorn entry-point script): the script's
   # shebang hardcodes the venv's absolute path and breaks if the repo is
   # moved or renamed, while the python symlink keeps working.
