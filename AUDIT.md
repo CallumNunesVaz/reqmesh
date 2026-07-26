@@ -97,9 +97,22 @@ Plus defence in depth: `project_root.resolve().is_relative_to(Path(settings.data
 
 ---
 
-## SEC-2 — Stored XSS in exported HTML reports 📄 STATIC
+## SEC-2 — Stored XSS in exported HTML reports 📄 STATIC · 🛠 FIXED
 
 **Severity: HIGH**
+
+> **Status: fixed** by a new `backend/app/services/sanitize.py` (stdlib `html.parser`, allowlist
+> only — no new pinned dependency). Applied at **both** boundaries:
+> - **On write** — `field_validator` on `RequirementCreate`/`RequirementUpdate.description`,
+>   so a direct `PUT` can no longer persist a payload.
+> - **On output** — `publisher.py` sanitises before interpolating, which is what covers the
+>   descriptions already stored before this existed.
+>
+> The allowlist deliberately mirrors the frontend's read-only renderer
+> (`autoLink.tsx::ALLOWED_TAGS`) so both surfaces agree. `script`/`style`/`iframe`/`object`/
+> `embed`/`svg`/`math` are dropped *with their contents*; all other unknown tags unwrap; every
+> attribute is stripped except a `data:`-only `src` on `<img>`.
+> Tests: `backend/tests/test_html_sanitisation.py` (22).
 **Where:** `backend/app/services/publisher.py:610,641`
 
 Every neighbouring field is escaped (`esc(rid)`, `esc(name)`, `rationale`, `source`) —
@@ -124,9 +137,22 @@ inert document with a tag allowlist and drops all attributes.
 
 ---
 
-## SEC-3 — PDF export fetches attacker-controlled URLs (SSRF + local file read) 📄 STATIC
+## SEC-3 — PDF export fetches attacker-controlled URLs (SSRF + local file read) 📄 STATIC · 🛠 FIXED
 
 **Severity: HIGH**
+
+> **Status: fixed** at two layers. The sanitiser (SEC-2) already reduces `<img src>` to `data:`
+> URIs, and `sanitize.safe_url_fetcher()` now backs both WeasyPrint call sites
+> (`extra_routes.py`, `publisher.to_pdf_file`) so anything else is refused outright.
+>
+> Note it is **not** a blanket `data:`-only clamp: the report logo is an operator-configured
+> "URL or data: URI" (`report_logo_url`), so that exact URL is allowlisted and its scheme is the
+> only extra one enabled. Redirects are disabled so an allowlisted host can't bounce the fetch
+> to an internal address. Uses the modern `URLFetcher` rather than the deprecated
+> `default_url_fetcher` (removed in the pinned WeasyPrint 69.0).
+>
+> Verified end-to-end: a requirement containing `<img src="file:///…secret">` renders a PDF that
+> does **not** contain the file's bytes.
 **Where:** `backend/app/api/extra_routes.py:915`
 
 ```python
@@ -379,9 +405,16 @@ the parse error. Surface skipped files in `/validate` so corruption is visible, 
 
 ---
 
-## BUG-3 — Trace matrix deletes the wrong link when a filter is active 📄 STATIC
+## BUG-3 — Trace matrix deletes the wrong link when a filter is active 📄 STATIC · 🛠 FIXED
 
 **Severity: HIGH (silent, unrecoverable)**
+
+> **Status: fixed.** `removeLink` now takes the link object, not a row index, and delegates to
+> a new pure helper `frontend/src/lib/traceLinks.ts::removeTraceLink` (identity-based, so a
+> duplicate source/target/type pair still removes only the clicked row, and a missing link is a
+> no-op instead of a pointless write).
+> Tests: `frontend/tests/traceLinks.test.ts` (4), including one that reproduces the old
+> index-based behaviour and asserts it deleted the wrong element.
 **Where:** `frontend/src/pages/TraceMatrixPage.tsx:228,248` → `:89-96`
 
 The list renders `filteredLinks` but passes that row index to `removeLink`, which splices the
@@ -423,9 +456,23 @@ and iterate transitively with a visited set; add an ETag/version on `traces.yaml
 
 ---
 
-## BUG-5 — `mode=replace` import deletes everything before parsing 📄 STATIC
+## BUG-5 — `mode=replace` import deletes everything before parsing 📄 STATIC · 🛠 FIXED
 
 **Severity: MEDIUM–HIGH (data loss)**
+
+> **Status: fixed.** Imports are now parse-then-write in both paths:
+> - `table_io.import_table` parses every row up front (and reuses that result rather than
+>   re-parsing), so a malformed row raises before anything is deleted. The `get()` helper now
+>   coerces `DictReader`'s trailing `None` to the caller's default, so ragged rows import cleanly.
+> - `mode=replace` **refuses** when no row yields an id — the unrecognised-header case that used
+>   to wipe the project and return `200 {"created": 0}`.
+> - `importer.import_into_store` normalises requirements *and* components before the delete pass,
+>   so a bad `quantity` can no longer empty requirements/VCs/components.
+> - The CSV/TSV/XLSX branches of `POST /import` now map `ValueError` to **400** (only the
+>   ReqIF/SysML branch did), so these guards surface as bad requests, not 500s.
+>
+> Tests: `backend/tests/test_import_destructive.py` (7), all asserting the project is byte-for-byte
+> unchanged after a failed import.
 **Where:** `backend/app/services/table_io.py:162-189`, `importer.py:99-105`
 
 Deletion happens first, parsing second. `csv.DictReader` fills missing trailing fields with
@@ -690,8 +737,8 @@ already are); `git add -- <changed paths>` instead of `-A`.
 
 - [x] **1.** Patch **SEC-1** — remove the second `unquote`, validate with `safe_id` — **DONE**, 6 regression tests added
 - [x] **2.** Fix **BUG-1** and **BUG-2** — broken endpoint + 500-on-corrupt-file — **DONE**, 9 regression tests added
-- [ ] **3.** Fix **BUG-3** trace deletion; stop `mode=replace` deleting before it parses (**BUG-5**) *(~1 hr)*
-- [ ] **4.** Sanitise descriptions server-side; restrict the WeasyPrint fetcher (**SEC-2/3**) *(~2 hrs)*
+- [x] **3.** Fix **BUG-3** trace deletion; stop `mode=replace` deleting before it parses (**BUG-5**) — **DONE**, 11 regression tests added
+- [x] **4.** Sanitise descriptions server-side; restrict the WeasyPrint fetcher (**SEC-2/3**) — **DONE**, 22 regression tests added
 - [ ] **5.** **PERF-1** — fast loader on the read path + mtime cache, comments preserved *(~half day)*
 - [ ] **6.** **PERF-3** — `async def` → `def` on data routes *(mechanical)*
 - [ ] **7.** Locking on users/traces/cascade (**BUG-4**); admin-gate the git remote (**SEC-4**) *(~half day)*

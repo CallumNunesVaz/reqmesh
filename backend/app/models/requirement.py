@@ -12,7 +12,9 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from app.services.sanitize import sanitize_html
 
 
 class RequirementType(str, Enum):
@@ -169,6 +171,14 @@ class RequirementCreate(BaseModel):
     type: RequirementType = RequirementType.FUNCTIONAL
     name: str = ""
     description: str = ""
+
+    # Descriptions are stored and published as HTML. The editor cleans content
+    # client-side, but the API takes a plain str, so this is the only place a
+    # direct API call can be stopped from persisting a script payload.
+    @field_validator("description")
+    @classmethod
+    def _clean_description(cls, v: str) -> str:
+        return sanitize_html(v)
     priority: Priority = Priority.MEDIUM
     status: RequirementStatus = RequirementStatus.PROPOSED
     verification_method: VerificationMethod = VerificationMethod.TEST
@@ -199,6 +209,11 @@ class RequirementUpdate(BaseModel):
     type: Optional[RequirementType] = None
     name: Optional[str] = None
     description: Optional[str] = None
+
+    @field_validator("description")
+    @classmethod
+    def _clean_description(cls, v: Optional[str]) -> Optional[str]:
+        return None if v is None else sanitize_html(v)
     priority: Optional[Priority] = None
     status: Optional[RequirementStatus] = None
     verification_method: Optional[VerificationMethod] = None

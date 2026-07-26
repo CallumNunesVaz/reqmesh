@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { GitBranch, Plus, X, LayoutGrid, LayoutList, Search } from 'lucide-react';
 import { api } from '../api/client';
 import type { TraceLink, Requirement, VerificationCase } from '../api/client';
+import { removeTraceLink } from '../lib/traceLinks';
 import { useAuthStore } from '../store/auth';
 import { useStore } from '../store';
 import AutocompleteInput from '../components/AutocompleteInput';
@@ -86,10 +87,12 @@ export default function TraceMatrixPage() {
     } catch (err: any) { setError(err.message || 'Failed to add link'); }
   };
 
-  const removeLink = async (index: number) => {
+  // Takes the link itself, never a row index — see removeTraceLink.
+  const removeLink = async (link: TraceLink) => {
     if (!projectId) return;
+    const updated = removeTraceLink(links, link);
+    if (updated === links) return; // not present; nothing to write
     try {
-      const updated = links.filter((_, i) => i !== index);
       await api.updateTraces(projectId, { links: updated });
       setLinks(updated);
     } catch (err: any) { setError(err.message || 'Failed to remove link'); }
@@ -245,7 +248,7 @@ export default function TraceMatrixPage() {
                   <td className="px-2 py-2.5">
                     {editable && (
                     <button
-                      onClick={() => removeLink(i)}
+                      onClick={() => removeLink(link)}
                       className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
                     >
                       <X size={12} />
