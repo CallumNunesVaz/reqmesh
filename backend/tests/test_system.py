@@ -131,18 +131,26 @@ def test_upload_update_stages_image_and_requests(client, tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "self_update_enabled", True)
     monkeypatch.setattr(settings, "offline_mode", True)  # proves offline works
 
+    # The target must be *newer* than the running build, derived rather than
+    # hardcoded: `get_update_status` reports COMPLETED once the running version
+    # has caught up with the target, so a fixed "0.0.9" started failing the
+    # moment VERSION passed it, and any fixed number would rot the same way.
+    from app.core.version import get_version
+    major, minor, patch = (get_version().split(".") + ["0", "0"])[:3]
+    target = f"{major}.{minor}.{int(patch.split('-')[0]) + 1}"
+
     res = client.post(
         "/api/system/update/upload",
-        files={"file": ("reqmesh-v0.0.9-image.tar.gz", b"not-a-real-image-but-nonempty", "application/gzip")},
-        data={"target_version": "0.0.9"},
+        files={"file": (f"reqmesh-v{target}-image.tar.gz", b"not-a-real-image-but-nonempty", "application/gzip")},
+        data={"target_version": target},
     )
     assert res.status_code == 200, res.text
     assert (control / "update-image.tar").read_bytes() == b"not-a-real-image-but-nonempty"
     assert (control / "update-mode").read_text().strip() == "image"
-    assert (control / "update-target").read_text().strip() == "0.0.9"
+    assert (control / "update-target").read_text().strip() == target
     status = client.get("/api/system/update/status").json()
     assert status["state"] in ("requested", "in_progress")
-    assert status["target_version"] == "0.0.9"
+    assert status["target_version"] == target
 
 
 def test_upload_update_rejects_empty(client, tmp_path, monkeypatch):

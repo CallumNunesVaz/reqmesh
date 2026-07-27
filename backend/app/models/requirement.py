@@ -38,6 +38,7 @@ class RequirementType(str, Enum):
 
 class RequirementStatus(str, Enum):
     PROPOSED = "proposed"
+    IN_REVIEW = "in_review"
     APPROVED = "approved"
     IMPLEMENTED = "implemented"
     VERIFIED = "verified"
@@ -248,3 +249,70 @@ class RequirementTreeNode(BaseModel):
     status: str
     priority: str
     children: list["RequirementTreeNode"] = Field(default_factory=list)
+
+
+# ── Validate-on-load: structural integrity for any dict coming off disk ───────
+# YAML on disk is unstructured — a manual git edit, a merge conflict or a
+# migration bug can leave a field with the wrong type. This is the
+# requirement-specific half of the read-side guard; see
+# `app/services/load_guard.py` for the id/HTML checks common to every
+# collection and for where this runs.
+#
+# Two things this deliberately does NOT do, both learned the hard way:
+#
+# * **It does not fill in missing fields.** `compute_fingerprint` canonicalises
+#   over the normative fields, so injecting `type: functional` into a file that
+#   omitted it changes that requirement's fingerprint and flips it to
+#   "unreviewed". Load-time defaults would silently invalidate the review state
+#   of every existing project — the exact false-assurance failure the store
+#   exists to prevent. Consumers already read these with `.get(field, default)`.
+#
+# * **It does not coerce unrecognised enum values.** The vocabularies are open
+#   in practice: `type: design` is not in `RequirementType`, but the coverage
+#   model matches a requirement's `type` against a downstream `needs` entry, so
+#   rewriting it to `functional` silently breaks the trace. The write path
+#   validates against the enums via Pydantic; the read path must not
+#   second-guess data a human put there on purpose.
+#
+# What is left is the narrow case worth acting on: a field whose *type* is
+# wrong (so consumers would raise), and entity references that can't be valid.
+
+# Fields naming another entity. A hostile value here can't reach the filesystem
+# (ids are re-validated before becoming a path) but it does produce dangling
+# graph edges and confusing traceability output, so drop it at the boundary.
+_ID_LIST_FIELDS = ("verification_cases", "needs")
+
+_LIST_FIELDS = ("attributes", "parameters", "constraints", "relations",
+                "verification_cases", "baselines", "needs", "references",
+                "system_states")
+
+
+def normalise_requirement_on_load(req: dict) -> dict:
+    """Return *req* with structurally impossible values repaired.
+
+    Mutates and returns the same dict — no copy is made. Only keys that are
+    *present and the wrong shape* are touched; absent keys stay absent.
+    """
+    from app.services.load_guard import is_safe_id
+
+    # A scalar where a list belongs raises in every consumer that iterates it.
+    for field in _LIST_FIELDS:
+        if field in req and not isinstance(req[field], list):
+            req[field] = []
+    if "priorities" in req and not isinstance(req["priorities"], dict):
+        req["priorities"] = {}
+
+    # Entity references: a parent or relation target that isn't a usable id
+    # renders as a broken link and confuses the tree builder.
+    if req.get("parent") is not None and not is_safe_id(req["parent"]):
+        req["parent"] = None
+    if req.get("relations"):
+        req["relations"] = [
+            rel for rel in req["relations"]
+            if isinstance(rel, dict) and is_safe_id(rel.get("target"))
+        ]
+    for field in _ID_LIST_FIELDS:
+        if req.get(field):
+            req[field] = [v for v in req[field] if is_safe_id(v)]
+
+    return req

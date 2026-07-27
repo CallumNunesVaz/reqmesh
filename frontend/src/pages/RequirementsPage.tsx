@@ -869,7 +869,7 @@ function BulkEditModal({
         description: `Update ${selectedIds.length} requirements`,
         undo: async () => {
           for (const [id, before] of Object.entries(savedBefore)) {
-            await api.updateRequirementSkipWorkflow(projectId, id, before);
+            await api.updateRequirement(projectId, id, before);
           }
         },
         redo: async () => { await api.bulkUpdateRequirements(projectId, selectedIds, updates); },

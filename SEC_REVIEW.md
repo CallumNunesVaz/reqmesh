@@ -7,6 +7,72 @@
 
 ---
 
+## Implementation status — verified 27 July 2026
+
+Each item below was checked against the code, not against a changelog. "Verified"
+means the behaviour was exercised; "read" means the code was inspected.
+
+### Closed
+
+| Finding | Where |
+| --- | --- |
+| F-02 anonymous read | `require_auth` default true outside `personal`; `require_auth_middleware` |
+| F-03 self-registration | off by default; `registration_domain_allowlist` |
+| F-04 bootstrap credential | `0600` file, never logged; `password_change_required` forces rotation; file deleted only after the **admin** has rotated |
+| F-05 proxy IP | `rate_limit.py` walks XFF right-to-left against `proxy_trusted_cidr`; progressive lockout |
+| F-06 access-control matrix | `test_permissions.py` generates from the live route table — 81 of 92 mutating routes asserted |
+| F-07 JWT / token storage | `algorithms=["HS256"]` pinned; cookies + double-submit CSRF, no `localStorage` token |
+| F-08 enumeration | constant response on forgot-password; dummy bcrypt hash on unknown user |
+| F-09 validate-on-load | `services/load_guard.py`, applied at the store's cache-fill path |
+| F-10 YAML | ruamel rt/safe only; no `yaml.load`/`FullLoader` |
+| F-11 / F-12 git | list-form subprocess, scheme allowlist, `redact_url()` at every logging site |
+| F-13 `/scan` containment | resolved and asserted inside the project root; symlinks skipped |
+| F-15 ReqIF XXE | DOCTYPE rejected outright |
+| F-16 XLSX bombs | compression-ratio and uncompressed-size caps; exact row count |
+| F-17 stored XSS | sanitised on write, on load, and in the publisher; no `dangerouslySetInnerHTML` |
+| F-18 LaTeX | escaped throughout, temp dir, 120 s timeout |
+| F-19 evaluator | float coercion bounds magnitude; `OverflowError` → `EvalError` |
+| F-20 headers / CSP | FastAPI middleware + `Caddyfile` + `nginx.conf` |
+| F-21 CORS | wildcard origin now **refuses to start** (credentials are always sent) |
+| F-22 images | `data:` images only, raster only — SVG refused |
+| F-23 / F-24 rate limits | SSE connection caps; analysis and publish budgets |
+| F-25 container | non-root, `read_only`, `cap_drop: [ALL]`, `no-new-privileges` |
+| F-27 `SECURITY.md` | present |
+| F-28 Electron | `sandbox: true`, `will-navigate` origin allowlist, `openExternal` restricted to http/https |
+| §0.1 profiles | `PROFILE_PRESETS` + `model_post_init` |
+| Phase 0 CI | `.github/workflows/security.yml` — CodeQL, Semgrep, Bandit, pip-audit, npm audit, gitleaks, Trivy |
+
+### Open
+
+| Finding | Note |
+| --- | --- |
+| **F-01 MFA / SSO** | Not started. No OIDC, WebAuthn or TOTP. The Essential Eight ML2 blocker, and the largest remaining item |
+| **F-14 audit-trail integrity** | No signed commits, no hash-chained history. Append-only remote not yet documented |
+| **F-26 SBOM / signed releases** | No CycloneDX, no cosign, base images pinned by tag not digest |
+| **F-28 code signing** | Electron runtime hardening is done; Windows/macOS signing is not |
+| **F-09 scope** | The guard covers ids, HTML and structure. `references[].path` containment is handled downstream in `references.py` rather than at load |
+| **F-16 residual** | Bounds are on the archive and row count; per-cell content is not bounded |
+
+### Two constraints found while implementing F-09
+
+Both are load-bearing and easy to reintroduce, so they are recorded here and
+enforced by `tests/test_load_guard.py`:
+
+1. **The read-side guard must not fill in absent fields.** `compute_fingerprint`
+   canonicalises over the normative fields, so injecting `type: functional` into
+   a file that omitted it changes that requirement's fingerprint and flips it to
+   "unreviewed" — silently invalidating the review state of every existing
+   project. That is the false-assurance failure in §2.1, caused by the control
+   meant to prevent it.
+2. **It must not coerce unrecognised enum values.** The vocabularies are open in
+   practice: `type: design` is not in `RequirementType`, but the coverage model
+   matches a requirement's `type` against a downstream `needs` entry, so
+   rewriting it to `functional` silently breaks the trace. The write path
+   validates against the enums; the read path must not second-guess data a
+   human put there deliberately.
+
+---
+
 ## 0. Scope, method and caveats
 
 This review was produced from the public `README.md` and the repository file listing. `AUDIT.md`, `DEPLOYMENT.md`, `ROADMAP.md` and the source tree itself were **not** readable at time of writing. Findings are therefore split into two classes:

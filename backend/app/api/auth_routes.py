@@ -119,8 +119,7 @@ async def register(data: RegisterRequest, response: Response,
         role = data.role
     result = register_user(data.username, data.password, role)
     if not result:
-        # Same error whether username exists or password > 72 bytes
-        raise HTTPException(status_code=409, detail="Username already exists")
+        raise HTTPException(status_code=409, detail="Registration failed")
 
     csrf_token = set_auth_cookies(response, result["username"], result["token"])
     return {
@@ -144,9 +143,11 @@ async def login_as_guest(response: Response):
 
 
 @router.get("/auth/whoami")
-async def whoami(request: Request, user: dict = Depends(get_current_user),
+async def whoami(request: Request, response: Response,
+                 user: dict = Depends(get_current_user),
                  authorization: Optional[str] = Header(None)):
-    from app.core.auth import create_token as _create_token
+    from app.core.auth import create_token as _create_token, create_csrf_token, _token_ttl, _cookie_domain
+    from app.core.config import settings
     users = load_users()
     u = users.get(user.get("username", ""), {})
 
@@ -155,6 +156,29 @@ async def whoami(request: Request, user: dict = Depends(get_current_user),
     if user.get("role", "guest") != "guest":
         tv = int(u.get("token_version", 0))
         ws_token = _create_token(user["username"], user.get("role", "guest"), tv)
+        # Return the CSRF token so the frontend can rehydrate after a page
+        # refresh — the csrftoken cookie persists but the in-memory store was
+        # lost.  Use the existing cookie value if present; only mint a fresh
+        # one when the cookie is missing (otherwise login + whoami in the same
+        # session would overwrite the cookie and break the next mutation).
+        csrf = request.cookies.get("csrftoken") or ""
+        if not csrf:
+            csrf = create_csrf_token(user["username"])
+            ttl = _token_ttl()
+            secure = settings.cookie_secure
+            domain = _cookie_domain()
+            response.set_cookie(
+                key="csrftoken",
+                value=csrf,
+                max_age=ttl,
+                httponly=False,
+                secure=secure,
+                samesite="strict" if secure else "lax",
+                path="/api",
+                domain=domain,
+            )
+    else:
+        csrf = ""
 
     return {
         "username": user.get("username", "guest"),
@@ -165,6 +189,7 @@ async def whoami(request: Request, user: dict = Depends(get_current_user),
         "last_active": u.get("last_active", ""),
         "joined": u.get("created", ""),
         "token": ws_token,
+        "csrf_token": csrf,
         "password_change_required": bool(u.get("password_change_required", False)),
     }
 

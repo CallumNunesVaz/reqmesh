@@ -48,7 +48,6 @@ class TestDefaultTiers:
         assert _new_cr(guest_client, {}).status_code == 403
 
     def test_contributor_cannot_create_project(self, guest_client):
-        # Project creation is maintainer-tier and global (no project to scope to).
         r = guest_client.post("/api/projects", json={"id": "q", "name": "Q"},
                               headers=_tok("cont", "contributor"))
         assert r.status_code == 403
@@ -57,7 +56,6 @@ class TestDefaultTiers:
 class TestLegacyRolesHardened:
     def test_legacy_viewer_and_editor_are_blocked(self, guest_client):
         _make_project(guest_client)
-        # Pre-migration roles aren't in the permissions map -> view (0).
         for role in ("viewer", "editor"):
             h = _tok(f"legacy_{role}", role)
             assert _new_cr(guest_client, h).status_code == 403, role
@@ -68,7 +66,7 @@ class TestProjectPermissionMap:
     def test_map_can_elevate_contributor_to_edit(self, guest_client):
         _make_project(guest_client)
         cont = _tok("cont", "contributor")
-        assert _new_req(guest_client, cont).status_code == 403      # default: denied
+        assert _new_req(guest_client, cont).status_code == 403
 
         store = get_store("p")
         meta = store.read_meta()
@@ -76,14 +74,181 @@ class TestProjectPermissionMap:
                                "maintainer": "edit", "admin": "admin"}
         store.write_meta(meta)
 
-        assert _new_req(guest_client, cont, "R-2").status_code == 201  # now allowed
+        assert _new_req(guest_client, cont, "R-2").status_code == 201
 
     def test_map_cannot_demote_a_global_admin(self, guest_client):
         _make_project(guest_client)
         store = get_store("p")
         meta = store.read_meta()
-        meta["permissions"] = {"admin": "view"}  # try to strip admin
+        meta["permissions"] = {"admin": "view"}
         store.write_meta(meta)
 
         adm = {"Authorization": f"Bearer {auth.create_token('adm', 'admin')}"}
         assert _new_req(guest_client, adm, "R-3").status_code == 201
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Route-table-driven permission audit — generated from the live FastAPI route
+# table so a new endpoint added without a permission dependency fails CI.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+import re
+import inspect
+import pytest
+from fastapi.routing import APIRoute
+
+from app.main import app
+from app.core.dependencies import require_edit, require_maintain, require_maintain_global, require_admin
+
+_PERM_DEP_NAMES = frozenset({
+    "require_edit", "require_maintain", "require_maintain_global", "require_admin",
+})
+
+_PROJECT_ID_RE = re.compile(r"^/api/projects/\{[^}]+\}(/.*)?$")
+
+
+def _collect_api_routes():
+    """Walk the live FastAPI route table and return every APIRoute under /api."""
+    routes = []
+    for r in app.routes:
+        if isinstance(r, APIRoute) and r.path.startswith("/api"):
+            routes.append(r)
+    return routes
+
+
+def _dep_name(dep):
+    """Return the string name of a FastAPI dependency if resolvable."""
+    if inspect.isfunction(dep):
+        return dep.__name__
+    if inspect.isclass(dep):
+        return dep.__name__
+    if hasattr(dep, "dependency") and inspect.isfunction(dep.dependency):
+        return dep.dependency.__name__
+    return None
+
+
+def _has_perm_dep(route: APIRoute) -> bool:
+    """True if *route* resolves at least one permission-guard dependency."""
+    for dep in getattr(route, "dependencies", []) or []:
+        name = _dep_name(dep)
+        if name and name in _PERM_DEP_NAMES:
+            return True
+    if hasattr(route, "dependant") and route.dependant:
+        for dd in getattr(route.dependant, "dependencies", []) or []:
+            call = getattr(dd, "call", None)
+            if call and hasattr(call, "__name__") and call.__name__ in _PERM_DEP_NAMES:
+                return True
+    return False
+
+
+# Path suffixes for POST endpoints that are genuinely read-only computations —
+# they take a request body because the query is too complex for a query string,
+# but they touch no state.
+#
+# Keep this list minimal. `/import` and `/scan` were previously exempt here on
+# the grounds of being "dry-run"; both can in fact mutate (`/import` in replace
+# mode deletes every requirement), and exempting them meant the two most
+# destructive routes in the API were the two the audit would never check.
+_READONLY_POST_SUFFIXES = frozenset({
+    "/evaluation/impact",
+})
+
+
+def _required_guard(route: APIRoute) -> str | None:
+    """Return the guard class a mutating route *should* carry, or None if unguarded
+    is acceptable."""
+    path = route.path
+    methods = route.methods or set()
+
+    if path == "/api/projects":
+        if "POST" in methods:
+            return "require_maintain_global"
+        return None
+
+    if _PROJECT_ID_RE.match(path):
+        if "DELETE" in methods and path == "/api/projects/{project_id}":
+            return "require_admin"
+        if methods & {"POST", "PUT", "PATCH", "DELETE"}:
+            # Allow read-only computation endpoints to skip permission guards.
+            if any(path.endswith(s) for s in _READONLY_POST_SUFFIXES):
+                return None
+            # Bulk operations need higher privilege regardless of entity type.
+            if "/bulk" in path:
+                return "require_maintain"
+            if any(seg in path for seg in ("/change-requests", "/risks",
+                    "/comments", "/decisions")):
+                return "require_edit"
+            return "require_maintain"
+        return None
+
+    if path.startswith("/api/auth/users"):
+        if methods & {"GET", "POST", "PUT", "PATCH", "DELETE"}:
+            return "require_admin"
+        return None
+
+    if path.startswith("/api/system/") and path != "/api/system/public-config":
+        if methods & {"GET", "POST", "PUT", "PATCH", "DELETE"}:
+            return "require_admin"
+        return None
+
+    if path.startswith("/api/auth/"):
+        return None
+
+    return None
+
+
+def _describe_route(method: str, path: str) -> str:
+    return f"{method} {path}"
+
+
+_API_ROUTES = _collect_api_routes()
+# Group routes so each gets its own parametrised test case.
+_MUTATING_ROUTES = [
+    (r, m) for r in _API_ROUTES
+    for m in sorted(r.methods or set())
+    if m in {"POST", "PUT", "PATCH", "DELETE"}
+]
+
+
+@pytest.mark.parametrize("route,method", _MUTATING_ROUTES,
+                         ids=[_describe_route(m, r.path) for r, m in _MUTATING_ROUTES])
+def test_mutating_route_has_permission_dep(route, method):
+    """Every mutating API route must carry a permission dependency.
+
+    A route added without ``require_edit``, ``require_maintain``,
+    ``require_maintain_global`` or ``require_admin`` fails this test.
+    """
+    guard = _required_guard(route)
+    if guard is None:
+        return
+    assert _has_perm_dep(route), (
+        f"{method} {route.path} has no permission dependency — "
+        f"expected {guard}"
+    )
+
+
+@pytest.mark.parametrize("route,method", _MUTATING_ROUTES,
+                         ids=[_describe_route(m, r.path) for r, m in _MUTATING_ROUTES])
+def test_mutating_route_uses_correct_permission_dep(route, method):
+    """Every mutating API route must use the *right* guard tier.
+
+    A ``POST /api/projects/{id}/requirements`` carrying ``require_edit`` instead
+    of ``require_maintain`` fails this test.
+    """
+    guard = _required_guard(route)
+    if guard is None:
+        return
+    dep_names = set()
+    for d in getattr(route, "dependencies", []) or []:
+        name = _dep_name(d)
+        if name:
+            dep_names.add(name)
+    if hasattr(route, "dependant") and route.dependant:
+        for dd in getattr(route.dependant, "dependencies", []) or []:
+            call = getattr(dd, "call", None)
+            if call and hasattr(call, "__name__"):
+                dep_names.add(call.__name__)
+    assert guard in dep_names, (
+        f"{method} {route.path} has dependencies {sorted(dep_names)} — "
+        f"expected {guard}"
+    )

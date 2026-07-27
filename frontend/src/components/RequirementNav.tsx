@@ -18,6 +18,7 @@ import {
   AlertTriangle,
   BarChart3,
   Boxes,
+  History,
 } from 'lucide-react';
 import { api, type RequirementTreeNode } from '../api/client';
 import { useStore } from '../store';
@@ -354,6 +355,7 @@ export default function RequirementNav({ width = 300, collapsed, onToggleCollaps
     { to: `/project/${projectId}/traces`, label: 'Trace Matrix', icon: GitBranch },
     { to: `/project/${projectId}/change-requests`, label: 'Change Requests', icon: GitPullRequest },
     { to: `/project/${projectId}/risks`, label: 'Risks', icon: AlertTriangle },
+    { to: `/project/${projectId}/baselines`, label: 'Baselines', icon: History },
     { to: `/project/${projectId}/metrics`, label: 'Metrics', icon: BarChart3 },
   ];
 

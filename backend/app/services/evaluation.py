@@ -190,6 +190,8 @@ class Evaluator:
                 return op(left, right)
             except ZeroDivisionError:
                 raise EvalError("division by zero")
+            except OverflowError:
+                raise EvalError("numerical result out of range")
 
         if isinstance(node, ast.UnaryOp):
             operand = self._eval(node.operand, owner, stack, env)
@@ -233,7 +235,7 @@ class Evaluator:
             args = [self._eval(a, owner, stack, env) for a in node.args]
             try:
                 return func(*args)
-            except (ValueError, TypeError) as e:
+            except (OverflowError, ValueError, TypeError) as e:
                 raise EvalError(f"{fname}: {e}")
 
         raise EvalError(f"disallowed syntax: {type(node).__name__}")

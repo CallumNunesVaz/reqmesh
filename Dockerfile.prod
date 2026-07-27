@@ -46,6 +46,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ ./
 COPY --from=frontend-build /app/frontend/dist /app/frontend/dist
 
+# GPLv3 §4: a copy of the Licence must travel with every conveyed copy of the
+# Program, and an image pushed to a registry is a conveyed copy. The
+# third-party notices ship alongside for the same reason.
+COPY LICENSE THIRD_PARTY_NOTICES.md /app/
+
 RUN mkdir -p /data/projects && \
     groupadd -r reqmesh && useradd -r -g reqmesh -d /app reqmesh && \
     chown -R reqmesh:reqmesh /app /data && \

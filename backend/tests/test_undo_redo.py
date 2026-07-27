@@ -2,21 +2,21 @@
 
 The undo/redo system works by:
 1. The frontend captures "before" state before a mutation
-2. On undo: calls PUT with the old state and ?skip_workflow=true
-3. On redo: calls PUT with the new state (normal workflow applies)
+2. On undo: calls PUT with the old state
+3. On redo: calls PUT with the new state
+
+All status transitions are now permissive — the skip_workflow bypass is removed.
 """
 
 from .conftest import make_req
 
 
 class TestUndoRedoStatusChange:
-    """The original bug: undoing a status change gave 400 because workflow
-    validation rejected the reverse transition.  ?skip_workflow=true fixes that."""
+    """Undo/redo of status changes — all transitions are now permissive."""
 
-    def test_undo_status_change_bypasses_workflow(self, client, project):
+    def test_undo_status_change_works(self, client, project):
         req = make_req(client, project, "UNDO01", name="Status Undo Test", status="proposed")
 
-        # Change status normally (workflow validates this).
         res = client.put(
             f"/api/projects/{project}/requirements/UNDO01",
             json={"status": "approved"},
@@ -24,45 +24,33 @@ class TestUndoRedoStatusChange:
         assert res.status_code == 200
         assert res.json()["status"] == "approved"
 
-        # Undo: reverting to "proposed" would normally fail workflow validation
-        # (approved→proposed might be disallowed).  ?skip_workflow=true must allow it.
         res2 = client.put(
-            f"/api/projects/{project}/requirements/UNDO01?skip_workflow=true",
+            f"/api/projects/{project}/requirements/UNDO01",
             json={"status": "proposed"},
         )
         assert res2.status_code == 200, f"Undo should succeed, got {res2.status_code}: {res2.text}"
         assert res2.json()["status"] == "proposed"
 
-    def test_skip_workflow_allows_any_transition(self, client, project):
+    def test_any_status_transition_allowed(self, client, project):
         req = make_req(client, project, "UNDO02", name="Any Transition", status="implemented")
 
-        # Jump from implemented all the way back to proposed — workflow would
-        # normally forbid this, but skip_workflow must allow it.
         res = client.put(
-            f"/api/projects/{project}/requirements/UNDO02?skip_workflow=true",
+            f"/api/projects/{project}/requirements/UNDO02",
             json={"status": "proposed"},
         )
         assert res.status_code == 200
         assert res.json()["status"] == "proposed"
 
-    def test_workflow_still_enforced_without_flag(self, client, project):
-        """The ?skip_workflow flag should only be used for undo — normal
-        updates must still enforce workflow rules."""
-        # Install a custom workflow that makes 'rejected' terminal.
-        client.patch(
-            f"/api/projects/{project}",
-            json={"workflow": {"transitions": {"rejected": []}}},
-        )
-        make_req(client, project, "UNDO03", name="Workflow Test", status="rejected")
+    def test_terminal_status_can_transition(self, client, project):
+        """Even a 'terminal' status (rejected/deprecated) can transition freely."""
+        make_req(client, project, "UNDO03", name="Terminal Test", status="deprecated")
 
-        # Rejected is a terminal state in the custom workflow — no transitions
-        # are allowed out of it.  The plain PUT must reject this.
         res = client.put(
             f"/api/projects/{project}/requirements/UNDO03",
-            json={"status": "approved"},
+            json={"status": "proposed"},
         )
-        assert res.status_code == 400
-        assert "transition" in res.json()["detail"].lower() or "terminal" in res.json()["detail"].lower()
+        assert res.status_code == 200
+        assert res.json()["status"] == "proposed"
 
 
 class TestUndoRedoCreateDelete:
@@ -152,7 +140,7 @@ class TestUndoRedoFieldChanges:
 
         # Undo each field individually (simulating what the undo stack does).
         undo_res = client.put(
-            f"/api/projects/{project}/requirements/UNDO20?skip_workflow=true",
+            f"/api/projects/{project}/requirements/UNDO20",
             json={
                 "name": "Original",
                 "priority": "low",
@@ -184,7 +172,7 @@ class TestUndoRedoFieldChanges:
 
         # Undo it.
         client.put(
-            f"/api/projects/{project}/requirements/UNDO21?skip_workflow=true",
+            f"/api/projects/{project}/requirements/UNDO21",
             json={"name": "Redo Fields"},
         )
 
@@ -216,12 +204,12 @@ class TestUndoRedoFieldChanges:
         assert r["priority"] == "high"
 
         # Step 3: undo priority
-        client.put(f"/api/projects/{project}/requirements/UNDO22?skip_workflow=true", json={"priority": "low"})
+        client.put(f"/api/projects/{project}/requirements/UNDO22", json={"priority": "low"})
         r = client.get(f"/api/projects/{project}/requirements/UNDO22").json()
         assert r["priority"] == "low"
 
         # Step 4: undo name
-        client.put(f"/api/projects/{project}/requirements/UNDO22?skip_workflow=true", json={"name": "Seq"})
+        client.put(f"/api/projects/{project}/requirements/UNDO22", json={"name": "Seq"})
         r = client.get(f"/api/projects/{project}/requirements/UNDO22").json()
         assert r["name"] == "Seq"
 

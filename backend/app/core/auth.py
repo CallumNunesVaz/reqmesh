@@ -180,6 +180,7 @@ def authenticate(username: str, password: str) -> dict:
         users = load_users()
         user = users.get(username)
         if not user:
+            hash_password(secrets.token_urlsafe(32))
             audit_logger.warning("Login failed: user=%s reason=unknown_user", username)
             return {"status": "invalid"}
 
@@ -218,6 +219,19 @@ def authenticate(username: str, password: str) -> dict:
         tv = int(user.get("token_version", 0))
         audit_logger.info("Login successful: user=%s role=%s", username, role)
         needs_pw_change = bool(user.get("password_change_required", False))
+
+        # Burn the bootstrap credential once the account it belongs to has been
+        # used. Scoped to that account deliberately: deleting it on *any*
+        # successful login means a self-registered user logging in first
+        # destroys the password before the operator has read it, locking them
+        # out of the admin account with no reset path unless SMTP is set up.
+        if username == "admin" and not needs_pw_change:
+            from app.core.config import settings
+            admin_file = Path(settings.data_root) / ".initial-admin"
+            try:
+                admin_file.unlink(missing_ok=True)
+            except OSError:
+                pass
         return {"status": "ok", "username": username, "role": role,
                 "token": create_token(username, role, tv),
                 "password_change_required": needs_pw_change}

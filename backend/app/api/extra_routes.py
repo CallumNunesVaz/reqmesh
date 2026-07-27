@@ -13,6 +13,7 @@ from app.core.config import settings
 from app.core.dependencies import get_store, require_edit, require_maintain, get_current_user
 from app.core.rate_limit import rate_limit
 from app.core.ids import safe_id
+from app.api.router import normalize_baseline_defs
 from app.models.change_request import ChangeRequestCreate, ChangeRequestUpdate
 from app.models.component import ComponentCreate, ComponentUpdate
 from app.models.requirement import RequirementUpdate
@@ -320,20 +321,12 @@ async def bulk_update_requirements(project_id: str, data: dict, user: dict = Dep
         raise HTTPException(status_code=422, detail=exc.errors())
     if not ids or not updates:
         raise HTTPException(status_code=400, detail="ids and updates required")
-    meta = store.read_meta() if "status" in updates else None
     updated = []
     skipped = []
     for req_id in ids:
         before = store.get_requirement(req_id)
         if before is None:
             continue
-        # Enforce the same workflow rules as the single-requirement update.
-        if meta is not None and before.get("status") != updates["status"]:
-            from app.services.workflow import validate_transition
-            err = validate_transition(meta, before.get("status", "proposed"), updates["status"])
-            if err:
-                skipped.append({"id": req_id, "reason": err})
-                continue
         result = store.update_requirement(req_id, updates)
         if result:
             record_change(store, req_id, "update", before, result, user.get("username", ""))
@@ -1127,14 +1120,24 @@ async def freeze_baseline(project_id: str, name: str, user: dict = Depends(requi
             "source": r.get("source", ""),
             "allocated_to": r.get("allocated_to", ""),
         }
-    data = {"name": name, "frozen_at": datetime.now(timezone.utc).isoformat(), "frozen": True, "snapshot": snapshot}
+    # Enrich with symbol + description from the project's baseline definitions
+    meta = store.read_meta()
+    defs = normalize_baseline_defs(meta.get("baselines", []))
+    sym, desc = "", ""
+    for d in defs:
+        if d["name"] == name:
+            sym, desc = d["symbol"], d["description"]
+            break
+    data = {"name": name, "symbol": sym, "description": desc,
+            "frozen_at": datetime.now(timezone.utc).isoformat(),
+            "frozen": True, "snapshot": snapshot}
     store.write_item("baselines", name, data)
     for r in reqs:
         existing = list(r.get("baselines") or [])
         if name not in existing:
             existing.append(name)
             store.update_requirement(r["id"], {"baselines": existing})
-    return {"name": name, "requirements": len(snapshot)}
+    return {"name": name, "symbol": sym, "description": desc, "requirements": len(snapshot)}
 
 
 @router.get("/projects/{project_id}/baselines/{name}/diff")
@@ -1162,7 +1165,10 @@ async def diff_baseline(project_id: str, name: str):
     for rid in snapshot:
         if not any(c["id"] == rid for c in changes):
             changes.append({"id": rid, "type": "removed"})
-    return {"baseline": name, "frozen_at": baseline.get("frozen_at"), "changes": changes, "changed_count": len(changes)}
+    return {"baseline": name, "symbol": baseline.get("symbol", ""),
+            "description": baseline.get("description", ""),
+            "frozen_at": baseline.get("frozen_at"), "changes": changes,
+            "changed_count": len(changes)}
 
 
 # ── Import (ReqIF / SysML) ────────────────────────────────────────────────────

@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import io
 import re
+import zipfile
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -277,11 +278,79 @@ def export_xlsx(store, path: str) -> None:
     wb.save(path)
 
 
+MAX_XLSX_UNCOMPRESSED_MB = 200
+MAX_XLSX_COMPRESSION_RATIO = 100
+MAX_XLSX_ESTIMATED_ROWS = 100_000
+
+
+def _check_xlsx_zip_bomb(content: bytes) -> None:
+    buf = io.BytesIO(content)
+    try:
+        with zipfile.ZipFile(buf) as zf:
+            for info in zf.infolist():
+                if info.filename.endswith("/"):
+                    continue
+                compressed = info.compress_size
+                uncompressed = info.file_size
+                if compressed <= 0:
+                    continue
+                ratio = uncompressed / compressed
+                if ratio > MAX_XLSX_COMPRESSION_RATIO:
+                    raise ValueError(
+                        f"XLSX file rejected: compression ratio {ratio:.0f}:1 "
+                        f"exceeds limit of {MAX_XLSX_COMPRESSION_RATIO}:1 — "
+                        f"likely a zip bomb attempt"
+                    )
+                if uncompressed > MAX_XLSX_UNCOMPRESSED_MB * 1024 * 1024:
+                    raise ValueError(
+                        f"XLSX file rejected: uncompressed size "
+                        f"{uncompressed / (1024*1024):.0f} MB exceeds limit of "
+                        f"{MAX_XLSX_UNCOMPRESSED_MB} MB"
+                    )
+    except ValueError:
+        raise
+    except zipfile.BadZipFile:
+        raise ValueError("XLSX file rejected: not a valid ZIP file")
+    except Exception:
+        raise ValueError("XLSX file rejected: could not inspect archive")
+
+
+def _count_xlsx_rows(content: bytes) -> int:
+    """Count ``<row `` tags across the workbook's sheets without decompressing
+    into openpyxl.
+
+    ``_check_xlsx_zip_bomb`` has already bounded how much this can inflate, so
+    reading the sheet XML here is safe. The count is *exact* — an earlier
+    version took ``max(row_tags, size / 100)`` as a belt-and-braces estimate,
+    but the size term over-estimates by roughly 4x on ordinary exports and
+    dominated the max, so a legitimate 25k-row import was rejected as "107,119
+    rows". Trust the tag count.
+    """
+    with zipfile.ZipFile(io.BytesIO(content)) as zf:
+        names = [n for n in zf.namelist()
+                 if n.startswith("xl/worksheets/") and n.endswith(".xml")]
+        if not names:
+            names = [n for n in zf.namelist()
+                     if "sheet" in n.lower() and n.endswith(".xml")]
+        rows = 0
+        for name in names:
+            rows += zf.read(name).count(b"<row ")
+    if rows > MAX_XLSX_ESTIMATED_ROWS:
+        raise ValueError(
+            f"XLSX file rejected: {rows:,} rows exceeds limit "
+            f"of {MAX_XLSX_ESTIMATED_ROWS:,}"
+        )
+    return rows
+
+
 def import_xlsx(store, content: bytes, mode: str = "merge", dry_run: bool = False) -> dict:
     if not HAS_OPENPYXL:
         raise ImportError("openpyxl is required for XLSX import. Install with: pip install openpyxl")
     if mode not in ("merge", "replace"):
         raise ValueError(f"Unknown mode: {mode}")
+
+    _check_xlsx_zip_bomb(content)
+    _count_xlsx_rows(content)
 
     import openpyxl
     wb = openpyxl.load_workbook(io.BytesIO(content), read_only=True)

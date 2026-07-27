@@ -122,16 +122,34 @@ function createWindow(port) {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: true,
     },
   });
 
   mainWindow.once('ready-to-show', () => mainWindow.show());
   mainWindow.on('closed', () => { mainWindow = null; });
 
+  // Prevent the renderer from navigating to unexpected URLs — the only allowed
+  // origin is the local backend serving the SPA.
+  const allowedOrigin = `http://${HOST}:${port}`;
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (!url.startsWith(allowedOrigin)) {
+      event.preventDefault();
+    }
+  });
+
   // Open target=_blank / external links in the user's browser, not a new
-  // Electron window.
+  // Electron window. Only http/https URLs are handed to the system shell;
+  // javascript:, file: and other dangerous schemes are refused.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+        shell.openExternal(url);
+      }
+    } catch {
+      // unparseable URL — refuse
+    }
     return { action: 'deny' };
   });
 

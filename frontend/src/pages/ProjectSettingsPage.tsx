@@ -33,6 +33,15 @@ const ENTITY_LABELS: Record<string, string> = {
   specifications: 'Specifications',
 };
 
+/** A baseline definition as stored in project meta. The Baselines page edits
+ *  `symbol` and `description`; this page edits only the set of names, but must
+ *  round-trip the other fields untouched. */
+interface BaselineDef {
+  name: string;
+  symbol: string;
+  description: string;
+}
+
 export default function ProjectSettingsPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
@@ -55,10 +64,21 @@ export default function ProjectSettingsPage() {
 
   // Baselines
   const [baselines, setBaselines] = useState<{ name: string; count: number }[]>([]);
-  const [baselineDefs, setBaselineDefs] = useState<string[]>([]);
+  // Full definition objects, not just names. This page only edits the name
+  // list, but it saves the whole array back — so holding bare strings here
+  // silently wiped the symbol and description that the Baselines page sets,
+  // on every unrelated settings save.
+  const [baselineDefs, setBaselineDefs] = useState<BaselineDef[]>([]);
   const [newBaselineDef, setNewBaselineDef] = useState('');
   const [editingBaseline, setEditingBaseline] = useState<string | null>(null);
   const [editBaselineName, setEditBaselineName] = useState('');
+
+  const addBaselineDef = () => {
+    const name = newBaselineDef.trim();
+    setNewBaselineDef('');
+    if (!name || baselineDefs.some((d) => d.name === name)) return;
+    setBaselineDefs((prev) => [...prev, { name, symbol: '', description: '' }]);
+  };
 
   // Git history
   const [gitCommits, setGitCommits] = useState<Array<{ hash: string; author: string; date: string; message: string }>>([]);
@@ -128,7 +148,11 @@ export default function ProjectSettingsPage() {
       setGitAutocommit(git.auto_commit !== false);
       setGitPushOnCommit(git.push_on_commit || false);
       setGitPushInterval(git.push_interval_minutes || 0);
-      setBaselineDefs(p.baselines || []);
+      setBaselineDefs((p.baselines || []).map((b: any) => (
+        typeof b === 'string'
+          ? { name: b, symbol: '', description: '' }
+          : { name: b.name, symbol: b.symbol || '', description: b.description || '' }
+      )));
     }).catch((err: any) => setError(err.message));
     loadBaselines();
     loadGitHistory();
@@ -267,10 +291,10 @@ export default function ProjectSettingsPage() {
         <h2 className="font-semibold text-sm text-card-foreground mb-1">Baseline Definitions</h2>
         <p className="text-xs text-muted-foreground mb-3">Define the available baseline names for this project (e.g. PDR, CDR, TRR). These appear as selectable options on requirement forms.</p>
         <div className="flex flex-wrap gap-1 mb-2">
-          {baselineDefs.map((name) => (
-            <span key={name} className="inline-flex items-center gap-1 rounded-full bg-accent px-2.5 py-0.5 text-xs">
-              {name}
-              <button onClick={() => setBaselineDefs((prev) => prev.filter((n) => n !== name))} className="text-muted-foreground hover:text-destructive"><X size={11} /></button>
+          {baselineDefs.map((def) => (
+            <span key={def.name} className="inline-flex items-center gap-1 rounded-full bg-accent px-2.5 py-0.5 text-xs">
+              {def.symbol ? `${def.symbol} · ${def.name}` : def.name}
+              <button onClick={() => setBaselineDefs((prev) => prev.filter((d) => d.name !== def.name))} className="text-muted-foreground hover:text-destructive"><X size={11} /></button>
             </span>
           ))}
           {baselineDefs.length === 0 && (
@@ -280,8 +304,8 @@ export default function ProjectSettingsPage() {
         <div className="flex gap-2">
           <input className="input text-sm flex-1" placeholder="PDR" value={newBaselineDef}
             onChange={(e) => setNewBaselineDef(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); const n = newBaselineDef.trim(); if (n && !baselineDefs.includes(n)) { setBaselineDefs([...baselineDefs, n]); } setNewBaselineDef(''); } }} />
-          <button className="btn-secondary text-xs" onClick={() => { const n = newBaselineDef.trim(); if (n && !baselineDefs.includes(n)) { setBaselineDefs([...baselineDefs, n]); } setNewBaselineDef(''); }}>
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addBaselineDef(); } }} />
+          <button className="btn-secondary text-xs" onClick={addBaselineDef}>
             <Plus size={14} /> Add
           </button>
         </div>

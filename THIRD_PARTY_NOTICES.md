@@ -22,7 +22,7 @@ The Docker images additionally bundle third-party software, invoked as separate
 programs (mere aggregation — not linked into reqmesh). Their own licenses apply
 to those components:
 
-## Tectonic
+### Tectonic
 
 - **Used for:** typesetting the LaTeX PDF report (primary PDF export path). When
   tectonic is unavailable, reqmesh falls back to the weasyprint HTML→PDF renderer.
@@ -40,3 +40,40 @@ under `TECTONIC_CACHE_DIR`). Those packages are **not** shipped inside the
 reqmesh image; they are individually licensed under the free/redistributable
 terms of the TeX Live distribution (predominantly the LaTeX Project Public
 License, LPPL).
+
+## Bundled binaries (desktop build)
+
+The Electron desktop build (`desktop/`, packaged by electron-builder) ships a
+complete application runtime inside the installer. Unlike tectonic above, this is
+not mere aggregation: reqmesh's frontend is loaded and executed *by* that runtime.
+The combination is nonetheless sound, because every component is under a
+permissive, GPL-compatible license — recording them here is a notice obligation,
+not a conflict.
+
+### Electron
+
+- **Used for:** the desktop shell — it starts the reqmesh backend as a child
+  process and renders the existing web UI in a native window (`desktop/main.js`).
+- **License:** MIT License.
+- **Copyright:** © Electron contributors; © 2013–2020 GitHub Inc.
+- **Homepage:** https://www.electronjs.org/
+- **Source:** https://github.com/electron/electron
+
+Electron in turn embeds two large runtimes, which are redistributed as part of
+the packaged application:
+
+- **Chromium** — BSD-3-Clause for Chromium's own source, plus a substantial set
+  of third-party licenses for its bundled components.
+- **Node.js** — MIT License, itself bundling components under MIT, BSD and
+  similar terms.
+
+Electron ships the authoritative, version-specific text for both as
+`LICENSES.chromium.html` in its distribution, and its own terms as `LICENSE`.
+Those files are the correct reference rather than a list transcribed here, which
+would drift out of date at every Electron upgrade. Both are present in the
+unpacked application directory of a built installer.
+
+`electron-builder` is a build-time tool only (MIT) and is not redistributed.
+
+The desktop build's own code is licensed GPL-3.0-or-later along with the rest of
+reqmesh; see `desktop/package.json`.

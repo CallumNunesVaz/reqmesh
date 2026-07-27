@@ -235,42 +235,34 @@ def test_create_requirement_accepts_relations_and_attributes(client, project):
     assert req["attributes"] == [{"key": "standard", "value": "DO-178C"}]
 
 
-# ── Custom workflow enforcement ──────────────────────────────────────────────
+# ── Status transitions are always permissive ─────────────────────────────────
 
-def _set_workflow(project_id):
-    from app.services.yaml_store import YamlStore
-    store = YamlStore(Path(settings.data_root) / project_id)
-    meta = store.read_meta()
-    meta["workflow"] = {
-        "states": ["proposed", "approved", "verified"],
-        "transitions": {"proposed": ["approved"], "approved": ["verified"]},
-        "default": "proposed",
-    }
-    store.write_meta(meta)
-
-
-def test_workflow_blocks_invalid_transition(client, project):
+def test_any_status_transition_allowed(client, project):
+    """Every status can jump to any other status — no workflow enforcement."""
     make_req(client, project, "SYST0001")
-    _set_workflow(project)
 
     res = client.put(f"/api/projects/{project}/requirements/SYST0001", json={"status": "verified"})
-    assert res.status_code == 400
-    assert "not allowed" in res.json()["detail"]
-
-    res = client.put(f"/api/projects/{project}/requirements/SYST0001", json={"status": "approved"})
     assert res.status_code == 200
+    assert res.json()["status"] == "verified"
+
+    res = client.put(f"/api/projects/{project}/requirements/SYST0001", json={"status": "deprecated"})
+    assert res.status_code == 200
+    assert res.json()["status"] == "deprecated"
+
+    res = client.put(f"/api/projects/{project}/requirements/SYST0001", json={"status": "proposed"})
+    assert res.status_code == 200
+    assert res.json()["status"] == "proposed"
 
 
-def test_bulk_update_respects_workflow(client, project):
+def test_bulk_update_allows_all_transitions(client, project):
     make_req(client, project, "SYST0001")                      # proposed
-    make_req(client, project, "SYST0002", status="verified")   # terminal state
-    _set_workflow(project)
+    make_req(client, project, "SYST0002", status="verified")   # any state
 
     res = client.post(f"/api/projects/{project}/requirements/bulk",
                       json={"ids": ["SYST0001", "SYST0002"], "updates": {"status": "approved"}})
     body = res.json()
-    assert body["ids"] == ["SYST0001"]
-    assert [s["id"] for s in body["skipped"]] == ["SYST0002"]
+    assert body["ids"] == ["SYST0001", "SYST0002"]
+    assert body["skipped"] == []
 
 
 # ── Published reports escape user content ────────────────────────────────────
@@ -372,6 +364,59 @@ def test_baseline_rename_carries_snapshot_and_labels(client, project):
     assert "BL2" in req["baselines"]
     assert client.get(f"/api/projects/{project}/baselines/BL2/diff").status_code == 200
     assert client.get(f"/api/projects/{project}/baselines/BL1/diff").status_code == 404
+
+
+def test_settings_save_preserves_baseline_symbol_and_description(client, project):
+    """The settings page saves the whole baselines array back, so this
+    round-trip has to be lossless — sending bare names wiped the symbol and
+    description that the Baselines page sets."""
+    client.patch(f"/api/projects/{project}", json={"baselines": [
+        {"name": "PDR", "symbol": "P", "description": "<p>Prelim design</p>"}]})
+
+    loaded = client.get(f"/api/projects/{project}").json()["baselines"]
+    assert loaded == [{"name": "PDR", "symbol": "P", "description": "<p>Prelim design</p>"}]
+
+    client.patch(f"/api/projects/{project}", json={"baselines": loaded})
+    assert client.get(f"/api/projects/{project}").json()["baselines"] == loaded
+
+    # Adding a name must keep the existing entry's fields.
+    client.patch(f"/api/projects/{project}", json={
+        "baselines": loaded + [{"name": "CDR", "symbol": "", "description": ""}]})
+    after = client.get(f"/api/projects/{project}").json()["baselines"]
+    pdr = next(b for b in after if b["name"] == "PDR")
+    assert pdr["symbol"] == "P"
+    assert pdr["description"] == "<p>Prelim design</p>"
+
+
+def test_baseline_name_from_settings_is_validated(client, project):
+    """POST /baselines validated the name, but PATCH /projects/{id} did not —
+    so a baseline could be defined as '../../etc/passwd', and every later
+    GET /baselines then 400'd from _item_path, breaking the whole listing."""
+    res = client.patch(f"/api/projects/{project}",
+                       json={"baselines": [{"name": "../../../etc/passwd"}]})
+    assert res.status_code == 400
+    assert "baseline name" in res.json()["detail"].lower()
+
+    assert client.get(f"/api/projects/{project}/baselines").status_code == 200
+
+
+def test_baselines_listing_survives_a_bad_name_already_on_disk(client, project):
+    """_meta.yaml is hand-editable and arrives by git pull, so a name that
+    predates the validation above must not take the listing down."""
+    from app.services.yaml_store import YamlStore
+
+    store = YamlStore(Path(settings.data_root) / project)
+    meta = store.read_meta()
+    meta["baselines"] = [{"name": "../../../etc/passwd"}, {"name": "BL1"}]
+    store.write_meta(meta)
+
+    res = client.get(f"/api/projects/{project}/baselines")
+    assert res.status_code == 200
+    names = [b["name"] for b in res.json()]
+    assert "BL1" in names
+    # The bad entry is listed but reported as never frozen, not probed on disk.
+    bad = next(b for b in res.json() if b["name"] == "../../../etc/passwd")
+    assert bad["frozen"] is False
 
 
 def test_baseline_rename_missing_is_404(client, project):
