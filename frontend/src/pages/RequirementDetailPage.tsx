@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { GuardedLink as Link } from '../components/navGuard';
 import { motion } from 'framer-motion';
 import { Trash2, ArrowLeft, Plus, X, ArrowRight, ArrowLeftRight, Sparkles, ShieldCheck, ExternalLink, ChevronRight, Waypoints, AlertTriangle, CheckCircle2, GitFork, Loader, Save, Undo2 } from 'lucide-react';
-import { api, type Requirement, type VerificationCase, type QualityItem, type Component, type Specification, type ChangeRequest, type Risk, type EvaluatedRequirement, type Definition, type Comment, type DecisionRecord } from '../api/client';
+import { api, baselineNames, type Requirement, type VerificationCase, type QualityItem, type Component, type Specification, type ChangeRequest, type Risk, type EvaluatedRequirement, type Definition, type Comment, type DecisionRecord } from '../api/client';
 import { ParametricsCard } from '../components/parametrics';
 import RichTextEditor from '../components/RichTextEditor';
 import AutocompleteInput from '../components/AutocompleteInput';
@@ -176,7 +176,7 @@ export default function RequirementDetailPage() {
     api.getUnreviewed(projectId).then((u) => {
       if (alive) setUnreviewedIds(new Set(u.items.map((r) => r.id)));
     }).catch(() => {});
-    api.getProject(projectId).then((p: any) => { if (alive) setProjectBaselines(p.baselines || []); }).catch(() => {});
+    api.getProject(projectId).then((p) => { if (alive) setProjectBaselines(baselineNames(p.baselines)); }).catch(() => {});
     api.listComments(projectId, reqId).then((v) => { if (alive) setComments(v); }).catch(() => { if (alive) setComments([]); });
     api.listDecisions(projectId).then((decs) => { if (alive) setDecisions(decs.filter((d) => d.linked_requirements?.includes(reqId))); }).catch(() => { if (alive) setDecisions([]); });
     return () => { alive = false; };

@@ -5,7 +5,7 @@ import {
   Plus, Search, X, Trash2, ChevronRight, ChevronDown, ChevronsDownUp, ChevronsUpDown,
   Zap, Gauge, Plug, User, Cpu, Briefcase, Shield, AlertTriangle, Leaf, CheckCircle, Inbox, Square, CheckSquare, ArrowUp, SlidersHorizontal,
 } from 'lucide-react';
-import { api, type Requirement, type EvalVerdict } from '../api/client';
+import { api, baselineNames, type Requirement, type EvalVerdict } from '../api/client';
 import { useStore } from '../store';
 import { useAuthStore } from '../store/auth';
 import { useUndoStore } from '../store/undo';
@@ -99,7 +99,7 @@ export default function RequirementsPage() {
         ev.requirements.filter((r) => r.verdict !== 'none').map((r) => [r.id, r.verdict]),
       )))
       .catch(() => {});
-    api.getProject(projectId).then((p: any) => setProjectBaselines(p.baselines || [])).catch(() => {});
+    api.getProject(projectId).then((p) => setProjectBaselines(baselineNames(p.baselines))).catch(() => {});
   };
   useEffect(load, [projectId, dataVersion]);
 

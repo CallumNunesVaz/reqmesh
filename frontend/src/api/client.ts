@@ -46,6 +46,10 @@ export interface Project {
   id: string;
   name: string;
   path: string;
+  /** Only present on `getProject`; `listProjects` omits it. Baselines used to
+   *  be bare name strings and hand-edited `_meta.yaml` may still hold those,
+   *  so both shapes are accepted — use `baselineNames` to read them. */
+  baselines?: (string | BaselineDef)[];
 }
 
 export interface BaselineDef {
@@ -53,6 +57,14 @@ export interface BaselineDef {
   symbol: string;
   description: string;
 }
+
+/** Baseline *names* from either storage shape.
+ *
+ *  `requirement.baselines` is an array of names, so anything comparing against
+ *  it (filters, toggles, `<option value>`) needs names rather than the
+ *  definition objects `getProject` now returns. */
+export const baselineNames = (baselines?: (string | BaselineDef)[]): string[] =>
+  (baselines || []).map((b) => (typeof b === 'string' ? b : b.name));
 
 export interface BaselineInfo extends BaselineDef {
   requirements: string[];
