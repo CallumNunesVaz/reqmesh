@@ -512,22 +512,6 @@ cd backend
 .venv/bin/python -m app.cli serve <path>
 ```
 
-## Roadmap
-
-- [x] Phase 1: Core CRUD, YAML storage, React UI
-- [x] Phase 2: Traceability & verification enhancements
-- [x] Phase 3: ReqIF/SysML import & export
-- [x] Phase 4: Git integration (auto-commit, history, hooks)
-- [x] Phase 5: Real-time collaboration (SSE + presence)
-- [x] Phase 6: Code & test traceability (coverage tag scanning, staleness)
-- [x] Phase 7: Deep coverage & tracing (needs, shallow/deep, cycle detection)
-- [x] Phase 8: Fingerprint-based review & change control
-- [x] Phase 9: Requirement quality linting
-- [x] Phase 10: Planning & estimation (effort, per-stakeholder priority, backlog)
-- [x] Phase 11: CSV/TSV/XLSX interchange + custom attribute schema
-
-The full phase roadmap, the active refinement backlog, and design records for completed initiatives are consolidated in [ROADMAP.md](ROADMAP.md).
-
 ## License
 
 reqmesh is licensed under the **GNU General Public License v3.0 or later**
