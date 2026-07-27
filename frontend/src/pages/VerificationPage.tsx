@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, CheckCircle2, Trash2, XCircle, Clock, ChevronDown, X, Link as LinkIcon, Play, ListChecks, ClipboardList, FlaskConical, Loader, Search } from 'lucide-react';
-import { api, type VerificationCase, type Requirement, type Component } from '../api/client';
+import { Plus, CheckCircle2, Trash2, XCircle, Clock, ChevronDown, X, Link as LinkIcon, Play, ListChecks, ClipboardList, FlaskConical, Loader, Search, UploadCloud } from 'lucide-react';
+import { api, type VerificationCase, type Requirement, type Component, type TestResultImportSummary } from '../api/client';
 import { useStore } from '../store';
 import { useAuthStore } from '../store/auth';
 import AutocompleteInput from '../components/AutocompleteInput';
@@ -51,6 +51,15 @@ export default function VerificationPage() {
   const [runFeedback, setRunFeedback] = useState<Record<string, { type: 'success' | 'error'; message: string }>>({});
   const [selectedVcs, setSelectedVcs] = useState<Set<string>>(new Set());
   const [bulkStatus, setBulkStatus] = useState('passed');
+
+  // CI test result import
+  const [showImport, setShowImport] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importFormat, setImportFormat] = useState('auto');
+  const [importDryRun, setImportDryRun] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<TestResultImportSummary | null>(null);
+  const [importError, setImportError] = useState('');
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [filterMethod, setFilterMethod] = useState('');
@@ -258,6 +267,25 @@ export default function VerificationPage() {
     }
   };
 
+  const handleImportTestResults = async () => {
+    if (!projectId || !importFile) return;
+    setImporting(true);
+    setImportError('');
+    setImportResult(null);
+    try {
+      const result = await api.importTestResults(projectId, importFile, importFormat, importDryRun);
+      setImportResult(result);
+      if (!importDryRun && result.updated > 0) {
+        const updated = await api.listVerificationCases(projectId);
+        setVerificationCases(updated);
+      }
+    } catch (err: any) {
+      setImportError(err.message || 'Import failed');
+    } finally {
+      setImporting(false);
+    }
+  };
+
   // Arriving from a link elsewhere (?focus=VC-001): open that case and scroll
   // to it, so the reference lands on the thing it pointed at.
   const focusId = useFocusedEntity(
@@ -278,6 +306,12 @@ export default function VerificationPage() {
         {editable && (
         <button onClick={() => setShowCreate(!showCreate)} className="btn-primary whitespace-nowrap shrink-0 self-start">
           <Plus size={16} /> New Verification Case
+        </button>
+        )}
+        {editable && (
+        <button onClick={() => { setShowImport(!showImport); setImportResult(null); setImportError(''); }}
+                className="btn-secondary whitespace-nowrap shrink-0 self-start">
+          <UploadCloud size={16} /> Import CI Results
         </button>
         )}
       </div>
@@ -763,7 +797,113 @@ export default function VerificationPage() {
                       </div>
                     </motion.div>
                   )}
-                </AnimatePresence>
+      </AnimatePresence>
+
+      {/* CI Test Result Import */}
+      <AnimatePresence>
+        {showImport && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden mb-4"
+          >
+            <div className="card p-5 border-2 border-primary/20">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-semibold text-sm flex items-center gap-2">
+                  <UploadCloud size={16} /> Import CI Test Results
+                </h3>
+                <button onClick={() => setShowImport(false)} className="text-muted-foreground hover:text-foreground">
+                  <X size={16} />
+                </button>
+              </div>
+              <p className="text-xs text-muted-foreground mb-3">
+                JUnit XML, CTRF JSON, or TAP test output. Test names must match verification case IDs (e.g. VCAF0001).
+                <a className="text-primary hover:underline ml-1" href={`/api/projects/${projectId}/test-results/sample`} target="_blank">View sample JUnit XML</a>
+              </p>
+
+              {!importResult ? (
+                <div className="space-y-3">
+                  <div className="flex gap-3">
+                    <div className="flex-1">
+                      <label className="label">File</label>
+                      <input type="file" accept=".xml,.json,.tap,.txt" className="input"
+                        onChange={(e) => setImportFile(e.target.files?.[0] ?? null)} />
+                    </div>
+                    <div>
+                      <label className="label">Format</label>
+                      <select className="select" value={importFormat}
+                        onChange={(e) => setImportFormat(e.target.value)}>
+                        <option value="auto">Auto-detect</option>
+                        <option value="junit">JUnit XML</option>
+                        <option value="ctrf">CTRF JSON</option>
+                        <option value="tap">TAP</option>
+                      </select>
+                    </div>
+                  </div>
+                  <label className="flex items-center gap-2 text-xs">
+                    <input type="checkbox" checked={importDryRun}
+                      onChange={(e) => setImportDryRun(e.target.checked)}
+                      className="w-4 h-4 rounded" />
+                    Dry run (preview only, no changes)
+                  </label>
+                  {importError && (
+                    <div className="p-2 rounded bg-destructive/10 text-destructive text-xs border border-destructive/20">{importError}</div>
+                  )}
+                  <button onClick={handleImportTestResults}
+                    disabled={!importFile || importing}
+                    className="btn-primary gap-1.5">
+                    {importing ? <Loader size={14} className="animate-spin" /> : <UploadCloud size={14} />}
+                    {importing ? 'Importing…' : importDryRun ? 'Preview' : 'Import'}
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex gap-4 text-sm">
+                    <span className="font-mono"><span className="text-cs-blue">{importResult.parsed}</span> parsed</span>
+                    <span className="font-mono"><span className="text-cs-green">{importResult.matched}</span> matched</span>
+                    {!importDryRun && <span className="font-mono"><span className="text-cs-teal">{importResult.updated}</span> updated</span>}
+                    <span className="font-mono"><span className="text-cs-orange">{importResult.unmatched}</span> unmatched</span>
+                    {importResult.errors.length > 0 && (
+                      <span className="font-mono"><span className="text-cs-red">{importResult.errors.length}</span> errors</span>
+                    )}
+                  </div>
+                  {importResult.details.length > 0 && (
+                    <div className="max-h-60 overflow-y-auto border rounded-lg">
+                      <table className="w-full text-xs">
+                        <thead className="sticky top-0 bg-muted">
+                          <tr className="text-muted-foreground">
+                            <th className="text-left px-2 py-1">Test</th>
+                            <th className="text-left px-2 py-1">VC</th>
+                            <th className="text-left px-2 py-1">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {importResult.details.map((d, i) => (
+                            <tr key={i} className="border-t">
+                              <td className="px-2 py-1 font-mono truncate max-w-[200px]" title={d.test_name}>{d.test_name}</td>
+                              <td className="px-2 py-1 font-mono">{d.vc_id || '—'}</td>
+                              <td className="px-2 py-1">
+                                <span className={`text-[10px] font-medium ${d.status === 'imported' ? 'text-cs-green' : d.status === 'unmatched' ? 'text-cs-orange' : d.status === 'dry_run' ? 'text-cs-blue' : 'text-cs-red'}`}>{d.status}</span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <button onClick={() => { setImportResult(null); setImportFile(null); }}
+                      className="btn-secondary text-xs">Import another</button>
+                    <button onClick={() => setShowImport(false)}
+                      className="btn-secondary text-xs">Close</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
               </motion.div>
             );
           })}

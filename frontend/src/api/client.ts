@@ -75,6 +75,56 @@ export interface BaselineDiff {
   changed_count: number;
 }
 
+export interface SearchResult {
+  kind: string;
+  kind_label: string;
+  kind_icon: string;
+  id: string;
+  name: string;
+  snippet: string;
+  score: number;
+  status: string;
+}
+
+export interface AllocationMatrixData {
+  rows: Array<{
+    req_id: string;
+    req_name: string;
+    req_status: string;
+    allocated_to: string;
+    cells: Record<string, boolean>;
+  }>;
+  columns: Array<{
+    comp_id: string;
+    comp_name: string;
+    comp_type: string;
+  }>;
+  total_requirements: number;
+  total_components: number;
+  allocated: number;
+  unallocated: number;
+  allocation_pct: number;
+}
+
+export interface TestResultImportDetail {
+  vc_id?: string;
+  test_name: string;
+  test_class?: string;
+  status: string;
+  detail: string;
+}
+
+export interface TestResultImportSummary {
+  format: string;
+  dry_run: boolean;
+  parsed: number;
+  matched: number;
+  updated: number;
+  unmatched: number;
+  errors: string[];
+  details: TestResultImportDetail[];
+}
+
 /** Envelope returned by paginated list endpoints. */
 export interface Paged<T> {
   items: T[];
@@ -877,4 +927,33 @@ export const api = {
   // What-if impact preview
   getEvaluationImpact: (projectId: string, overrides: Record<string, number>) =>
     request<ImpactResultData>(`/projects/${projectId}/evaluation/impact`, { method: 'POST', body: { overrides } }),
+
+  // Project-wide full-text search
+  searchProject: (projectId: string, query: string, kind?: string) =>
+    request<{ query: string; results: SearchResult[]; total: number }>(
+      `/projects/${projectId}/search?q=${encodeURIComponent(query)}${kind ? '&kind=' + encodeURIComponent(kind) : ''}`
+    ),
+
+  // Allocation matrix
+  getAllocationMatrix: (projectId: string, search?: string, filterType?: string) => {
+    const qs = new URLSearchParams();
+    if (search) qs.set('search', search);
+    if (filterType) qs.set('filter_type', filterType);
+    const qsStr = qs.toString();
+    return request<AllocationMatrixData>(`/projects/${projectId}/allocation-matrix${qsStr ? '?' + qsStr : ''}`);
+  },
+  setAllocation: (projectId: string, reqId: string, componentId: string, allocated: boolean) =>
+    request<{ req_id: string; component_id: string; allocated: boolean; allocated_to: string }>(
+      `/projects/${projectId}/allocation`, { method: 'POST', body: { req_id: reqId, component_id: componentId, allocated } }),
+
+  // CI test-result import
+  importTestResults: (projectId: string, file: File, format: string, dryRun: boolean) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('format', format);
+    fd.append('dry_run', String(dryRun));
+    return request<TestResultImportSummary>(`/projects/${projectId}/test-results/import`, { method: 'POST', body: fd });
+  },
+  getTestResultSample: (projectId: string) =>
+    request<string>(`/projects/${projectId}/test-results/sample`, { raw: true } as any),
 };
