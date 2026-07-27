@@ -85,6 +85,19 @@ app = FastAPI(
 )
 
 app.add_middleware(GZipMiddleware, minimum_size=512)
+# Fail-fast on a dangerous CORS configuration. Sessions are cookie-based, so
+# credentials are always sent; a wildcard origin would tell the browser to
+# accept authenticated cross-origin requests from anywhere. Starlette silently
+# degrades the wildcard to an origin echo in this combination, which is *worse*
+# than the spec-mandated refusal — every origin gets reflected back. Refuse to
+# start rather than serve it.
+if "*" in settings.cors_origins:
+    raise RuntimeError(
+        "RT_CORS_ORIGINS contains '*', but reqmesh always sends credentials "
+        "(cookie sessions), so a wildcard origin would allow authenticated "
+        "requests from any site. Set RT_CORS_ORIGINS to an explicit allowlist, "
+        "or leave it empty for a single-origin deployment."
+    )
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,

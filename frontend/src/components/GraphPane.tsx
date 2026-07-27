@@ -21,7 +21,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { forceSimulation, forceLink, forceManyBody, forceCollide, forceX, forceY } from 'd3-force';
-import { Search, RotateCw, ListTree, Orbit, SlidersHorizontal, ChevronsUpDown, ChevronsDownUp, Filter, Waypoints, Share2, Save, ArrowLeftRight, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
+import { Search, RotateCw, ListTree, Orbit, SlidersHorizontal, ChevronsUpDown, ChevronsDownUp, Filter, Waypoints, Share2, Save, ArrowLeftRight, ArrowDownLeft, ArrowUpRight, EyeOff } from 'lucide-react';
 import { api, type Requirement, type TraceLink, type EvaluatedRequirement, type EvaluatedParameter, type Component } from '../api/client';
 import CircularNode from './CircularNode';
 import BlockNode, { BLOCK_W, STACK_OVERHANG, type BlockParam, type BlockConstraint } from './BlockNode';
@@ -481,6 +481,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
   const [filterComponent, setFilterComponent] = useState('');
   const [filterKind, setFilterKind] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  const [hideRoots, setHideRoots] = useState(false);
   const { selectedReqId, selectReq, derivationReq } = useSelectedReq();
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   // How many relationship hops out from the focused node stay highlighted.
@@ -677,9 +678,10 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
     if (filterAllocated) out = out.filter(r => r.allocated_to === filterAllocated);
     if (filterKind) out = out.filter(r => r.requirement_kind === filterKind);
     if (filterComponent) out = out.filter(r => componentReqIds.has(r.id));
+    if (hideRoots) out = out.filter(r => r.parent);
     return out;
   }, [reqs, search, filterStatus, filterPriority, filterBaseline, filterType,
-      filterVerStatus, filterVerMethod, filterAllocated, filterKind, filterComponent, componentReqIds]);
+      filterVerStatus, filterVerMethod, filterAllocated, filterKind, filterComponent, componentReqIds, hideRoots]);
 
   const distinct = (pick: (r: typeof reqs[number]) => string) =>
     [...new Set(reqs.map(pick).filter(Boolean))].sort();
@@ -1274,6 +1276,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
                   return { ...e, style: clean };
                 }));
                 animatingRef.current = false;
+                if (switching) { switchingRef.current = false; releaseSplash(); }
                 const expandedParents = new Set([...newChildrenIds].map(cid => initialNodes.find(n => n.id === cid)?.data?.parent).filter(Boolean) as string[]);
                 const expandedNodeId = [...expandedParents][0];
                 // A derivation trace expands many groups at once and owns both
@@ -1343,13 +1346,21 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
           }));
         }
         hasLaidOutOnceRef.current = true;
-      }).catch((err) => console.error('ELK layout failed', err));
+      }).catch((err) => {
+        console.error('ELK layout failed', err);
+        if (switching) { switchingRef.current = false; releaseSplash(); }
+      });
       return () => {
         // Supersede any in-flight ELK result and cancel every pending phase
         // timer so a re-run never gets clobbered by the previous animation.
         layoutReqIdRef.current++;
         timers.forEach(clearTimeout);
         animatingRef.current = false;
+        // If the switch-triggered layout was superseded before ELK settled
+        // (e.g. an SSE data change fired loadData mid-computation), the
+        // splash was held by switchLayout and the .then() bailed at the
+        // reqId guard — release it here so the spinner doesn't stick.
+        if (switching) { switchingRef.current = false; releaseSplash(); }
       };
     }
 
@@ -1393,9 +1404,34 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
   }, [entranceDone, nodes.length, resetView]);
 
   // When selection changes externally (nav click, etc.), smoothly fit view.
+  // Also auto-expand any collapsed ancestor chain so the selected node is
+  // always visible — a requirement opened via "Show in graph" shouldn't stay
+  // hidden behind a folded parent group.
   useEffect(() => {
     if (!entranceDone || !selectedReqId || selectedReqId === prevSelectedRef.current) return;
     prevSelectedRef.current = selectedReqId;
+
+    const byId = new Map(reqs.map(r => [r.id, r]));
+    const toExpand = new Set<string>();
+    let cursor: string | null = selectedReqId;
+    while (cursor) {
+      const node = byId.get(cursor);
+      const ancestor: string | null = node ? node.parent ?? null : null;
+      if (ancestor && (collapsed.has(ancestor) || groupsOnly.has(ancestor))) {
+        toExpand.add(ancestor);
+      }
+      cursor = ancestor;
+    }
+    if (toExpand.size > 0) {
+      const newCollapsed = new Set(collapsed);
+      const newGroupsOnly = new Set(groupsOnly);
+      for (const id of toExpand) { newCollapsed.delete(id); newGroupsOnly.delete(id); }
+      setCollapsed(newCollapsed);
+      setGroupsOnly(newGroupsOnly);
+      refocusRef.current = selectedReqId;
+      return;
+    }
+
     // Single-frame delay so dimmed node states commit before camera moves.
     const raf = requestAnimationFrame(() => {
       const hasChildren = reqs.some(r => r.parent === selectedReqId);
@@ -1850,6 +1886,17 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
               <ChevronsDownUp size={13} />
             </button>
           </div>
+          <button
+            onClick={() => setHideRoots((v) => !v)}
+            className={`p-1.5 rounded-lg border shadow-sm transition-colors ${
+              hideRoots
+                ? 'bg-primary/15 text-primary border-primary/30'
+                : 'bg-graph-panel text-graph-text border-graph-border hover:text-foreground hover:bg-graph-control-hover'
+            }`}
+            title={hideRoots ? 'Show root nodes' : 'Hide root nodes (no parent)'}
+          >
+            <EyeOff size={13} />
+          </button>
           {/* Highlight radius: how many relationship hops out from the selected
               node stay lit (1 = direct neighbours only, up to 3). Hidden on
               very narrow panes — it's a persisted power-user pref, and the

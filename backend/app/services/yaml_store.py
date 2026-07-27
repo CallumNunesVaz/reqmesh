@@ -215,6 +215,8 @@ class YamlStore:
         return items
 
     def _read_collection(self, d: Path) -> list[dict]:
+        from app.services.load_guard import validate_on_load
+
         items = []
         for f in sorted(d.glob("*.yaml")):
             # A hand-edited file that no longer parses is skipped, not coerced
@@ -231,7 +233,17 @@ class YamlStore:
                 import logging
                 logging.getLogger(__name__).warning("Skipping %s: no 'id' field", f)
                 continue
-            items.append(item)
+            # Disk is not a trusted input: these dicts may have arrived by a
+            # direct edit or a `git pull` rather than through the API. Doing
+            # this here, on the cache-fill path, means every consumer of the
+            # store gets it and the cost is paid once per directory generation.
+            checked = validate_on_load(d.name, item)
+            if checked is None:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "Skipping %s: unusable 'id' %r", f, item.get("id"))
+                continue
+            items.append(checked)
         return items
 
     def corrupt_files(self, collection: Optional[str] = None) -> list[dict]:
@@ -241,6 +253,8 @@ class YamlStore:
         in the UI. Surfaced through the integrity check so it is reported
         rather than silently dropped.
         """
+        from app.services.load_guard import id_rejection_reason
+
         out: list[dict] = []
         for name in ([collection] if collection else COLLECTIONS):
             d = self._root / name
@@ -254,6 +268,13 @@ class YamlStore:
                     continue
                 if not item.get("id"):
                     out.append({"path": f"{name}/{f.name}", "error": "missing 'id' field"})
+                    continue
+                # An id the store refuses to serve is a silent disappearance
+                # otherwise — the file is on disk and in git, but absent from
+                # every view. Report it with the reason.
+                reason = id_rejection_reason(item.get("id"))
+                if reason:
+                    out.append({"path": f"{name}/{f.name}", "error": reason})
         return out
 
     def get_item(self, collection: str, item_id: str) -> Optional[dict]:

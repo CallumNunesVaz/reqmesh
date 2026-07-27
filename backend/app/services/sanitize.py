@@ -41,7 +41,7 @@ DROP_WITH_CONTENT = frozenset({
 
 VOID_TAGS = frozenset({"br", "img"})
 
-_DATA_IMAGE = re.compile(r"^data:image/(png|jpeg|jpg|gif|webp|svg\+xml);base64,[A-Za-z0-9+/=\s]+$", re.I)
+_DATA_IMAGE = re.compile(r"^data:image/(png|jpeg|jpg|gif|webp);base64,[A-Za-z0-9+/=\s]+$", re.I)
 
 
 class _Sanitiser(HTMLParser):

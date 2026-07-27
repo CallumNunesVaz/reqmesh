@@ -14,6 +14,7 @@ import GraphView from './pages/GraphView';
 import ChangeRequestsPage from './pages/ChangeRequestsPage';
 import RisksPage from './pages/RisksPage';
 import MetricsPage from './pages/MetricsPage';
+import BaselinesPage from './pages/BaselinesPage';
 import PublishPage from './pages/PublishPage';
 import UsersPage from './pages/UsersPage';
 import SystemPage from './pages/SystemPage';
@@ -40,6 +41,7 @@ export default function App() {
         <Route path="/project/:projectId/change-requests" element={<ChangeRequestsPage />} />
         <Route path="/project/:projectId/risks" element={<RisksPage />} />
         <Route path="/project/:projectId/metrics" element={<MetricsPage />} />
+        <Route path="/project/:projectId/baselines" element={<BaselinesPage />} />
         <Route path="/project/:projectId/publish" element={<PublishPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

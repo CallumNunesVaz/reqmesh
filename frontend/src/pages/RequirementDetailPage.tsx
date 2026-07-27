@@ -223,7 +223,7 @@ export default function RequirementDetailPage() {
       const updated = await api.updateRequirement(projectId, reqId, diff);
       useUndoStore.getState().push({
         description: `Update ${reqId}`,
-        undo: async () => { await api.updateRequirementSkipWorkflow(projectId, reqId, beforeFields); },
+        undo: async () => { await api.updateRequirement(projectId, reqId, beforeFields); },
         redo: async () => { await api.updateRequirement(projectId, reqId, diff); },
       });
       setReq(updated);
@@ -486,9 +486,11 @@ export default function RequirementDetailPage() {
             </button>
           </>
         )}
-        <button onClick={handleDelete} className="btn-danger" disabled={!editable}>
+        {editable && (
+        <button onClick={handleDelete} className="btn-danger">
           <Trash2 size={14} />
         </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 @4xl:grid-cols-3 gap-6">
@@ -896,27 +898,10 @@ export default function RequirementDetailPage() {
               </div>
               <div>
                 <label className="label">Status</label>
-                <select className="select" value={req.status} onChange={(e) => save({ status: e.target.value })} disabled={!editable}>
-                  {statusOptions.map((s) => (<option key={s} value={s}>{s}</option>))}
-                </select>
-                {workflow && editable && (
-                  <div className="text-[10px] text-muted-foreground mt-1 flex flex-wrap gap-1">
-                    <span>Next:</span>
-                    {(workflow.transitions[req.status] || []).map((t) => (
-                      <button
-                        key={t}
-                        onClick={() => save({ status: t })}
-                        className="px-1.5 py-px rounded bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
-                      >
-                        {t}
-                      </button>
-                    ))}
-                    {(workflow.transitions[req.status] || []).length === 0 && (
-                      <span className="text-muted-foreground/60">terminal</span>
-                    )}
-                  </div>
-                )}
-              </div>
+        <select className="select" value={req.status} onChange={(e) => save({ status: e.target.value })} disabled={!editable}>
+          {statusOptions.map((s) => (<option key={s} value={s}>{s}</option>))}
+        </select>
+      </div>
               <div>
                 <label className="label">Priority</label>
                 <select className="select" value={req.priority} onChange={(e) => save({ priority: e.target.value })} disabled={!editable}>

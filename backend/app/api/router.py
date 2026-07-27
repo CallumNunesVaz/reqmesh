@@ -14,6 +14,7 @@ from app.core.dependencies import get_store, require_maintain, require_maintain_
 from app.core.ids import safe_id
 from app.core.tree_utils import build_flat_tree
 from app.models.requirement import RequirementCreate, RequirementUpdate
+from app.services.load_guard import is_safe_id, validate_on_load
 from app.models.specification import SpecificationCreate, SpecificationUpdate
 from app.models.definition import DefinitionCreate, DefinitionUpdate
 from app.models.analysis import AnalysisCaseCreate, AnalysisCaseUpdate
@@ -29,8 +30,40 @@ class ProjectCreate(BaseModel):
     name: str
 
 
+class BaselineDefItem(BaseModel):
+    """A baseline definition — name, optional short symbol, and rich-text description."""
+    name: str
+    symbol: str = ""
+    description: str = ""
+
+
+def normalize_baseline_defs(baselines: list) -> list[dict]:
+    """Normalize baseline definitions from either legacy string format or
+    the object format to a uniform list of {name, symbol, description}."""
+    result: list[dict] = []
+    for item in (baselines or []):
+        if isinstance(item, str):
+            result.append({"name": item, "symbol": "", "description": ""})
+        elif isinstance(item, dict):
+            result.append({
+                "name": item.get("name", ""),
+                "symbol": item.get("symbol", ""),
+                "description": item.get("description", ""),
+            })
+    return result
+
+
+def _baseline_def_by_name(baselines: list, name: str) -> dict | None:
+    for b in normalize_baseline_defs(baselines):
+        if b["name"] == name:
+            return b
+    return None
+
+
 class BaselineCreate(BaseModel):
     name: str
+    symbol: str = ""
+    description: str = ""
     requirements: list[str] = []
 
 
@@ -45,6 +78,8 @@ class BreakCascade(BaseModel):
 
 class RenameBaseline(BaseModel):
     name: str
+    symbol: Optional[str] = None
+    description: Optional[str] = None
 
 
 router = APIRouter()
@@ -102,7 +137,7 @@ async def get_project(project_id: str, request: Request,
         "workflow": meta.get("workflow"),
         "naming": naming,
         "quality": meta.get("quality"),
-        "baselines": meta.get("baselines", []),
+        "baselines": normalize_baseline_defs(meta.get("baselines", [])),
     }
     # Git settings can hold a credentialed remote URL, so unlike the rest of
     # the project metadata they are only shown to those who manage settings
@@ -123,7 +158,7 @@ class ProjectSettings(BaseModel):
     quality: Optional[dict] = None
     workflow: Optional[dict] = None
     git: Optional[dict] = None
-    baselines: Optional[list[str]] = None
+    baselines: Optional[list] = None  # list of BaselineDefItem-compatible dicts or legacy strings
     permissions: Optional[dict] = None
 
 
@@ -166,6 +201,19 @@ async def update_project_settings(project_id: str, data: ProjectSettings, user: 
         raise HTTPException(status_code=400, detail="No fields to update")
     if "git" in updates:
         _guard_git_settings(updates["git"], meta.get("git", {}), user)
+    if "baselines" in updates and updates["baselines"] is not None:
+        defs = normalize_baseline_defs(updates["baselines"])
+        # Baseline names become filenames when a baseline is frozen
+        # (`store.get_item("baselines", name)`), so they need the same
+        # validation `create_baseline` applies. Without it this endpoint
+        # accepted `../../etc/passwd`, and every later GET /baselines then
+        # raised 400 from `_item_path` — breaking the whole listing for the
+        # project until someone hand-edited _meta.yaml.
+        for d in defs:
+            safe_id(d["name"], "baseline name")
+        updates["baselines"] = [
+            {k: v for k, v in d.items() if k == "name" or v} for d in defs
+        ]
     meta.update(updates)
     store.write_meta(meta)
     return meta
@@ -301,6 +349,9 @@ async def list_requirements(
     limit: int = Query(500, ge=1, le=2000),
 ):
     store = get_store(project_id)
+    # No validate-on-load call here: the store applies it at the cache-fill
+    # path, so it covers the evaluator and publisher too and runs once per
+    # directory generation rather than once per request.
     reqs = store.list_requirements()
     if search or type or status or priority:
         filters = {k: v for k, v in [("type", type), ("status", status), ("priority", priority)] if v}
@@ -315,7 +366,14 @@ async def get_requirement(project_id: str, req_id: str):
     req = store.get_requirement(req_id)
     if req is None:
         raise HTTPException(status_code=404, detail="Requirement not found")
-    return req
+    # Single-item reads bypass the collection cache (they use the round-trip
+    # parser, for read-modify-write), so the guard is applied here instead.
+    # Deliberately not inside the store: injecting defaults into the object an
+    # edit later writes back would persist them into hand-written YAML.
+    checked = validate_on_load("requirements", dict(req))
+    if checked is None:
+        raise HTTPException(status_code=404, detail="Requirement not found")
+    return checked
 
 
 @router.post("/projects/{project_id}/requirements", status_code=201)
@@ -335,7 +393,7 @@ async def create_requirement(project_id: str, data: RequirementCreate, user: dic
 
 
 @router.put("/projects/{project_id}/requirements/{req_id}")
-async def update_requirement(project_id: str, req_id: str, data: RequirementUpdate, user: dict = Depends(require_maintain), skip_workflow: bool = Query(False)):
+async def update_requirement(project_id: str, req_id: str, data: RequirementUpdate, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     update_dict = data.model_dump(mode="json", exclude_unset=True)
 
@@ -361,14 +419,6 @@ async def update_requirement(project_id: str, req_id: str, data: RequirementUpda
                 )
             seen.add(cursor)
             cursor = parent_of.get(cursor)
-
-    # Validate workflow transition if status is changing (skip for undo).
-    if not skip_workflow and "status" in update_dict and before.get("status") != update_dict["status"]:
-        from app.services.workflow import validate_transition
-        meta = store.read_meta()
-        err = validate_transition(meta, before.get("status", "proposed"), update_dict["status"])
-        if err:
-            raise HTTPException(status_code=400, detail=err)
 
     result = store.update_requirement(req_id, update_dict)
     if result is None:
@@ -549,29 +599,75 @@ async def delete_specification(project_id: str, spec_id: str, user: dict = Depen
 @router.get("/projects/{project_id}/baselines")
 async def list_baselines(project_id: str):
     store = get_store(project_id)
+    meta = store.read_meta()
+    defs = normalize_baseline_defs(meta.get("baselines", []))
+    # Aggregate requirements per baseline from their .baselines arrays
     baselines: dict[str, list[str]] = {}
     for r in store.list_requirements():
         for bl in (r.get("baselines") or []):
             if bl:
                 baselines.setdefault(bl, []).append(r["id"])
-    return [{"name": k, "requirements": v, "count": len(v)} for k, v in sorted(baselines.items())]
+    # Also surface baseline definitions that have no requirements yet
+    seen = set()
+    result = []
+    for d in defs:
+        name = d["name"]
+        reqs = baselines.get(name, [])
+        # A name that can't be a filename can't have a frozen snapshot. Checked
+        # rather than passed to get_item, which raises 400 and would take the
+        # whole listing down for one bad entry — _meta.yaml is hand-editable
+        # and reachable by git pull, so this can arrive without the API.
+        frozen = store.get_item("baselines", name) if is_safe_id(name) else None
+        result.append({
+            "name": name,
+            "symbol": d["symbol"],
+            "description": d["description"],
+            "requirements": reqs,
+            "count": len(reqs),
+            "frozen": frozen is not None,
+            "frozen_at": (frozen or {}).get("frozen_at", ""),
+            "frozen_count": len((frozen or {}).get("snapshot", {})),
+        })
+        seen.add(name)
+    for name, reqs in baselines.items():
+        if name not in seen:
+            result.append({
+                "name": name, "symbol": "", "description": "",
+                "requirements": reqs, "count": len(reqs),
+                "frozen": False, "frozen_at": "", "frozen_count": 0,
+            })
+    return sorted(result, key=lambda x: x["name"])
 
 
 @router.post("/projects/{project_id}/baselines")
 async def create_baseline(project_id: str, data: BaselineCreate, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     name = safe_id(data.name, "baseline name")
+    # Upsert the baseline definition into project metadata
+    meta = store.read_meta()
+    defs = normalize_baseline_defs(meta.get("baselines", []))
+    existing = next((d for d in defs if d["name"] == name), None)
+    if existing:
+        existing["symbol"] = data.symbol or existing["symbol"]
+        existing["description"] = data.description or existing["description"]
+    else:
+        defs.append({"name": name, "symbol": data.symbol, "description": data.description})
+    serialized = [{k: v for k, v in d.items() if k == "name" or v} for d in defs]
+    meta["baselines"] = serialized
+    store.write_meta(meta)
+    # Assign the baseline to specified requirements
     updated = 0
     for req_id in data.requirements:
         req = store.get_requirement(req_id)
         if req is None:
             continue
-        baselines = list(req.get("baselines") or [])
-        if name not in baselines:
-            baselines.append(name)
-            if store.update_requirement(req_id, {"baselines": baselines}):
+        blist = list(req.get("baselines") or [])
+        if name not in blist:
+            blist.append(name)
+            if store.update_requirement(req_id, {"baselines": blist}):
                 updated += 1
-    return {"name": name, "requirements_assigned": updated}
+    return {"name": name, "symbol": data.symbol, "description": data.description,
+            "requirements_assigned": updated}
 
 
 @router.patch("/projects/{project_id}/baselines/{name}")
@@ -584,16 +680,34 @@ async def rename_baseline(project_id: str, name: str, data: RenameBaseline, user
     safe_id(new_name, "baseline name")
     if store.get_item("baselines", new_name) is not None:
         raise HTTPException(status_code=409, detail="A baseline with that name already exists")
+    # Update the baseline definition in project metadata
+    meta = store.read_meta()
+    defs = normalize_baseline_defs(meta.get("baselines", []))
+    for d in defs:
+        if d["name"] == name:
+            d["name"] = new_name
+            if data.symbol is not None:
+                d["symbol"] = data.symbol
+            if data.description is not None:
+                d["description"] = data.description
+    serialized = [{k: v for k, v in d.items() if k == "name" or v} for d in defs]
+    meta["baselines"] = serialized
+    store.write_meta(meta)
+    # Rename on all requirements
     updated = 0
     for r in store.list_requirements():
-        baselines = list(r.get("baselines") or [])
-        if name in baselines:
-            baselines = [new_name if b == name else b for b in baselines]
-            store.update_requirement(r["id"], {"baselines": baselines})
+        blist = list(r.get("baselines") or [])
+        if name in blist:
+            blist = [new_name if b == name else b for b in blist]
+            store.update_requirement(r["id"], {"baselines": blist})
             updated += 1
     frozen = store.get_item("baselines", name)
     if frozen is not None:
         frozen["name"] = new_name
+        if data.symbol is not None:
+            frozen["symbol"] = data.symbol
+        if data.description is not None:
+            frozen["description"] = data.description
         store.write_item("baselines", new_name, frozen)
         store.delete_item("baselines", name)
     elif updated == 0:
@@ -605,12 +719,19 @@ async def rename_baseline(project_id: str, name: str, data: RenameBaseline, user
 async def delete_baseline(project_id: str, name: str, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     store.delete_item("baselines", name)
+    # Remove the baseline definition from project metadata
+    meta = store.read_meta()
+    defs = normalize_baseline_defs(meta.get("baselines", []))
+    defs = [d for d in defs if d["name"] != name]
+    serialized = [{k: v for k, v in d.items() if k == "name" or v} for d in defs]
+    meta["baselines"] = serialized
+    store.write_meta(meta)
     updated = 0
     for r in store.list_requirements():
-        baselines = list(r.get("baselines") or [])
-        if name in baselines:
-            baselines.remove(name)
-            store.update_requirement(r["id"], {"baselines": baselines})
+        blist = list(r.get("baselines") or [])
+        if name in blist:
+            blist.remove(name)
+            store.update_requirement(r["id"], {"baselines": blist})
             updated += 1
     return {"name": name, "requirements_cleared": updated}
 

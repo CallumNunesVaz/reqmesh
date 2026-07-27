@@ -48,6 +48,33 @@ export interface Project {
   path: string;
 }
 
+export interface BaselineDef {
+  name: string;
+  symbol: string;
+  description: string;
+}
+
+export interface BaselineInfo extends BaselineDef {
+  requirements: string[];
+  count: number;
+  frozen: boolean;
+  frozen_at: string;
+  frozen_count: number;
+}
+
+export interface BaselineDiff {
+  baseline: string;
+  symbol: string;
+  description: string;
+  frozen_at: string;
+  changes: Array<{
+    id: string;
+    type: 'added' | 'modified' | 'removed';
+    diffs?: Record<string, { before: string; after: string }>;
+  }>;
+  changed_count: number;
+}
+
 /** Envelope returned by paginated list endpoints. */
 export interface Paged<T> {
   items: T[];
@@ -568,7 +595,7 @@ export const api = {
   createProject: (data: { id: string; name: string }) => request<Project>('/projects', { method: 'POST', body: data }),
   getProject: (id: string) => request<Project>(`/projects/${id}`),
   deleteProject: (id: string) => request<void>(`/projects/${id}`, { method: 'DELETE' }),
-  updateProject: (id: string, data: { name?: string; naming?: Record<string, any>; quality?: Record<string, any>; workflow?: Record<string, any>; git?: Record<string, any>; baselines?: string[] }) =>
+  updateProject: (id: string, data: { name?: string; naming?: Record<string, any>; quality?: Record<string, any>; workflow?: Record<string, any>; git?: Record<string, any>; baselines?: (string | BaselineDef)[] }) =>
     request<any>(`/projects/${id}`, { method: 'PATCH', body: data }),
   getWorkflow: (projectId: string) =>
     request<{ states: string[]; transitions: Record<string, string[]>; default: string }>(`/projects/${projectId}/workflow`),
@@ -622,8 +649,6 @@ export const api = {
     request<Requirement>(`/projects/${projectId}/requirements`, { method: 'POST', body: data }),
   updateRequirement: (projectId: string, reqId: string, data: Partial<Requirement>) =>
     request<Requirement>(`/projects/${projectId}/requirements/${reqId}`, { method: 'PUT', body: data }),
-  updateRequirementSkipWorkflow: (projectId: string, reqId: string, data: Partial<Requirement>) =>
-    request<Requirement>(`/projects/${projectId}/requirements/${reqId}?skip_workflow=true`, { method: 'PUT', body: data }),
   deleteRequirement: (projectId: string, reqId: string) =>
     request<void>(`/projects/${projectId}/requirements/${reqId}`, { method: 'DELETE' }),
   cascadeRequirement: (projectId: string, reqId: string) =>
@@ -633,13 +658,23 @@ export const api = {
 
   // Baselines
   listBaselines: (projectId: string) =>
-    request<{ name: string; requirements: string[]; count: number }[]>(`/projects/${projectId}/baselines`),
-  createBaseline: (projectId: string, name: string, requirements: string[]) =>
-    request<{ name: string; requirements_assigned: number }>(`/projects/${projectId}/baselines`, { method: 'POST', body: { name, requirements } }),
-  renameBaseline: (projectId: string, oldName: string, newName: string) =>
-    request<{ old_name: string; new_name: string; requirements_updated: number }>(`/projects/${projectId}/baselines/${encodeURIComponent(oldName)}`, { method: 'PATCH', body: { name: newName } }),
+    request<BaselineInfo[]>(`/projects/${projectId}/baselines`),
+  createBaseline: (projectId: string, name: string, symbol?: string, description?: string, requirements?: string[]) =>
+    request<{ name: string; symbol: string; description: string; requirements_assigned: number }>(
+      `/projects/${projectId}/baselines`,
+      { method: 'POST', body: { name, symbol: symbol ?? '', description: description ?? '', requirements: requirements ?? [] } }),
+  renameBaseline: (projectId: string, oldName: string, newName: string, symbol?: string, description?: string) =>
+    request<{ old_name: string; new_name: string; requirements_updated: number }>(
+      `/projects/${projectId}/baselines/${encodeURIComponent(oldName)}`,
+      { method: 'PATCH', body: { name: newName, symbol, description } }),
   deleteBaseline: (projectId: string, name: string) =>
     request<{ name: string; requirements_cleared: number }>(`/projects/${projectId}/baselines/${encodeURIComponent(name)}`, { method: 'DELETE' }),
+  freezeBaseline: (projectId: string, name: string) =>
+    request<{ name: string; symbol: string; description: string; requirements: number }>(
+      `/projects/${projectId}/baselines/${encodeURIComponent(name)}/freeze`,
+      { method: 'POST' }),
+  diffBaseline: (projectId: string, name: string) =>
+    request<BaselineDiff>(`/projects/${projectId}/baselines/${encodeURIComponent(name)}/diff`),
 
   // Specifications
   listSpecifications: (projectId: string) => request<Specification[]>(`/projects/${projectId}/specifications`),

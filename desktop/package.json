@@ -5,7 +5,8 @@
   "description": "Desktop (Electron) shell for reqmesh — boots the backend and loads the UI in a native window.",
   "main": "main.js",
   "author": "reqmesh",
-  "license": "MIT",
+  "private": true,
+  "license": "GPL-3.0-or-later",
   "scripts": {
     "start": "electron .",
     "build": "electron-builder"
