@@ -1299,6 +1299,217 @@ async def project_events(project_id: str, user: dict = Depends(get_current_user)
     )
 
 
+# ── Project-wide full-text search ─────────────────────────────────────────────
+
+
+@router.get("/projects/{project_id}/search")
+async def search_project(project_id: str, q: str = Query(""), kind: str | None = Query(None),
+                         _rate: None = Depends(rate_limit(20, 60))):
+    """Full-text search across all entity types in a project.
+
+    Returns scored results grouped by entity kind. Supports optional ``kind``
+    filter (requirement, component, verification, specification, change_request,
+    risk, comment, decision, definition, analysis, baseline).
+    """
+    from app.services.search import search_project as do_search
+
+    store = get_store(project_id)
+    results = do_search(store, q, kind, limit=50)
+    return {"query": q, "results": results, "total": len(results)}
+
+
+# ── Allocation matrix (requirements × components) ─────────────────────────────
+
+
+class AllocationRequest(BaseModel):
+    req_id: str
+    component_id: str
+    allocated: bool = True
+
+
+@router.get("/projects/{project_id}/allocation-matrix")
+async def allocation_matrix(project_id: str, search: str = Query(""), filter_type: str = Query(""),
+                            _rate: None = Depends(rate_limit(20, 60))):
+    """Returns a requirements × components matrix showing allocation status.
+
+    Rows = requirements, columns = components. Each cell indicates whether
+    the requirement is allocated to that component (via ``satisfies``)."""
+    store = get_store(project_id)
+    reqs = store.list_requirements()
+    comps = store.list_components()
+
+    if filter_type:
+        reqs = [r for r in reqs if r.get("type") == filter_type]
+    if search:
+        q = search.lower()
+        reqs = [r for r in reqs if q in r["id"].lower() or q in r.get("name", "").lower()]
+        comps = [c for c in comps if q in c["id"].lower() or q in c.get("name", "").lower()]
+
+    # Build the reverse map: requirement_id → set of component_ids
+    allocation: dict[str, set[str]] = {}
+    for c in comps:
+        for rid in c.get("satisfies") or []:
+            if rid:
+                allocation.setdefault(rid, set()).add(c["id"])
+
+    rows = []
+    for r in reqs:
+        alloc_set = allocation.get(r["id"], set())
+        cells: dict[str, bool] = {}
+        for c in comps:
+            cells[c["id"]] = c["id"] in alloc_set
+        rows.append({
+            "req_id": r["id"],
+            "req_name": r.get("name", ""),
+            "req_status": r.get("status", ""),
+            "allocated_to": r.get("allocated_to", ""),
+            "cells": cells,
+        })
+
+    columns = [{"comp_id": c["id"], "comp_name": c.get("name", ""), "comp_type": c.get("type", "")}
+               for c in comps]
+    allocated = sum(1 for r in rows if any(r["cells"].values()))
+    unallocated = len(rows) - allocated
+
+    return {
+        "rows": rows,
+        "columns": columns,
+        "total_requirements": len(rows),
+        "total_components": len(columns),
+        "allocated": allocated,
+        "unallocated": unallocated,
+        "allocation_pct": round(allocated / len(rows) * 100, 1) if rows else 0,
+    }
+
+
+@router.post("/projects/{project_id}/allocation")
+async def set_allocation(project_id: str, data: AllocationRequest, user: dict = Depends(require_maintain)):
+    """Allocate or deallocate a requirement to/from a component.
+
+    Updates both ``component.satisfies`` and ``requirement.allocated_to``
+    in a single call, keeping the two directions in sync.
+    """
+    store = get_store(project_id)
+    req = store.get_requirement(data.req_id)
+    comp = store.get_component(data.component_id)
+    if not req:
+        raise HTTPException(status_code=404, detail="Requirement not found")
+    if not comp:
+        raise HTTPException(status_code=404, detail="Component not found")
+
+    satisfies = list(comp.get("satisfies") or [])
+    if data.allocated:
+        if data.req_id not in satisfies:
+            satisfies.append(data.req_id)
+    else:
+        satisfies = [r for r in satisfies if r != data.req_id]
+
+    store.update_component(data.component_id, {"satisfies": satisfies})
+
+    # `allocated_to` is a single display field but a requirement can be
+    # satisfied by several components, so derive it from what actually
+    # satisfies the requirement now. Clearing it unconditionally on
+    # deallocation blanked the field while other components still satisfied
+    # the requirement, leaving it disagreeing with the matrix.
+    owners = [
+        c.get("name") or c["id"]
+        for c in store.list_components()
+        if data.req_id in (c.get("satisfies") or [])
+    ]
+    allocated_to = ", ".join(sorted(owners))
+    store.update_requirement(data.req_id, {"allocated_to": allocated_to})
+
+    return {"req_id": data.req_id, "component_id": data.component_id,
+            "allocated": data.allocated, "allocated_to": allocated_to}
+
+
+# ── CI test-result import ─────────────────────────────────────────────────────
+
+SAMPLE_JUNIT = """<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="reqmesh-vc" tests="3">
+  <testcase classname="com.example.VerificationTests" name="VCAF0001"
+            time="1.234">
+  </testcase>
+  <testcase classname="com.example.VerificationTests" name="VCPR0001"
+            time="0.567">
+    <failure message="assertion failed: expected True, got False">
+      Traceback (most recent call last):
+        test_engine.py:42 in test_thrust
+      AssertionError: expected True, got False
+    </failure>
+  </testcase>
+  <testcase classname="com.example.VerificationTests" name="UnknownTest"
+            time="0.001">
+    <skipped message="not applicable"/>
+  </testcase>
+</testsuite>"""
+
+
+@router.get("/projects/{project_id}/test-results/sample")
+async def sample_test_result():
+    """Return a sample JUnit XML showing the expected format for CI import."""
+    from fastapi.responses import PlainTextResponse
+    return PlainTextResponse(content=SAMPLE_JUNIT, media_type="application/xml")
+
+
+@router.post("/projects/{project_id}/test-results/import")
+async def import_test_results(
+    project_id: str,
+    file: UploadFile = File(...),
+    format: str = Form("auto"),
+    dry_run: bool = Form(False),
+    user: dict = Depends(require_maintain),
+):
+    """Import CI test results (JUnit XML, CTRF JSON, TAP) and update
+    verification case statuses.
+
+    Test cases are matched to verification cases by name convention:
+    1. Test name exactly matches a VC ID
+    2. Test name contains a VC name (case-insensitive)
+    3. Test name or classname contains a VC ID
+
+    In dry-run mode results are parsed and matched but no changes are applied.
+    """
+    from app.services.test_result_import import (
+        detect_format, parse_results, import_test_results as do_import,
+    )
+
+    if format not in ("auto", "junit", "ctrf", "tap"):
+        raise HTTPException(status_code=400,
+                            detail=f"Unknown format '{format}'. Supported: auto, junit, ctrf, tap.")
+
+    content = await _read_upload_capped(file, settings.max_upload_size_mb)
+
+    # Resolve "auto" here so the response can report what was actually used.
+    # (This previously read `getattr(results, '__format__', 'unknown')`, which
+    # returns list.__format__ — a bound method, and not JSON-serialisable, so
+    # the endpoint failed after doing all the work.)
+    detected = detect_format(content) if format == "auto" else format
+
+    try:
+        results = parse_results(content, detected)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=400,
+                            detail=f"Failed to parse test results: {exc}")
+
+    store = get_store(project_id)
+    summary = do_import(store, results, dry_run=dry_run)
+
+    return {
+        "format": format,
+        "detected_format": detected,
+        "dry_run": dry_run,
+        "parsed": summary.parsed,
+        "matched": summary.matched,
+        "updated": summary.updated,
+        "unmatched": summary.unmatched,
+        "errors": summary.errors,
+        "details": summary.details,
+    }
+
+
 # ── WebSocket (live events) ───────────────────────────────────────────────────
 
 @router.websocket("/projects/{project_id}/ws")

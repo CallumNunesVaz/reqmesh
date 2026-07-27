@@ -5,6 +5,7 @@ import { Search } from 'lucide-react';
 import { ENTITY_META } from './entities';
 import { loadEntityIndex, searchEntities, recordEntityVisit, type IndexedEntity } from './entityIndex';
 import { useStore } from '../store';
+import { api, type SearchResult } from '../api/client';
 
 function highlightMatch(text: string, query: string): React.ReactNode {
   if (!query.trim()) return text;
@@ -29,9 +30,39 @@ export default function CommandPalette({ projectId }: { projectId: string }) {
   const [query, setQuery] = useState('');
   const [entities, setEntities] = useState<IndexedEntity[]>([]);
   const [cursor, setCursor] = useState(0);
+  const [backendResults, setBackendResults] = useState<SearchResult[]>([]);
+  const [backendLoading, setBackendLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const dataVersion = useStore((s) => s.dataVersion);
+  const searchSeqRef = useRef(0);
+
+  // Fetch backend project-wide search when query is 3+ chars.
+  //
+  // Debounced: the search scans every collection in the project, and firing on
+  // each keystroke meant a 12-character query cost ten full scans — enough to
+  // exhaust the endpoint's rate limit mid-word, after which the catch below
+  // would quietly blank the results and the palette would look empty rather
+  // than throttled. The sequence guard still handles out-of-order responses.
+  useEffect(() => {
+    if (!open || query.trim().length < 3) {
+      setBackendResults([]);
+      return;
+    }
+    const timer = setTimeout(() => {
+      const seq = ++searchSeqRef.current;
+      setBackendLoading(true);
+      api.searchProject(projectId, query.trim()).then((res) => {
+        if (seq !== searchSeqRef.current) return;
+        setBackendResults(res.results);
+      }).catch(() => {
+        if (seq === searchSeqRef.current) setBackendResults([]);
+      }).finally(() => {
+        if (seq === searchSeqRef.current) setBackendLoading(false);
+      });
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [open, query, projectId]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -61,7 +92,30 @@ export default function CommandPalette({ projectId }: { projectId: string }) {
     }
   }, [open, projectId, dataVersion]);
 
-  const results = searchEntities(entities, query);
+  const localResults = searchEntities(entities, query);
+  const showBackend = query.trim().length >= 3;
+
+  // Merge results: local entity-index results first, then deduplicated backend results
+  const localIds = useMemo(() => new Set(localResults.map(e => e.id)), [localResults]);
+  const mergedBackend = useMemo(() =>
+    showBackend ? backendResults.filter(r => !localIds.has(r.id)) : [],
+    [showBackend, backendResults, localIds],
+  );
+
+  const combinedResults = useMemo(() => {
+    const combined: Array<IndexedEntity | SearchResult> = [...localResults];
+    if (showBackend && mergedBackend.length > 0) {
+      combined.push(...mergedBackend);
+    }
+    return combined;
+  }, [localResults, showBackend, mergedBackend]);
+
+  // Fix cursor bounds when results change
+  useEffect(() => {
+    if (cursor >= combinedResults.length && combinedResults.length > 0) {
+      setCursor(0);
+    }
+  }, [combinedResults.length]);
 
   // Recent items — shown at top when query is empty
   const [recentIds, setRecentIds] = useState<string[]>(() => {
@@ -70,8 +124,25 @@ export default function CommandPalette({ projectId }: { projectId: string }) {
   });
   const recentEntities = !query.trim() ? recentIds.map(id => entities.find(e => e.id === id)).filter(Boolean) as IndexedEntity[] : [];
 
-  const pick = useCallback((entity: IndexedEntity) => {
+  const pick = useCallback((entity: IndexedEntity | SearchResult) => {
     setOpen(false);
+    if ('kind_icon' in entity) {
+      // Backend search result — navigate to the entity
+      const meta = ENTITY_META[entity.kind as keyof typeof ENTITY_META];
+      if (meta) {
+        navigate(meta.path(projectId, entity.id));
+        return;
+      }
+      // Fallback for entity kinds without dedicated pages (comments, decisions, baselines)
+      if (entity.kind === 'baseline') {
+        navigate(`/project/${projectId}/baselines`);
+      } else {
+        // Navigate to the project overview as fallback
+        navigate(`/project/${projectId}`);
+      }
+      return;
+    }
+    // Local entity index result
     const newRecent = [entity.id, ...recentIds.filter(id => id !== entity.id)].slice(0, 8);
     setRecentIds(newRecent);
     try { localStorage.setItem(`rt-recent-${projectId}`, JSON.stringify(newRecent)); } catch {}
@@ -81,11 +152,10 @@ export default function CommandPalette({ projectId }: { projectId: string }) {
 
   const onInputKey = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') { setOpen(false); return; }
-    if (e.key === 'ArrowDown') { e.preventDefault(); setCursor((c) => Math.min(c + 1, results.length - 1)); }
+    if (e.key === 'ArrowDown') { e.preventDefault(); setCursor((c) => Math.min(c + 1, combinedResults.length - 1)); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); setCursor((c) => Math.max(c - 1, 0)); }
-    else if (e.key === 'Enter' && results[cursor]) { e.preventDefault(); pick(results[cursor]); }
+    else if (e.key === 'Enter' && combinedResults[cursor]) { e.preventDefault(); pick(combinedResults[cursor]); }
     else return;
-    // Keep the highlighted row in view while arrowing through.
     requestAnimationFrame(() => {
       listRef.current?.querySelector('[data-active="true"]')?.scrollIntoView({ block: 'nearest' });
     });
@@ -137,25 +207,53 @@ export default function CommandPalette({ projectId }: { projectId: string }) {
                   <div className="border-t my-1 mx-1" />
                 </>
               )}
-              {results.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-8">No matches.</p>
+              {combinedResults.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">
+                  {backendLoading ? 'Searching…' : 'No matches.'}
+                </p>
               ) : (
-                results.map((e, i) => {
-                  const meta = ENTITY_META[e.kind];
+                combinedResults.map((e, i) => {
+                  const isBackend = 'kind_icon' in e;
+                  if (isBackend) {
+                    const sr = e as SearchResult;
+                    const meta = ENTITY_META[sr.kind as keyof typeof ENTITY_META];
+                    const Icon = meta?.icon ?? Search;
+                    return (
+                      <button
+                        key={`b-${sr.kind}-${sr.id}`}
+                        data-active={i === cursor}
+                        onClick={() => pick(sr)}
+                        onMouseMove={() => setCursor(i)}
+                        className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left transition-colors ${
+                          i === cursor ? 'bg-accent' : ''
+                        }`}
+                      >
+                        <Icon size={14} className={`${meta?.cls ?? 'text-muted-foreground'} shrink-0`} />
+                        <span className="font-mono text-xs text-muted-foreground shrink-0">{highlightMatch(sr.id, query)}</span>
+                        <span className="text-sm text-card-foreground truncate">{highlightMatch(sr.name || sr.id, query)}</span>
+                        {sr.snippet && (
+                          <span className="text-[11px] text-muted-foreground/60 truncate hidden sm:inline max-w-[200px]">{sr.snippet}</span>
+                        )}
+                        <span className="ml-auto text-[10px] text-muted-foreground shrink-0 hidden sm:inline">{sr.kind_label}</span>
+                      </button>
+                    );
+                  }
+                  const entity = e as IndexedEntity;
+                  const meta = ENTITY_META[entity.kind];
                   const Icon = meta.icon;
                   return (
                     <button
-                      key={`${e.kind}-${e.id}`}
+                      key={`${entity.kind}-${entity.id}`}
                       data-active={i === cursor}
-                      onClick={() => pick(e)}
+                      onClick={() => pick(entity)}
                       onMouseMove={() => setCursor(i)}
                       className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left transition-colors ${
                         i === cursor ? 'bg-accent' : ''
                       }`}
                     >
                       <Icon size={14} className={`${meta.cls} shrink-0`} />
-                      <span className="font-mono text-xs text-muted-foreground shrink-0">{highlightMatch(e.id, query)}</span>
-                      <span className="text-sm text-card-foreground truncate">{highlightMatch(e.name || 'Untitled', query)}</span>
+                      <span className="font-mono text-xs text-muted-foreground shrink-0">{highlightMatch(entity.id, query)}</span>
+                      <span className="text-sm text-card-foreground truncate">{highlightMatch(entity.name || 'Untitled', query)}</span>
                       <span className="ml-auto text-[10px] text-muted-foreground shrink-0 hidden sm:inline">{meta.label}</span>
                     </button>
                   );

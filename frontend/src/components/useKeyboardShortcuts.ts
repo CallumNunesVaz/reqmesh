@@ -103,6 +103,7 @@ export function useKeyboardShortcuts(projectId: string | undefined, handlers: Sh
         h: `/project/${projectId}/change-requests`,
         k: `/project/${projectId}/risks`,
         b: `/project/${projectId}/baselines`,
+        a: `/project/${projectId}/allocation`,
         m: `/project/${projectId}/metrics`,
         p: `/project/${projectId}/publish`,
       };
