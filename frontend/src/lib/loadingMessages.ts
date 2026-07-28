@@ -1,4 +1,11 @@
-// Auto-generated from LOADING_MESSAGES.md — 500 loading taglines.
+// 500 rotating loading taglines. This file is the source of truth — it was
+// originally transcribed from a LOADING_MESSAGES.md that duplicated all 500
+// verbatim with no generator between them, so the prose copy was dropped.
+//
+// Register: dry, specific, understated. The joke is usually that the tool is
+// being unhelpfully honest. Ids run 1–500 in the thematic order they were
+// written (requirement quality, weak words, traceability, baselines,
+// parametrics, …); keep new entries grouped with their neighbours.
 // Messages with a `seq` field form a narrative sequence played in order.
 
 interface LoadingMessage {

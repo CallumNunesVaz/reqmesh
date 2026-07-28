@@ -114,34 +114,7 @@ generate_compose() {
 generate_caddyfile() {
     local out="${CFG[INSTALL_DIR]:-$INSTALL_DIR}/Caddyfile"
     info "Generating Caddyfile..."
-    local tmpl="$TEMPLATES/Caddyfile.tmpl"
-    local content
-    content="$(< "$tmpl")"
-
-    local domain="${CFG[DOMAIN]:-localserver.reqmesh.com}"
-    local tls="${CFG[TLS]:-letsencrypt}"
-
-    content="${content//\$\{DOMAIN\}/$domain}"
-    if [ "$tls" = "letsencrypt" ] && [ "$domain" != "localserver.reqmesh.com" ]; then
-        content="${content//%_TLS_%/}"  # Let's Encrypt is the default, leave as-is
-    elif [ "$tls" = "internal" ]; then
-        content="${content//%_TLS_%/    tls internal}"
-    else
-        content="${content//%_TLS_%/    tls internal}"
-    fi
-
-    if [ -z "${CFG[DOMAIN]:-}" ] || [ "$domain" = "localserver.reqmesh.com" ]; then
-        # Bare IP or localhost — use IP binding
-        content="${content//%_BARE_IP_%/
-:443 {
-    tls internal
-    reverse_proxy reqmesh:8000 { flush_interval -1 }
-}}"
-    else
-        content="${content//%_BARE_IP_%/}"
-    fi
-
-    echo "$content" > "$out"
+    render_caddyfile "reqmesh:8000" > "$out"
     success "Caddyfile written to $out"
 }
 
@@ -218,12 +191,48 @@ deploy_docker() {
 main() {
     header "Deploying reqmesh (Docker)"
 
-    mkdir -p "${CFG[INSTALL_DIR]:-$INSTALL_DIR}"
+    local dir="${CFG[INSTALL_DIR]:-$INSTALL_DIR}"
+    mkdir -p "$dir"
+
+    # ── Re-install check ──────────────────────────────────────────────────
+    local backups=()
+    local existing_files=("$dir/.env" "$dir/$COMPOSE_FILE" "$dir/Caddyfile" "$dir/nginx.conf")
+    for f in "${existing_files[@]}"; do
+        if [ -f "$f" ]; then
+            backups+=("$f")
+        fi
+    done
+    if [ ${#backups[@]} -gt 0 ]; then
+        warn "Existing installation files found:"
+        for f in "${backups[@]}"; do
+            echo "  $f"
+        done
+        info "Existing files will be backed up with a .bak timestamp suffix."
+        echo ""
+    fi
+
+    # ── Port conflict check ───────────────────────────────────────────────
+    local port
+    port="${CFG[PORT]:-8000}"
+    if check_port "$port"; then
+        warn "Port $port is already in use — the app may fail to bind."
+    fi
+    local proxy="${CFG[PROXY]:-caddy}"
+    if [ "$proxy" != "none" ]; then
+        if check_port 443; then warn "Port 443 (HTTPS) is already in use."; fi
+        if check_port 80; then warn "Port 80 (HTTP) is already in use."; fi
+    fi
+
+    # ── Back up existing files ────────────────────────────────────────────
+    local ts
+    ts="$(date +%s)"
+    for f in "${backups[@]}"; do
+        cp "$f" "${f}.bak.${ts}" 2>/dev/null || true
+    done
 
     generate_env
     generate_compose
 
-    local proxy="${CFG[PROXY]:-caddy}"
     case "$proxy" in
         caddy)  generate_caddyfile ;;
         nginx)  generate_nginx_conf ;;
@@ -231,14 +240,16 @@ main() {
 
     deploy_docker
 
+    # ── Access instructions ────────────────────────────────────────────────
+    local cred_file
+    cred_file="$(write_admin_credential)"
+
     echo ""
-    success "reqmesh deployed!"
-    info "URL:     ${CFG[BASE_URL]}"
-    report_admin_credential
-    info ""
-    info "Manage:  cd ${CFG[INSTALL_DIR]:-$INSTALL_DIR} && docker compose -f $COMPOSE_FILE"
-    info "Logs:    docker compose -f $COMPOSE_FILE logs -f"
-    info "Stop:    docker compose -f $COMPOSE_FILE down"
+    summary_box "$cred_file" \
+        "Manage:  cd $dir" \
+        "         docker compose -f $COMPOSE_FILE ps" \
+        "Logs:    docker compose -f $COMPOSE_FILE logs -f" \
+        "Stop:    docker compose -f $COMPOSE_FILE down"
     echo ""
 }
 

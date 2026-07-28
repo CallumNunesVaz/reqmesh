@@ -280,7 +280,12 @@ export default function RequirementDetailPage() {
     const ok = await showConfirm('Delete this requirement?', 'Delete Requirement');
     if (!ok) return;
     const snap = { ...req };
-    await api.deleteRequirement(projectId, reqId);
+    try {
+      await api.deleteRequirement(projectId, reqId);
+    } catch (e: any) {
+      setSaveError(e?.message || 'Delete failed');
+      return;
+    }
     useUndoStore.getState().push({
       description: `Delete ${reqId}`,
       undo: async () => { await api.createRequirement(projectId, snap); },
@@ -335,7 +340,9 @@ export default function RequirementDetailPage() {
           await api.updateRequirement(projectId, newRelTarget.trim(), {
             relations: [...((await api.getRequirement(projectId, newRelTarget.trim())).relations || []), { type: newRelType, target: reqId }],
           });
-        } catch { /* target might not exist yet */ }
+        } catch (e: any) {
+          console.warn('Reverse relation add on target %s failed: %s', newRelTarget.trim(), e?.message || e);
+        }
       } else {
         await api.updateRequirement(projectId, target.id, {
           relations: [...target.relations, { type: newRelType, target: reqId }],
@@ -357,7 +364,9 @@ export default function RequirementDetailPage() {
     if (!projectId || !reqId || !req) return;
     const updatedRelations = req.relations.filter((_, i) => i !== index);
     await api.updateRequirement(projectId, reqId, { relations: updatedRelations });
-    setReq({ ...req, relations: updatedRelations });
+    const updated = { ...req, relations: updatedRelations };
+    setReq(updated);
+    savedRef.current = updated;
 
     try {
       const targetReq = await api.getRequirement(projectId, targetId);
@@ -368,8 +377,8 @@ export default function RequirementDetailPage() {
         if (exists) return prev.map((r) => r.id === targetId ? { ...r, relations: targetRelations } : r);
         return prev;
       });
-    } catch {
-      // Target may be a VC or doesn't exist — still removed from source above.
+    } catch (e: any) {
+      console.warn('Relation flip on target %s failed: %s', targetId, e?.message || e);
     }
     bumpGraphVersion();
   };
@@ -448,6 +457,7 @@ export default function RequirementDetailPage() {
                 await api.reviewRequirement(projectId!, reqId!);
                 const updated = await api.getRequirement(projectId!, reqId!);
                 setReq(updated);
+                savedRef.current = updated;
                 setUnreviewedIds((prev) => { const next = new Set(prev); next.delete(reqId!); return next; });
                 setSaveSuccess(true);
                 setTimeout(() => setSaveSuccess(false), 2000);
@@ -1127,7 +1137,9 @@ function AddCommentForm({ projectId, reqId, onAdded, disabled }: { projectId: st
       setText('');
       setShow(false);
       onAdded();
-    } catch { /* ignore */ }
+    } catch (e: any) {
+      console.warn('Comment submit failed: %s', e?.message || e);
+    }
     finally { setBusy(false); }
   };
 

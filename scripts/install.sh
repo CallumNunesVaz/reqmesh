@@ -22,6 +22,84 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Standalone mode — if lib.sh is absent we are running with only this file.
+# Download all companion scripts and templates from the repo so the rest of
+# the installer can proceed as if the full tree were present.
+# ═══════════════════════════════════════════════════════════════════════════════
+if ! [ -f "$SCRIPT_DIR/lib.sh" ]; then
+    _RED='\033[0;31m'; _GREEN='\033[0;32m'; _YELLOW='\033[1;33m'; _BLUE='\033[0;34m'; _NC='\033[0m'
+    _info()  { printf "${_BLUE}→${_NC} %s\n" "$*"; }
+    _warn()  { printf "${_YELLOW}⚠${_NC} %s\n" "$*" >&2; }
+    _err()   { printf "${_RED}✗${_NC} %s\n" "$*" >&2; exit 1; }
+
+    # Pinned by default. `main` moves, so an installer fetched today and re-run
+    # next month would silently pull different companion scripts than the ones
+    # it was tested against — and a force-push would change them under a user
+    # mid-install. Override REQMESH_REF to track a branch deliberately.
+    _REF="${REQMESH_REF:-v0.1.1}"
+    _REPO_RAW="${REQMESH_INSTALL_REPO:-https://raw.githubusercontent.com/CallumNunesVaz/reqmesh/${_REF}/scripts}"
+
+    case "$_REPO_RAW" in
+        https://*) ;;
+        *) _err "REQMESH_INSTALL_REPO must be an https:// URL (got: $_REPO_RAW)" ;;
+    esac
+
+    # Staged in a private temp directory, not alongside this script. When the
+    # installer is run the documented way — `curl … | bash` — ${BASH_SOURCE[0]}
+    # is empty and SCRIPT_DIR resolves to $PWD, so the previous version wrote
+    # lib.sh, wizard.sh, deploy-*.sh, templates/ and updater/ into whatever
+    # directory the user happened to be standing in, usually their home.
+    _STAGE="$(mktemp -d "${TMPDIR:-/tmp}/reqmesh-bootstrap.XXXXXXXXXX")"
+    chmod 700 "$_STAGE"
+    trap 'rm -rf "$_STAGE"' EXIT
+    mkdir -p "$_STAGE/templates" "$_STAGE/updater"
+
+    _info "Standalone mode — fetching companion scripts"
+    _info "  source: $_REPO_RAW"
+
+    _companions=(
+        lib.sh wizard.sh deploy-docker.sh deploy-bare.sh
+        templates/docker-compose.prod.yml.tmpl
+        templates/Caddyfile.tmpl
+        templates/nginx.conf.tmpl
+        templates/reqmesh.service.tmpl
+        updater/watch.sh
+    )
+    for _f in "${_companions[@]}"; do
+        printf "${_BLUE}  ↓${_NC} %s" "$_f"
+        if ! curl -fsSL --proto '=https' --tlsv1.2 --connect-timeout 15 --retry 2 \
+                "$_REPO_RAW/$_f" -o "$_STAGE/$_f"; then
+            printf "\r${_RED}  ✗${_NC} %s\n" "$_f"
+            _err "Failed to download $_f — check connectivity, or set REQMESH_INSTALL_REPO to a mirror"
+        fi
+        # These files are about to be sourced and run as root. curl reports
+        # success for a response that was cut short mid-transfer, and a
+        # half-written lib.sh defines half its functions — the installer would
+        # then fail somewhere deep in a deployment rather than here. There is no
+        # published checksum to compare against (the release bundle ships a
+        # different installer), so verify what can be verified locally: the file
+        # is non-empty, and shell scripts actually parse.
+        if [ ! -s "$_STAGE/$_f" ]; then
+            _err "Downloaded $_f is empty — refusing to continue"
+        fi
+        case "$_f" in
+            *.sh)
+                bash -n "$_STAGE/$_f" 2>/dev/null \
+                    || _err "Downloaded $_f is not valid shell — refusing to run a truncated or corrupted script"
+                ;;
+        esac
+        printf "\r${_GREEN}  ✓${_NC} %s\n" "$_f"
+    done
+
+    chmod +x "$_STAGE"/*.sh "$_STAGE/updater"/*.sh
+    SCRIPT_DIR="$_STAGE"
+    printf "${_GREEN}✓${_NC} Companion scripts ready (%s).\n\n" "$_STAGE"
+    _warn "Integrity rests on TLS to the host above, exactly as it did for this"
+    _warn "script. Review $_STAGE before continuing if that is not sufficient."
+fi
+
 source "$SCRIPT_DIR/lib.sh"
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -63,13 +141,22 @@ bootstrap_gum() {
         return 0
     fi
 
+    local checksum_verified=false
     if curl -fsSL --proto '=https' --tlsv1.2 -o "$tmpdir/checksums.txt" \
-            "$base/checksums.txt" 2>/dev/null && has_cmd sha256sum; then
+            "$base/checksums.txt" 2>/dev/null; then
         local expected actual
         expected="$(awk -v f="$tarball" '$2 == f || $2 == "*"f {print $1}' "$tmpdir/checksums.txt" | head -1)"
-        actual="$(sha256sum "$tmpdir/$tarball" | awk '{print $1}')"
         if [ -z "$expected" ]; then
             warn "No checksum published for $tarball — skipping Gum rather than trusting it."
+            rm -rf "$tmpdir"
+            return 0
+        fi
+        if has_cmd sha256sum; then
+            actual="$(sha256sum "$tmpdir/$tarball" | awk '{print $1}')"
+        elif has_cmd openssl; then
+            actual="$(openssl dgst -sha256 "$tmpdir/$tarball" | awk '{print $NF}')"
+        else
+            warn "Neither sha256sum nor openssl available — skipping Gum rather than trusting it."
             rm -rf "$tmpdir"
             return 0
         fi
@@ -80,7 +167,9 @@ bootstrap_gum() {
             rm -rf "$tmpdir"
             return 0
         fi
-    else
+        checksum_verified=true
+    fi
+    if ! $checksum_verified; then
         warn "Could not verify the Gum checksum — skipping Gum rather than trusting it."
         rm -rf "$tmpdir"
         return 0
@@ -162,6 +251,7 @@ non_interactive() {
     save_cfg "ALLOWED_HOSTS" "${RT_ALLOWED_HOSTS:-}"
     save_cfg "REQMESH_USER" "${REQMESH_USER:-reqmesh}"
     save_cfg "REQMESH_GROUP" "${REQMESH_GROUP:-reqmesh}"
+    save_cfg "LAN_IP" "$(detect_lan_ip)"
 
     # Dispatch to deploy script
     local mode="${CFG[DEPLOY_MODE]:-docker}"
