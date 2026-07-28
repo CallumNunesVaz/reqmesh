@@ -208,8 +208,8 @@ export default function RequirementsPage() {
       bumpDataVersion();
       if (selectedReqId === reqId) selectReq(null);
       load();
-    } catch {
-      // silently no-op when permissions insufficient
+    } catch (e: any) {
+      console.warn('Delete requirement %s failed: %s', reqId, e?.message || e);
     }
   };
 
@@ -249,9 +249,8 @@ export default function RequirementsPage() {
       if (selectedReqId && ids.includes(selectedReqId)) selectReq(null);
       clearSelection();
       load();
-    } catch {
-      // Failure leaves the selection intact so the user can retry; avoid
-      // clearing selection/undo state for a mutation that never happened.
+    } catch (e: any) {
+      console.warn('Bulk delete failed: %s', e?.message || e);
     }
   };
 
@@ -261,8 +260,8 @@ export default function RequirementsPage() {
       await api.bulkUpdateRequirements(projectId, [...selectedIds], { baselines: [baseline] });
       clearSelection();
       load();
-    } catch {
-      // Leave selection intact so the user can see what was being changed and retry.
+    } catch (e: any) {
+      console.warn('Bulk baseline update failed: %s', e?.message || e);
     }
   };
 
@@ -273,8 +272,8 @@ export default function RequirementsPage() {
       clearSelection();
       load();
       setBulkParent('');
-    } catch {
-      // Leave selection/input intact so the user can retry.
+    } catch (e: any) {
+      console.warn('Bulk reparent failed: %s', e?.message || e);
     }
   };
 
@@ -284,8 +283,8 @@ export default function RequirementsPage() {
       await api.bulkReparentRequirements(projectId!, [moveReq.id], moveReq.target.trim(), true);
       setMoveReq(null);
       load();
-    } catch {
-      // Leave the move-target input open so the user can retry.
+    } catch (e: any) {
+      console.warn('Single reparent failed: %s', e?.message || e);
     }
   };
 

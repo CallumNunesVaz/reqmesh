@@ -31,8 +31,10 @@ _FORMULA_LEAD = ("=", "+", "-", "@", "\t", "\r")
 def _defuse(value):
     """Prefix a leading formula trigger with an apostrophe (the spreadsheet
     convention for "this is literal text"). Non-strings pass through."""
-    if isinstance(value, str) and value.startswith(_FORMULA_LEAD):
-        return "'" + value
+    if isinstance(value, str):
+        stripped = value.lstrip()
+        if stripped.startswith(_FORMULA_LEAD):
+            return "'" + value
     return value
 
 

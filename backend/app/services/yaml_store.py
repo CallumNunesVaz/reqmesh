@@ -155,6 +155,16 @@ class YamlStore:
             with os.fdopen(fd, "w") as f:
                 with _yaml_lock:
                     yaml.dump(data, f)
+                f.flush()
+                os.fsync(f.fileno())
+            # Fsync the directory so the rename is durable on journaling
+            # filesystems. Without this, a crash after replace() can leave
+            # the directory entry pointing at unwritten blocks.
+            dir_fd = os.open(path.parent, os.O_RDONLY)
+            try:
+                os.fsync(dir_fd)
+            finally:
+                os.close(dir_fd)
             os.replace(tmp, path)
         except BaseException:
             try:

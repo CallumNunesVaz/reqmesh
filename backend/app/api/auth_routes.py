@@ -66,7 +66,7 @@ class RegisterRequest(BaseModel):
 
 
 @router.post("/auth/login")
-async def login(data: LoginRequest, response: Response, _rate: None = Depends(rate_limit(5, 60))):
+def login(data: LoginRequest, response: Response, _rate: None = Depends(rate_limit(5, 60))):
     result = authenticate(data.username, data.password)
     status = result.get("status")
 
@@ -87,7 +87,7 @@ async def login(data: LoginRequest, response: Response, _rate: None = Depends(ra
 
 
 @router.post("/auth/register")
-async def register(data: RegisterRequest, response: Response,
+def register(data: RegisterRequest, response: Response,
                    request: Request,
                    authorization: Optional[str] = Header(None),
                    _rate: None = Depends(rate_limit(3, 300))):
@@ -131,7 +131,7 @@ async def register(data: RegisterRequest, response: Response,
 
 
 @router.post("/auth/guest")
-async def login_as_guest(response: Response):
+def login_as_guest(response: Response):
     from app.core.config import settings
     if settings.require_auth:
         raise HTTPException(status_code=401,
@@ -143,7 +143,7 @@ async def login_as_guest(response: Response):
 
 
 @router.get("/auth/whoami")
-async def whoami(request: Request, response: Response,
+def whoami(request: Request, response: Response,
                  user: dict = Depends(get_current_user),
                  authorization: Optional[str] = Header(None)):
     from app.core.auth import create_token as _create_token, create_csrf_token, _token_ttl, _cookie_domain
@@ -195,7 +195,7 @@ async def whoami(request: Request, response: Response,
 
 
 @router.post("/auth/logout")
-async def logout(response: Response):
+def logout(response: Response):
     clear_auth_cookies(response)
     return {"ok": True}
 
@@ -207,7 +207,7 @@ class ProfileUpdateRequest(BaseModel):
 
 
 @router.patch("/auth/profile")
-async def update_profile(data: ProfileUpdateRequest, user: dict = Depends(get_current_user), _rate: None = Depends(rate_limit(3, 300))):
+def update_profile(data: ProfileUpdateRequest, user: dict = Depends(get_current_user), _rate: None = Depends(rate_limit(3, 300))):
     username = user.get("username", "")
     if username in ("guest", ""):
         raise HTTPException(status_code=403, detail="Guests cannot update a profile")
@@ -236,7 +236,7 @@ async def update_profile(data: ProfileUpdateRequest, user: dict = Depends(get_cu
 
 
 @router.post("/auth/logout-everywhere")
-async def logout_everywhere(user: dict = Depends(get_current_user)):
+def logout_everywhere(user: dict = Depends(get_current_user)):
     """Invalidate all of the caller's own sessions across devices."""
     username = user.get("username", "")
     if username in ("guest", ""):
@@ -257,7 +257,7 @@ class ResetPasswordRequest(BaseModel):
 
 
 @router.post("/auth/forgot-password")
-async def forgot_password(data: ForgotPasswordRequest, _rate: None = Depends(rate_limit(3, 300))):
+def forgot_password(data: ForgotPasswordRequest, _rate: None = Depends(rate_limit(3, 300))):
     token = create_reset_token(data.username)
     # Always return the same response to prevent username enumeration
     from app.core.config import settings
@@ -270,7 +270,7 @@ async def forgot_password(data: ForgotPasswordRequest, _rate: None = Depends(rat
 
 
 @router.post("/auth/reset-password")
-async def reset_password(data: ResetPasswordRequest, _rate: None = Depends(rate_limit(3, 300))):
+def reset_password(data: ResetPasswordRequest, _rate: None = Depends(rate_limit(3, 300))):
     _validate_password(data.password)
     if not consume_reset_token(data.token, data.password):
         raise HTTPException(status_code=400, detail="Invalid or expired reset token")
@@ -284,7 +284,7 @@ class VerifyEmailRequest(BaseModel):
 
 
 @router.post("/auth/verify-email")
-async def verify_email_endpoint(data: VerifyEmailRequest, _rate: None = Depends(rate_limit(5, 300))):
+def verify_email_endpoint(data: VerifyEmailRequest, _rate: None = Depends(rate_limit(5, 300))):
     username = verify_email(data.token)
     # Uniform response regardless of token validity to prevent enumeration
     if not username:
@@ -293,7 +293,7 @@ async def verify_email_endpoint(data: VerifyEmailRequest, _rate: None = Depends(
 
 
 @router.post("/auth/resend-verification")
-async def resend_verification(user: dict = Depends(get_current_user), _rate: None = Depends(rate_limit(1, 120))):
+def resend_verification(user: dict = Depends(get_current_user), _rate: None = Depends(rate_limit(1, 120))):
     from app.core.config import settings
     from app.services.email_service import _send_email, _is_configured
     username = user.get("username", "")
@@ -337,13 +337,13 @@ def _validate_role(role: str) -> None:
 
 
 @router.get("/auth/users")
-async def list_users(admin: dict = Depends(require_admin)):
+def list_users(admin: dict = Depends(require_admin)):
     """List all accounts (without password hashes). Admins only."""
     return public_users()
 
 
 @router.post("/auth/users", status_code=201)
-async def create_user(data: CreateUserRequest, admin: dict = Depends(require_admin)):
+def create_user(data: CreateUserRequest, admin: dict = Depends(require_admin)):
     if not USERNAME_RE.match(data.username):
         raise HTTPException(status_code=400, detail="Username must be 3–32 chars: letters, digits, . _ -")
     _validate_password(data.password)
@@ -366,7 +366,7 @@ async def create_user(data: CreateUserRequest, admin: dict = Depends(require_adm
 
 
 @router.patch("/auth/users/{username}")
-async def update_user(username: str, data: UpdateUserRequest, admin: dict = Depends(require_admin)):
+def update_user(username: str, data: UpdateUserRequest, admin: dict = Depends(require_admin)):
     users = load_users()
     if username not in users:
         raise HTTPException(status_code=404, detail="User not found")
@@ -403,7 +403,7 @@ async def update_user(username: str, data: UpdateUserRequest, admin: dict = Depe
 
 
 @router.delete("/auth/users/{username}")
-async def remove_user(username: str, admin: dict = Depends(require_admin)):
+def remove_user(username: str, admin: dict = Depends(require_admin)):
     users = load_users()
     if username not in users:
         raise HTTPException(status_code=404, detail="User not found")
@@ -423,7 +423,7 @@ class DisableRequest(BaseModel):
 
 
 @router.post("/auth/users/{username}/disable")
-async def disable_user(username: str, data: DisableRequest, admin: dict = Depends(require_admin)):
+def disable_user(username: str, data: DisableRequest, admin: dict = Depends(require_admin)):
     users = load_users()
     if username not in users:
         raise HTTPException(status_code=404, detail="User not found")
@@ -439,14 +439,14 @@ async def disable_user(username: str, data: DisableRequest, admin: dict = Depend
 
 
 @router.post("/auth/users/{username}/unlock")
-async def unlock_account(username: str, admin: dict = Depends(require_admin)):
+def unlock_account(username: str, admin: dict = Depends(require_admin)):
     if not unlock_user(username):
         raise HTTPException(status_code=404, detail="User not found")
     return {"ok": True}
 
 
 @router.post("/auth/users/{username}/logout")
-async def force_logout(username: str, admin: dict = Depends(require_admin)):
+def force_logout(username: str, admin: dict = Depends(require_admin)):
     """Revoke every active session for a user (force sign-out everywhere)."""
     if not bump_token_version(username):
         raise HTTPException(status_code=404, detail="User not found")
@@ -468,7 +468,7 @@ def _invite_link(token: str) -> str:
 
 
 @router.post("/auth/users/invite", status_code=201)
-async def invite_user(data: InviteRequest, admin: dict = Depends(require_admin)):
+def invite_user(data: InviteRequest, admin: dict = Depends(require_admin)):
     """Create an account and email a set-password link. When SMTP is not
     configured the link is returned so the admin can share it manually."""
     if not USERNAME_RE.match(data.username):
@@ -504,7 +504,7 @@ class BulkUserRequest(BaseModel):
 
 
 @router.post("/auth/users/bulk")
-async def bulk_user_action(data: BulkUserRequest, admin: dict = Depends(require_admin)):
+def bulk_user_action(data: BulkUserRequest, admin: dict = Depends(require_admin)):
     valid = {"disable", "enable", "delete", "set_role"}
     if data.action not in valid:
         raise HTTPException(status_code=400, detail=f"Unknown action: {data.action}")
@@ -549,7 +549,7 @@ async def bulk_user_action(data: BulkUserRequest, admin: dict = Depends(require_
 # ── CSV import / export ───────────────────────────────────────────────────────
 
 @router.get("/auth/users/export")
-async def export_users_csv(admin: dict = Depends(require_admin)):
+def export_users_csv(admin: dict = Depends(require_admin)):
     import csv
     import io
     from fastapi.responses import Response
@@ -569,7 +569,7 @@ class ImportUsersRequest(BaseModel):
 
 
 @router.post("/auth/users/import")
-async def import_users_csv(data: ImportUsersRequest, admin: dict = Depends(require_admin)):
+def import_users_csv(data: ImportUsersRequest, admin: dict = Depends(require_admin)):
     """Create accounts from CSV rows (username, full_name, email, role). Each new
     user is invited (set-password link); existing usernames are skipped."""
     import csv
