@@ -23,6 +23,8 @@ services:
       dockerfile: Dockerfile.prod
     ports:
       - "${RT_BIND:-127.0.0.1}:8000:8000"
+    # tectonic caches its ~300MB TeX bundle on /data so it downloads only
+    # once, on the first LaTeX PDF export.
     environment:
       - RT_STATIC_DIR=/app/frontend/dist
       - RT_UPDATE_CONTROL_DIR=/control
@@ -30,13 +32,11 @@ services:
       - RT_GITHUB_TOKEN=${RT_GITHUB_TOKEN:-}
       - RT_SELF_UPDATE_ENABLED=${RT_SELF_UPDATE_ENABLED:-true}
       - RT_DATA_ROOT=/data/projects
-      # tectonic caches its ~300MB TeX bundle here (on the persistent /data
-      # volume) so it downloads once, on the first LaTeX PDF export.
       - TECTONIC_CACHE_DIR=/data/.tectonic-cache
       - RT_HOST=0.0.0.0
       - RT_PORT=8000
-      - RT_SECRET=${RT_SECRET:?RT_SECRET is required — generate with: openssl rand -hex 32}
-      - RT_ADMIN_PASSWORD=${RT_ADMIN_PASSWORD:?RT_ADMIN_PASSWORD is required — generate with: openssl rand -base64 12}
+      - "RT_SECRET=${RT_SECRET:?RT_SECRET is required}"
+      - "RT_ADMIN_PASSWORD=${RT_ADMIN_PASSWORD:?RT_ADMIN_PASSWORD is required}"
       - RT_GIT_AUTOCOMMIT=true
       - RT_GIT_REMOTE_URL=${RT_GIT_REMOTE_URL:-}
       - RT_GIT_PUSH_ON_COMMIT=${RT_GIT_PUSH_ON_COMMIT:-false}
@@ -47,7 +47,7 @@ services:
       - RT_PROFILE=${RT_PROFILE:-team}
       - RT_COOKIE_SECURE=${RT_COOKIE_SECURE:-true}
       - RT_PROXY_TRUSTED_CIDR=${RT_PROXY_TRUSTED_CIDR:-127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}
-      - RT_BASE_URL=${RT_BASE_URL:-http://localhost:8000}
+      - "RT_BASE_URL=${RT_BASE_URL:-http://localhost:8000}"
       - RT_SMTP_HOST=${RT_SMTP_HOST:-}
       - RT_SMTP_PORT=${RT_SMTP_PORT:-587}
       - RT_SMTP_USERNAME=${RT_SMTP_USERNAME:-}
