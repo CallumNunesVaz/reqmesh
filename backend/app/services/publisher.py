@@ -858,9 +858,14 @@ class Publisher:
 
         hdr = self._header_config()
         project_name = esc(self.meta.get("name", self.project_id))
-        # Inject the selected accent colour into the HTML CSS.
+        # Inject the selected accent colour into the HTML CSS. The stylesheet
+        # uses two deliberately different shades — #2563eb for the accent and
+        # #1d4ed8 for its darker companion — so they map to accent and
+        # accent_dark respectively. Collapsing both onto one value flattened
+        # every hover and heading-rule contrast the design relies on.
         accent_hex = hdr.get("accent_color", "#2094f3")
-        css_with_accent = CSS.replace("#2563eb", accent_hex).replace("#1d4ed8", accent_hex)
+        accent_dark_hex = hdr.get("accent_dark", _darken(accent_hex, 0.65))
+        css_with_accent = CSS.replace("#2563eb", accent_hex).replace("#1d4ed8", accent_dark_hex)
         footer_css = f"""
   @bottom-left {{
     content: "{esc(hdr['footer_str'], quote=True)}";

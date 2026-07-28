@@ -162,7 +162,9 @@ class ProjectSettings(BaseModel):
     permissions: Optional[dict] = None
 
 
-_ALLOWED_REMOTE_SCHEMES = ("https://", "ssh://", "git@")
+# Single definition, shared with git_service.test_remote — see the note there.
+from app.services.git_service import ALLOWED_REMOTE_SCHEMES as _ALLOWED_REMOTE_SCHEMES
+from app.services.git_service import REMOTE_SCHEME_ERROR as _REMOTE_SCHEME_ERROR
 
 
 def _guard_git_settings(new_git: dict, existing_git: dict, user: dict) -> None:
@@ -183,8 +185,7 @@ def _guard_git_settings(new_git: dict, existing_git: dict, user: dict) -> None:
     if incoming and not str(incoming).startswith(_ALLOWED_REMOTE_SCHEMES):
         raise HTTPException(
             status_code=400,
-            detail="git remote URL must start with https://, ssh:// or git@ "
-                   "(file:// and http:// are refused)",
+            detail=_REMOTE_SCHEME_ERROR,
         )
 
 

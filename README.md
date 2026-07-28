@@ -17,7 +17,7 @@ An open-source, web-based requirements management tool with:
 - **Deep traceability** — shallow and deep coverage analysis, code-to-requirement tag scanning, cycle detection via Tarjan's SCC
 - **Fingerprint-based review** — content-hash auto-invalidates reviews when normative content changes; no manual bookkeeping
 - **Quality linting** — inline requirement writing feedback (weak words, placeholders, measurability checks) based on INCOSE / EARS / ISO 29148
-- **Planning & estimation** — per-stakeholder priority, story points, prioritized backlog
+- **Planning & estimation** — per-stakeholder priority and a prioritized backlog
 - **Rich text editing** — TipTap editor with image support, paste sanitization, and live word count
 - **Guided mode** — toggleable contextual help for every section of the application
 
