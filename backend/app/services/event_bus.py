@@ -50,22 +50,50 @@ class EventBus:
 
     # --- Presence -------------------------------------------------------------
 
-    def join(self, project_id: str, client_id: str, username: str, role: str) -> None:
-        roster = self._presence.setdefault(project_id, {})
-        # Prune entries with no activity for > 5 min (TCP drops can prevent
-        # the leave() call, leaving a permanent ghost entry).
-        now = datetime.now(timezone.utc)
-        stale = [cid for cid, info in roster.items()
-                 if (now - datetime.fromisoformat(info["since"])).total_seconds() > 300
-                 and cid != client_id]
+    # A connection is considered gone after this long with no heartbeat. The SSE
+    # loop touches every 30 s, so this is ten missed beats — long enough to ride
+    # out a slow network, short enough that a ghost clears within a coffee break.
+    _PRESENCE_TTL_SECONDS = 300
+
+    def _prune(self, project_id: str, now: datetime) -> bool:
+        """Drop connections that have stopped heartbeating. Returns True if any went.
+
+        Keyed on ``last_seen``, not ``since``: ``since`` is the join time and is
+        never refreshed, so pruning on it evicted anyone whose session had
+        simply lasted longer than the TTL — while they were still connected and
+        watching the roster lose them.
+        """
+        roster = self._presence.get(project_id, {})
+        stale = [
+            cid for cid, info in roster.items()
+            if (now - datetime.fromisoformat(info["last_seen"])).total_seconds()
+            > self._PRESENCE_TTL_SECONDS
+        ]
         for cid in stale:
             del roster[cid]
+        return bool(stale)
+
+    def join(self, project_id: str, client_id: str, username: str, role: str) -> None:
+        roster = self._presence.setdefault(project_id, {})
+        now = datetime.now(timezone.utc)
+        self._prune(project_id, now)
         roster[client_id] = {
             "username": username or "guest",
             "role": role or "guest",
             "since": now.isoformat(),
+            "last_seen": now.isoformat(),
         }
         self._broadcast_presence(project_id)
+
+    def touch(self, project_id: str, client_id: str) -> None:
+        """Mark a connection alive. Called from the SSE loop's heartbeat.
+
+        Deliberately silent — no presence broadcast — so a roomful of idle
+        clients heartbeating every 30 s does not generate cross-traffic.
+        """
+        info = self._presence.get(project_id, {}).get(client_id)
+        if info is not None:
+            info["last_seen"] = datetime.now(timezone.utc).isoformat()
 
     def leave(self, project_id: str, client_id: str) -> None:
         roster = self._presence.get(project_id, {})
@@ -74,7 +102,14 @@ class EventBus:
             self._broadcast_presence(project_id)
 
     def roster(self, project_id: str) -> list[dict]:
-        return list(self._presence.get(project_id, {}).values())
+        # Prune here too, so a ghost clears on the next read even when nobody
+        # new joins — join() alone left it visible indefinitely on a quiet project.
+        self._prune(project_id, datetime.now(timezone.utc))
+        # last_seen is bookkeeping, not part of the wire format.
+        return [
+            {k: v for k, v in info.items() if k != "last_seen"}
+            for info in self._presence.get(project_id, {}).values()
+        ]
 
     def _broadcast_presence(self, project_id: str) -> None:
         self.publish(project_id, {"type": "presence", "users": self.roster(project_id)})
