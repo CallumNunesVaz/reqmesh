@@ -200,6 +200,16 @@ async def csrf_middleware(request: Request, call_next):
 
 _PROJECT_PATH_RE = re.compile(r"^/api/projects/([^/]+)(/.*)?$")
 
+# Per-project serialisation: git can't handle concurrent commits on the same
+# tree (they collide on .git/index.lock and one is silently dropped).
+_git_locks: dict[str, asyncio.Lock] = {}
+# Per-project state for schedule-aware commits — the middleware increments the
+# change counter on every mutating request and evaluates the configured schedule
+# (every_change, interval, changes, or both) to decide whether to fire a commit.
+_git_change_counts: dict[str, int] = {}
+_git_last_commit_time: dict[str, float] = {}
+_GIT_DEBOUNCE_S = 3.0
+
 
 @app.middleware("http")
 async def request_logging_middleware(request: Request, call_next):
@@ -268,6 +278,11 @@ async def git_autocommit_middleware(request: Request, call_next):
                     git_cfg = {}
                 auto_commit_enabled = git_cfg.get("auto_commit", settings.git_autocommit)
                 if auto_commit_enabled:
+                    # Read the per-project schedule configuration.
+                    schedule = str(git_cfg.get("commit_schedule", settings.git_commit_schedule) or "every_change")
+                    interval_hours = float(git_cfg.get("commit_interval_hours", settings.git_commit_interval_hours) or 0)
+                    changes_threshold = int(git_cfg.get("commit_changes_threshold", settings.git_commit_changes_threshold) or 0)
+
                     username = ""
                     auth = request.headers.get("Authorization", "")
                     if auth.startswith("Bearer "):
@@ -282,9 +297,45 @@ async def git_autocommit_middleware(request: Request, call_next):
                     msg = f"rt: {request.method.lower()} {action}"
                     if username:
                         msg += f" ({username})"
-                    committed = await asyncio.to_thread(
-                        auto_commit, project_root, msg, username=username
-                    )
+
+                    lock = _git_locks.get(project_id)
+                    if lock is None:
+                        lock = asyncio.Lock()
+                        _git_locks[project_id] = lock
+
+                    # Increment the per-project change counter.
+                    count = _git_change_counts.get(project_id, 0) + 1
+                    _git_change_counts[project_id] = count
+
+                    now = time.monotonic()
+                    last = _git_last_commit_time.get(project_id, 0)
+
+                    # Decide whether to commit based on the configured schedule.
+                    should_commit = False
+                    if schedule == "every_change":
+                        if now - last >= _GIT_DEBOUNCE_S:
+                            should_commit = True
+                    elif schedule == "interval":
+                        if interval_hours > 0 and now - last >= interval_hours * 3600:
+                            should_commit = True
+                    elif schedule == "changes":
+                        if changes_threshold > 0 and count >= changes_threshold:
+                            should_commit = True
+                    elif schedule == "both":
+                        time_ok = interval_hours > 0 and now - last >= interval_hours * 3600
+                        count_ok = changes_threshold > 0 and count >= changes_threshold
+                        if time_ok or count_ok:
+                            should_commit = True
+
+                    committed = False
+                    if should_commit:
+                        async with lock:
+                            committed = await asyncio.to_thread(
+                                auto_commit, project_root, msg, username=username
+                            )
+                            if committed:
+                                _git_last_commit_time[project_id] = time.monotonic()
+                                _git_change_counts[project_id] = 0
                     push_on_commit = git_cfg.get("push_on_commit", settings.git_push_on_commit)
                     push_interval = git_cfg.get("push_interval_minutes", settings.git_push_interval_minutes)
                     remote_url = git_cfg.get("remote_url") or settings.git_remote_url

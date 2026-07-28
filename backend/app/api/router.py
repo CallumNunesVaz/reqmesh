@@ -289,15 +289,15 @@ def next_uid(project_id: str, parent: str | None = None):
         if prefix_hint.upper() not in used:
             prefix = prefix_hint.upper()
         else:
+            # Walk sequentially from the hint instead of generating all
+            # combinations up front (itertools.product over 26^4 = 457k).
+            # This finds the first available prefix in the same sorted order
+            # without materialising the entire space.
             chars = string.ascii_uppercase if prefix_type == "alpha" else string.ascii_uppercase + string.digits
-            prefix = None
-            for length in range(prefix_len, prefix_len + 3):
-                for combo in itertools.product(chars, repeat=length):
-                    candidate = "".join(combo)
-                    if candidate not in used:
-                        prefix = candidate
-                        break
-                if prefix:
+            _prefix_iter = _make_prefix_iter(chars, prefix_len)
+            for candidate in _prefix_iter:
+                if candidate not in used:
+                    prefix = candidate
                     break
             if not prefix:
                 prefix = prefix_hint.upper() + "0"
@@ -325,6 +325,24 @@ def next_uid(project_id: str, parent: str | None = None):
         suffix = _int_to_base36(next_val).zfill(suffix_len)
 
     return {"prefix": prefix, "next_id": f"{base}{suffix}"}
+
+
+def _make_prefix_iter(chars: str, start_len: int):
+    """Yield prefix candidates in length-first lexicographic order, bounded at
+    ``start_len + 2``.  Unlike ``itertools.product(chars, repeat=…)`` this does
+    not materialise the full Cartesian product (worst-case 457k tuples)."""
+    for length in range(start_len, start_len + 3):
+        yield from _product_gen(chars, length)
+
+
+def _product_gen(chars: str, length: int):
+    """Recursive generator over the characters in ``chars``."""
+    if length == 0:
+        yield ""
+        return
+    for rest in _product_gen(chars, length - 1):
+        for c in chars:
+            yield c + rest
 
 
 def _int_to_base36(n: int) -> str:
@@ -542,7 +560,7 @@ def list_specifications(
     store = get_store(project_id)
     items = store.list_specifications()
     if offset is None and limit is None:
-        return items
+        return items[:2000]
     off = offset or 0
     lim = limit or 500
     total = len(items)
@@ -747,7 +765,7 @@ def list_definitions(
     store = get_store(project_id)
     items = store.list_items("definitions")
     if offset is None and limit is None:
-        return items
+        return items[:2000]
     off = offset or 0
     lim = limit or 500
     total = len(items)
@@ -793,7 +811,7 @@ def list_analysis_cases(
     store = get_store(project_id)
     items = store.list_items("analysis_cases")
     if offset is None and limit is None:
-        return items
+        return items[:2000]
     off = offset or 0
     lim = limit or 500
     total = len(items)
@@ -849,7 +867,7 @@ def list_verification_cases(
     store = get_store(project_id)
     items = store.list_verification_cases()
     if offset is None and limit is None:
-        return items
+        return items[:2000]
     off = offset or 0
     lim = limit or 500
     total = len(items)

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, ChevronRight, Boxes, Square, CheckSquare, Trash2, X, Search } from 'lucide-react';
+import { Plus, ChevronRight, Boxes, Square, CheckSquare, Trash2, X, Search, Eye, EyeOff } from 'lucide-react';
 import { api, COMPONENT_TYPES, type Component, type ComponentTreeNode } from '../api/client';
 import { useStore } from '../store';
 import { useAuthStore } from '../store/auth';
@@ -17,6 +17,9 @@ export default function ComponentsPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkParent, setBulkParent] = useState('');
   const dataVersion = useStore((s) => s.dataVersion);
+  const componentFilters = useStore((s) => s.componentFilters);
+  const toggleComponentFilter = useStore((s) => s.toggleComponentFilter);
+  const bumpGraph = useStore((s) => s.bumpGraphVersion);
 
   const [components, setComponents] = useState<Component[]>([]);
   const [tree, setTree] = useState<ComponentTreeNode[]>([]);
@@ -239,6 +242,13 @@ export default function ComponentsPage() {
               {node.satisfies.length} requirements
             </span>
           )}
+          <button
+            onClick={(e) => { e.stopPropagation(); toggleComponentFilter(node.id); bumpGraph(); }}
+            className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0"
+            title={componentFilters.includes(node.id) ? 'Show in graph (enabled)' : 'Show in graph (disabled)'}
+          >
+            {componentFilters.includes(node.id) ? <Eye size={13} /> : <EyeOff size={13} />}
+          </button>
         </div>
         {hasKids && !isCollapsed && node.children.map((child) => renderNode(child, depth + 1))}
       </div>

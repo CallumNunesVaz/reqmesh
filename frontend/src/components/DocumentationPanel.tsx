@@ -492,14 +492,11 @@ const DOCS: DocSection[] = [
   },
   {
     id: 'planning', icon: TrendingUp, title: 'Planning & Estimation',
-    keywords: 'effort story points backlog stakeholder priorities burndown decision records estimation',
+    keywords: 'backlog stakeholder priorities burndown decision records estimation',
     render: () => (
       <>
         <H2>Planning & Estimation</H2>
         <P>Lightweight project-planning signals on top of requirements.</P>
-
-        <H3>Effort</H3>
-        <P>Set <strong className="text-card-foreground">story points</strong> on requirements to track implementation effort. The <strong className="text-card-foreground">Metrics</strong> dashboard shows total, completed, and remaining effort by status — a simple burndown view.</P>
 
         <H3>Stakeholder Priorities</H3>
         <P>Assign per-stakeholder scores:</P>
@@ -509,7 +506,7 @@ const DOCS: DocSection[] = [
   safety: 10`}</Code>
 
         <H3>Backlog</H3>
-        <P><InlineCode>GET /api/projects/{'{id}'}/backlog</InlineCode> returns requirements sorted by a combined priority function. Filter by status, sort by effort or priority.</P>
+        <P><InlineCode>GET /api/projects/{'{id}'}/backlog</InlineCode> returns requirements sorted by a combined priority function. Filter by status or sort by priority.</P>
 
         <H3>Decision Records</H3>
         <P>Record architectural and engineering decisions with context, alternatives, rationale, and linked requirements. Decisions appear on the documentation section of each linked requirement's detail page.</P>

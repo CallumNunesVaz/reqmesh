@@ -6,6 +6,7 @@ import { glow } from './graphColors';
 
 export const statusColors: Record<string, { fill: string; text: string }> = {
   proposed: { fill: 'hsl(207,90%,64%)', text: '#93c5fd' },
+  in_review: { fill: 'hsl(45,90%,55%)', text: '#fcd34d' },
   approved: { fill: 'hsl(145,55%,42%)', text: '#4ade80' },
   implemented: { fill: 'hsl(260,100%,78%)', text: '#c4b5fd' },
   verified: { fill: 'hsl(179,100%,31%)', text: '#2dd4bf' },

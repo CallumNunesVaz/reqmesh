@@ -198,7 +198,7 @@ export default function ChangeRequestsPage() {
                   <option value="submitted">Submitted</option><option value="in_review">In Review</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="implemented">Implemented</option><option value="closed">Closed</option>
                 </select>
                 {editable && (
-                <button onClick={() => handleDelete(cr.id)} className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"><Trash2 size={14} /></button>
+                <button onClick={() => handleDelete(cr.id)} className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all" title="Delete"><Trash2 size={14} /></button>
                 )}
               </div>
             </div>

@@ -61,6 +61,9 @@ export default function ProjectSettingsPage() {
   const [gitAutocommit, setGitAutocommit] = useState(true);
   const [gitPushOnCommit, setGitPushOnCommit] = useState(false);
   const [gitPushInterval, setGitPushInterval] = useState(0);
+  const [gitCommitSchedule, setGitCommitSchedule] = useState('every_change');
+  const [gitCommitIntervalHours, setGitCommitIntervalHours] = useState(0);
+  const [gitCommitChangesThreshold, setGitCommitChangesThreshold] = useState(0);
 
   // Baselines
   const [baselines, setBaselines] = useState<{ name: string; count: number }[]>([]);
@@ -85,6 +88,8 @@ export default function ProjectSettingsPage() {
   const [gitRepo, setGitRepo] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [restoring, setRestoring] = useState<string | null>(null);
+  const [testingRemote, setTestingRemote] = useState(false);
+  const [remoteTestResult, setRemoteTestResult] = useState<{ ok: boolean; error?: string; branches?: string[]; branch_count?: number } | null>(null);
 
   const loadGitHistory = () => {
     if (!projectId) return;
@@ -106,6 +111,20 @@ export default function ProjectSettingsPage() {
       alert(err.message || 'Restore failed');
     } finally {
       setRestoring(null);
+    }
+  };
+
+  const handleTestRemote = async () => {
+    if (!projectId || !gitRemoteUrl.trim()) return;
+    setTestingRemote(true);
+    setRemoteTestResult(null);
+    try {
+      const res = await api.gitTestRemote(projectId, gitRemoteUrl.trim());
+      setRemoteTestResult(res);
+    } catch (err: any) {
+      setRemoteTestResult({ ok: false, error: err.message || 'Request failed' });
+    } finally {
+      setTestingRemote(false);
     }
   };
 
@@ -148,6 +167,9 @@ export default function ProjectSettingsPage() {
       setGitAutocommit(git.auto_commit !== false);
       setGitPushOnCommit(git.push_on_commit || false);
       setGitPushInterval(git.push_interval_minutes || 0);
+      setGitCommitSchedule(git.commit_schedule || 'every_change');
+      setGitCommitIntervalHours(git.commit_interval_hours || 0);
+      setGitCommitChangesThreshold(git.commit_changes_threshold || 0);
       setBaselineDefs((p.baselines || []).map((b: any) => (
         typeof b === 'string'
           ? { name: b, symbol: '', description: '' }
@@ -183,6 +205,9 @@ export default function ProjectSettingsPage() {
           user_name: gitUserName, user_email: gitUserEmail,
           remote_url: gitRemoteUrl, auto_commit: gitAutocommit,
           push_on_commit: gitPushOnCommit, push_interval_minutes: gitPushInterval,
+          commit_schedule: gitCommitSchedule,
+          commit_interval_hours: Number(gitCommitIntervalHours) || 0,
+          commit_changes_threshold: Number(gitCommitChangesThreshold) || 0,
         },
       });
       setOriginalName(projectName);
@@ -402,11 +427,87 @@ export default function ProjectSettingsPage() {
             <div className="text-[10px] text-muted-foreground mt-0.5">Git remote to push commits to (SSH or HTTPS). Leave blank for no remote.</div>
           </div>
 
+          {gitRemoteUrl.trim() && (
+            <div>
+              <button
+                onClick={handleTestRemote}
+                disabled={testingRemote || !editable}
+                className="btn-secondary text-xs"
+              >
+                {testingRemote ? (
+                  <><RotateCw size={12} className="animate-spin mr-1" /> Testing…</>
+                ) : (
+                  'Test Connection'
+                )}
+              </button>
+              {remoteTestResult && (
+                <div className={`mt-2 px-3 py-2 rounded text-xs ${remoteTestResult.ok ? 'border border-green-500/20 bg-green-500/5 text-green-400' : 'border border-red-500/20 bg-red-500/5 text-red-400'}`}>
+                  {remoteTestResult.ok ? (
+                    <>Remote is reachable. Found {remoteTestResult.branch_count ?? 0} branch{remoteTestResult.branch_count !== 1 ? 'es' : ''}{remoteTestResult.branches && remoteTestResult.branches.length > 0 ? `: ${remoteTestResult.branches!.join(', ')}` : '.'}</>
+                  ) : (
+                    <>{remoteTestResult.error}</>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Commit Schedule */}
+          <div className="border-t border-border/60 pt-4 mt-4">
+            <label className="label mb-2">Commit Schedule</label>
+            <p className="text-[10px] text-muted-foreground mb-3">
+              Choose when git commits are created. Auto-commit must be enabled above.
+            </p>
+            <select className="select mb-3" value={gitCommitSchedule}
+              onChange={(e) => setGitCommitSchedule(e.target.value)} disabled={!editable || !gitAutocommit}>
+              <option value="every_change">Every change (debounced)</option>
+              <option value="interval">Time-based — every N hours</option>
+              <option value="changes">Change-count — every N changes</option>
+              <option value="both">Both time and change-count (whichever comes first)</option>
+            </select>
+
+            {(gitCommitSchedule === 'interval' || gitCommitSchedule === 'both') && (
+              <div className="mb-3">
+                <label className="label">Commit interval (hours)</label>
+                <input className="input text-sm w-32" type="number" min={0.5} step={0.5} max={720}
+                  value={gitCommitIntervalHours || ''}
+                  onChange={(e) => setGitCommitIntervalHours(Number(e.target.value) || 0)}
+                  disabled={!editable || !gitAutocommit}
+                  placeholder="24" />
+                <div className="text-[10px] text-muted-foreground mt-0.5">
+                  {gitCommitIntervalHours >= 24
+                    ? `≈ every ${(gitCommitIntervalHours / 24).toFixed(1)} days`
+                    : gitCommitIntervalHours >= 1
+                      ? `≈ every ${gitCommitIntervalHours} hour${gitCommitIntervalHours !== 1 ? 's' : ''}`
+                      : gitCommitIntervalHours > 0
+                        ? `≈ every ${Math.round(gitCommitIntervalHours * 60)} minutes`
+                        : 'Enter a value to enable time-based commits'}
+                </div>
+              </div>
+            )}
+
+            {(gitCommitSchedule === 'changes' || gitCommitSchedule === 'both') && (
+              <div className="mb-3">
+                <label className="label">Commit after every N changes</label>
+                <input className="input text-sm w-32" type="number" min={1} max={10000}
+                  value={gitCommitChangesThreshold || ''}
+                  onChange={(e) => setGitCommitChangesThreshold(Number(e.target.value) || 0)}
+                  disabled={!editable || !gitAutocommit}
+                  placeholder="50" />
+                <div className="text-[10px] text-muted-foreground mt-0.5">
+                  {gitCommitChangesThreshold > 0
+                    ? `A commit will be created after ${gitCommitChangesThreshold} changes.`
+                    : 'Enter a value to enable change-count commits'}
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="flex items-center gap-6">
             <label className="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" checked={gitAutocommit} onChange={(e) => setGitAutocommit(e.target.checked)} disabled={!editable}
                 className="w-4 h-4 rounded border-muted-foreground/30" />
-              <span className="label">Auto-commit on change</span>
+              <span className="label">Enable auto-commit</span>
             </label>
             <label className="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" checked={gitPushOnCommit} onChange={(e) => setGitPushOnCommit(e.target.checked)} disabled={!editable}

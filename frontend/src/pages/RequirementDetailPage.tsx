@@ -20,10 +20,38 @@ import DescriptionHelper from '../components/DescriptionHelper';
 import ParametricsGuide from '../components/ParametricsGuide';
 import { useKeyboardShortcuts } from '../components/useKeyboardShortcuts';
 import LoadingSplash from '../components/LoadingSplash';
+import { statusColors } from '../components/RequirementNode';
 
 const typeOptions = ['functional', 'non_functional_performance', 'non_functional_security', 'non_functional_usability', 'non_functional_maintainability', 'non_functional_reliability', 'non_functional_scalability', 'non_functional_portability', 'interface', 'user', 'system', 'business', 'regulatory_compliance', 'safety', 'environmental', 'verification'];
 const priorityOptions = ['low', 'medium', 'high', 'critical'];
 const methodOptions = ['test', 'analysis', 'demonstration', 'inspection'];
+
+const typeColorMap: Record<string, string> = {
+  functional: 'hsl(207,90%,64%)',
+  interface: 'hsl(260,100%,78%)',
+  user: '#ec4899',
+  system: '#0ea5e9',
+  business: '#f59e0b',
+  regulatory_compliance: '#ef4444',
+  safety: '#f43f5e',
+  environmental: '#22c55e',
+  verification: '#8b5cf6',
+};
+const typeColorOf = (t: string) => t.startsWith('non_functional') ? 'hsl(179,100%,38%)' : typeColorMap[t];
+
+const priorityColorMap: Record<string, string> = {
+  low: 'hsl(195,6%,62%)',
+  medium: 'hsl(207,90%,64%)',
+  high: 'hsl(28,100%,53%)',
+  critical: 'hsl(0,84%,68%)',
+};
+
+const verifStatusColorMap: Record<string, string> = {
+  pending: 'hsl(195,6%,62%)',
+  in_progress: 'hsl(207,90%,64%)',
+  passed: 'hsl(145,55%,42%)',
+  failed: 'hsl(0,84%,68%)',
+};
 
 export default function RequirementDetailPage() {
   const { projectId, reqId } = useParams<{ projectId: string; reqId: string }>();
@@ -497,7 +525,7 @@ export default function RequirementDetailPage() {
           </>
         )}
         {editable && (
-        <button onClick={handleDelete} className="btn-danger">
+        <button onClick={handleDelete} className="btn-danger" title="Delete">
           <Trash2 size={14} />
         </button>
         )}
@@ -875,15 +903,15 @@ export default function RequirementDetailPage() {
             <div className="space-y-3 mt-2">
               <div>
                 <label className="label">Type</label>
-                <select className="select" value={req.type} onChange={(e) => save({ type: e.target.value })} disabled={!editable}>
+                <select className="select" value={req.type} onChange={(e) => save({ type: e.target.value })} disabled={!editable} style={{ color: typeColorOf(req.type) }}>
                   {typeOptions.map((t) => {
                     let label = t.replace(/_/g, ' ');
                     if (t.startsWith('non_functional_')) {
-                      label = 'Non-Functional \u2013 ' + t.slice('non_functional_'.length).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                      label = 'Non-Functional – ' + t.slice('non_functional_'.length).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
                     } else {
                       label = label.replace(/\b\w/g, c => c.toUpperCase());
                     }
-                    return (<option key={t} value={t}>{label}</option>);
+                    return (<option key={t} value={t} style={{ color: typeColorOf(t) }}>{label}</option>);
                   })}
                 </select>
               </div>
@@ -908,14 +936,14 @@ export default function RequirementDetailPage() {
               </div>
               <div>
                 <label className="label">Status</label>
-        <select className="select" value={req.status} onChange={(e) => save({ status: e.target.value })} disabled={!editable}>
-          {statusOptions.map((s) => (<option key={s} value={s}>{s}</option>))}
+        <select className="select" value={req.status} onChange={(e) => save({ status: e.target.value })} disabled={!editable} style={{ color: statusColors[req.status]?.text }}>
+          {statusOptions.map((s) => (<option key={s} value={s} style={{ color: statusColors[s]?.text }}>{s}</option>))}
         </select>
       </div>
               <div>
                 <label className="label">Priority</label>
-                <select className="select" value={req.priority} onChange={(e) => save({ priority: e.target.value })} disabled={!editable}>
-                  {priorityOptions.map((p) => (<option key={p} value={p}>{p}</option>))}
+                <select className="select" value={req.priority} onChange={(e) => save({ priority: e.target.value })} disabled={!editable} style={{ color: priorityColorMap[req.priority] }}>
+                  {priorityOptions.map((p) => (<option key={p} value={p} style={{ color: priorityColorMap[p] }}>{p}</option>))}
                 </select>
               </div>
               <div>
@@ -989,20 +1017,6 @@ export default function RequirementDetailPage() {
                 <div className="text-[10px] text-muted-foreground mt-0.5">Per-stakeholder priority scores (e.g. development: 5)</div>
               </div>
               <div>
-                <label className="label">Effort (story points)</label>
-                <input
-                  className="input"
-                  type="number"
-                  min="0"
-                  value={req.effort ?? ''}
-                  onBlur={(e) => {
-                    const v = parseInt(e.target.value);
-                    save({ effort: !isNaN(v) && v >= 0 ? v : null });
-                  }}
-                  disabled={!editable}
-                />
-              </div>
-              <div>
                 <label className="label">Verification Method</label>
                 <select className="select" value={req.verification_method} onChange={(e) => save({ verification_method: e.target.value })} disabled={!editable}>
                   {methodOptions.map((m) => (<option key={m} value={m}>{m}</option>))}
@@ -1010,11 +1024,11 @@ export default function RequirementDetailPage() {
               </div>
               <div>
                 <label className="label">Verification Status</label>
-                <select className="select" value={req.verification_status || 'pending'} onChange={(e) => save({ verification_status: e.target.value })} disabled={!editable}>
-                  <option value="pending">Pending</option>
-                  <option value="in_progress">In Progress</option>
-                  <option value="passed">Passed</option>
-                  <option value="failed">Failed</option>
+                <select className="select" value={req.verification_status || 'pending'} onChange={(e) => save({ verification_status: e.target.value })} disabled={!editable} style={{ color: verifStatusColorMap[req.verification_status || 'pending'] }}>
+                  <option value="pending" style={{ color: verifStatusColorMap.pending }}>Pending</option>
+                  <option value="in_progress" style={{ color: verifStatusColorMap.in_progress }}>In Progress</option>
+                  <option value="passed" style={{ color: verifStatusColorMap.passed }}>Passed</option>
+                  <option value="failed" style={{ color: verifStatusColorMap.failed }}>Failed</option>
                 </select>
               </div>
               <div>

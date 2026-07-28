@@ -229,8 +229,8 @@ export default function ComponentDetailPage() {
             <CopyLinkButton kind="component" id={component.id} />
           </div>
         </div>
-        <button onClick={handleDelete} className="btn-danger" disabled={!editable}>
-          <Trash2 size={14} /> Delete
+        <button onClick={handleDelete} className="btn-danger" disabled={!editable} title="Delete">
+          <Trash2 size={14} />
         </button>
       </div>
 

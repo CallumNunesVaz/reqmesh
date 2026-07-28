@@ -311,12 +311,10 @@ Inline requirement writing feedback based on INCOSE, EARS, and ISO 29148 guideli
 
 Configurable per project via `_meta.yaml` (`quality.rules`, `quality.weights`, `quality.min_words`, `quality.max_words`). The **Description Helper** (togglable via the Guided button) provides live client-side feedback as you type, with guideline explanations for each rule.
 
-## Planning & Estimation
+## Priorities & Backlog
 
-- **`effort`** — story points (integer)
 - **`priorities`** — per-stakeholder scores (`{"development": 5, "customers": 8, "safety": 10}`)
 - **Prioritized backlog** — `GET /api/projects/{id}/backlog` returns requirements ordered by combined priority scores
-- **Effort rollup** — total and completed effort by status shown on the metrics dashboard
 
 ## Cross-linking
 
@@ -407,11 +405,11 @@ Key environment variables:
 | GET | `/api/projects/{id}/validate` | Integrity checks (dangling links, cycles, unreviewed, cascades…) |
 | GET | `/api/projects/{id}/coverage` | Shallow + deep coverage analysis |
 | GET | `/api/projects/{id}/trace` | Coverage trace (`?format=text` for plaintext) |
-| GET | `/api/projects/{id}/metrics` | Quality, traceability, effort, status distribution |
+| GET | `/api/projects/{id}/metrics` | Quality, traceability, status distribution |
 | GET | `/api/projects/{id}/gap-analysis` | Missing descriptions, rationales, sources, links |
 | GET | `/api/projects/{id}/conflicts` | Explicit conflicts + duplicate names |
 | GET | `/api/projects/{id}/quality` | Per-requirement quality scores and findings |
-| GET | `/api/projects/{id}/backlog` | Prioritized backlog with effort rollup |
+| GET | `/api/projects/{id}/backlog` | Prioritized backlog |
 | GET | `/api/projects/{id}/evaluation` | Parametric constraint evaluation (design + measured) |
 | POST | `/api/projects/{id}/evaluation/impact` | What-if preview: re-evaluate with hypothetical overrides + dependency-ordered impact trace |
 | GET | `/api/projects/{id}/requirements/{rid}/impact` | Impact analysis (dependents + cascades) |
@@ -479,7 +477,6 @@ verification_cases: [VC-001]
 verification_status: pending
 parent: FEAT-001
 needs: [design, verification_case]
-effort: 5
 priorities: {development: 5, customers: 8, safety: 10}
 derived: false
 normative: true

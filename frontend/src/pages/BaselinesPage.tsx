@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Trash2, Edit3, Check, X, Snowflake, History, GitBranch, Clock, Layers, ArrowRight, ChevronDown, ChevronRight, Loader } from 'lucide-react';
+import { Plus, Trash2, Edit3, Check, X, Snowflake, History, GitBranch, Clock, Layers, ArrowRight, ChevronDown, ChevronRight, Loader, Eye, EyeOff } from 'lucide-react';
 import { api, type BaselineInfo, type BaselineDiff } from '../api/client';
 import { EntityLink } from '../components/entities';
 import RichTextEditor from '../components/RichTextEditor';
@@ -16,6 +16,8 @@ export default function BaselinesPage() {
   const [error, setError] = useState('');
   const editable = useAuthStore((s) => s.canEdit());
   const bumpGraph = useStore((s) => s.bumpGraphVersion);
+  const baselineFilters = useStore((s) => s.baselineFilters);
+  const toggleBaselineFilter = useStore((s) => s.toggleBaselineFilter);
 
   // Create / edit form state
   const [showForm, setShowForm] = useState(false);
@@ -297,6 +299,13 @@ export default function BaselinesPage() {
 
                   {/* Actions */}
                   <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={() => { toggleBaselineFilter(b.name); bumpGraph(); }}
+                      className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                      title={baselineFilters.includes(b.name) ? 'Show in graph (enabled)' : 'Show in graph (disabled)'}
+                    >
+                      {baselineFilters.includes(b.name) ? <Eye size={14} /> : <EyeOff size={14} />}
+                    </button>
                     {editable && (
                       <>
                         <button

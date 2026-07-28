@@ -89,7 +89,9 @@ OVERRIDABLE: dict[str, dict] = {
     "report_approved_by": {"type": "str", "category": "reporting", "label": "Approved by",
                            "help": "Name and role for the approval block."},
     "report_distribution": {"type": "list", "category": "reporting", "label": "Distribution list",
-                            "help": "Recipients of this document, one per line."},
+                             "help": "Recipients of this document, one per line."},
+    "report_color": {"type": "color", "category": "reporting", "label": "Report accent colour",
+                     "help": "Hex colour (#RRGGBB) for headings, rules, and links in exported PDFs. Defaults to blue."},
 }
 
 _SECRET_MASK = "********"

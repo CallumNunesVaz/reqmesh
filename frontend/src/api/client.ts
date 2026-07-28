@@ -224,7 +224,6 @@ export interface Requirement {
   reviewed: string | null;
   derived: boolean;
   normative: boolean;
-  effort: number | null;
   priorities: Record<string, number>;
   needs: string[];
   requirement_kind: 'stakeholder_need' | 'system_requirement';
@@ -479,7 +478,7 @@ export interface ManagedUser {
 export interface AppSetting {
   key: string;
   value: string | number | boolean | string[];
-  type: 'str' | 'int' | 'bool' | 'list';
+  type: 'str' | 'int' | 'bool' | 'list' | 'color';
   category: string;
   label: string;
   help: string;
@@ -892,6 +891,9 @@ export const api = {
   gitRestore: (projectId: string, hash: string) =>
     request<{ status: string; message: string }>(`/projects/${projectId}/git/restore`, { method: 'POST', body: { hash } }),
 
+  gitTestRemote: (projectId: string, remoteUrl: string) =>
+    request<{ ok: boolean; error?: string; branches?: string[]; branch_count?: number }>(`/projects/${projectId}/git/test-remote`, { method: 'POST', body: { remote_url: remoteUrl } }),
+
   // Import (ReqIF / SysML)
   importProject: (projectId: string, file: File, format: string, mode: string) => {
     const fd = new FormData();
@@ -933,7 +935,7 @@ export const api = {
   // Backlog
   getBacklog: (projectId: string, sort?: string) => {
     const qs = sort ? `?sort=${sort}` : '';
-    return request<{ items: { id: string; name: string; status: string; effort: number | null; priorities: Record<string, number>; combined_priority: number }[]; total_effort: number; completed_effort: number }>(`/projects/${projectId}/backlog${qs}`);
+    return request<{ items: { id: string; name: string; status: string; priorities: Record<string, number>; combined_priority: number }[] }>(`/projects/${projectId}/backlog${qs}`);
   },
 
   // What-if impact preview

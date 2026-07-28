@@ -210,6 +210,33 @@ function SettingRow({ setting, value, onChange }: {
           >
             <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${value ? 'translate-x-5' : ''}`} />
           </button>
+        ) : setting.type === 'color' ? (
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <input
+                type="color"
+                value={String(value || '#2094f3')}
+                disabled={locked}
+                onChange={(e) => onChange(e.target.value)}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+              />
+              <div
+                className="w-8 h-8 rounded-md border border-border shadow-sm"
+                style={{ backgroundColor: String(value || '#2094f3') }}
+              />
+            </div>
+            <input
+              className="input text-sm w-24 font-mono"
+              type="text"
+              value={String(value ?? '')}
+              placeholder="#2094f3"
+              disabled={locked}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (/^#[0-9a-fA-F]{0,6}$/.test(v)) onChange(v);
+              }}
+            />
+          </div>
         ) : (
           <input
             className="input text-sm w-full font-mono"
