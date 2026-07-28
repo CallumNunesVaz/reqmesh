@@ -67,6 +67,14 @@ def write_all(version: str) -> None:
     for pkg in (ROOT / "frontend/package.json", ROOT / "desktop/package.json"):
         if pkg.is_file():
             _sub_once(pkg, r'"version":\s*"[^"]*"', f'"version": "{version}"')
+    # install.sh pins the git ref it fetches its companion scripts from when run
+    # standalone. Bumped here so the tag cannot drift from the release it ships
+    # in — a stale pin would quietly install the previous version's wizard.
+    _sub_once(
+        ROOT / "scripts/install.sh",
+        r"REQMESH_REF:-v\d+\.\d+\.\d+",
+        f"REQMESH_REF:-v{version}",
+    )
 
 
 def main() -> None:

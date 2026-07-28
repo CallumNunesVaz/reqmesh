@@ -20,14 +20,14 @@ services:
       - TECTONIC_CACHE_DIR=/data/.tectonic-cache
       - RT_HOST=0.0.0.0
       - RT_PORT=8000
-      - RT_SECRET=${RT_SECRET:?RT_SECRET is required}
-      - RT_ADMIN_PASSWORD=${RT_ADMIN_PASSWORD:?RT_ADMIN_PASSWORD is required}
+      - "RT_SECRET=${RT_SECRET:?RT_SECRET is required}"
+      - "RT_ADMIN_PASSWORD=${RT_ADMIN_PASSWORD:?RT_ADMIN_PASSWORD is required}"
       - RT_PROFILE=${RT_PROFILE:-team}
       - RT_REQUIRE_AUTH=${RT_REQUIRE_AUTH:-true}
       - RT_ALLOW_SELF_REGISTRATION=${RT_ALLOW_SELF_REGISTRATION:-false}
       - RT_COOKIE_SECURE=${RT_COOKIE_SECURE:-true}
       - RT_REQUIRE_EMAIL_VERIFICATION=${RT_REQUIRE_EMAIL_VERIFICATION:-false}
-      - RT_BASE_URL=${RT_BASE_URL:-http://localhost:8000}
+      - "RT_BASE_URL=${RT_BASE_URL:-http://localhost:8000}"
       - RT_GIT_AUTOCOMMIT=${RT_GIT_AUTOCOMMIT:-true}
       - RT_GIT_REMOTE_URL=${RT_GIT_REMOTE_URL:-}
       - RT_GIT_PUSH_ON_COMMIT=${RT_GIT_PUSH_ON_COMMIT:-false}

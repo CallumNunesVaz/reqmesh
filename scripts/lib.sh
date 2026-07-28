@@ -54,6 +54,35 @@ warn()    { printf "${YELLOW}⚠${NC} %s\n" "$*" >&2; }
 error()   { printf "${RED}✗${NC} %s\n" "$*" >&2; }
 header()  { printf "\n${BOLD}${CYAN}═══ %s ═══${NC}\n\n" "$*"; }
 
+# ── Summary box ────────────────────────────────────────────────────────────────
+# Both deploy scripts end with a framed summary. Drawn through these helpers so
+# the right-hand border is actually closed: hand-written `printf "║ text\n"`
+# lines left every row open, because the padding depends on the text length and
+# no caller was computing it.
+#
+# Padding uses ${#text}, so box content must stay plain ASCII — colour codes and
+# multi-column glyphs would count as characters but not as printed columns.
+# Colour is applied via the second argument instead of being embedded, and text
+# wider than BOX_WIDTH degrades to an unclosed line rather than a mangled one.
+BOX_WIDTH=68
+
+box_rule() {
+    local left="$1" right="$2" line=""
+    local i
+    for ((i = 0; i < BOX_WIDTH + 2; i++)); do line+="─"; done
+    printf "${GREEN}%s%s%s${NC}\n" "$left" "$line" "$right"
+}
+box_top()    { box_rule "╭" "╮"; }
+box_bottom() { box_rule "╰" "╯"; }
+
+box_line() {
+    local text="${1:-}" colour="${2:-}"
+    local pad=$(( BOX_WIDTH - ${#text} ))
+    [ "$pad" -lt 0 ] && pad=0
+    printf "${GREEN}│${NC} %b%s%b%*s ${GREEN}│${NC}\n" \
+        "$colour" "$text" "${colour:+\033[0m}" "$pad" ""
+}
+
 # ── Spinner (wraps Gum if available, fallback to background job) ───────────────
 spinner() {
     local msg="$1" pid="$2"
@@ -127,6 +156,11 @@ install_docker() {
         error "Automatic Docker install not supported on $OS_ID. Install manually: https://docs.docker.com/engine/install/"
         return 1
     fi
+    if ! groups "$USER" 2>/dev/null | grep -qw docker; then
+        warn "User '$USER' was added to the 'docker' group."
+        warn "You must log out and back in (or run: newgrp docker) for this to take effect."
+        warn "Until then, prefix docker commands with 'sudo'."
+    fi
 }
 
 install_system_pkgs() {
@@ -199,6 +233,88 @@ install_tectonic() {
     fi
 }
 
+# ── Network & environment detection ─────────────────────────────────────────
+# Return the primary non-loopback IPv4 address, or empty string if none found.
+#
+# `ip route get` prints two shapes depending on whether the destination is
+# reached through a gateway:
+#     1.1.1.1 via 192.168.0.1 dev eth0 src 192.168.0.162 uid 1000
+#     1.1.1.1 dev eth0 src 192.168.0.162 uid 1000          (on-link default)
+# A fixed field index only works for the first. Cloud images that configure
+# `default dev eth0 scope link` (and point-to-point links such as WireGuard)
+# print the second, where field 7 is the *uid* — so the installer would report
+# `https://1000` as the LAN address. Scan for the `src` keyword instead.
+detect_lan_ip() {
+    local ip=""
+    if has_cmd ip; then
+        ip="$(ip -4 -o route get 1.1.1.1 2>/dev/null \
+              | awk '{for (i = 1; i < NF; i++) if ($i == "src") { print $(i + 1); exit }}')"
+    fi
+    if [ -z "$ip" ] && has_cmd hostname; then
+        ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+    fi
+    if [ -z "$ip" ] && has_cmd ifconfig; then
+        ip="$(ifconfig 2>/dev/null | awk '/inet / && !/127.0.0.1/ {print $2; exit}')"
+    fi
+    printf '%s' "${ip:-}"
+}
+
+# Check whether a TCP port is already in use. Returns 0 (true) if busy.
+#
+# Deliberately not `ss … | grep -q`: `grep -q` exits at the first match, `ss`
+# then dies of SIGPIPE, and `set -o pipefail` reports the pipeline as *failed* —
+# so a port that is in use is reported free. It only shows up once the listener
+# list is long enough that ss is still writing when grep leaves, i.e. on busy
+# servers and never on a test box. Match in awk, which reads to EOF.
+check_port() {
+    local port="$1"
+    if has_cmd ss; then
+        ss -tln 2>/dev/null | awk -v p=":$port" 'NR > 1 && index($4, p) == length($4) - length(p) + 1 { found = 1 } END { exit !found }'
+    elif has_cmd lsof; then
+        lsof -i ":$port" -sTCP:LISTEN >/dev/null 2>&1
+    else
+        return 1
+    fi
+}
+
+# Print a warning if a system firewall is active and common ports are not open.
+#
+# `sudo -n` throughout: this runs mid-wizard, inside the Gum TUI, and a blocking
+# password prompt there is invisible under the alternate screen buffer. A
+# firewall we cannot inspect without credentials is simply not reported.
+check_firewall() {
+    local ports="${1:-80 443 8000}"
+    local active=false out=""
+    # Each probe captures first and matches after, for the same reason
+    # check_port does: `… | grep -q` under pipefail loses the match whenever the
+    # producer outruns grep, and `ufw status` on a host with real rules is long
+    # enough to do exactly that.
+    if has_cmd ufw; then
+        out="$(sudo -n ufw status 2>/dev/null || true)"
+        case "$out" in *"Status: active"*) active=true ;; esac
+    fi
+    if ! $active && has_cmd firewall-cmd; then
+        out="$(sudo -n firewall-cmd --state 2>&1 || true)"
+        case "$out" in *running*) active=true ;; esac
+    fi
+    if ! $active && has_cmd iptables; then
+        out="$(sudo -n iptables -L INPUT -n 2>/dev/null || true)"
+        case "$out" in *DROP*|*REJECT*) active=true ;; esac
+    fi
+    if $active; then
+        warn "A firewall appears to be active on this system."
+        warn "Make sure the following ports are open: $ports"
+    fi
+}
+
+# Detect SELinux enforcing mode; print warning if it may interfere.
+detect_selinux() {
+    if has_cmd getenforce && [ "$(getenforce 2>/dev/null)" = "Enforcing" ]; then
+        warn "SELinux is enforcing — it may block Docker socket access or network binds."
+        warn "If services fail to start, try: sudo setenforce 0 (temporarily)"
+    fi
+}
+
 # ── Config helpers ─────────────────────────────────────────────────────────────
 # Generate a random secret string
 rand_secret() {
@@ -225,6 +341,54 @@ template() {
     # printf, not echo: echo mangles backslash sequences in some shells, and a
     # rendered config may legitimately contain them.
     printf '%s\n' "$content" > "$out"
+}
+
+# Render the Caddyfile to stdout for a given backend target ("reqmesh:8000" for
+# Docker, "127.0.0.1:8000" for bare metal).
+#
+# Shared because the two deploy scripts previously rendered the same template by
+# hand — deploy-docker.sh through `${var//…}` substitutions, deploy-bare.sh
+# through a series of `sed -i` calls — and both got the no-domain case wrong in
+# different ways: the Docker path emitted a truncated site block (a `}` in a
+# `${var//pat/repl}` replacement ends the expansion early), while the bare-metal
+# path left the address empty, producing a file starting with ` {`. Caddy
+# rejected both, so the LAN install the wizard recommends never came up.
+render_caddyfile() {
+    local backend="$1"
+    local domain="${CFG[DOMAIN]:-}"
+    local tls="${CFG[TLS]:-letsencrypt}"
+    local content
+    content="$(< "$TEMPLATES_DIR/Caddyfile.tmpl")"
+
+    local site_address tls_directive
+    if [ -n "$domain" ] && [ "$domain" != "localserver.reqmesh.com" ]; then
+        site_address="$domain"
+        if [ "$tls" = "letsencrypt" ]; then
+            tls_directive=""          # Let's Encrypt is Caddy's default
+        else
+            tls_directive="    tls internal"
+        fi
+    else
+        # `:443` answers on every hostname this box has — the LAN IP and
+        # localhost alike — which is exactly what a domainless install needs.
+        site_address=":443"
+        tls_directive="    tls internal"
+    fi
+
+    content="${content//%_SITE_ADDRESS_%/$site_address}"
+    content="${content//%_TLS_%/$tls_directive}"
+    content="${content//reqmesh:8000/$backend}"
+
+    # A bare `:443` site gets no automatic HTTP redirect (Caddy only issues one
+    # for named sites), so plain http:// would be refused outright.
+    if [ "$site_address" = ":443" ]; then
+        content+="
+:80 {
+    redir https://{host}{uri} permanent
+}"
+    fi
+
+    printf '%s\n' "$content"
 }
 
 # Reject values that cannot be represented safely in the .env files this
@@ -280,28 +444,92 @@ load_cfg() {
 }
 
 # ── Credential reporting ───────────────────────────────────────────────────────
-# Print where the admin password is, never the password itself.
+# Write the admin password to a 0600 file and echo that file's *path* on stdout.
+# The password itself is never printed: both deploy scripts used to finish with
+# `info "Admin: admin / $PASSWORD"`, and installers are routinely run under tee,
+# in CI, or inside a terminal recorder, so that put the credential straight into
+# a log — the same finding (F-04) the backend fixed by writing a 0600 file and
+# logging only the path. summary_box prints what this returns.
 #
-# Both deploy scripts used to finish with `info "Admin: admin / $PASSWORD"`.
-# Installers are routinely run under `tee`, in CI, or inside a terminal
-# recorder, so that put the credential straight into a log — the same finding
-# (F-04) the backend already fixed by writing to a 0600 file and logging only
-# the path. This mirrors that behaviour so the two agree.
-report_admin_credential() {
+# The write is `sudo tee` or plain `tee`, decided *before* the pipe runs — not
+# `tee || sudo tee`. In the fallback form the first tee has already consumed
+# stdin by the time it fails on permissions, so sudo tee inherits a drained pipe
+# and writes an empty file: the installer then reports a password that is not
+# there, and the operator is locked out.
+write_admin_credential() {
     local install_dir="${CFG[INSTALL_DIR]:-$INSTALL_DIR}"
     local cred_file="$install_dir/.initial-admin"
 
     if [ -n "${CFG[ADMIN_PASSWORD]:-}" ]; then
-        install -m 600 /dev/null "$cred_file" 2>/dev/null || {
+        local writer=(tee)
+        if ! install -m 600 /dev/null "$cred_file" 2>/dev/null; then
             sudo install -m 600 /dev/null "$cred_file"
-        }
-        printf '%s\n' "${CFG[ADMIN_PASSWORD]}" | \
-            { tee "$cred_file" >/dev/null 2>&1 || sudo tee "$cred_file" >/dev/null; }
+            writer=(sudo tee)
+        fi
+        printf '%s\n' "${CFG[ADMIN_PASSWORD]}" | "${writer[@]}" "$cred_file" >/dev/null
     fi
 
-    info "Admin:   username 'admin'"
-    info "         password written to $cred_file (mode 0600)"
-    warn "         Log in, change it, then delete that file."
+    printf '%s' "$cred_file"
+}
+
+# The closing summary both deploy scripts print. Takes the credential file path
+# followed by the mode-specific management commands.
+#
+# Shared rather than duplicated: the two scripts previously carried their own
+# copies of the URL logic, the TLS caveat and the credential write, and the
+# copies had already drifted apart in wording — with the credential write
+# duplicating a bug (see write_admin_credential) into two places at once.
+summary_box() {
+    local cred_file="$1"; shift
+
+    local base_url="${CFG[BASE_URL]:-}"
+    local lan="${CFG[LAN_IP]:-}"
+    local domain="${CFG[DOMAIN]:-}"
+    local proxy="${CFG[PROXY]:-none}"
+    local tls="${CFG[TLS]:-none}"
+
+    local has_domain=false
+    if [ -n "$domain" ] && [ "$domain" != "localserver.reqmesh.com" ]; then
+        has_domain=true
+    fi
+
+    box_top
+    box_line "reqmesh is running!" "$BOLD"
+    box_line ""
+    box_line "Browser URL:  $base_url" "$CYAN"
+    # A second address is only worth printing when the server actually answers
+    # on it. With a domain configured the proxy serves that name alone, so the
+    # LAN IP would not resolve to a site — the extra line goes on the
+    # domainless install, whose BASE_URL is already the LAN address.
+    if ! $has_domain && [ "$proxy" != "none" ] && [ -n "$lan" ]; then
+        box_line "From this PC: https://localhost" "$CYAN"
+    fi
+    box_line ""
+
+    # Deliberately ASCII: see box_line. Under LC_ALL=C — which is what an
+    # installer run from CI, systemd or a minimal container gets — ${#text}
+    # counts bytes, so a single em dash here shortened the line by two columns.
+    if [ "$proxy" = "none" ] || [ "$tls" = "none" ]; then
+        box_line "! TLS is not enabled - traffic is unencrypted." "$YELLOW"
+        box_line "  Do not expose this deployment to the internet." "$YELLOW"
+        box_line ""
+    elif ! $has_domain || [ "$tls" != "letsencrypt" ]; then
+        box_line "! TLS uses a self-signed certificate." "$YELLOW"
+        box_line "  Your browser will warn on first visit - accept it." "$YELLOW"
+        box_line "  Re-run with a public domain for a trusted one." "$YELLOW"
+        box_line ""
+    fi
+
+    box_line "Admin user:  admin"
+    box_line "Password:    $cred_file (mode 0600)"
+    box_line "Log in, change the password, then delete that file." "$YELLOW"
+    box_line ""
+
+    local line
+    for line in "$@"; do
+        box_line "$line"
+    done
+    box_bottom
 }
 
 # ── Health check ───────────────────────────────────────────────────────────────
