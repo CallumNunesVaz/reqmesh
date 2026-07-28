@@ -46,8 +46,7 @@ reqmesh/                    # THE TOOL (this repo)
 ├── Dockerfile.prod        # Multi-stage production build
 ├── docker-compose.prod.yml # Single-origin production deployment
 ├── Caddyfile / nginx.conf # Reverse proxy configs with TLS
-├── DEPLOYMENT.md          # Full server deployment guide
-└── ROADMAP.md             # Roadmap, refinement backlog & design records
+└── DEPLOYMENT.md          # Full server deployment guide
 
 <your-project>/            # YOUR DATA (separate, git-tracked)
 ├── _meta.yaml             # Project identity + workflow + quality config
