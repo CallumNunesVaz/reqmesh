@@ -61,7 +61,7 @@ def _validate_links(store: YamlStore, satisfies: list[str] | None, vcs: list[str
 # catch-all, or "tree" is parsed as a component id.
 
 @router.get("/projects/{project_id}/components/tree")
-async def get_component_tree(project_id: str):
+def get_component_tree(project_id: str):
     store = get_store(project_id)
     return build_flat_tree(store.list_components(), project=lambda c: {
         "id": c["id"],
@@ -83,7 +83,7 @@ def _flatten_bom(components: list[dict], parent_id: str | None, indent: int = 0)
 
 
 @router.get("/projects/{project_id}/components/export/bom")
-async def export_bill_of_materials(project_id: str):
+def export_bill_of_materials(project_id: str):
     """Export an indented bill-of-materials as CSV."""
     store = get_store(project_id)
     all_comps = store.list_components()
@@ -107,7 +107,7 @@ async def export_bill_of_materials(project_id: str):
 
 
 @router.get("/projects/{project_id}/components")
-async def list_components(
+def list_components(
     project_id: str,
     search: str | None = Query(None),
     type: str | None = Query(None),
@@ -134,7 +134,7 @@ async def list_components(
 
 
 @router.get("/projects/{project_id}/components/{component_id}")
-async def get_component(project_id: str, component_id: str):
+def get_component(project_id: str, component_id: str):
     store = get_store(project_id)
     component = store.get_component(component_id)
     if component is None:
@@ -143,7 +143,7 @@ async def get_component(project_id: str, component_id: str):
 
 
 @router.post("/projects/{project_id}/components", status_code=201)
-async def create_component(project_id: str, data: ComponentCreate, user: dict = Depends(require_maintain)):
+def create_component(project_id: str, data: ComponentCreate, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     safe_id(data.id, "component id")
     if store.get_component(data.id):
@@ -156,7 +156,7 @@ async def create_component(project_id: str, data: ComponentCreate, user: dict = 
 
 
 @router.put("/projects/{project_id}/components/{component_id}")
-async def update_component(
+def update_component(
     project_id: str, component_id: str, data: ComponentUpdate, user: dict = Depends(require_maintain)
 ):
     store = get_store(project_id)
@@ -177,7 +177,7 @@ async def update_component(
 
 
 @router.delete("/projects/{project_id}/components/{component_id}")
-async def delete_component(project_id: str, component_id: str, user: dict = Depends(require_maintain)):
+def delete_component(project_id: str, component_id: str, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     doomed = store.get_component(component_id)
     if doomed is None:
@@ -199,7 +199,7 @@ async def delete_component(project_id: str, component_id: str, user: dict = Depe
 # ── Reverse lookups ──────────────────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/requirements/{req_id}/components")
-async def components_for_requirement(project_id: str, req_id: str):
+def components_for_requirement(project_id: str, req_id: str):
     """Which parts of the design claim to realise this requirement."""
     store = get_store(project_id)
     if store.get_requirement(req_id) is None:
@@ -208,7 +208,7 @@ async def components_for_requirement(project_id: str, req_id: str):
 
 
 @router.get("/projects/{project_id}/verification/{vc_id}/components")
-async def components_for_verification_case(project_id: str, vc_id: str):
+def components_for_verification_case(project_id: str, vc_id: str):
     """Which parts of the design this verification case exercises."""
     store = get_store(project_id)
     if store.get_verification_case(vc_id) is None:

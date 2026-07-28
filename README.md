@@ -31,16 +31,16 @@ reqmesh/                    # THE TOOL (this repo)
 │   ├── app/models/        # Pydantic models for all 10 entity types
 │   ├── app/services/      # YAML store, integrity, tracing, fingerprint, evaluation,
 │   │                      # code_scan, quality, table_io, email, publisher, workflow…
-│   ├── tests/             # 259 integration + unit tests (pytest)
+│   ├── tests/             # 624 integration + unit tests (pytest)
 │   ├── gen_schemas.py     # JSON Schema generator
 │   └── requirements.txt   # All deps pinned to exact versions
 ├── frontend/              # React 18 + TypeScript + Vite + TailwindCSS
 │   ├── src/
 │   │   ├── api/           # Typed API client
 │   │   ├── components/    # Layout, nav, graph, editor, parametrics, helpers, palette…
-│   │   ├── pages/         # 12 route pages (projects, requirements, components, metrics…)
+│   │   ├── pages/         # 20 route pages (projects, requirements, components, metrics…)
 │   │   └── store/         # Zustand state (auth, data, helpers toggle)
-│   └── tests/             # 80 unit tests (vitest)
+│   └── tests/             # 89 unit tests (vitest)
 ├── schemas/               # JSON Schemas for all project YAML formats
 ├── desktop/               # Electron shell for native desktop app
 ├── Dockerfile.prod        # Multi-stage production build
@@ -129,7 +129,7 @@ backend/.venv/bin/python seed_cessna.py --force
 
 ### Tests
 
-**Backend** — 259 tests covering API, storage, auth, integrity, quality, tracing, code scan, fingerprint, table I/O, evaluation, what-if impact, and deployment:
+**Backend** — 624 tests covering API, storage, auth, integrity, quality, tracing, code scan, fingerprint, table I/O, evaluation, what-if impact, and deployment:
 
 ```bash
 cd backend
