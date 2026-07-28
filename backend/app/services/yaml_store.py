@@ -157,15 +157,16 @@ class YamlStore:
                     yaml.dump(data, f)
                 f.flush()
                 os.fsync(f.fileno())
-            # Fsync the directory so the rename is durable on journaling
-            # filesystems. Without this, a crash after replace() can leave
-            # the directory entry pointing at unwritten blocks.
+            os.replace(tmp, path)
+            # Fsync the directory *after* the rename, so the new directory
+            # entry itself is durable. Doing it before only flushes the entry
+            # for the temp file, which the rename then replaces — the crash
+            # window this exists to close stayed wide open.
             dir_fd = os.open(path.parent, os.O_RDONLY)
             try:
                 os.fsync(dir_fd)
             finally:
                 os.close(dir_fd)
-            os.replace(tmp, path)
         except BaseException:
             try:
                 os.close(fd)

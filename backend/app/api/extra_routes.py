@@ -1279,9 +1279,14 @@ async def project_events(project_id: str, user: dict = Depends(get_current_user)
             while True:
                 try:
                     event = await asyncio.wait_for(queue.get(), timeout=30.0)
+                    # Any delivery proves the connection is alive, so it counts
+                    # as activity just as the idle heartbeat does — otherwise a
+                    # busy client would be pruned for never reaching the timeout.
+                    bus.touch(project_id, client_id)
                     channel = "presence" if event.get("type") == "presence" else "change"
                     yield f"event: {channel}\ndata: {json.dumps(event)}\n\n"
                 except asyncio.TimeoutError:
+                    bus.touch(project_id, client_id)
                     yield "event: heartbeat\ndata: {}\n\n"
         except asyncio.CancelledError:
             pass
