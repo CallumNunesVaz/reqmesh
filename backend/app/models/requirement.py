@@ -231,7 +231,6 @@ class RequirementUpdate(BaseModel):
     reviewed: Optional[str] = None
     derived: Optional[bool] = None
     normative: Optional[bool] = None
-    effort: Optional[int] = None
     priorities: Optional[dict[str, int]] = None
     needs: Optional[list[str]] = None
     references: Optional[list[Reference]] = None

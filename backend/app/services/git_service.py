@@ -64,13 +64,20 @@ def _identity_for(project_root: Path, username: str = "") -> list[str]:
     return ["-c", f"user.name={name}", "-c", f"user.email={email}"]
 
 
-def _git(project_root: Path, *args: str) -> subprocess.CompletedProcess:
+def _git(project_root: Path, *args: str, remote_url: str = "") -> subprocess.CompletedProcess:
+    """Run git in a project. Pass ``remote_url`` for calls that touch the network.
+
+    Network calls need the SSH options from `_ssh_env`, otherwise `test_remote`
+    (which sets them) succeeds on a host whose key is unknown while the push
+    that follows blocks on a prompt it can never answer.
+    """
     return subprocess.run(
         ["git", *_identity_for(project_root), *args],
         cwd=str(project_root),
         capture_output=True,
         text=True,
         timeout=30,
+        env=_ssh_env(remote_url) if remote_url else None,
     )
 
 
@@ -158,25 +165,56 @@ def _project_git_config(project_root: Path) -> dict:
         return {}
 
 
-def test_remote(project_root: Path, remote_url: str) -> dict:
-    """Test whether a git remote URL is reachable and returns basic info.
+# Schemes a project may push to. `file://`, bare local paths and `http://` are
+# refused: the first two turn any git operation into a reader of repositories
+# elsewhere on the host, and the third ships history in clear text. Enforced on
+# both the write path (router._guard_git_settings) and here, so a new endpoint
+# cannot reach `git` with an unchecked URL again.
+ALLOWED_REMOTE_SCHEMES = ("https://", "ssh://", "git@")
 
-    Uses ``git ls-remote`` which performs a lightweight handshake (no clone).
-    Returns ``{"ok": True, "branches": [...]}`` on success or
-    ``{"ok": False, "error": "..."}`` on failure.
+REMOTE_SCHEME_ERROR = ("git remote URL must start with https://, ssh:// or git@ "
+                       "(file://, http:// and local paths are refused)")
+
+
+def is_allowed_remote(remote_url: str) -> bool:
+    return str(remote_url).startswith(ALLOWED_REMOTE_SCHEMES)
+
+
+def _ssh_env(remote_url: str) -> dict:
+    """Environment for a git network call.
+
+    SSH remotes get a non-interactive, bounded handshake: without this git can
+    block forever on an unknown-host prompt with no tty to answer it.
+    """
+    env = os.environ.copy()
+    if str(remote_url).startswith(("git@", "ssh://")):
+        env["GIT_SSH_COMMAND"] = (
+            "ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o BatchMode=yes")
+    return env
+
+
+def test_remote(project_root: Path, remote_url: str) -> dict:
+    """Test whether a git remote URL is reachable and return basic info.
+
+    Uses ``git ls-remote`` — a lightweight handshake, no clone. Returns
+    ``{"ok": True, "branches": [...]}`` or ``{"ok": False, "error": "..."}``.
+
+    The URL is checked against the same allowlist as the write path *before*
+    reaching git. Without that, this became a way to read branch names out of
+    any repository on the host (`file://` and bare paths both work with
+    ls-remote), to confirm the existence of arbitrary filesystem paths from the
+    error text, and to probe internal hosts and ports.
     """
     project_root = Path(project_root)
     if not is_repo(project_root):
         return {"ok": False, "error": "Project directory is not a git repository. Run 'git init' first."}
     if not remote_url:
         return {"ok": False, "error": "No remote URL configured."}
+    if not is_allowed_remote(remote_url):
+        return {"ok": False, "error": REMOTE_SCHEME_ERROR}
     try:
         ident = _identity_for(project_root)
-        # Accept new host keys for SSH remotes (batch mode skips the prompt,
-        # but GIT_SSH_COMMAND allows us to auto-accept).
-        env = os.environ.copy()
-        if remote_url.startswith(("git@", "ssh://")):
-            env["GIT_SSH_COMMAND"] = "ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10"
+        env = _ssh_env(remote_url)
         result = subprocess.run(
             ["git", *ident, "ls-remote", "--heads", remote_url],
             cwd=str(project_root), capture_output=True, text=True, timeout=20,
@@ -230,7 +268,8 @@ def push_to_remote(project_root: Path, branch: str = "main") -> bool:
         if branch_result.returncode == 0 and branch_result.stdout.strip():
             actual_branch = branch_result.stdout.strip()
 
-        result = _git(project_root, "push", "-u", "origin", actual_branch)
+        result = _git(project_root, "push", "-u", "origin", actual_branch,
+                      remote_url=remote_url)
         if result.returncode != 0:
             logger.warning("git push failed in %s: %s", project_root, redact_url(result.stderr.strip()))
             return False

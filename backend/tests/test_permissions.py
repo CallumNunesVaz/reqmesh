@@ -168,6 +168,12 @@ def _required_guard(route: APIRoute) -> str | None:
     if _PROJECT_ID_RE.match(path):
         if "DELETE" in methods and path == "/api/projects/{project_id}":
             return "require_admin"
+        # Anything that configures or exercises the git remote is an admin
+        # decision — the remote determines where the whole project history is
+        # shipped. Kept in step with router._guard_git_settings, which refuses a
+        # remote_url change from anyone below admin.
+        if path.endswith("/git/test-remote"):
+            return "require_admin"
         if methods & {"POST", "PUT", "PATCH", "DELETE"}:
             # Allow read-only computation endpoints to skip permission guards.
             if any(path.endswith(s) for s in _READONLY_POST_SUFFIXES):
