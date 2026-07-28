@@ -11,7 +11,7 @@ from fastapi import APIRouter, HTTPException, Query, Depends, File, Form, Upload
 from pydantic import BaseModel, ValidationError
 
 from app.core.config import settings
-from app.core.dependencies import get_store, require_edit, require_maintain, get_current_user
+from app.core.dependencies import get_store, require_edit, require_maintain, require_admin, get_current_user
 from app.core.rate_limit import rate_limit
 from app.core.ids import safe_id
 from app.api.router import normalize_baseline_defs
@@ -761,12 +761,22 @@ def git_restore(project_id: str, data: dict, user: dict = Depends(require_mainta
 
 
 @router.post("/projects/{project_id}/git/test-remote")
-def git_test_remote(project_id: str, data: dict, user: dict = Depends(require_maintain)):
+def git_test_remote(project_id: str, data: dict, user: dict = Depends(require_admin)):
+    """Check that a candidate remote is reachable before it is saved.
+
+    Admin-only, matching `router._guard_git_settings`: this makes the server
+    perform a network (or filesystem) operation against a caller-supplied URL,
+    which is the same authority as setting the remote and belongs behind the
+    same gate. The URL is validated against the shared scheme allowlist here
+    *and* inside `git_service.test_remote`.
+    """
     from app.services import git_service
 
     remote_url = str(data.get("remote_url", "")).strip()
     if not remote_url:
         raise HTTPException(status_code=400, detail="remote_url is required")
+    if not git_service.is_allowed_remote(remote_url):
+        raise HTTPException(status_code=400, detail=git_service.REMOTE_SCHEME_ERROR)
 
     store = get_store(project_id)
     return git_service.test_remote(store.root, remote_url)

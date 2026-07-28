@@ -792,7 +792,11 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
   useEffect(() => {
     if (autoCollapsed || reqs.length === 0) return;
     const toFold = new Set<string>();
-    const isParent = new Set(Object.keys(childrenByParent).filter(k => k !== 'null'));
+    // childrenByParent is a Map, so Object.keys() returns [] — this Set was
+    // always empty and auto-collapse silently never fired, opening every
+    // project fully expanded.
+    const isParent = new Set(
+      [...childrenByParent.keys()].filter((k): k is string => k !== null));
     for (const r of reqs) {
       if (isParent.has(r.id) && r.parent) toFold.add(r.id);
     }
