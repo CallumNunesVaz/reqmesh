@@ -33,7 +33,11 @@ services:
       - RT_GIT_PUSH_ON_COMMIT=${RT_GIT_PUSH_ON_COMMIT:-false}
       - RT_GIT_PUSH_INTERVAL_MINUTES=${RT_GIT_PUSH_INTERVAL_MINUTES:-0}
       - RT_SEED_DEMO=${RT_SEED_DEMO:-true}
-      - RT_CORS_ORIGINS=${RT_CORS_ORIGINS:-}
+      # Single-origin deployment: the SPA is served by the app itself, so no
+      # cross-origin request should be allowed. Left blank this falls back to
+      # the *development* default (localhost:5173), which has no business
+      # being an allowed credentialed origin in production.
+      - RT_CORS_ORIGINS=${RT_CORS_ORIGINS:-[]}
       - RT_OFFLINE_MODE=${RT_OFFLINE_MODE:-false}
       - RT_PROXY_TRUSTED_CIDR=${RT_PROXY_TRUSTED_CIDR:-127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}
       - RT_SMTP_HOST=${RT_SMTP_HOST:-}

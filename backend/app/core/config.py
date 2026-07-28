@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import get_args, get_origin
 
 from pydantic import SecretStr
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, DotEnvSettingsSource, EnvSettingsSource
 
 
 # Per-profile defaults, applied in `Settings.model_post_init` to any field the
@@ -39,6 +40,61 @@ PROFILE_PRESETS: dict[str, dict] = {
 }
 
 PROFILES = tuple(PROFILE_PRESETS)
+
+
+class _ListEnvMixin:
+    """Accept the two forms operators actually write for ``list[str]`` settings.
+
+    pydantic-settings JSON-decodes complex fields inside the *source*, before
+    any validator runs, so anything that is not valid JSON raises SettingsError
+    at import and the process never starts — with a pydantic traceback that
+    names the field but not the reason. Every generated deployment tripped one
+    of the two cases below, so the installer could not produce a bootable
+    configuration in *any* combination:
+
+        RT_ALLOWED_HOSTS=                          (no domain — the LAN case
+                                                    the wizard recommends)
+        RT_ALLOWED_HOSTS=example.com,192.168.0.5   (a domain — comma-separated,
+                                                    which is what the wizard
+                                                    writes and what every
+                                                    12-factor env var uses)
+
+    So: blank means "not set", and falls back to the field default. Both
+    consumers already read the resulting value correctly — `main.py` skips
+    TrustedHostMiddleware unless `allowed_hosts` is a real restriction, and the
+    wildcard guard's own error message tells operators to leave `cors_origins`
+    empty for a single-origin deployment.
+
+    A non-blank value is JSON if it looks like JSON, and a comma-separated list
+    otherwise. Restricted to ``list[str]`` so dict-valued settings keep their
+    JSON-only contract, where guessing would be ambiguous.
+    """
+
+    @staticmethod
+    def _is_str_list(field) -> bool:
+        return get_origin(field.annotation) is list and get_args(field.annotation) == (str,)
+
+    def prepare_field_value(self, field_name, field, value, value_is_complex):
+        # `value_is_complex` alone is not the condition: for a plain env var the
+        # source sets it False and decides from the *field* type, so the JSON
+        # decode still fired.
+        if isinstance(value, str) and (value_is_complex or self.field_is_complex(field)):
+            stripped = value.strip()
+            if not stripped:
+                return None
+            if self._is_str_list(field) and stripped[0] not in "[{\"'":
+                return [part.strip() for part in stripped.split(",") if part.strip()]
+        return super().prepare_field_value(field_name, field, value, value_is_complex)
+
+
+# Applied to both sources: os.environ (Docker `environment:`) and the .env file
+# (systemd `EnvironmentFile=`, which is the bare-metal installer's path).
+class _EmptyTolerantEnvSource(_ListEnvMixin, EnvSettingsSource):
+    pass
+
+
+class _EmptyTolerantDotEnvSource(_ListEnvMixin, DotEnvSettingsSource):
+    pass
 
 
 class Settings(BaseSettings):
@@ -164,6 +220,21 @@ class Settings(BaseSettings):
     # plain str to smtp_password are re-coerced back into a SecretStr, so the field
     # is always masked regardless of how it was set.
     model_config = {"env_prefix": "RT_", "env_file": ".env", "validate_assignment": True}
+
+    @classmethod
+    def settings_customise_sources(cls, settings_cls, init_settings, env_settings,
+                                   dotenv_settings, file_secret_settings):
+        """Swap in the empty-tolerant env source, for both env and .env files.
+
+        Order is unchanged — this only replaces *how* each source reads a blank
+        complex value, not which source wins.
+        """
+        return (
+            init_settings,
+            _EmptyTolerantEnvSource(settings_cls),
+            _EmptyTolerantDotEnvSource(settings_cls),
+            file_secret_settings,
+        )
 
     def model_post_init(self, __context) -> None:
         """Apply the deployment profile's defaults.
