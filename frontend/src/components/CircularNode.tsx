@@ -7,6 +7,7 @@ import { zoomLevel, labelScale, type ZoomLevel } from './semanticZoom';
 
 const statusFillColors: Record<string, string> = {
   proposed: 'hsl(207,90%,64%)',
+  in_review: 'hsl(45,90%,55%)',
   approved: 'hsl(145,55%,42%)',
   implemented: 'hsl(260,100%,78%)',
   verified: 'hsl(179,100%,31%)',

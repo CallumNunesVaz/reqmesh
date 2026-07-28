@@ -528,11 +528,34 @@ p7_integrations() {
         save_cfg "GIT_AUTOCOMMIT" "true"
         save_cfg "GIT_PUSH_ON_COMMIT" "false"
         save_cfg "GIT_PUSH_INTERVAL_MINUTES" "$(gum_input "Push interval (minutes, 0=off)" "0" "15")"
+
+        # Commit schedule
+        local schedule
+        schedule=$(gum_choose "Commit schedule" \
+            "every_change — commit on every change (debounced, default)" \
+            "interval     — commit on a time schedule (every N hours)" \
+            "changes      — commit after N changes accumulate" \
+            "both         — whichever comes first (time or N changes)")
+        save_cfg "GIT_COMMIT_SCHEDULE" "${schedule%% *}"
+
+        if [[ "$schedule" == interval* || "$schedule" == both* ]]; then
+            save_cfg "GIT_COMMIT_INTERVAL_HOURS" "$(gum_input "Commit interval (hours)" "24" "24")"
+        else
+            save_cfg "GIT_COMMIT_INTERVAL_HOURS" "0"
+        fi
+        if [[ "$schedule" == changes* || "$schedule" == both* ]]; then
+            save_cfg "GIT_COMMIT_CHANGES_THRESHOLD" "$(gum_input "Number of changes per commit" "50" "50")"
+        else
+            save_cfg "GIT_COMMIT_CHANGES_THRESHOLD" "0"
+        fi
     else
         save_cfg "GIT_REMOTE_URL" ""
         save_cfg "GIT_AUTOCOMMIT" "true"
         save_cfg "GIT_PUSH_ON_COMMIT" "false"
         save_cfg "GIT_PUSH_INTERVAL_MINUTES" "0"
+        save_cfg "GIT_COMMIT_SCHEDULE" "every_change"
+        save_cfg "GIT_COMMIT_INTERVAL_HOURS" "0"
+        save_cfg "GIT_COMMIT_CHANGES_THRESHOLD" "50"
     fi
 
     # Git author identity

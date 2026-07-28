@@ -454,18 +454,6 @@
       "title": "Normative",
       "type": "boolean"
     },
-    "effort": {
-      "anyOf": [
-        {
-          "type": "integer"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Effort"
-    },
     "priorities": {
       "additionalProperties": {
         "type": "integer"

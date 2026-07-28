@@ -9,6 +9,7 @@ import { useAuthStore } from '../store/auth';
 
 const statusColors: Record<string, string> = {
   proposed: 'border-blue-500/50 bg-blue-500/10 text-blue-400',
+  in_review: 'border-amber-500/50 bg-amber-500/10 text-amber-400',
   approved: 'border-green-500/50 bg-green-500/10 text-green-400',
   implemented: 'border-purple-500/50 bg-purple-500/10 text-purple-400',
   verified: 'border-emerald-500/50 bg-emerald-500/10 text-emerald-400',

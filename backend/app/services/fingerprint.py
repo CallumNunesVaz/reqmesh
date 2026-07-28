@@ -84,20 +84,22 @@ def check_suspect_links(store) -> list[dict]:
     return suspect
 
 
-def review_item(store, req_id: str, reviewer: str = "", comment: str = "") -> dict | None:
+def review_item(store, req_id: str, reviewer: str = "", comment: str = "",
+                reqs_map: dict[str, dict] | None = None) -> dict | None:
     req = store.get_requirement(req_id)
     if req is None:
         return None
 
-    reqs = store.list_requirements()
-    req_map = {r["id"]: r for r in reqs}
+    if reqs_map is None:
+        reqs = store.list_requirements()
+        reqs_map = {r["id"]: r for r in reqs}
 
     fp = compute_fingerprint(req)
     req["reviewed"] = fp
 
     relations = []
     for rel in req.get("relations", []):
-        target = req_map.get(rel.get("target", ""))
+        target = reqs_map.get(rel.get("target", ""))
         link_fp = compute_link_fingerprint(rel, target)
         rel_copy = dict(rel)
         rel_copy["reviewed_fingerprint"] = link_fp
@@ -110,9 +112,10 @@ def review_item(store, req_id: str, reviewer: str = "", comment: str = "") -> di
 
 def review_all(store, user: str = "") -> dict:
     reqs = store.list_requirements()
+    reqs_map = {r["id"]: r for r in reqs}
     reviewed = 0
     for r in reqs:
-        result = review_item(store, r["id"], reviewer=user)
+        result = review_item(store, r["id"], reviewer=user, reqs_map=reqs_map)
         if result is not None:
             reviewed += 1
     return {"reviewed": reviewed, "total": len(reqs)}

@@ -32,6 +32,9 @@ services:
       - RT_GIT_REMOTE_URL=${RT_GIT_REMOTE_URL:-}
       - RT_GIT_PUSH_ON_COMMIT=${RT_GIT_PUSH_ON_COMMIT:-false}
       - RT_GIT_PUSH_INTERVAL_MINUTES=${RT_GIT_PUSH_INTERVAL_MINUTES:-0}
+      - RT_GIT_COMMIT_SCHEDULE=${RT_GIT_COMMIT_SCHEDULE:-every_change}
+      - RT_GIT_COMMIT_INTERVAL_HOURS=${RT_GIT_COMMIT_INTERVAL_HOURS:-0}
+      - RT_GIT_COMMIT_CHANGES_THRESHOLD=${RT_GIT_COMMIT_CHANGES_THRESHOLD:-0}
       - RT_SEED_DEMO=${RT_SEED_DEMO:-true}
       # Single-origin deployment: the SPA is served by the app itself, so no
       # cross-origin request should be allowed. Left blank this falls back to

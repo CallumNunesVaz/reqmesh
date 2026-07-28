@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
 import subprocess
 import threading
@@ -155,6 +156,49 @@ def _project_git_config(project_root: Path) -> dict:
         return meta.get("git", {})
     except Exception:
         return {}
+
+
+def test_remote(project_root: Path, remote_url: str) -> dict:
+    """Test whether a git remote URL is reachable and returns basic info.
+
+    Uses ``git ls-remote`` which performs a lightweight handshake (no clone).
+    Returns ``{"ok": True, "branches": [...]}`` on success or
+    ``{"ok": False, "error": "..."}`` on failure.
+    """
+    project_root = Path(project_root)
+    if not is_repo(project_root):
+        return {"ok": False, "error": "Project directory is not a git repository. Run 'git init' first."}
+    if not remote_url:
+        return {"ok": False, "error": "No remote URL configured."}
+    try:
+        ident = _identity_for(project_root)
+        # Accept new host keys for SSH remotes (batch mode skips the prompt,
+        # but GIT_SSH_COMMAND allows us to auto-accept).
+        env = os.environ.copy()
+        if remote_url.startswith(("git@", "ssh://")):
+            env["GIT_SSH_COMMAND"] = "ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10"
+        result = subprocess.run(
+            ["git", *ident, "ls-remote", "--heads", remote_url],
+            cwd=str(project_root), capture_output=True, text=True, timeout=20,
+            env=env,
+        )
+        if result.returncode != 0:
+            msg = result.stderr.strip() or "Unknown error"
+            return {"ok": False, "error": redact_url(msg)}
+        branches = []
+        for line in result.stdout.splitlines():
+            parts = line.split("\t")
+            if len(parts) == 2 and parts[1].startswith("refs/heads/"):
+                branches.append(parts[1][len("refs/heads/"):])
+        return {
+            "ok": True,
+            "branches": branches[:20],
+            "branch_count": len(branches),
+        }
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "error": "Connection timed out after 20 seconds. Check the URL and network access."}
+    except OSError as exc:
+        return {"ok": False, "error": str(exc)}
 
 
 def push_to_remote(project_root: Path, branch: str = "main") -> bool:

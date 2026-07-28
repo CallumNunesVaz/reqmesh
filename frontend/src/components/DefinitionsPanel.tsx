@@ -59,7 +59,7 @@ export function DefinitionsManager({ projectId, editable }: { projectId: string;
               </span>
               <div className="flex-1" />
               {editable && (
-                <button onClick={() => remove(d.id)} className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all">
+                <button onClick={() => remove(d.id)} className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all" title="Delete">
                   <Trash2 size={12} />
                 </button>
               )}
@@ -172,7 +172,7 @@ export function AnalysisCasesPanel({ projectId, editable }: { projectId: string;
                 <Play size={12} /> Run
               </button>
               {editable && (
-                <button onClick={() => remove(c.id)} className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all">
+                <button onClick={() => remove(c.id)} className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all" title="Delete">
                   <Trash2 size={12} />
                 </button>
               )}

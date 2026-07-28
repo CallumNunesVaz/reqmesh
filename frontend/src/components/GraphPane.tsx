@@ -419,8 +419,8 @@ interface SavedView {
   showAllLinks: boolean;
   linkDir?: LinkDir;
   filters: {
-    search: string; status: string; priority: string; baseline: string; type: string;
-    verStatus: string; verMethod: string; allocated: string; component: string; kind: string;
+    search: string; status: string; priority: string; baselines: string[]; type: string;
+    verStatus: string; verMethod: string; allocated: string; components: string[]; kind: string;
   };
   viewport: { x: number; y: number; zoom: number } | null;
 }
@@ -473,13 +473,18 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [filterPriority, setFilterPriority] = useState('');
-  const [filterBaseline, setFilterBaseline] = useState('');
   const [filterType, setFilterType] = useState('');
   const [filterVerStatus, setFilterVerStatus] = useState('');
   const [filterVerMethod, setFilterVerMethod] = useState('');
   const [filterAllocated, setFilterAllocated] = useState('');
-  const [filterComponent, setFilterComponent] = useState('');
   const [filterKind, setFilterKind] = useState('');
+
+  const baselineFilters = useStore((s) => s.baselineFilters);
+  const setBaselineFilters = useStore((s) => s.setBaselineFilters);
+  const toggleBaselineFilter = useStore((s) => s.toggleBaselineFilter);
+  const componentFilters = useStore((s) => s.componentFilters);
+  const toggleComponentFilter = useStore((s) => s.toggleComponentFilter);
+  const setComponentFilters = useStore((s) => s.setComponentFilters);
   const [showFilters, setShowFilters] = useState(false);
   const [hideRoots, setHideRoots] = useState(false);
   const { selectedReqId, selectReq, derivationReq } = useSelectedReq();
@@ -656,12 +661,18 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
     }
   }, [refocusGraph]);
 
-  // The set of requirement ids satisfied by the currently-selected component,
+  // The set of requirement ids satisfied by the currently-selected components,
   // for O(1) membership tests in the filter below.
-  const componentReqIds = useMemo(
-    () => new Set(components.find(c => c.id === filterComponent)?.satisfies ?? []),
-    [components, filterComponent],
-  );
+  const componentReqIds = useMemo(() => {
+    if (componentFilters.length === 0) return new Set<string>();
+    const ids = new Set<string>();
+    for (const c of components) {
+      if (componentFilters.includes(c.id)) {
+        for (const rid of c.satisfies || []) ids.add(rid);
+      }
+    }
+    return ids;
+  }, [components, componentFilters]);
 
   const filteredReqs = useMemo(() => {
     let out = reqs;
@@ -671,17 +682,17 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
     }
     if (filterStatus) out = out.filter(r => r.status === filterStatus);
     if (filterPriority) out = out.filter(r => r.priority === filterPriority);
-    if (filterBaseline) out = out.filter(r => r.baselines?.includes(filterBaseline));
+    if (baselineFilters.length > 0) out = out.filter(r => baselineFilters.some(b => r.baselines?.includes(b)));
     if (filterType) out = out.filter(r => r.type === filterType);
     if (filterVerStatus) out = out.filter(r => r.verification_status === filterVerStatus);
     if (filterVerMethod) out = out.filter(r => r.verification_method === filterVerMethod);
     if (filterAllocated) out = out.filter(r => r.allocated_to === filterAllocated);
     if (filterKind) out = out.filter(r => r.requirement_kind === filterKind);
-    if (filterComponent) out = out.filter(r => componentReqIds.has(r.id));
+    if (componentFilters.length > 0) out = out.filter(r => componentReqIds.has(r.id));
     if (hideRoots) out = out.filter(r => r.parent);
     return out;
-  }, [reqs, search, filterStatus, filterPriority, filterBaseline, filterType,
-      filterVerStatus, filterVerMethod, filterAllocated, filterKind, filterComponent, componentReqIds, hideRoots]);
+  }, [reqs, search, filterStatus, filterPriority, baselineFilters, filterType,
+      filterVerStatus, filterVerMethod, filterAllocated, filterKind, componentFilters, componentReqIds, hideRoots]);
 
   const distinct = (pick: (r: typeof reqs[number]) => string) =>
     [...new Set(reqs.map(pick).filter(Boolean))].sort();
@@ -714,33 +725,50 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
     setSearch('');
     setFilterStatus('');
     setFilterPriority('');
-    setFilterBaseline('');
+    setBaselineFilters([]);
     setFilterType('');
     setFilterVerStatus('');
     setFilterVerMethod('');
     setFilterAllocated('');
-    setFilterComponent('');
+    setComponentFilters([]);
     setFilterKind('');
   };
   const activeFilterCount = [
-    search, filterStatus, filterPriority, filterBaseline, filterType,
-    filterVerStatus, filterVerMethod, filterAllocated, filterComponent, filterKind,
-  ].filter(Boolean).length;
+    search, filterStatus, filterPriority, filterType,
+    filterVerStatus, filterVerMethod, filterAllocated, filterKind,
+  ].filter(Boolean).length + (baselineFilters.length > 0 ? 1 : 0) + (componentFilters.length > 0 ? 1 : 0);
   const hasActiveFilters = activeFilterCount > 0;
+
+  const childrenByParent = useMemo(() => {
+    const map = new Map<string | null, string[]>();
+    for (const r of reqs) {
+      const p = r.parent || null;
+      if (!map.has(p)) map.set(p, []);
+      map.get(p)!.push(r.id);
+    }
+    return map;
+  }, [reqs]);
+
+  const reqsById = useMemo(() => {
+    const map = new Map<string, (typeof reqs)[number]>();
+    for (const r of reqs) map.set(r.id, r);
+    return map;
+  }, [reqs]);
 
   const childCounts = useMemo(() => {
     const counts = new Map<string, number>();
+    const childrenOf = (id: string | null) => childrenByParent.get(id) || [];
     function count(id: string): number {
       let total = 0;
-      for (const r of reqs) {
-        if (r.parent === id) { total += 1 + count(r.id); }
+      for (const cid of childrenOf(id)) {
+        total += 1 + count(cid);
       }
       counts.set(id, total);
       return total;
     }
-    for (const r of reqs) { if (!r.parent) count(r.id); }
+    for (const rid of childrenOf(null)) count(rid);
     return counts;
-  }, [reqs]);
+  }, [childrenByParent]);
 
   // Which nodes are parents, and per-node counts of direct subgroup children
   // (direct children that are themselves parents) — drives the two expand
@@ -764,14 +792,13 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
   useEffect(() => {
     if (autoCollapsed || reqs.length === 0) return;
     const toFold = new Set<string>();
+    const isParent = new Set(Object.keys(childrenByParent).filter(k => k !== 'null'));
     for (const r of reqs) {
-      const isParent = reqs.some(c => c.parent === r.id);
-      const isRoot = !r.parent;
-      if (isParent && !isRoot) toFold.add(r.id);
+      if (isParent.has(r.id) && r.parent) toFold.add(r.id);
     }
     if (toFold.size > 0) setCollapsed(toFold);
     setAutoCollapsed(true);
-  }, [reqs, autoCollapsed]);
+  }, [reqs, autoCollapsed, childrenByParent]);
 
   const expandAll = () => { setCollapsed(new Set()); setGroupsOnly(new Set()); };
   const collapseAll = () => {
@@ -1049,9 +1076,9 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
       showAllLinks,
       linkDir,
       filters: {
-        search, status: filterStatus, priority: filterPriority, baseline: filterBaseline,
+        search, status: filterStatus, priority: filterPriority, baselines: [...baselineFilters],
         type: filterType, verStatus: filterVerStatus, verMethod: filterVerMethod,
-        allocated: filterAllocated, component: filterComponent, kind: filterKind,
+        allocated: filterAllocated, components: [...componentFilters], kind: filterKind,
       },
       viewport: rfRef.current?.getViewport() ?? null,
     };
@@ -1062,8 +1089,8 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
       return next;
     });
   }, [collapsed, groupsOnly, selectedReqId, layoutMode, graphSettings, hopDepth, showAllLinks, linkDir, search,
-      filterStatus, filterPriority, filterBaseline, filterType, filterVerStatus, filterVerMethod,
-      filterAllocated, filterComponent, filterKind, persistViews]);
+      filterStatus, filterPriority, baselineFilters, filterType, filterVerStatus, filterVerMethod,
+      filterAllocated, componentFilters, filterKind, persistViews]);
 
   const clearView = useCallback((slot: number) => {
     setViews((prev) => {
@@ -1095,12 +1122,12 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
     setSearch(f.search ?? '');
     setFilterStatus(f.status ?? '');
     setFilterPriority(f.priority ?? '');
-    setFilterBaseline(f.baseline ?? '');
+    setBaselineFilters(f.baselines ?? []);
     setFilterType(f.type ?? '');
     setFilterVerStatus(f.verStatus ?? '');
     setFilterVerMethod(f.verMethod ?? '');
     setFilterAllocated(f.allocated ?? '');
-    setFilterComponent(f.component ?? '');
+    setComponentFilters(f.components ?? []);
     setFilterKind(f.kind ?? '');
     // Guarantee the layout effect runs (and thus consumes restoreRef) even if
     // the restored config is identical to the current one.
@@ -1147,7 +1174,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
       // ancestor (the group it now lives inside) so there's always something to
       // frame.
       let id: string | null = target;
-      while (id && !visibleNodeIds.has(id)) id = reqs.find((r) => r.id === id)?.parent ?? null;
+      while (id && !visibleNodeIds.has(id)) id = reqsById.get(id)?.parent ?? null;
       if (!id) { rfRef.current?.fitView({ padding: 0.12, maxZoom: gs.maxZoom, duration }); return true; }
       const related = new Set<string>([id]);
       for (const e of initialEdges) {
@@ -1772,13 +1799,60 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
                 <div className="space-y-2.5 max-h-[60vh] overflow-y-auto pr-0.5">
                   <FilterField label="Status" options={availableStatuses} value={filterStatus} onChange={setFilterStatus} colorOf={statusOptionColor} />
                   <FilterField label="Priority" options={availablePriorities} value={filterPriority} onChange={setFilterPriority} colorOf={priorityOptionColor} />
-                  <FilterField label="Baseline" options={availableBaselines} value={filterBaseline} onChange={setFilterBaseline} />
+                  {availableBaselines.length > 0 && (
+                    <div>
+                      <div className="text-[9px] text-graph-muted mb-1">Baselines</div>
+                      <div className="space-y-0.5 max-h-32 overflow-y-auto">
+                        {availableBaselines.map((b) => {
+                          const checked = baselineFilters.includes(b);
+                          return (
+                            <label key={b} className="flex items-center gap-1.5 py-0.5 cursor-pointer hover:bg-graph-control-hover rounded px-1 transition-colors">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => toggleBaselineFilter(b)}
+                                className="w-3 h-3 rounded border-graph-border accent-graph-text cursor-pointer"
+                              />
+                              <span className="text-[11px] text-graph-text">{b}</span>
+                              <span className="text-[9px] text-graph-muted ml-auto">
+                                {reqs.filter(r => r.baselines?.includes(b)).length}
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                   <FilterField label="Type" options={availableTypes} value={filterType} onChange={setFilterType} format={formatReqType} colorOf={typeOptionColor} />
                   <FilterField label="Requirement kind" options={availableKinds} value={filterKind} onChange={setFilterKind} format={formatUnderscored} />
                   <FilterField label="Verification status" options={availableVerStatuses} value={filterVerStatus} onChange={setFilterVerStatus} colorOf={verifStatusOptionColor} />
                   <FilterField label="Verification method" options={availableVerMethods} value={filterVerMethod} onChange={setFilterVerMethod} />
                   <FilterField label="Allocated team" options={availableAllocations} value={filterAllocated} onChange={setFilterAllocated} />
-                  <FilterField label="Component" options={availableComponents} value={filterComponent} onChange={setFilterComponent} format={(id) => componentLabels.get(id) || id} />
+                  <FilterField label="Allocated team" options={availableAllocations} value={filterAllocated} onChange={setFilterAllocated} />
+                  {availableComponents.length > 0 && (
+                    <div>
+                      <div className="text-[9px] text-graph-muted mb-1">Components</div>
+                      <div className="space-y-0.5 max-h-32 overflow-y-auto">
+                        {availableComponents.map((cid) => {
+                          const checked = componentFilters.includes(cid);
+                          const label = componentLabels.get(cid) || cid;
+                          const reqCount = components.find(c => c.id === cid)?.satisfies?.length ?? 0;
+                          return (
+                            <label key={cid} className="flex items-center gap-1.5 py-0.5 cursor-pointer hover:bg-graph-control-hover rounded px-1 transition-colors">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => toggleComponentFilter(cid)}
+                                className="w-3 h-3 rounded border-graph-border accent-graph-text cursor-pointer"
+                              />
+                              <span className="text-[11px] text-graph-text truncate max-w-[140px]">{label}</span>
+                              <span className="text-[9px] text-graph-muted ml-auto shrink-0">{reqCount}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
                 {hasActiveFilters && (
                   <div className="mt-3 pt-3 border-t border-graph-border">

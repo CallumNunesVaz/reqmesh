@@ -30,6 +30,15 @@ def latex_engine_available() -> str | None:
     return None
 
 
+def _darken(hex_color: str, factor: float) -> str:
+    """Darken a hex colour by the given factor (0-1).  *factor* = 0.65 means
+    the result is 65% as bright as the original."""
+    hex_color = hex_color.lstrip("#")
+    r, g, b = int(hex_color[0:2], 16), int(hex_color[2:4], 16), int(hex_color[4:6], 16)
+    r, g, b = int(r * factor), int(g * factor), int(b * factor)
+    return f"#{r:02x}{g:02x}{b:02x}"
+
+
 def compile_latex_to_pdf(latex: str, out_path: str) -> bool:
     """Compile a LaTeX document to ``out_path``.
 
@@ -481,6 +490,12 @@ class Publisher:
         is_draft = status.strip().lower() in {
             "draft", "working", "preliminary", "in review", "in_review", "wip"}
 
+        raw_color = getattr(global_settings, "report_color", "") or "#2094f3"
+        accent_color = raw_color.strip()
+        if not re.match(r"^#[0-9a-fA-F]{6}$", accent_color):
+            accent_color = "#2094f3"
+        accent_dark = _darken(accent_color, 0.65)
+
         return {
             "logo_url": logo_url,
             "company": company,
@@ -498,6 +513,8 @@ class Publisher:
             "distribution": distribution,
             "is_draft": is_draft,
             "git_sha": git_sha,
+            "accent_color": accent_color,
+            "accent_dark": accent_dark,
         }
 
     # ── Section builders ────────────────────────────────────────────────────────
@@ -841,6 +858,9 @@ class Publisher:
 
         hdr = self._header_config()
         project_name = esc(self.meta.get("name", self.project_id))
+        # Inject the selected accent colour into the HTML CSS.
+        accent_hex = hdr.get("accent_color", "#2094f3")
+        css_with_accent = CSS.replace("#2563eb", accent_hex).replace("#1d4ed8", accent_hex)
         footer_css = f"""
   @bottom-left {{
     content: "{esc(hdr['footer_str'], quote=True)}";
@@ -864,7 +884,7 @@ class Publisher:
 
         html = f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"><title>{project_name} — {hdr["title"]}</title>
-<style>{CSS}
+<style>{css_with_accent}
 @page {{{header_css}{footer_css}}}
 </style></head><body>
 """
@@ -1067,6 +1087,20 @@ class Publisher:
         distribution = [_latex_escape(x) for x in hdr["distribution"]]
         is_draft = hdr["is_draft"]
 
+        # ── Accent colour ─────────────────────────────────────────────────
+        accent_hex = hdr.get("accent_color", "#2094f3").lstrip("#")
+        accent_dark_hex = hdr.get("accent_dark", "#0964ae").lstrip("#")
+        accent_r = int(accent_hex[0:2], 16)
+        accent_g = int(accent_hex[2:4], 16)
+        accent_b = int(accent_hex[4:6], 16)
+        accent_dark_r = int(accent_dark_hex[0:2], 16)
+        accent_dark_g = int(accent_dark_hex[2:4], 16)
+        accent_dark_b = int(accent_dark_hex[4:6], 16)
+        # Lighter tint for table headers (~15% of full saturation)
+        accent_light_r = int(accent_r + (255 - accent_r) * 0.92)
+        accent_light_g = int(accent_g + (255 - accent_g) * 0.92)
+        accent_light_b = int(accent_b + (255 - accent_b) * 0.92)
+
         # ── Stats ────────────────────────────────────────────────────────
         total = len(self.reqs)
         status_dist: dict[str, int] = {}
@@ -1140,12 +1174,12 @@ class Publisher:
         # Matches the app UI exactly — the Cloudscape light-theme CSS variables
         # (frontend/src/styles/index.css), converted from HSL to RGB, so the
         # report reads as the same product rather than a generic LaTeX doc.
-        L.append(r"\definecolor{accent}{RGB}{32,148,243}")      # --primary — headings, rules, links
-        L.append(r"\definecolor{accentdark}{RGB}{9,100,174}")   # darker accent — cover title
+        L.append(f"\\definecolor{{accent}}{{RGB}}{{{accent_r},{accent_g},{accent_b}}}")
+        L.append(f"\\definecolor{{accentdark}}{{RGB}}{{{accent_dark_r},{accent_dark_g},{accent_dark_b}}}")
         L.append(r"\definecolor{ink}{RGB}{31,39,51}")           # --foreground — body
         L.append(r"\definecolor{muted}{RGB}{104,119,141}")      # --muted-foreground — captions
         L.append(r"\definecolor{rule}{RGB}{220,224,229}")       # --border — hairlines
-        L.append(r"\definecolor{prop}{RGB}{32,148,243}")        # --cs-blue — proposed
+        L.append(f"\\definecolor{{prop}}{{RGB}}{{{accent_r},{accent_g},{accent_b}}}")
         L.append(r"\definecolor{appr}{RGB}{34,160,86}")         # --cs-green — approved
         L.append(r"\definecolor{impl}{RGB}{119,62,234}")        # --cs-purple — implemented
         L.append(r"\definecolor{veri}{RGB}{0,143,140}")         # --cs-teal — verified
@@ -1154,8 +1188,8 @@ class Publisher:
         L.append(r"\definecolor{prihigh}{RGB}{255,119,0}")      # --cs-orange — high priority
         L.append(r"\definecolor{pricrit}{RGB}{237,44,44}")      # --cs-red — critical priority
         L.append(r"\definecolor{prlow}{RGB}{133,144,147}")      # --cs-grey — low priority
-        L.append(r"\definecolor{primed}{RGB}{32,148,243}")      # --cs-blue — medium priority
-        L.append(r"\definecolor{tabhead}{RGB}{232,243,252}")    # --accent (light) — table header fill
+        L.append(f"\\definecolor{{primed}}{{RGB}}{{{accent_r},{accent_g},{accent_b}}}")
+        L.append(f"\\definecolor{{tabhead}}{{RGB}}{{{accent_light_r},{accent_light_g},{accent_light_b}}}")
         L.append(r"\definecolor{rowalt}{RGB}{250,251,252}")     # --background — zebra stripe
 
         L.append(r"\usepackage{hyperref}")

@@ -168,6 +168,14 @@ class Settings(BaseSettings):
     git_remote_url: str = ""
     git_push_on_commit: bool = False
     git_push_interval_minutes: int = 0
+    # commit_schedule controls when auto-commits fire:
+    #   every_change — commit after every mutating request (debounced, default)
+    #   interval     — commit on a time schedule (every N hours)
+    #   changes      — commit after N mutating requests accumulate
+    #   both         — commit when *either* the interval elapses or N changes accrue
+    git_commit_schedule: str = "every_change"
+    git_commit_interval_hours: float = 0.0
+    git_commit_changes_threshold: int = 0
 
     # ── Misc ──────────────────────────────────────────────────────────────
     seed_demo: bool = True
@@ -200,6 +208,8 @@ class Settings(BaseSettings):
     report_reviewed_by: str = ""
     report_approved_by: str = ""
     report_distribution: list[str] = []
+    # Hex accent colour for PDF reports — headings, rules, hyperlinks.
+    report_color: str = "#2094f3"
 
     # ── Self-update ───────────────────────────────────────────────────────
     github_repo: str = "CallumNunesVaz/reqmesh"

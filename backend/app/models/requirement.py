@@ -154,7 +154,6 @@ class Requirement(BaseModel):
     reviewed: Optional[str] = None
     derived: bool = False
     normative: bool = True
-    effort: Optional[int] = None
     priorities: dict[str, int] = Field(default_factory=dict)
     needs: list[str] = Field(default_factory=list)
     references: list[Reference] = Field(default_factory=list)
@@ -197,7 +196,6 @@ class RequirementCreate(BaseModel):
     reviewed: Optional[str] = None
     derived: bool = False
     normative: bool = True
-    effort: Optional[int] = None
     priorities: dict[str, int] = Field(default_factory=dict)
     needs: list[str] = Field(default_factory=list)
     references: list[Reference] = Field(default_factory=list)

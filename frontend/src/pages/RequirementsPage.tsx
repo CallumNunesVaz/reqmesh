@@ -790,7 +790,6 @@ function BulkEditModal({
     baselines: null as string[] | null,
     derived: null as boolean | null,
     normative: null as boolean | null,
-    effort: '' as number | string,
     system_states: '',
     subject: '',
     needs: '',
@@ -828,10 +827,6 @@ function BulkEditModal({
     if (form.baselines !== null) updates.baselines = form.baselines;
     if (form.derived !== null) updates.derived = form.derived;
     if (form.normative !== null) updates.normative = form.normative;
-    if (form.effort !== '' && form.effort !== null) {
-      const v = typeof form.effort === 'number' ? form.effort : parseInt(String(form.effort));
-      if (!isNaN(v)) updates.effort = v;
-    }
     if (form.system_states) updates.system_states = form.system_states.split(',').map(s => s.trim()).filter(Boolean);
     if (form.subject) updates.subject = form.subject;
     if (form.needs) updates.needs = form.needs.split(',').map(s => s.trim()).filter(Boolean);
@@ -1015,12 +1010,7 @@ function BulkEditModal({
                   <label className="label">Cascade From</label>
                   <input className="input font-mono text-xs" placeholder="Parent requirement ID..." value={form.cascade_from}
                     onChange={(e) => setForm({ ...form, cascade_from: e.target.value })} />
-                </div>
-                <div>
-                  <label className="label">Effort (story points)</label>
-                  <input className="input" type="number" min="0" placeholder="No change" value={form.effort}
-                    onChange={(e) => setForm({ ...form, effort: e.target.value })} />
-                </div>
+                </div>                  
               </div>
 
               {/* Row 5: System States / Coverage Needs */}

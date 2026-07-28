@@ -760,6 +760,18 @@ def git_restore(project_id: str, data: dict, user: dict = Depends(require_mainta
     return {"status": "ok", "message": f"Restored to {commit_hash[:8]}"}
 
 
+@router.post("/projects/{project_id}/git/test-remote")
+def git_test_remote(project_id: str, data: dict, user: dict = Depends(require_maintain)):
+    from app.services import git_service
+
+    remote_url = str(data.get("remote_url", "")).strip()
+    if not remote_url:
+        raise HTTPException(status_code=400, detail="remote_url is required")
+
+    store = get_store(project_id)
+    return git_service.test_remote(store.root, remote_url)
+
+
 # ── Compliance ────────────────────────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/compliance")
@@ -799,16 +811,10 @@ def project_metrics(project_id: str, _rate: None = Depends(rate_limit(20, 60))):
         if r.get("relations"): with_trace += 1
         if r.get("cascade_from"): with_cascade += 1
 
-    effort_by_id = {r["id"]: r.get("effort") or 0 for r in reqs}
-    effort_total = sum(effort_by_id.values())
-    effort_done = sum(effort_by_id[r["id"]] for r in reqs if r.get("status") in ("verified", "implemented", "deprecated"))
-
     return {
         "total": total,
         "verification_cases": len(vcs),
         "baselines": len(baselines),
-        "total_effort": effort_total,
-        "completed_effort": effort_done,
         "status_distribution": statuses,
         "quality": {
             "with_description": with_desc,
@@ -838,18 +844,12 @@ def prioritized_backlog(project_id: str, sort: str = "priority", _rate: None = D
             continue
         priorities = r.get("priorities", {})
         combined = sum(priorities.values()) if priorities else 0
-        combined -= r.get("effort") or 0
         results.append({
             "id": r["id"], "name": r.get("name", ""), "status": r.get("status", "proposed"),
-            "effort": r.get("effort"), "priorities": priorities, "combined_priority": combined,
+            "priorities": priorities, "combined_priority": combined,
         })
-    if sort == "effort":
-        results.sort(key=lambda x: -(x["effort"] or 0))
-    else:
-        results.sort(key=lambda x: -x["combined_priority"])
-    e = sum(r.get("effort") or 0 for r in reqs)
-    d = sum(r.get("effort") or 0 for r in reqs if r.get("status") in ("verified", "implemented", "deprecated"))
-    return {"items": results, "total_effort": e, "completed_effort": d}
+    results.sort(key=lambda x: -x["combined_priority"])
+    return {"items": results}
 
 
 # ── Publishing ────────────────────────────────────────────────────────────────
