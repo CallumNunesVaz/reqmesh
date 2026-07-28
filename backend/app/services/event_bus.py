@@ -25,7 +25,7 @@ class EventBus:
         self._presence: dict[str, dict[str, dict]] = {}
 
     def subscribe(self, project_id: str) -> asyncio.Queue:
-        q: asyncio.Queue = asyncio.Queue()
+        q: asyncio.Queue = asyncio.Queue(maxsize=256)
         self._subscribers.setdefault(project_id, []).append(q)
         return q
 
@@ -40,16 +40,30 @@ class EventBus:
             try:
                 q.put_nowait(event)
             except asyncio.QueueFull:
-                pass
+                # Drop the oldest event to make room — a backlogged client
+                # needs the freshest data, not stale history.
+                try:
+                    q.get_nowait()
+                    q.put_nowait(event)
+                except (asyncio.QueueEmpty, asyncio.QueueFull):
+                    pass
 
     # --- Presence -------------------------------------------------------------
 
     def join(self, project_id: str, client_id: str, username: str, role: str) -> None:
         roster = self._presence.setdefault(project_id, {})
+        # Prune entries with no activity for > 5 min (TCP drops can prevent
+        # the leave() call, leaving a permanent ghost entry).
+        now = datetime.now(timezone.utc)
+        stale = [cid for cid, info in roster.items()
+                 if (now - datetime.fromisoformat(info["since"])).total_seconds() > 300
+                 and cid != client_id]
+        for cid in stale:
+            del roster[cid]
         roster[client_id] = {
             "username": username or "guest",
             "role": role or "guest",
-            "since": datetime.now(timezone.utc).isoformat(),
+            "since": now.isoformat(),
         }
         self._broadcast_presence(project_id)
 

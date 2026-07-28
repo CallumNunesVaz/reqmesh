@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import re
 import uuid
 from datetime import datetime, timezone
@@ -18,6 +19,8 @@ from app.models.change_request import ChangeRequestCreate, ChangeRequestUpdate
 from app.models.component import ComponentCreate, ComponentUpdate
 from app.models.requirement import RequirementUpdate
 from app.models.risk import RiskCreate, RiskUpdate, CommentCreate, DecisionRecordCreate, DecisionRecordUpdate
+
+logger = logging.getLogger(__name__)
 from app.models.verification import VerificationCaseCreate, VerificationCaseUpdate
 from app.models.specification import SpecificationCreate, SpecificationUpdate
 from app.services.publisher import Publisher, compile_latex_to_pdf
@@ -43,14 +46,14 @@ class PublishRequest(BaseModel):
 router = APIRouter()
 
 
-async def _read_upload_capped(file: UploadFile, limit_mb: int) -> bytes:
+def _read_upload_capped(file: UploadFile, limit_mb: int) -> bytes:
     """Read an uploaded file into memory, aborting with 413 once it exceeds the
     configured limit so a large upload can't exhaust memory."""
     limit = max(1, limit_mb) * 1024 * 1024
     chunks: list[bytes] = []
     total = 0
     while True:
-        chunk = await file.read(4 * 1024 * 1024)
+        chunk = file.file.read(4 * 1024 * 1024)
         if not chunk:
             break
         total += len(chunk)
@@ -67,7 +70,7 @@ def _sorted_by_modified(items: list[dict], key: str = "modified") -> list[dict]:
 # ── Change Requests ──────────────────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/change-requests")
-async def list_change_requests(
+def list_change_requests(
     project_id: str,
     offset: Optional[int] = Query(None, ge=0),
     limit: Optional[int] = Query(None, ge=1, le=2000),
@@ -82,7 +85,7 @@ async def list_change_requests(
 
 
 @router.post("/projects/{project_id}/change-requests", status_code=201)
-async def create_change_request(project_id: str, data: ChangeRequestCreate, user: dict = Depends(require_edit)):
+def create_change_request(project_id: str, data: ChangeRequestCreate, user: dict = Depends(require_edit)):
     store = get_store(project_id)
     cr = data.model_dump(mode="json")
     cr.setdefault("status", "submitted")
@@ -95,12 +98,12 @@ async def create_change_request(project_id: str, data: ChangeRequestCreate, user
         from app.services.email_service import notify_change_request
         notify_change_request(store, project_id, result["id"], "created", user.get("username", ""))
     except Exception:
-        pass
+        logger.exception("Email notification failed")
     return result
 
 
 @router.put("/projects/{project_id}/change-requests/{cr_id}")
-async def update_change_request(project_id: str, cr_id: str, data: ChangeRequestUpdate, user: dict = Depends(require_edit)):
+def update_change_request(project_id: str, cr_id: str, data: ChangeRequestUpdate, user: dict = Depends(require_edit)):
     store = get_store(project_id)
     before = store.get_item("change_requests", cr_id)
     result = store.update_item("change_requests", cr_id, data.model_dump(mode="json", exclude_unset=True))
@@ -111,12 +114,12 @@ async def update_change_request(project_id: str, cr_id: str, data: ChangeRequest
         from app.services.email_service import notify_change_request
         notify_change_request(store, project_id, cr_id, "updated", user.get("username", ""))
     except Exception:
-        pass
+        logger.exception("Email notification failed")
     return result
 
 
 @router.delete("/projects/{project_id}/change-requests/{cr_id}")
-async def delete_change_request(project_id: str, cr_id: str, user: dict = Depends(require_edit)):
+def delete_change_request(project_id: str, cr_id: str, user: dict = Depends(require_edit)):
     store = get_store(project_id)
     before = store.get_item("change_requests", cr_id)
     if not store.delete_item("change_requests", cr_id):
@@ -128,7 +131,7 @@ async def delete_change_request(project_id: str, cr_id: str, user: dict = Depend
 # ── Risks ─────────────────────────────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/risks")
-async def list_risks(
+def list_risks(
     project_id: str,
     offset: Optional[int] = Query(None, ge=0),
     limit: Optional[int] = Query(None, ge=1, le=2000),
@@ -143,7 +146,7 @@ async def list_risks(
 
 
 @router.post("/projects/{project_id}/risks", status_code=201)
-async def create_risk(project_id: str, data: RiskCreate, user: dict = Depends(require_edit)):
+def create_risk(project_id: str, data: RiskCreate, user: dict = Depends(require_edit)):
     r = data.model_dump(mode="json")
     r.setdefault("impact", "")
     r.setdefault("mitigation", "")
@@ -156,12 +159,12 @@ async def create_risk(project_id: str, data: RiskCreate, user: dict = Depends(re
         from app.services.email_service import notify_risk
         notify_risk(store, project_id, result["id"], "created", user.get("username", ""))
     except Exception:
-        pass
+        logger.exception("Email notification failed")
     return result
 
 
 @router.put("/projects/{project_id}/risks/{risk_id}")
-async def update_risk(project_id: str, risk_id: str, data: RiskUpdate, user: dict = Depends(require_edit)):
+def update_risk(project_id: str, risk_id: str, data: RiskUpdate, user: dict = Depends(require_edit)):
     store = get_store(project_id)
     before = store.get_item("risks", risk_id)
     result = store.update_item("risks", risk_id, data.model_dump(mode="json", exclude_unset=True))
@@ -172,12 +175,12 @@ async def update_risk(project_id: str, risk_id: str, data: RiskUpdate, user: dic
         from app.services.email_service import notify_risk
         notify_risk(store, project_id, risk_id, "updated", user.get("username", ""))
     except Exception:
-        pass
+        logger.exception("Email notification failed")
     return result
 
 
 @router.delete("/projects/{project_id}/risks/{risk_id}")
-async def delete_risk(project_id: str, risk_id: str, user: dict = Depends(require_edit)):
+def delete_risk(project_id: str, risk_id: str, user: dict = Depends(require_edit)):
     store = get_store(project_id)
     before = store.get_item("risks", risk_id)
     if not store.delete_item("risks", risk_id):
@@ -189,7 +192,7 @@ async def delete_risk(project_id: str, risk_id: str, user: dict = Depends(requir
 # ── Comments ──────────────────────────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/comments")
-async def list_comments(
+def list_comments(
     project_id: str,
     requirement_id: Optional[str] = Query(None),
     offset: Optional[int] = Query(None, ge=0),
@@ -208,7 +211,7 @@ async def list_comments(
 
 
 @router.post("/projects/{project_id}/comments", status_code=201)
-async def create_comment(project_id: str, data: CommentCreate, user: dict = Depends(require_edit)):
+def create_comment(project_id: str, data: CommentCreate, user: dict = Depends(require_edit)):
     c = data.model_dump(mode="json")
     c["id"] = f"COMMENT-{uuid.uuid4().hex[:8].upper()}"
     c["resolved"] = False
@@ -219,19 +222,19 @@ async def create_comment(project_id: str, data: CommentCreate, user: dict = Depe
         from app.services.email_service import notify_comment
         notify_comment(store, project_id, data.requirement_id, user.get("username", ""), data.text)
     except Exception:
-        pass
+        logger.exception("Email notification failed")
     return result
 
 
 @router.delete("/projects/{project_id}/comments/{comment_id}")
-async def delete_comment(project_id: str, comment_id: str, user: dict = Depends(require_edit)):
+def delete_comment(project_id: str, comment_id: str, user: dict = Depends(require_edit)):
     if not get_store(project_id).delete_item("comments", comment_id):
         raise HTTPException(status_code=404, detail="Not found")
     return {"ok": True}
 
 
 @router.patch("/projects/{project_id}/comments/{comment_id}")
-async def update_comment(project_id: str, comment_id: str, data: CommentUpdate, user: dict = Depends(require_edit)):
+def update_comment(project_id: str, comment_id: str, data: CommentUpdate, user: dict = Depends(require_edit)):
     store = get_store(project_id)
     existing = store.get_item("comments", comment_id)
     if existing is None:
@@ -250,7 +253,7 @@ async def update_comment(project_id: str, comment_id: str, data: CommentUpdate, 
 # ── Decision Records ──────────────────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/decisions")
-async def list_decisions(
+def list_decisions(
     project_id: str,
     offset: Optional[int] = Query(None, ge=0),
     limit: Optional[int] = Query(None, ge=1, le=2000),
@@ -265,7 +268,7 @@ async def list_decisions(
 
 
 @router.post("/projects/{project_id}/decisions", status_code=201)
-async def create_decision(project_id: str, data: DecisionRecordCreate, user: dict = Depends(require_edit)):
+def create_decision(project_id: str, data: DecisionRecordCreate, user: dict = Depends(require_edit)):
     d = data.model_dump(mode="json")
     d.setdefault("rationale", "")
     d.setdefault("consequences", "")
@@ -279,12 +282,12 @@ async def create_decision(project_id: str, data: DecisionRecordCreate, user: dic
         from app.services.email_service import notify_decision
         notify_decision(store, project_id, result["id"], "created", user.get("username", ""))
     except Exception:
-        pass
+        logger.exception("Email notification failed")
     return result
 
 
 @router.put("/projects/{project_id}/decisions/{dec_id}")
-async def update_decision(project_id: str, dec_id: str, data: DecisionRecordUpdate, user: dict = Depends(require_edit)):
+def update_decision(project_id: str, dec_id: str, data: DecisionRecordUpdate, user: dict = Depends(require_edit)):
     store = get_store(project_id)
     before = store.get_item("decisions", dec_id)
     result = store.update_item("decisions", dec_id, data.model_dump(mode="json", exclude_unset=True))
@@ -295,12 +298,12 @@ async def update_decision(project_id: str, dec_id: str, data: DecisionRecordUpda
         from app.services.email_service import notify_decision
         notify_decision(store, project_id, dec_id, "updated", user.get("username", ""))
     except Exception:
-        pass
+        logger.exception("Email notification failed")
     return result
 
 
 @router.delete("/projects/{project_id}/decisions/{dec_id}")
-async def delete_decision(project_id: str, dec_id: str, user: dict = Depends(require_edit)):
+def delete_decision(project_id: str, dec_id: str, user: dict = Depends(require_edit)):
     store = get_store(project_id)
     before = store.get_item("decisions", dec_id)
     if not store.delete_item("decisions", dec_id):
@@ -312,7 +315,7 @@ async def delete_decision(project_id: str, dec_id: str, user: dict = Depends(req
 # ── Bulk Operations ───────────────────────────────────────────────────────────
 
 @router.post("/projects/{project_id}/requirements/bulk")
-async def bulk_update_requirements(project_id: str, data: dict, user: dict = Depends(require_maintain)):
+def bulk_update_requirements(project_id: str, data: dict, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     ids = data.get("ids", [])
     try:
@@ -335,7 +338,7 @@ async def bulk_update_requirements(project_id: str, data: dict, user: dict = Dep
 
 
 @router.post("/projects/{project_id}/requirements/bulk-delete")
-async def bulk_delete_requirements(project_id: str, data: dict, user: dict = Depends(require_maintain)):
+def bulk_delete_requirements(project_id: str, data: dict, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     deleted = 0
     for req_id in data.get("ids", []):
@@ -361,7 +364,7 @@ def _bulk_delete(store, ids: list[str], get_fn, delete_fn, record_type: str, use
 
 
 @router.post("/projects/{project_id}/components/bulk")
-async def bulk_update_components(project_id: str, data: dict, user: dict = Depends(require_maintain)):
+def bulk_update_components(project_id: str, data: dict, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     ids = data.get("ids", [])
     try:
@@ -378,7 +381,7 @@ async def bulk_update_components(project_id: str, data: dict, user: dict = Depen
 
 
 @router.post("/projects/{project_id}/components/bulk-delete")
-async def bulk_delete_components(project_id: str, data: dict, user: dict = Depends(require_maintain)):
+def bulk_delete_components(project_id: str, data: dict, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     deleted = 0
     for comp_id in data.get("ids", []):
@@ -390,6 +393,10 @@ async def bulk_delete_components(project_id: str, data: dict, user: dict = Depen
             if child.get("parent") == comp_id:
                 store.update_component(child["id"], {"parent": before.get("parent")})
                 promoted.append(child["id"])
+                record_change(store, child["id"], "reparent",
+                              {"parent": comp_id},
+                              {"parent": before.get("parent")},
+                              user.get("username", ""))
         if store.delete_component(comp_id):
             record_change(store, comp_id, "delete", before, None, user.get("username", ""))
             deleted += 1
@@ -397,7 +404,7 @@ async def bulk_delete_components(project_id: str, data: dict, user: dict = Depen
 
 
 @router.post("/projects/{project_id}/components/bulk-reparent")
-async def bulk_reparent_components(project_id: str, data: dict, user: dict = Depends(require_maintain)):
+def bulk_reparent_components(project_id: str, data: dict, user: dict = Depends(require_maintain)):
     """Assign multiple components to a new parent (set parent=None to detach)."""
     store = get_store(project_id)
     ids = data.get("ids", [])
@@ -410,7 +417,7 @@ async def bulk_reparent_components(project_id: str, data: dict, user: dict = Dep
 
 
 @router.post("/projects/{project_id}/verification/bulk")
-async def bulk_update_verification_cases(project_id: str, data: dict, user: dict = Depends(require_maintain)):
+def bulk_update_verification_cases(project_id: str, data: dict, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     ids = data.get("ids", [])
     try:
@@ -427,14 +434,14 @@ async def bulk_update_verification_cases(project_id: str, data: dict, user: dict
 
 
 @router.post("/projects/{project_id}/verification/bulk-delete")
-async def bulk_delete_verification_cases(project_id: str, data: dict, user: dict = Depends(require_maintain)):
+def bulk_delete_verification_cases(project_id: str, data: dict, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     deleted = _bulk_delete(store, data.get("ids", []), store.get_verification_case, store.delete_verification_case, "verification", user.get("username", ""))
     return {"deleted": deleted}
 
 
 @router.post("/projects/{project_id}/specifications/bulk")
-async def bulk_update_specifications(project_id: str, data: dict, user: dict = Depends(require_maintain)):
+def bulk_update_specifications(project_id: str, data: dict, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     ids = data.get("ids", [])
     try:
@@ -451,14 +458,14 @@ async def bulk_update_specifications(project_id: str, data: dict, user: dict = D
 
 
 @router.post("/projects/{project_id}/specifications/bulk-delete")
-async def bulk_delete_specifications(project_id: str, data: dict, user: dict = Depends(require_maintain)):
+def bulk_delete_specifications(project_id: str, data: dict, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     deleted = _bulk_delete(store, data.get("ids", []), store.get_specification, store.delete_specification, "specification", user.get("username", ""))
     return {"deleted": deleted}
 
 
 @router.post("/projects/{project_id}/risks/bulk")
-async def bulk_update_risks(project_id: str, data: dict, user: dict = Depends(require_maintain)):
+def bulk_update_risks(project_id: str, data: dict, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     ids = data.get("ids", [])
     try:
@@ -475,7 +482,7 @@ async def bulk_update_risks(project_id: str, data: dict, user: dict = Depends(re
 
 
 @router.post("/projects/{project_id}/risks/bulk-delete")
-async def bulk_delete_risks(project_id: str, data: dict, user: dict = Depends(require_maintain)):
+def bulk_delete_risks(project_id: str, data: dict, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     deleted = 0
     for risk_id in data.get("ids", []):
@@ -489,7 +496,7 @@ async def bulk_delete_risks(project_id: str, data: dict, user: dict = Depends(re
 
 
 @router.post("/projects/{project_id}/change-requests/bulk")
-async def bulk_update_change_requests(project_id: str, data: dict, user: dict = Depends(require_maintain)):
+def bulk_update_change_requests(project_id: str, data: dict, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     ids = data.get("ids", [])
     try:
@@ -506,7 +513,7 @@ async def bulk_update_change_requests(project_id: str, data: dict, user: dict = 
 
 
 @router.post("/projects/{project_id}/change-requests/bulk-delete")
-async def bulk_delete_change_requests(project_id: str, data: dict, user: dict = Depends(require_maintain)):
+def bulk_delete_change_requests(project_id: str, data: dict, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     deleted = 0
     for cr_id in data.get("ids", []):
@@ -536,7 +543,7 @@ def _leading_prefix(item_id: str) -> str:
 
 
 @router.post("/projects/{project_id}/requirements/bulk-reparent")
-async def bulk_reparent_requirements(project_id: str, data: dict, user: dict = Depends(require_maintain)):
+def bulk_reparent_requirements(project_id: str, data: dict, user: dict = Depends(require_maintain)):
     """Move selected requirements under a new parent and optionally re-prefix IDs.
 
     With ``re_prefix`` set and the new parent's prefix differing from a moved
@@ -632,7 +639,7 @@ async def bulk_reparent_requirements(project_id: str, data: dict, user: dict = D
 # ── Impact Analysis ───────────────────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/requirements/{req_id}/impact")
-async def get_impact(project_id: str, req_id: str):
+def get_impact(project_id: str, req_id: str):
     store = get_store(project_id)
     all_reqs = store.list_requirements()
     req = store.get_requirement(req_id)
@@ -654,7 +661,7 @@ async def get_impact(project_id: str, req_id: str):
 # ── Gap Analysis ──────────────────────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/gap-analysis")
-async def gap_analysis(project_id: str):
+def gap_analysis(project_id: str):
     store = get_store(project_id)
     reqs = store.list_requirements()
     gaps = []
@@ -672,7 +679,7 @@ async def gap_analysis(project_id: str):
 # ── Coverage Analysis ─────────────────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/coverage")
-async def coverage_analysis(project_id: str, _rate: None = Depends(rate_limit(20, 60))):
+def coverage_analysis(project_id: str, _rate: None = Depends(rate_limit(20, 60))):
     from app.services.tracing import trace_all
     items = trace_all(get_store(project_id))
     total = len(items)
@@ -691,7 +698,7 @@ async def coverage_analysis(project_id: str, _rate: None = Depends(rate_limit(20
 # ── Conflict Detection ────────────────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/conflicts")
-async def detect_conflicts(project_id: str):
+def detect_conflicts(project_id: str):
     store = get_store(project_id)
     reqs = store.list_requirements()
     conflicts = []
@@ -714,14 +721,14 @@ async def detect_conflicts(project_id: str):
 # ── Version History ───────────────────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/requirements/{req_id}/history")
-async def requirement_history(project_id: str, req_id: str):
+def requirement_history(project_id: str, req_id: str):
     return get_store(project_id).list_history(req_id)[:50]
 
 
 # ── Git Log ───────────────────────────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/git/log")
-async def git_log(project_id: str, limit: int = Query(50, ge=1, le=500)):
+def git_log(project_id: str, limit: int = Query(50, ge=1, le=500)):
     from app.services import git_service
 
     store = get_store(project_id)
@@ -732,7 +739,7 @@ async def git_log(project_id: str, limit: int = Query(50, ge=1, le=500)):
 
 
 @router.post("/projects/{project_id}/git/restore")
-async def git_restore(project_id: str, data: dict, user: dict = Depends(require_maintain)):
+def git_restore(project_id: str, data: dict, user: dict = Depends(require_maintain)):
     from app.services import git_service
 
     commit_hash = data.get("hash", "").strip()
@@ -756,7 +763,7 @@ async def git_restore(project_id: str, data: dict, user: dict = Depends(require_
 # ── Compliance ────────────────────────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/compliance")
-async def compliance_status(project_id: str):
+def compliance_status(project_id: str):
     store = get_store(project_id)
     reqs = store.list_requirements()
     standards: dict[str, int] = {}
@@ -771,7 +778,7 @@ async def compliance_status(project_id: str):
 # ── Metrics ───────────────────────────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/metrics")
-async def project_metrics(project_id: str, _rate: None = Depends(rate_limit(20, 60))):
+def project_metrics(project_id: str, _rate: None = Depends(rate_limit(20, 60))):
     store = get_store(project_id)
     reqs = store.list_requirements()
     vcs = store.list_verification_cases()
@@ -822,7 +829,7 @@ async def project_metrics(project_id: str, _rate: None = Depends(rate_limit(20, 
 
 
 @router.get("/projects/{project_id}/backlog")
-async def prioritized_backlog(project_id: str, sort: str = "priority", _rate: None = Depends(rate_limit(20, 60))):
+def prioritized_backlog(project_id: str, sort: str = "priority", _rate: None = Depends(rate_limit(20, 60))):
     store = get_store(project_id)
     reqs = store.list_requirements()
     results = []
@@ -848,7 +855,7 @@ async def prioritized_backlog(project_id: str, sort: str = "priority", _rate: No
 # ── Publishing ────────────────────────────────────────────────────────────────
 
 @router.post("/projects/{project_id}/publish")
-async def publish_project(project_id: str, data: PublishRequest, user: dict = Depends(require_maintain), _rate: None = Depends(rate_limit(5, 60))):
+def publish_project(project_id: str, data: PublishRequest, user: dict = Depends(require_maintain), _rate: None = Depends(rate_limit(5, 60))):
     store = get_store(project_id)
     pub = Publisher(store, data.subsystems)
     fmt = data.format
@@ -867,7 +874,7 @@ async def publish_project(project_id: str, data: PublishRequest, user: dict = De
 
 
 @router.get("/projects/{project_id}/publish/download")
-async def download_report(project_id: str, format: str = "html", subsystems: str | None = None,
+def download_report(project_id: str, format: str = "html", subsystems: str | None = None,
                           sections: str | None = None, changelog_from: str = "", changelog_to: str = "",
                           _rate: None = Depends(rate_limit(5, 60))):
     import os
@@ -943,7 +950,7 @@ async def download_report(project_id: str, format: str = "html", subsystems: str
 
 
 @router.post("/projects/{project_id}/scan")
-async def scan_code(project_id: str, code_root: str = Form(""), user: dict = Depends(require_maintain), _rate: None = Depends(rate_limit(20, 60))):
+def scan_code(project_id: str, code_root: str = Form(""), user: dict = Depends(require_maintain), _rate: None = Depends(rate_limit(20, 60))):
     from app.services.code_scan import scan_tree, merge_references
     store = get_store(project_id)
 
@@ -966,7 +973,7 @@ async def scan_code(project_id: str, code_root: str = Form(""), user: dict = Dep
 
 
 @router.get("/projects/{project_id}/references/freshness")
-async def reference_freshness(project_id: str, user: dict = Depends(get_current_user)):
+def reference_freshness(project_id: str, user: dict = Depends(get_current_user)):
     from app.services.references import check_reference_freshness
     store = get_store(project_id)
     # The project root, not the server's cwd: references describe files tracked
@@ -978,7 +985,7 @@ async def reference_freshness(project_id: str, user: dict = Depends(get_current_
 
 
 @router.get("/projects/{project_id}/quality")
-async def quality_analysis(project_id: str, _rate: None = Depends(rate_limit(20, 60))):
+def quality_analysis(project_id: str, _rate: None = Depends(rate_limit(20, 60))):
     from app.services.quality import project_quality
     return project_quality(get_store(project_id))
 
@@ -987,7 +994,7 @@ async def quality_analysis(project_id: str, _rate: None = Depends(rate_limit(20,
 
 
 @router.get("/projects/{project_id}/evaluation")
-async def parametric_evaluation(project_id: str, _rate: None = Depends(rate_limit(20, 60))):
+def parametric_evaluation(project_id: str, _rate: None = Depends(rate_limit(20, 60))):
     """Evaluate every parameter, constraint and measurement in the project."""
     from app.services.evaluation import evaluate_project
     return evaluate_project(get_store(project_id))
@@ -998,7 +1005,7 @@ class ImpactRequest(BaseModel):
 
 
 @router.post("/projects/{project_id}/evaluation/impact")
-async def evaluation_impact(project_id: str, data: ImpactRequest, _rate: None = Depends(rate_limit(20, 60))):
+def evaluation_impact(project_id: str, data: ImpactRequest, _rate: None = Depends(rate_limit(20, 60))):
     """Returns the evaluation with hypothetical overrides plus a
     dependency-ordered trace of every parameter and constraint that
     changes — so the frontend can animate the what-if cascade."""
@@ -1025,14 +1032,14 @@ async def evaluation_impact(project_id: str, data: ImpactRequest, _rate: None = 
 # ── Validation ────────────────────────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/validate")
-async def validate_project(project_id: str, _rate: None = Depends(rate_limit(20, 60))):
+def validate_project(project_id: str, _rate: None = Depends(rate_limit(20, 60))):
     store = get_store(project_id)
     checker = IntegrityChecker(store)
     return checker.check_all()
 
 
 @router.get("/projects/{project_id}/suspect-links")
-async def get_suspect_links(project_id: str):
+def get_suspect_links(project_id: str):
     store = get_store(project_id)
     from app.services.fingerprint import check_suspect_links
     links = check_suspect_links(store)
@@ -1040,7 +1047,7 @@ async def get_suspect_links(project_id: str):
 
 
 @router.post("/projects/{project_id}/suspect-links/clear")
-async def clear_suspects(project_id: str, data: dict | None = None, user: dict = Depends(require_maintain)):
+def clear_suspects(project_id: str, data: dict | None = None, user: dict = Depends(require_maintain)):
     from app.services.fingerprint import review_all
     return {"ok": True, **review_all(get_store(project_id), user.get("username", ""))}
 
@@ -1048,7 +1055,7 @@ async def clear_suspects(project_id: str, data: dict | None = None, user: dict =
 # ── Git Hooks ─────────────────────────────────────────────────────────────────
 
 @router.post("/projects/{project_id}/hooks/install")
-async def install_git_hook(project_id: str, user: dict = Depends(require_maintain)):
+def install_git_hook(project_id: str, user: dict = Depends(require_maintain)):
     try:
         path = install_hook(str(get_store(project_id).root))
         return {"installed": True, "path": path}
@@ -1057,7 +1064,7 @@ async def install_git_hook(project_id: str, user: dict = Depends(require_maintai
 
 
 @router.post("/projects/{project_id}/hooks/uninstall")
-async def uninstall_git_hook(project_id: str, user: dict = Depends(require_maintain)):
+def uninstall_git_hook(project_id: str, user: dict = Depends(require_maintain)):
     uninstall_hook(str(get_store(project_id).root))
     return {"installed": False}
 
@@ -1065,7 +1072,7 @@ async def uninstall_git_hook(project_id: str, user: dict = Depends(require_maint
 # ── Review Workflow ───────────────────────────────────────────────────────────
 
 @router.post("/projects/{project_id}/requirements/{req_id}/review")
-async def submit_review(project_id: str, req_id: str, data: ReviewRequest, user: dict = Depends(require_maintain)):
+def submit_review(project_id: str, req_id: str, data: ReviewRequest, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     req = store.get_requirement(req_id)
     if not req:
@@ -1082,18 +1089,18 @@ async def submit_review(project_id: str, req_id: str, data: ReviewRequest, user:
         from app.services.email_service import notify_reviewed
         notify_reviewed(store, project_id, req_id, user.get("username", ""), data.comment)
     except Exception:
-        pass
+        logger.exception("Email notification failed")
     return result
 
 
 @router.post("/projects/{project_id}/review-all")
-async def review_all_endpoint(project_id: str, user: dict = Depends(require_maintain)):
+def review_all_endpoint(project_id: str, user: dict = Depends(require_maintain)):
     from app.services.fingerprint import review_all
     return review_all(get_store(project_id), user.get("username", ""))
 
 
 @router.get("/projects/{project_id}/unreviewed")
-async def get_unreviewed(project_id: str):
+def get_unreviewed(project_id: str):
     from app.services.fingerprint import check_unreviewed
     return {"items": check_unreviewed(get_store(project_id)), "count": None}
 
@@ -1101,7 +1108,7 @@ async def get_unreviewed(project_id: str):
 # ── Baselines (Enhanced) ──────────────────────────────────────────────────────
 
 @router.post("/projects/{project_id}/baselines/{name}/freeze")
-async def freeze_baseline(project_id: str, name: str, user: dict = Depends(require_maintain)):
+def freeze_baseline(project_id: str, name: str, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     safe_id(name, "baseline name")
     reqs = store.list_requirements()
@@ -1141,7 +1148,7 @@ async def freeze_baseline(project_id: str, name: str, user: dict = Depends(requi
 
 
 @router.get("/projects/{project_id}/baselines/{name}/diff")
-async def diff_baseline(project_id: str, name: str):
+def diff_baseline(project_id: str, name: str):
     store = get_store(project_id)
     baseline = store.get_item("baselines", name)
     if baseline is None:
@@ -1174,7 +1181,7 @@ async def diff_baseline(project_id: str, name: str):
 # ── Import (ReqIF / SysML) ────────────────────────────────────────────────────
 
 @router.post("/projects/{project_id}/import")
-async def import_project(
+def import_project(
     project_id: str,
     file: UploadFile = File(...),
     format: str = Form("auto"),
@@ -1192,7 +1199,7 @@ async def import_project(
     if mode not in ("merge", "replace"):
         raise HTTPException(status_code=400, detail=f"Unknown mode: {mode}")
 
-    content = await _read_upload_capped(file, settings.max_upload_size_mb)
+    content = _read_upload_capped(file, settings.max_upload_size_mb)
     from app.services.table_io import import_table as table_import
 
     if format in ("csv", "tsv"):
@@ -1228,7 +1235,7 @@ from fastapi.responses import StreamingResponse
 
 
 @router.get("/projects/{project_id}/presence")
-async def project_presence(project_id: str):
+def project_presence(project_id: str):
     """Return the users currently viewing the project (real-time roster)."""
     from app.services.event_bus import get_event_bus
 
@@ -1303,7 +1310,7 @@ async def project_events(project_id: str, user: dict = Depends(get_current_user)
 
 
 @router.get("/projects/{project_id}/search")
-async def search_project(project_id: str, q: str = Query(""), kind: str | None = Query(None),
+def search_project(project_id: str, q: str = Query(""), kind: str | None = Query(None),
                          _rate: None = Depends(rate_limit(20, 60))):
     """Full-text search across all entity types in a project.
 
@@ -1328,7 +1335,7 @@ class AllocationRequest(BaseModel):
 
 
 @router.get("/projects/{project_id}/allocation-matrix")
-async def allocation_matrix(project_id: str, search: str = Query(""), filter_type: str = Query(""),
+def allocation_matrix(project_id: str, search: str = Query(""), filter_type: str = Query(""),
                             _rate: None = Depends(rate_limit(20, 60))):
     """Returns a requirements × components matrix showing allocation status.
 
@@ -1383,7 +1390,7 @@ async def allocation_matrix(project_id: str, search: str = Query(""), filter_typ
 
 
 @router.post("/projects/{project_id}/allocation")
-async def set_allocation(project_id: str, data: AllocationRequest, user: dict = Depends(require_maintain)):
+def set_allocation(project_id: str, data: AllocationRequest, user: dict = Depends(require_maintain)):
     """Allocate or deallocate a requirement to/from a component.
 
     Updates both ``component.satisfies`` and ``requirement.allocated_to``
@@ -1446,14 +1453,14 @@ SAMPLE_JUNIT = """<?xml version="1.0" encoding="UTF-8"?>
 
 
 @router.get("/projects/{project_id}/test-results/sample")
-async def sample_test_result():
+def sample_test_result():
     """Return a sample JUnit XML showing the expected format for CI import."""
     from fastapi.responses import PlainTextResponse
     return PlainTextResponse(content=SAMPLE_JUNIT, media_type="application/xml")
 
 
 @router.post("/projects/{project_id}/test-results/import")
-async def import_test_results(
+def import_test_results(
     project_id: str,
     file: UploadFile = File(...),
     format: str = Form("auto"),
@@ -1478,7 +1485,7 @@ async def import_test_results(
         raise HTTPException(status_code=400,
                             detail=f"Unknown format '{format}'. Supported: auto, junit, ctrf, tap.")
 
-    content = await _read_upload_capped(file, settings.max_upload_size_mb)
+    content = _read_upload_capped(file, settings.max_upload_size_mb)
 
     # Resolve "auto" here so the response can report what was actually used.
     # (This previously read `getattr(results, '__format__', 'unknown')`, which

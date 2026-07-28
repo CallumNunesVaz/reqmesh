@@ -211,15 +211,7 @@ EOF
     # Proxy config
     if [ "$proxy" = "caddy" ]; then
         info "Configuring Caddy..."
-        sudo cp "$TEMPLATES/Caddyfile.tmpl" /etc/caddy/Caddyfile
-        sudo sed -i "s/\${DOMAIN}/$domain/g" /etc/caddy/Caddyfile
-        if [ "$tls" = "internal" ] || [ -z "$domain" ]; then
-            sudo sed -i 's/%_TLS_%/\ttls internal/g' /etc/caddy/Caddyfile
-        else
-            sudo sed -i 's/%_TLS_%/  /g' /etc/caddy/Caddyfile
-        fi
-        # Replace the backend target with localhost
-        sudo sed -i "s|reqmesh:8000|${host}:${port}|g" /etc/caddy/Caddyfile
+        render_caddyfile "${host}:${port}" | sudo tee /etc/caddy/Caddyfile >/dev/null
         sudo systemctl enable caddy
         sudo systemctl restart caddy
     elif [ "$proxy" = "nginx" ]; then
@@ -283,6 +275,47 @@ start_service() {
 main() {
     header "Deploying reqmesh (bare-metal)"
     detect_os
+    detect_selinux
+
+    # ── Re-install check ──────────────────────────────────────────────────
+    local backups=()
+    local existing_files=("$INSTALL_DIR/.env" "/etc/systemd/system/reqmesh.service")
+    local proxy="${CFG[PROXY]:-none}"
+    if [ "$proxy" = "caddy" ]; then
+        existing_files+=("/etc/caddy/Caddyfile")
+    elif [ "$proxy" = "nginx" ]; then
+        existing_files+=("/etc/nginx/sites-available/reqmesh")
+    fi
+    for f in "${existing_files[@]}"; do
+        if [ -f "$f" ]; then
+            backups+=("$f")
+        fi
+    done
+    if [ ${#backups[@]} -gt 0 ]; then
+        warn "Existing installation files found:"
+        for f in "${backups[@]}"; do
+            echo "  $f"
+        done
+        info "Existing files will be backed up with a .bak timestamp suffix."
+        echo ""
+    fi
+
+    # ── Port conflict check ───────────────────────────────────────────────
+    local port="${CFG[PORT]:-8000}"
+    if check_port "$port"; then
+        warn "Port $port is already in use — the app may fail to bind."
+    fi
+    if [ "$proxy" != "none" ]; then
+        if check_port 443; then warn "Port 443 (HTTPS) is already in use."; fi
+        if check_port 80; then warn "Port 80 (HTTP) is already in use."; fi
+    fi
+
+    # ── Back up existing files ────────────────────────────────────────────
+    local ts
+    ts="$(date +%s)"
+    for f in "${backups[@]}"; do
+        sudo cp "$f" "${f}.bak.${ts}" 2>/dev/null || true
+    done
 
     install_deps
     install_app
@@ -291,14 +324,15 @@ main() {
     install_service
     start_service
 
+    # ── Access instructions ────────────────────────────────────────────────
+    local cred_file
+    cred_file="$(write_admin_credential)"
+
     echo ""
-    success "reqmesh deployed!"
-    info "URL:     ${CFG[BASE_URL]}"
-    report_admin_credential
-    echo ""
-    info "Manage:  systemctl {start,stop,restart,status} reqmesh"
-    info "Logs:    journalctl -u reqmesh -f"
-    info "Config:  $INSTALL_DIR/.env"
+    summary_box "$cred_file" \
+        "Manage:  systemctl {start,stop,restart,status} reqmesh" \
+        "Logs:    journalctl -u reqmesh -f" \
+        "Config:  $INSTALL_DIR/.env"
     echo ""
 }
 

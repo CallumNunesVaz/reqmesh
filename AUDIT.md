@@ -4,6 +4,14 @@
 **Working tree:** `e33facb` plus uncommitted changes
 **Priorities as requested:** scalability, bug fixing, security
 **Date:** 2026-07-25
+**Last reconciled:** 2026-07-28
+
+> This document absorbed the former `SEC_REVIEW.md` (v1.0, 25 July 2026), which
+> reviewed the same codebase from the outside — it was written without access to
+> the source tree and numbered its findings `F-01`…`F-29`. That review said of
+> itself that it "should be reconciled against `AUDIT.md` before any work
+> starts"; §6 below is that reconciliation. Its closed findings are recorded as a
+> table rather than re-argued, since the code-level detail lives in §1–§3 here.
 
 > ✅ **SEC-1 is FIXED** (see below) — the exploit no longer reproduces, and a regression test
 > guards it. This document is now safe to commit alongside that fix. Do not push it *ahead* of
@@ -766,3 +774,127 @@ The riskiest code is the least tested — which is why BUG-1 and BUG-2 shipped.
 **Cheapest high-value additions:** a test that `POST /change-requests/bulk` returns 200; a ragged-CSV
 import test; a `build_flat_tree` test with a dangling parent; a `undo.ts` test asserting the entry
 is popped when `entry.undo()` rejects.
+
+---
+
+# 6. External security review (former `SEC_REVIEW.md`)
+
+A separate review of 25 July 2026 assessed reqmesh from the public `README.md`
+and the repository file listing, without access to the source tree. It numbered
+its findings `F-01`…`F-29`. Its code-level conclusions were re-checked against
+the implementation on 27 July 2026 — "verified" below means the behaviour was
+exercised, not that a changelog claimed it.
+
+Where a finding overlaps §1, the §1 entry is authoritative: it was reproduced
+against a running instance, and the external review was not.
+
+## 6.1 Closed
+
+| Finding | Closed by | Overlaps |
+| --- | --- | --- |
+| F-02 anonymous read | `require_auth` defaults true outside `personal`; `require_auth_middleware` | SEC-5 |
+| F-03 self-registration | off by default; `registration_domain_allowlist` | — |
+| F-04 bootstrap credential | `0600` file, never logged; `password_change_required` forces rotation; the file is deleted only after the **admin** has rotated | — |
+| F-05 proxy IP | `rate_limit.py` walks XFF right-to-left against `proxy_trusted_cidr`; progressive lockout | SEC-7 |
+| F-06 access-control matrix | `test_permissions.py` generates from the live route table — 81 of 92 mutating routes asserted | SEC-5 |
+| F-07 JWT / token storage | `algorithms=["HS256"]` pinned; cookies + double-submit CSRF, no `localStorage` token | — |
+| F-08 enumeration | constant response on forgot-password; dummy bcrypt hash on unknown user | — |
+| F-09 validate-on-load | `services/load_guard.py`, applied at the store's cache-fill path | BUG-2 |
+| F-10 YAML | ruamel rt/safe only; no `yaml.load`/`FullLoader` | — |
+| F-11 / F-12 git | list-form subprocess, scheme allowlist, `redact_url()` at every logging site | SEC-1, SEC-4 |
+| F-13 `/scan` containment | resolved and asserted inside the project root; symlinks skipped | SEC-6 |
+| F-15 ReqIF XXE | DOCTYPE rejected outright | — |
+| F-16 XLSX bombs | compression-ratio and uncompressed-size caps; exact row count | — |
+| F-17 stored XSS | sanitised on write, on load, and in the publisher; no `dangerouslySetInnerHTML` | SEC-2 |
+| F-18 LaTeX | escaped throughout, temp dir, 120 s timeout | — |
+| F-19 evaluator | float coercion bounds magnitude; `OverflowError` → `EvalError` | BUG-9 |
+| F-20 headers / CSP | FastAPI middleware + `Caddyfile` + `nginx.conf` | — |
+| F-21 CORS | a wildcard origin now **refuses to start** (credentials are always sent) | — |
+| F-22 images | `data:` images only, raster only — SVG refused | SEC-3 |
+| F-23 / F-24 rate limits | SSE connection caps; analysis and publish budgets | SEC-7 |
+| F-25 container | non-root, `read_only`, `cap_drop: [ALL]`, `no-new-privileges` | — |
+| F-27 `SECURITY.md` | present | — |
+| F-29 CI pipeline | `.github/workflows/security.yml` — CodeQL, Semgrep, Bandit, pip-audit, npm audit, gitleaks, Trivy | — |
+
+## 6.2 Open
+
+| Finding | State |
+| --- | --- |
+| **F-01 MFA / SSO** | Not started. No OIDC, WebAuthn or TOTP. The Essential Eight ML2 blocker, and the largest remaining item. |
+| **F-14 audit-trail integrity** | No signed commits, no hash-chained history. The append-only remote pattern is not yet documented in `DEPLOYMENT.md`. |
+| **F-26 SBOM / signed releases** | No CycloneDX, no cosign; base images pinned by tag, not digest. |
+| **F-28 code signing** | Electron runtime hardening is done; Windows/macOS signing is not. Whether this blocks a release depends on whether the desktop build is a supported channel or a convenience — still undecided. |
+| **F-09 residual** | The load guard covers ids, HTML and structure. `references[].path` containment is handled downstream in `references.py` rather than at load. |
+| **F-16 residual** | Bounds are on the archive and the row count; per-cell content is not bounded. |
+
+## 6.3 Two constraints on the read-side guard
+
+Both are load-bearing and easy to reintroduce by "tidying" `load_guard.py`.
+`tests/test_load_guard.py` enforces them.
+
+1. **It must not fill in absent fields.** `compute_fingerprint` canonicalises over
+   the normative fields, so injecting `type: functional` into a file that omitted
+   it changes that requirement's fingerprint and flips it to "unreviewed" —
+   silently invalidating the review state of every existing project. That is a
+   false-assurance failure caused by the control meant to prevent it.
+2. **It must not coerce unrecognised enum values.** The vocabularies are open in
+   practice: `type: design` is not in `RequirementType`, but the coverage model
+   matches a requirement's `type` against a downstream `needs` entry, so
+   rewriting it to `functional` silently breaks the trace. The write path
+   validates against the enums; the read path must not second-guess data a human
+   put there deliberately.
+
+## 6.4 Standards positioning
+
+Retained from the external review because nothing in §1–§5 covers it.
+
+**Pursue:**
+
+| Standard | Rationale | Commitment |
+| --- | --- | --- |
+| **OWASP ASVS 5.0 Level 2** | The verification target — a checklist that can be driven to completion and cited. Prioritise V1 (encoding/injection), V4 (access control), V5 (file handling), V8 (data protection). | Ongoing, self-assessed |
+| **NIST SP 800-218 (SSDF)** + SBOM | The framing US and allied primes ask for in supply-chain attestations. | Low, mostly documentation |
+| **OpenSSF Scorecard + Best Practices badge** | The open-source-native equivalent, automated, visible on the repo. | One weekend |
+| **ISO/IEC 29147 / 30111** | Disclosure intake and handling. | Hours |
+| **CIS Docker Benchmark** | Directly applicable to `Dockerfile.prod`. | One evening |
+
+**Decline:** ISO/IEC 27001 (certifies an operating organisation; reqmesh is not
+a service), Common Criteria (recertification-per-release is incompatible with an
+actively developed solo project), IEC 62443 (applies to OT environments).
+
+**DO-330 tool qualification** is the significant one, and it is not a security
+standard. The demo project is a Cessna 172S and the example requirement carries a
+`DO-178C` attribute; if a customer holds certification-credible requirements in
+reqmesh, the tool is plausibly qualifiable at **TQL-5** — a development tool whose
+errors could insert an undetected error into airborne software. The road-vehicle
+and industrial equivalents are ISO 26262-8 clause 11 and IEC 61508-3 clause
+7.4.4 (T2). Full qualification is out of scope, but the *preparatory* work
+overlaps almost entirely with things worth doing anyway: reqmesh's own
+requirements captured in reqmesh, structured test evidence traced to them,
+configuration-management records, and a tamper-evident history (F-14).
+**Recommendation:** don't chase TQL-5; make the choices that keep it reachable,
+and say so — "designed with DO-330 TQL-5 qualification in mind; qualification
+data package not yet produced" is honest, differentiating, and free. This is
+also what makes F-14 worth more than its severity suggests.
+
+**Essential Eight.** ASD confirmed on 24 June 2026 that it will be retired over
+roughly two years and replaced by a domain-based *Essentials* series. Both run in
+parallel; deprecation ~mid-2027, retirement ~mid-2028. The practical consequence
+for reqmesh is none — the underlying controls are unchanged and tenders still
+reference the Essential Eight — but write any published mapping so it can be
+re-titled rather than rewritten. Four of the eight land on reqmesh's side:
+
+| Control | Position | Action |
+| --- | --- | --- |
+| **Multi-factor authentication** | **Fails.** No MFA of any kind; phishing-resistant MFA required from ML2. | F-01 |
+| **Patch applications** | Weak. No advisory channel, no SBOM. | F-26 |
+| **Restrict administrative privileges** | Reasonable. Role tiers and lockout guardrails are sound. | Closed (F-03, F-04) |
+| **Regular backups** | **Strong — a genuine differentiator.** Git-native YAML is versioned, restorable, human-readable, diffable and offsite via push. ML2+ additionally requires tested restoration and that unprivileged accounts cannot modify or delete backups. | Document the append-only remote in `DEPLOYMENT.md` (F-14) |
+
+Application control affects the Electron build only (F-28).
+
+Be explicit in any published mapping that the Essential Eight says essentially
+nothing about application security — it is IT hygiene, and ASD says so directly,
+pointing to the ISM, NIST CSF or ISO 27002 for coverage. ASVS answers "is the
+code sound"; the Essential Eight answers "is the environment fit to run it".
+reqmesh needs both, and they are different documents.

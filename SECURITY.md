@@ -60,8 +60,8 @@ are assigned lower severity.
 ## Known Issues
 
 A running list of known, accepted limitations is maintained in
-[SEC_REVIEW.md](../SEC_REVIEW.md). Before reporting, check whether the
-finding is already tracked there.
+[AUDIT.md](AUDIT.md) — see §6.2 for the open items. Before reporting, check
+whether the finding is already tracked there.
 
 ## Supported Versions
 
