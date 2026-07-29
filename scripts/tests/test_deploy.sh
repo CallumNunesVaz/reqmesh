@@ -430,6 +430,88 @@ check "no bare 'up -d' remains" \
       "$(grep -cE 'compose -f "\$COMPOSE_FILE" up -d$' "$REPO/scripts/deploy-docker.sh")" "0"
 
 # ══════════════════════════════════════════════════════════════════════════════
+section "nginx works at all in Docker mode"
+# ══════════════════════════════════════════════════════════════════════════════
+# nginx had never worked in a container. Compose rejected the whole project with
+# "service nginx refers to undefined volume nginx-certs" — the volume was
+# referenced but never declared — so the deploy exited 1 before starting.
+TMPL="$REPO/scripts/templates/docker-compose.prod.yml.tmpl"
+# Comments stripped: the note explaining this very bug names the old volume.
+check "no reference to an undeclared named volume" \
+      "$(cat "$REPO/scripts/deploy-docker.sh" "$TMPL" \
+         | grep -v '^[[:space:]]*#' | grep -c 'nginx-certs')" "0"
+check "certs reach nginx via a bind mount" \
+      "$(grep -c './certs:/etc/nginx/certs:ro' "$REPO/scripts/deploy-docker.sh")" "1"
+
+# The template carries 127.0.0.1 for the bare-metal path, where the app is on
+# the host. In a container that is nginx pointing at itself — a guaranteed 502.
+NTMPL="$REPO/scripts/templates/nginx.conf.tmpl"
+check "the upstream is templated, not hardcoded" \
+      "$(grep -c '%_NGINX_UPSTREAM_%' "$NTMPL")" "1"
+check "no hardcoded loopback upstream remains" \
+      "$(grep -c 'server 127.0.0.1:\${PORT}' "$NTMPL")" "0"
+check "docker resolves it to the service name" \
+      "$(grep -c '%_NGINX_UPSTREAM_%/reqmesh:8000' "$REPO/scripts/deploy-docker.sh")" "1"
+check "bare metal still uses loopback" \
+      "$(grep -c 's/%_NGINX_UPSTREAM_%/127.0.0.1:\$port/g' "$REPO/scripts/deploy-bare.sh")" "1"
+
+# ssl_certificate pointed at $INSTALL_DIR/certs — a *host* path the container
+# cannot see — and nothing ever created the files it named.
+check "cert paths are container paths" \
+      "$(grep -c 'ssl_certificate     /etc/nginx/certs/server.crt' "$REPO/scripts/deploy-docker.sh")" "2"
+check "no host cert path leaks into the config" \
+      "$(grep -c 'ssl_certificate     \$certdir' "$REPO/scripts/deploy-docker.sh")" "0"
+
+# ══════════════════════════════════════════════════════════════════════════════
+section "self-signed certificate generation"
+# ══════════════════════════════════════════════════════════════════════════════
+# Caddy mints its own; nginx does not, and nothing in the installer ever created
+# one, so TLS=selfsigned named files that had never existed.
+if command -v openssl >/dev/null 2>&1; then
+    certdir="$TMP/certs"
+    ( declare -A CFG=(); source "$REPO/scripts/lib.sh" >/dev/null 2>&1
+      ensure_selfsigned_cert "$certdir" 10.9.8.7 ) >/dev/null 2>&1
+    check "certificate created" "$([ -f "$certdir/server.crt" ] && echo yes)" "yes"
+    check "key created" "$([ -f "$certdir/server.key" ] && echo yes)" "yes"
+    check "the private key is not world-readable" "$(stat -c '%a' "$certdir/server.key" 2>/dev/null)" "600"
+    # A certificate with only a CN is rejected by every current browser, which
+    # would turn a startup failure into an unfixable warning page.
+    sans="$(openssl x509 -in "$certdir/server.crt" -noout -ext subjectAltName 2>/dev/null)"
+    check "the address is a SAN, not just a CN" \
+          "$(printf '%s' "$sans" | grep -c 'IP Address:10.9.8.7')" "1"
+    check "localhost is covered too" "$(printf '%s' "$sans" | grep -c 'DNS:localhost')" "1"
+    # A hostname must get a DNS SAN rather than an IP one.
+    ( declare -A CFG=(); source "$REPO/scripts/lib.sh" >/dev/null 2>&1
+      ensure_selfsigned_cert "$TMP/certs2" reqs.example.com ) >/dev/null 2>&1
+    check "a hostname gets a DNS SAN" \
+          "$(openssl x509 -in "$TMP/certs2/server.crt" -noout -ext subjectAltName 2>/dev/null \
+             | grep -c 'DNS:reqs.example.com')" "1"
+    # Re-running must not churn the certificate — that would break every client
+    # that had accepted it.
+    before="$(cat "$certdir/server.crt")"
+    ( declare -A CFG=(); source "$REPO/scripts/lib.sh" >/dev/null 2>&1
+      ensure_selfsigned_cert "$certdir" 10.9.8.7 ) >/dev/null 2>&1
+    check "an existing certificate is reused" "$(cat "$certdir/server.crt")" "$before"
+else
+    ok "openssl absent — certificate generation not exercised"
+fi
+
+# ══════════════════════════════════════════════════════════════════════════════
+section "a reconfigured proxy actually reloads"
+# ══════════════════════════════════════════════════════════════════════════════
+# The proxy config is a bind-mounted file, and `up -d` only recreates a
+# container when its *service definition* changes. Rewriting Caddyfile or
+# nginx.conf does not, so a proxy that was already running kept serving its
+# startup config: switching nginx to HTTPS regenerated the config and the
+# certificate, reported success, and left 443 closed.
+check "the proxy is restarted after deploy" \
+      "$(grep -c 'compose -f "\$COMPOSE_FILE" restart "\$proxy_svc"' "$REPO/scripts/deploy-docker.sh")" "1"
+check "it is skipped when there is no proxy" \
+      "$(grep -c 'if \[ "\$proxy_svc" != "none" \]' "$REPO/scripts/deploy-docker.sh")" "1"
+check "a failed restart warns rather than passing silently" \
+      "$(grep -c 'may still be serving the previous configuration' "$REPO/scripts/deploy-docker.sh")" "1"
+
+# ══════════════════════════════════════════════════════════════════════════════
 section "release staging cannot drop a versioned file"
 # ══════════════════════════════════════════════════════════════════════════════
 # v0.1.2 shipped an install.sh still pinned to v0.1.1 because release.sh kept its
