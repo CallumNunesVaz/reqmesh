@@ -50,43 +50,33 @@ needs network access, after which it works offline.
 
 ---
 
-## Ubuntu 24.04 Script
+## Ubuntu 24.04
 
-A script is provided to install reqmesh on a fresh instance of Ubuntu 24.04.
-**This script is ONLY FOR A FRESH OS** — it installs nginx and Python system
-packages and could overwrite an existing web setup. It also does not configure
-TLS or email; you must do those separately.
-
-The script sets up a Python virtual environment in `/opt/reqmesh`, builds the
-frontend, generates JWT secrets and an admin password, creates a `reqmesh`
-systemd service, and configures nginx as a reverse proxy on port 80.
-
-#### Running the Script
+Use the standard installer — it covers Ubuntu 24.04 along with every other
+supported target, and is the only install path that is tested end to end:
 
 ```bash
-# Download the script
-wget https://raw.githubusercontent.com/CallumNunesVaz/reqmesh/main/scripts/install-ubuntu-24.04.sh
-
-# Make it executable
-chmod +x install-ubuntu-24.04.sh
-
-# Run with root privileges
-sudo ./install-ubuntu-24.04.sh
+curl -fsSL https://raw.githubusercontent.com/CallumNunesVaz/reqmesh/v0.1.3/scripts/install.sh | bash
 ```
 
-The admin password is printed at the end of the script. Change it immediately
-after logging in at `http://<server-ip>/`.
+For a bare-metal install (Python venv + systemd, no Docker), answer "bare" at
+the deployment-mode prompt, or run it scripted:
 
-#### Customising the Install
+```bash
+curl -fsSL https://raw.githubusercontent.com/CallumNunesVaz/reqmesh/v0.1.3/scripts/install.sh \
+  | REQMESH_DEPLOY_MODE=bare REQMESH_PROXY=nginx bash -s -- --non-interactive
+```
 
-Set these environment variables before running the script:
+Re-running it over an existing installation keeps that machine's settings, its
+signing secret and its accounts; see [Upgrading](#upgrading).
 
-| Variable | Default | Effect |
-|----------|---------|--------|
-| `INSTALL_DIR` | `/opt/reqmesh` | Where the application lives |
-| `DATA_DIR` | `$INSTALL_DIR/data/projects` | Where project YAML files are stored |
-| `NGINX` | `yes` | Set to `no` to skip nginx setup |
-| `REQMESH_HOSTNAME` | auto | Domain or IP for nginx `server_name` |
+> A separate `scripts/install-ubuntu-24.04.sh` used to be documented here. It
+> was a second, parallel implementation of the bare-metal install that had
+> drifted badly from the maintained one: it ran the service as **root**, printed
+> the admin password to stdout (so it landed in any CI log or `tee`), cloned
+> `main` rather than a released tag, and never set `RT_COOKIE_SECURE` — so over
+> plain HTTP you could log in and then have every subsequent request rejected
+> with 401. It has been removed rather than fixed twice.
 
 ---
 

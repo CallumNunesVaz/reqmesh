@@ -1,4 +1,5 @@
 import bcrypt
+import ipaddress
 import jwt
 import secrets
 import time
@@ -449,14 +450,37 @@ def create_csrf_token(username: str) -> str:
 
 
 def _cookie_domain() -> str | None:
-    """Return the cookie domain, or None (browser default)."""
+    """Return the cookie domain, or None for a host-only cookie.
+
+    None is returned for IP literals. RFC 6265's Domain attribute is defined for
+    domain names, and pinning it to one address breaks every other address the
+    same host answers on: a server with two addresses on one NIC handed out
+    ``Domain=192.168.0.164`` while the operator browsed to ``192.168.0.163``, so
+    login succeeded and every request after it returned 401 — the cookie was
+    set and then never sent back. Omitting Domain makes the cookie host-only,
+    which is what a single deployment wants and works whichever address or
+    hostname was used to reach it.
+    """
     from app.core.config import settings
     base = settings.base_url
-    if base and "://" in base:
-        host = base.split("://", 1)[1].split(":")[0]
-        if host not in ("localhost", "127.0.0.1", "0.0.0.0"):
-            return host
-    return None
+    if not base or "://" not in base:
+        return None
+
+    authority = base.split("://", 1)[1].split("/", 1)[0]
+    # A bracketed IPv6 literal must be unwrapped before the port is stripped —
+    # splitting on ":" first turns "[2001:db8::1]" into "[2001".
+    if authority.startswith("["):
+        host = authority[1:].split("]", 1)[0]
+    else:
+        host = authority.split(":", 1)[0]
+
+    if host in ("localhost", "0.0.0.0", ""):
+        return None
+    try:
+        ipaddress.ip_address(host)
+        return None                # an IP literal — host-only cookie
+    except ValueError:
+        return host
 
 
 def set_auth_cookies(response, username: str, token: str) -> str:
