@@ -247,7 +247,34 @@ non_interactive() {
     save_cfg "PORT" "${RT_PORT:-8000}"
     # Empty means "derive from PROXY" — see effective_bind.
     save_cfg "BIND" "${RT_BIND:-}"
-    save_cfg "BASE_URL" "${RT_BASE_URL:-$(prev_env RT_BASE_URL 'http://localhost:8000')}"
+    # Needed before BASE_URL, which derives its host from it.
+    save_cfg "LAN_IP" "$(detect_lan_ip)"
+
+    # BASE_URL cannot simply be carried over from the previous install the way
+    # the other settings are. Switching a deployment between HTTP and HTTPS
+    # changes the correct answer — the proxy takes 80/443 and the app loses its
+    # published port, or the reverse — so preserving it left the operator being
+    # told to browse to an address that no longer answers, and made the
+    # installer's own post-deploy check fail against a URL it had invented.
+    #
+    # An explicit value always wins. A carried-over value is kept only while it
+    # still fits the deployment, so a custom host survives an unrelated re-run.
+    if [ -n "${RT_BASE_URL:-}" ]; then
+        save_cfg "BASE_URL" "$RT_BASE_URL"
+    else
+        _prev_base="$(prev_env RT_BASE_URL '')"
+        if [ -n "$_prev_base" ] && base_url_fits_shape "$_prev_base"; then
+            save_cfg "BASE_URL" "$_prev_base"
+        else
+            _derived="$(derive_base_url)"
+            if [ -n "$_prev_base" ] && [ "$_prev_base" != "$_derived" ]; then
+                info "Base URL updated for the new configuration:"
+                info "  was $_prev_base"
+                info "  now $_derived"
+            fi
+            save_cfg "BASE_URL" "$_derived"
+        fi
+    fi
     # Which image tag to deploy. Default unchanged (`latest`); settable so an
     # operator can pin a known-good build, or deploy one built locally.
     save_cfg "IMAGE_TAG" "${REQMESH_VERSION:-latest}"
@@ -323,7 +350,6 @@ non_interactive() {
     save_cfg "ALLOWED_HOSTS" "${RT_ALLOWED_HOSTS:-$(prev_env RT_ALLOWED_HOSTS '')}"
     save_cfg "REQMESH_USER" "${REQMESH_USER:-reqmesh}"
     save_cfg "REQMESH_GROUP" "${REQMESH_GROUP:-reqmesh}"
-    save_cfg "LAN_IP" "$(detect_lan_ip)"
 
     # Dispatch to deploy script
     local mode="${CFG[DEPLOY_MODE]:-docker}"
