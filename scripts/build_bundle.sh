@@ -66,10 +66,39 @@ echo "==> Copying deploy configs and docs"
 for f in Dockerfile.prod docker-compose.prod.yml Caddyfile nginx.conf DEPLOYMENT.md LICENSE README.md VERSION; do
   [ -e "$f" ] && cp -a "$f" "$DEST/" || echo "    (skip missing $f)"
 done
-cp scripts/bundle_install.sh "$DEST/install.sh"
+# ── 5b. The installer ────────────────────────────────────────────────────────
+# The bundle ships the real installer and its companions, not a parallel
+# implementation. It used to carry two of its own: bundle_install.sh (as
+# install.sh) and install-ubuntu-24.04.sh. Both duplicated the deployment logic
+# and had drifted from it — neither set RT_COOKIE_SECURE, so a bundle install
+# over plain HTTP let you log in and then rejected every request with 401, and
+# neither had any of the fixes the maintained installer has accumulated.
+#
+# deploy-bare.sh takes its application source from $SCRIPT_DIR/.., which inside
+# the bundle is the bundle root — so the bare path works from an unpacked
+# tarball with no network at all.
+echo "==> Copying the installer"
+mkdir -p "$DEST/scripts"
+# Only what an install needs at runtime. The release tooling (build_bundle.sh,
+# release.sh, set_version.py) has no business on a deployment target, and
+# shipping it invites someone to run it there.
+for f in install.sh lib.sh wizard.sh deploy-docker.sh deploy-bare.sh; do
+  cp "scripts/$f" "$DEST/scripts/"
+done
+cp -a scripts/templates "$DEST/scripts/templates"
+cp -a scripts/updater "$DEST/scripts/updater"
+chmod +x "$DEST/scripts"/*.sh "$DEST/scripts/updater"/*.sh
+
+# ./install.sh at the bundle root stays the documented entry point; it has to
+# live beside lib.sh or the real installer decides it is running standalone and
+# tries to download its companions, which defeats an offline bundle.
+cat > "$DEST/install.sh" <<'WRAPPER'
+#!/usr/bin/env bash
+# reqmesh bundle installer — delegates to the maintained installer in scripts/.
+set -euo pipefail
+exec "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/scripts/install.sh" "$@"
+WRAPPER
 chmod +x "$DEST/install.sh"
-cp scripts/install-ubuntu-24.04.sh "$DEST/"
-chmod +x "$DEST/install-ubuntu-24.04.sh"
 [ -f "${RELEASE_NOTES_FILE:-}" ] && cp "$RELEASE_NOTES_FILE" "$DEST/RELEASE_NOTES.md" || true
 
 # ── 6. Manifest ──────────────────────────────────────────────────────────────

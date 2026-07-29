@@ -10,6 +10,10 @@ load_cfg
 INSTALL_DIR="${CFG[INSTALL_DIR]:-$INSTALL_DIR}"
 BACKEND_DIR="$INSTALL_DIR/backend"
 VENV_DIR="$BACKEND_DIR/.venv"
+# Where accounts and the signing secret live. Script-level because both
+# generate_configs and install_service need it — as a `local` in the former
+# it was an unbound variable by the time the unit was rendered.
+STATE_DIR="$(dirname "${CFG[DATA_ROOT]:-${INSTALL_DIR}/data/projects}")/.reqmesh"
 REQMESH_USER="${CFG[REQMESH_USER]:-reqmesh}"
 REQMESH_GROUP="${CFG[REQMESH_GROUP]:-reqmesh}"
 TEMPLATES="$SCRIPT_DIR/templates"
@@ -24,12 +28,22 @@ install_deps() {
 
     # Python 3.12+ check
     local python="python3"
-    if ! has_cmd python3; then
+    # Test for the capability, not the binary. Ubuntu 24.04 ships python3 but
+    # splits venv/ensurepip into python3-venv, so `has_cmd python3` succeeded,
+    # this whole block was skipped, and the install died later with "The virtual
+    # environment was not created successfully because ensurepip is not
+    # available" — after apt, the service user and the file copy had all run.
+    if ! has_cmd python3 || ! python3 -c 'import ensurepip' 2>/dev/null; then
         case "$OS_ID" in
             ubuntu|debian) sudo apt-get install -y -qq python3 python3-venv python3-pip ;;
             fedora|rhel)   sudo dnf install -y python3 python3-pip ;;
-            *) error "Python 3 not found. Install python3, venv, and pip."; exit 1 ;;
+            *) error "Python 3 with venv support not found. Install python3, venv, and pip."; exit 1 ;;
         esac
+        if ! python3 -c 'import ensurepip' 2>/dev/null; then
+            error "python3 still cannot create virtual environments (ensurepip missing)."
+            error "On Debian/Ubuntu: sudo apt install python3-venv"
+            exit 1
+        fi
     fi
 
     # Node.js (only needed if building frontend from source, not from tarball)
@@ -98,7 +112,7 @@ install_app() {
     if [ -d "$app_src/frontend/dist" ]; then
         sudo mkdir -p "$INSTALL_DIR/frontend"
         sudo cp -r "$app_src/frontend/dist" "$INSTALL_DIR/frontend/"
-        save_cfg "STATIC_DIR" "/app/frontend/dist"
+        save_cfg "STATIC_DIR" "$INSTALL_DIR/frontend/dist"
         success "Copied pre-built frontend"
     elif [ "${CFG[BUILD_FROM_SOURCE]:-false}" = "true" ]; then
         info "Building frontend from source..."
@@ -110,7 +124,7 @@ install_app() {
             )
             sudo mkdir -p "$INSTALL_DIR/frontend"
             sudo cp -r "$app_src/frontend/dist" "$INSTALL_DIR/frontend/"
-            save_cfg "STATIC_DIR" "/app/frontend/dist"
+            save_cfg "STATIC_DIR" "$INSTALL_DIR/frontend/dist"
             success "Built and copied frontend"
         fi
     else
@@ -168,7 +182,12 @@ generate_configs() {
     # .env file
     local env_file="$INSTALL_DIR/.env"
     info "Writing $env_file..."
-    cat > "$INSTALL_DIR/.env.tmp" << EOF
+    # write_root_file elevates and creates the file 0600 before any content
+    # reaches it. The previous form wrote a temp file with an unprivileged
+    # `cat >` into a root-owned INSTALL_DIR and then sudo-moved it, so on a
+    # clean host it died with "/opt/reqmesh/.env.tmp: Permission denied" —
+    # the same defect the Docker path had.
+    write_root_file "$env_file" 600 << EOF
 # reqmesh environment — generated $(date -u +"%Y-%m-%dT%H:%M:%SZ")
 RT_PROFILE=${CFG[PROFILE]:-team}
 RT_SECRET=${CFG[RT_SECRET]}
@@ -176,7 +195,8 @@ RT_ADMIN_PASSWORD=${CFG[ADMIN_PASSWORD]}
 RT_HOST=$host
 RT_PORT=$port
 RT_DATA_ROOT=$data_root
-RT_STATIC_DIR=${CFG[STATIC_DIR]:-/app/frontend/dist}
+RT_STATE_DIR=$STATE_DIR
+RT_STATIC_DIR=${CFG[STATIC_DIR]:-$INSTALL_DIR/frontend/dist}
 RT_BASE_URL=${CFG[BASE_URL]:-http://localhost:8000}
 RT_COOKIE_SECURE=${CFG[COOKIE_SECURE]:-true}
 RT_REQUIRE_AUTH=${CFG[REQUIRE_AUTH]:-true}
@@ -203,12 +223,11 @@ RT_REPORT_LOGO_URL=${CFG[REPORT_LOGO_URL]:-}
 RT_ALLOWED_HOSTS=${CFG[ALLOWED_HOSTS]:-}
 RT_PROXY_TRUSTED_CIDR=$proxy_cidr
 EOF
-    sudo mv "$INSTALL_DIR/.env.tmp" "$env_file"
-    sudo chmod 600 "$env_file"
     sudo chown "$REQMESH_USER:$REQMESH_GROUP" "$env_file" 2>/dev/null || true
 
     # Tectonic cache directory
-    sudo mkdir -p "$data_root/.tectonic-cache"
+    sudo mkdir -p "$data_root/.tectonic-cache" "$STATE_DIR"
+    sudo chown -R "$REQMESH_USER:$REQMESH_GROUP" "$STATE_DIR" 2>/dev/null || true
     sudo chown -R "$REQMESH_USER:$REQMESH_GROUP" "$data_root" 2>/dev/null || true
 
     # Proxy config
@@ -221,7 +240,18 @@ EOF
         info "Configuring nginx..."
         sudo cp "$TEMPLATES/nginx.conf.tmpl" /etc/nginx/sites-available/reqmesh
         sudo ln -sf /etc/nginx/sites-available/reqmesh /etc/nginx/sites-enabled/reqmesh 2>/dev/null || true
-        sudo sed -i "s/\${DOMAIN}/$domain/g" /etc/nginx/sites-available/reqmesh
+        # Ubuntu enables a default site on the same catch-all name, and nginx
+        # resolves the clash by ignoring ours ("conflicting server name \"_\"")
+        # — serving its welcome page instead of reqmesh.
+        if [ -e /etc/nginx/sites-enabled/default ]; then
+            info "Disabling the default nginx site (it claims the same server_name)"
+            sudo rm -f /etc/nginx/sites-enabled/default
+        fi
+        # `_` is nginx's catch-all. Without a domain this substituted nothing,
+        # producing a bare `server_name ;` — "invalid number of arguments in
+        # server_name directive" — so nginx refused to start and took the whole
+        # install down with it.
+        sudo sed -i "s/\${DOMAIN}/${domain:-_}/g" /etc/nginx/sites-available/reqmesh
         sudo sed -i "s/\${PORT}/$port/g" /etc/nginx/sites-available/reqmesh
         # Bare metal runs the app on the host, so loopback is correct here. The
         # placeholder exists because the Docker path shares this template and
@@ -231,6 +261,10 @@ EOF
         sudo sed -i 's/%_NGINX_LISTEN_%/    listen 80;/g' /etc/nginx/sites-available/reqmesh
         sudo sed -i 's/%_NGINX_TLS_%//g' /etc/nginx/sites-available/reqmesh
         sudo sed -i 's/%_NGINX_HTTP_REDIRECT_%//g' /etc/nginx/sites-available/reqmesh
+        if ! sudo nginx -t 2>&1 | sed 's/^/    /'; then
+            error "The generated nginx configuration is invalid (see above)."
+            return 1
+        fi
         sudo systemctl enable nginx
         sudo systemctl restart nginx
     fi
@@ -254,6 +288,7 @@ install_service() {
     content="$(< "$tmpl")"
     content="${content//\$\{INSTALL_DIR\}/$INSTALL_DIR}"
     content="${content//\$\{DATA_ROOT\}/$data_root}"
+    content="${content//\$\{STATE_DIR\}/$STATE_DIR}"
     content="${content//\$\{HOST\}/$host}"
     content="${content//\$\{PORT\}/$port}"
     content="${content//\$\{PROXY_TRUSTED_CIDR\}/$proxy_cidr}"

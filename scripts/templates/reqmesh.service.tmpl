@@ -11,7 +11,10 @@ Wants=network-online.target
 Type=simple
 User=${REQMESH_USER}
 Group=${REQMESH_GROUP}
-WorkingDirectory=${INSTALL_DIR}
+# uvicorn resolves `app.main:app` relative to the working directory, and
+# app/ is installed under backend/ — pointing this at INSTALL_DIR gave
+# "ModuleNotFoundError: No module named 'app'" on every start.
+WorkingDirectory=${INSTALL_DIR}/backend
 EnvironmentFile=${INSTALL_DIR}/.env
 ExecStart=${INSTALL_DIR}/backend/.venv/bin/uvicorn app.main:app \
     --host ${HOST} \
@@ -31,7 +34,10 @@ LimitNOFILE=65536
 # Hardening (compatible with Python + weasyprint)
 ProtectSystem=strict
 ProtectHome=yes
-ReadWritePaths=${DATA_ROOT} ${INSTALL_DIR}/backend/.venv
+# STATE_DIR holds users.yaml and the signing secret. Without it here,
+# ProtectSystem=strict makes the account database read-only and login
+# fails with PermissionError — exactly what the container's tmpfs did.
+ReadWritePaths=${DATA_ROOT} ${STATE_DIR} ${INSTALL_DIR}/backend/.venv
 ReadOnlyPaths=${INSTALL_DIR}/backend/app
 PrivateDevices=yes
 ProtectKernelTunables=yes
