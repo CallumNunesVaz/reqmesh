@@ -618,6 +618,66 @@ set_docker_cmd() {
     fi
 }
 
+# ── Base URL ───────────────────────────────────────────────────────────────────
+# The address the deployment tells people to use. It has to follow the shape of
+# the deployment, because switching a machine between HTTP and HTTPS changes it:
+# the proxy takes 80/443 and the app loses its published port, or the reverse.
+#
+# derive_base_url — the canonical URL for the *current* PROXY/TLS/DOMAIN.
+derive_base_url() {
+    local proxy="${CFG[PROXY]:-caddy}"
+    local tls="${CFG[TLS]:-none}"
+    local domain="${CFG[DOMAIN]:-}"
+    local port="${CFG[PORT]:-8000}"
+    local lan="${CFG[LAN_IP]:-}"
+
+    local scheme="http"
+    [ "$proxy" != "none" ] && [ "$tls" != "none" ] && scheme="https"
+
+    local host="localhost"
+    if [ -n "$domain" ] && [ "$domain" != "localserver.reqmesh.com" ]; then
+        host="$domain"
+    elif [ -n "$lan" ]; then
+        host="$lan"
+    fi
+
+    if [ "$proxy" != "none" ]; then
+        printf '%s://%s' "$scheme" "$host"      # the proxy owns 80/443
+    else
+        printf '%s://%s:%s' "$scheme" "$host" "$port"
+    fi
+}
+
+# base_url_fits_shape <url> — is this URL still valid for the current PROXY/TLS?
+#
+# Used to decide whether a base URL carried over from an existing install is
+# still usable. A deliberately customised host (an external load balancer, a
+# CNAME) should survive an unrelated re-run; a URL whose scheme or port
+# contradicts the deployment must not, because carrying it over is how switching
+# to HTTPS left the operator being told to browse to a dead http://host:8000.
+base_url_fits_shape() {
+    local url="$1"
+    local proxy="${CFG[PROXY]:-caddy}"
+    local tls="${CFG[TLS]:-none}"
+
+    local want_scheme="http"
+    [ "$proxy" != "none" ] && [ "$tls" != "none" ] && want_scheme="https"
+
+    case "$url" in
+        "${want_scheme}://"*) ;;
+        *) return 1 ;;
+    esac
+
+    # Behind a proxy the app's port must not appear; without one it must.
+    local port="${CFG[PORT]:-8000}"
+    if [ "$proxy" != "none" ]; then
+        case "$url" in *":${port}"*) return 1 ;; esac
+    else
+        case "$url" in *":${port}"*) ;; *) return 1 ;; esac
+    fi
+    return 0
+}
+
 # ── Listen address ─────────────────────────────────────────────────────────────
 # Which interface the app's published port binds to.
 #

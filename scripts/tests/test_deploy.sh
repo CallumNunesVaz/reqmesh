@@ -375,6 +375,61 @@ check "it distinguishes 'healthy but wrong address'" \
       "$(grep -c 'the app is running and this address is wrong' "$REPO/scripts/lib.sh")" "1"
 
 # ══════════════════════════════════════════════════════════════════════════════
+section "switching between HTTP and HTTPS"
+# ══════════════════════════════════════════════════════════════════════════════
+# Turning TLS on or off changes the correct base URL: the proxy takes 80/443 and
+# the app loses its published port, or the reverse. Carrying the old value over
+# with the other settings left an HTTPS deployment advertising a dead
+# http://host:8000 — and the installer's own post-deploy check then failed
+# against the URL it had just invented.
+base_for() {   # <proxy> <tls> [domain]
+    ( declare -A CFG=([PROXY]="$1" [TLS]="$2" [PORT]=8000 [LAN_IP]=10.1.1.5 [DOMAIN]="${3-}")
+      source "$REPO/scripts/lib.sh" >/dev/null 2>&1
+      derive_base_url )
+}
+check "no proxy keeps the app port" "$(base_for none none)" "http://10.1.1.5:8000"
+check "caddy + TLS drops the port"  "$(base_for caddy selfsigned)" "https://10.1.1.5"
+check "a domain wins over the LAN IP" \
+      "$(base_for caddy letsencrypt reqs.example.com)" "https://reqs.example.com"
+# A proxy that terminates plain HTTP must not advertise https.
+check "proxy without TLS stays http" "$(base_for nginx none)" "http://10.1.1.5"
+
+fits() {   # <proxy> <tls> <url>
+    ( declare -A CFG=([PROXY]="$1" [TLS]="$2" [PORT]=8000 [LAN_IP]=10.1.1.5)
+      source "$REPO/scripts/lib.sh" >/dev/null 2>&1
+      base_url_fits_shape "$3" && echo keep || echo rederive )
+}
+check "http URL is rejected once TLS is on"  "$(fits caddy selfsigned http://10.1.1.5:8000)" "rederive"
+check "the app port is rejected behind a proxy" "$(fits caddy selfsigned https://10.1.1.5:8000)" "rederive"
+check "a matching https URL is kept"          "$(fits caddy selfsigned https://10.1.1.5)" "keep"
+# A deliberately customised host — an external load balancer, a CNAME — must
+# survive a re-run that changes nothing about the scheme.
+check "a custom host survives"                "$(fits caddy selfsigned https://reqs.example.com)" "keep"
+check "https URL is rejected once TLS is off" "$(fits none none https://10.1.1.5)" "rederive"
+check "a matching http URL is kept"           "$(fits none none http://10.1.1.5:8000)" "keep"
+
+check "an explicit RT_BASE_URL still wins" \
+      "$(grep -c 'if \[ -n "${RT_BASE_URL:-}" \]' "$REPO/scripts/install.sh")" "1"
+check "BASE_URL is not blindly carried over" \
+      "$(grep -c 'save_cfg "BASE_URL" "${RT_BASE_URL:-\$(prev_env' "$REPO/scripts/install.sh")" "0"
+check "LAN_IP is resolved before BASE_URL uses it" \
+      "$([ "$(grep -n 'save_cfg "LAN_IP"' "$REPO/scripts/install.sh" | cut -d: -f1)" -lt \
+          "$(grep -n 'save_cfg "BASE_URL" "\$RT_BASE_URL"' "$REPO/scripts/install.sh" | cut -d: -f1)" ] \
+        && echo yes)" "yes"
+check "LAN_IP is set exactly once" \
+      "$(grep -c 'save_cfg "LAN_IP"' "$REPO/scripts/install.sh")" "1"
+
+# Disabling the proxy rewrites the compose file without it; without
+# --remove-orphans the old container kept running, kept holding 80/443, and kept
+# serving HTTPS from a Caddyfile the installer no longer manages.
+check "up -d removes orphaned services" \
+      "$(grep -c 'up -d --remove-orphans' "$REPO/scripts/deploy-docker.sh")" "1"
+check "the build path removes them too" \
+      "$(grep -c 'up -d --build --remove-orphans' "$REPO/scripts/deploy-docker.sh")" "1"
+check "no bare 'up -d' remains" \
+      "$(grep -cE 'compose -f "\$COMPOSE_FILE" up -d$' "$REPO/scripts/deploy-docker.sh")" "0"
+
+# ══════════════════════════════════════════════════════════════════════════════
 section "release staging cannot drop a versioned file"
 # ══════════════════════════════════════════════════════════════════════════════
 # v0.1.2 shipped an install.sh still pinned to v0.1.1 because release.sh kept its

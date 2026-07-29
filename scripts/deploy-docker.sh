@@ -186,12 +186,17 @@ deploy_docker() {
         "${DOCKER[@]}" compose -f "$COMPOSE_FILE" build --pull=false
     fi
 
+    # --remove-orphans: turning the reverse proxy off rewrites the compose file
+    # without the caddy (or nginx) service, but a plain `up -d` leaves the old
+    # container running. It kept holding 80/443 and kept serving HTTPS from a
+    # Caddyfile the installer no longer manages, so "disable TLS" disabled
+    # nothing. The same applies to switching caddy -> nginx.
     info "Starting containers..."
     if [ "${CFG[BUILD_FROM_SOURCE]:-false}" = "true" ] || [ "${CFG[OFFLINE_MODE]:-false}" = "true" ]; then
-        "${DOCKER[@]}" compose -f "$COMPOSE_FILE" up -d --build
+        "${DOCKER[@]}" compose -f "$COMPOSE_FILE" up -d --build --remove-orphans
     else
         "${DOCKER[@]}" compose -f "$COMPOSE_FILE" pull --quiet 2>/dev/null || true
-        "${DOCKER[@]}" compose -f "$COMPOSE_FILE" up -d
+        "${DOCKER[@]}" compose -f "$COMPOSE_FILE" up -d --remove-orphans
     fi
 
     # Probe the app directly, not BASE_URL. BASE_URL is the *user-facing* address:
