@@ -635,7 +635,9 @@ p9_review() {
         "Profile:            ${CFG[PROFILE]:-team}" \
         "Install directory:  ${CFG[INSTALL_DIR]:-}" \
         "Data directory:     ${CFG[DATA_ROOT]:-}" \
-        "Admin password:     ${CFG[ADMIN_PASSWORD]:-}" \
+        "Admin password:     $([ "${CFG[EXISTING_INSTALL]:-false}" = "true" ] \
+                                && echo 'unchanged (existing accounts kept)' \
+                                || echo 'generated - shown after install')" \
         "SMTP:               ${CFG[SMTP_HOST]:-disabled}" \
         "Git remote:         ${CFG[GIT_REMOTE_URL]:-disabled}" \
         "Demo project:       ${CFG[SEED_DEMO]:-true}"
@@ -654,6 +656,21 @@ run_wizard() {
     require_gum
     detect_os
 
+    # Read the settings of any install already on this box, so an upgrade
+    # defaults to what the machine is doing rather than to factory values.
+    # Each phase still asks; PREV_ENV only changes the default offered.
+    #
+    # Nothing is written to CONFIG_FILE here. p1_welcome offers to resume a saved
+    # session when that file is non-empty, so a save_cfg at this point made every
+    # run look like a resumable one — the wizard asked an extra question that the
+    # caller had no answer for, and every scripted answer after it landed one
+    # prompt too early. The flag is persisted after p1_welcome instead, which is
+    # also where a declined resume clears the file.
+    local _had_install=false
+    if load_installed_env "${REQMESH_INSTALL_DIR:-/opt/reqmesh}"; then
+        _had_install=true
+    fi
+
     # p1_welcome sets this when the user resumes a saved session. It has to be
     # checked *here*: `return` inside p1_welcome only leaves that function, so
     # the earlier "jump to review" path ran p9_review and then fell straight
@@ -661,6 +678,17 @@ run_wizard() {
     RESUME_TO_REVIEW=false
 
     p1_welcome
+
+    # Safe to persist now: the resume prompt is behind us, and a declined resume
+    # has already cleared the file.
+    save_cfg "EXISTING_INSTALL" "$_had_install"
+    if $_had_install; then
+        warn "An existing reqmesh installation was found at ${REQMESH_INSTALL_DIR:-/opt/reqmesh}."
+        warn "Its settings are offered as the defaults below."
+        warn "Accounts and project data are kept — the admin password is not reset."
+        echo ""
+    fi
+
     if ! $RESUME_TO_REVIEW; then
         p2_deploy_mode
         p3_proxy

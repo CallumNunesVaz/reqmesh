@@ -21,7 +21,15 @@ generate_env() {
     # also supplies the sudo this path previously lacked entirely.
     write_root_file "$env_file" 600 << EOF
 # reqmesh environment — generated $(date -u +"%Y-%m-%dT%H:%M:%SZ")
+#
+# The REQMESH_* lines below are the installer's own choices, not application
+# settings. They are recorded here so that re-running install.sh can rebuild the
+# same deployment instead of falling back to factory defaults.
 REQMESH_VERSION=${CFG[IMAGE_TAG]:-latest}
+REQMESH_DEPLOY_MODE=${CFG[DEPLOY_MODE]:-docker}
+REQMESH_PROXY=${CFG[PROXY]:-caddy}
+REQMESH_TLS=${CFG[TLS]:-letsencrypt}
+REQMESH_DOMAIN=${CFG[DOMAIN]:-}
 RT_PROFILE=${CFG[PROFILE]:-team}
 RT_SECRET=${CFG[RT_SECRET]}
 RT_ADMIN_PASSWORD=${CFG[ADMIN_PASSWORD]}
@@ -246,7 +254,11 @@ main() {
     local ts
     ts="$(date +%s)"
     for f in "${backups[@]}"; do
-        cp "$f" "${f}.bak.${ts}" 2>/dev/null || true
+        if dest="$(backup_file "$f" "$ts")"; then
+            info "Backed up $f -> $dest"
+        else
+            warn "Could not back up $f — continuing, but the old copy is gone."
+        fi
     done
 
     generate_env
