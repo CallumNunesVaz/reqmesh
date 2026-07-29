@@ -115,7 +115,14 @@ caddy="$(render_caddyfile reqmesh:8000)"
 o="$(grep -o '{' <<<"$caddy" | wc -l)"; c="$(grep -o '}' <<<"$caddy" | wc -l)"
 check "braces balanced" "$o" "$c"
 grep -q '%_' <<<"$caddy" && bad "unsubstituted placeholder" || ok "no placeholders left"
-grep -q '^:443 {' <<<"$caddy" && ok "serves :443 (answers on the LAN IP)" || bad "no :443 site"
+# This used to assert `^:443 {` on the grounds that it "answers on the LAN IP".
+# It answers there at the TCP level and cannot complete a TLS handshake: an
+# unnamed site gives the internal CA nothing to sign. Verified on a real host —
+# https://<ip> returned "tlsv1 alert internal error" until the site was named.
+grep -q '^:443 {' <<<"$caddy" && bad "unnamed :443 site cannot serve TLS" \
+    || ok "no unnamed :443 site"
+grep -q 'https://localhost' <<<"$caddy" && ok "serves a named site" \
+    || bad "no named site to issue a certificate for"
 echo
 echo "  --- rendered Caddyfile ---"
 sed 's/^/  | /' <<<"$caddy"

@@ -12,10 +12,23 @@ TOKEN_TTL = 86400 * 7  # 7 days
 RESET_TOKEN_TTL = 3600  # 1 hour
 VERIFY_TOKEN_TTL = 86400  # 24 hours
 
-USERS_FILE = Path.home() / ".reqmesh" / "users.yaml"
-SECRET_FILE = Path.home() / ".reqmesh" / "secret"
-RESET_TOKENS_FILE = Path.home() / ".reqmesh" / "reset_tokens.yaml"
-VERIFY_TOKENS_FILE = Path.home() / ".reqmesh" / "verify_tokens.yaml"
+# Where the account database and signing secret live.
+#
+# This is deliberately overridable and not simply ``Path.home()``. In the Docker
+# deployment the container runs as uid 999 with HOME=/app, the root filesystem is
+# read-only, and the compose file covers /app/.reqmesh with a tmpfs owned by
+# root — so the default resolved to a directory the app could not write, and
+# login failed with PermissionError on users.yaml. Even had it been writable,
+# tmpfs is memory-backed: every account and password change would have been
+# discarded on restart while the project data beside it persisted.
+#
+# RT_STATE_DIR points this at the same durable volume as the project data.
+_STATE_DIR = Path(os.environ.get("RT_STATE_DIR") or (Path.home() / ".reqmesh"))
+
+USERS_FILE = _STATE_DIR / "users.yaml"
+SECRET_FILE = _STATE_DIR / "secret"
+RESET_TOKENS_FILE = _STATE_DIR / "reset_tokens.yaml"
+VERIFY_TOKENS_FILE = _STATE_DIR / "verify_tokens.yaml"
 
 _secret_cache: str | None = None
 

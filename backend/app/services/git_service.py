@@ -31,6 +31,59 @@ def is_repo(project_root: Path) -> bool:
     return (Path(project_root) / ".git").exists()
 
 
+def init_repo(project_root: Path, username: str = "") -> bool:
+    """Make *project_root* a git repository. Returns True if one now exists.
+
+    Nothing in the application used to do this. A newly created project was a
+    plain directory, so ``auto_commit`` took the ``is_repo`` early return and
+    reported "nothing to commit" — indistinguishable from a genuine no-op. On a
+    fresh deployment with ``git_autocommit=true`` the result was that every
+    change was written to disk and none was ever versioned, silently, which is
+    the one thing this tool exists to do.
+
+    Safe to call on a directory that is already a repo, and deliberately not
+    called on one nested inside an existing repository: there the parent already
+    tracks these files, and initialising a child would quietly detach them from
+    the history the operator set up.
+    """
+    project_root = Path(project_root)
+    if is_repo(project_root):
+        return True
+    if not project_root.is_dir():
+        return False
+
+    # `git rev-parse --show-toplevel` walks upward; if it finds a repo above us,
+    # leave the directory alone.
+    try:
+        probe = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            cwd=str(project_root), capture_output=True, text=True, timeout=10,
+        )
+        if probe.returncode == 0 and probe.stdout.strip():
+            logger.info("Not initialising %s — already inside the repo at %s",
+                        project_root, probe.stdout.strip())
+            return True
+    except Exception:
+        pass
+
+    try:
+        ident = _identity_for(project_root, username)
+        result = subprocess.run(
+            ["git", *ident, "init", "-q"],
+            cwd=str(project_root), capture_output=True, text=True, timeout=30,
+        )
+        if result.returncode != 0:
+            logger.warning("git init failed in %s: %s",
+                           project_root, redact_url(result.stderr.strip()))
+            return False
+    except Exception as exc:
+        logger.warning("git init failed in %s: %s", project_root, exc)
+        return False
+
+    logger.info("Initialised a git repository for %s", project_root)
+    return True
+
+
 # Batched push state
 _push_queue: set[Path] = set()
 _push_timer: threading.Timer | None = None

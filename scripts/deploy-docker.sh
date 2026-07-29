@@ -15,22 +15,18 @@ TEMPLATES="$SCRIPT_DIR/templates"
 generate_env() {
     local env_file="${CFG[INSTALL_DIR]:-$INSTALL_DIR}/.env"
     info "Generating $env_file..."
-    mkdir -p "$(dirname "$env_file")"
 
-    # This file holds RT_SECRET, the admin password and the SMTP password.
-    # Create it 0600 *before* writing, so it is never even briefly readable —
-    # `cat >` truncates but keeps the existing mode. deploy-bare.sh already
-    # chmod'd its .env; the Docker path did not, and left secrets at 0644.
-    # (A bare `umask 077` here would leak into every later file this script
-    # writes, since umask is not scoped to the function.)
-    install -m 600 /dev/null "$env_file"
-
-    cat > "$env_file" << EOF
+    # This file holds RT_SECRET, the admin password and the SMTP password, so it
+    # is created 0600 before any content is written — see write_root_file, which
+    # also supplies the sudo this path previously lacked entirely.
+    write_root_file "$env_file" 600 << EOF
 # reqmesh environment — generated $(date -u +"%Y-%m-%dT%H:%M:%SZ")
+REQMESH_VERSION=${CFG[IMAGE_TAG]:-latest}
 RT_PROFILE=${CFG[PROFILE]:-team}
 RT_SECRET=${CFG[RT_SECRET]}
 RT_ADMIN_PASSWORD=${CFG[ADMIN_PASSWORD]}
 RT_BASE_URL=${CFG[BASE_URL]}
+RT_BIND=$(effective_bind)
 RT_COOKIE_SECURE=${CFG[COOKIE_SECURE]:-true}
 RT_REQUIRE_AUTH=${CFG[REQUIRE_AUTH]:-true}
 RT_ALLOW_SELF_REGISTRATION=${CFG[SELF_REG]:-false}
@@ -109,7 +105,7 @@ generate_compose() {
         content="${content//%_CADDY_VOLUME_%/}"
     fi
 
-    echo "$content" > "$out"
+    printf '%s\n' "$content" | write_root_file "$out"
     success "Compose file written to $out"
 }
 
@@ -117,7 +113,7 @@ generate_compose() {
 generate_caddyfile() {
     local out="${CFG[INSTALL_DIR]:-$INSTALL_DIR}/Caddyfile"
     info "Generating Caddyfile..."
-    render_caddyfile "reqmesh:8000" > "$out"
+    render_caddyfile "reqmesh:8000" | write_root_file "$out"
     success "Caddyfile written to $out"
 }
 
@@ -164,7 +160,7 @@ generate_nginx_conf() {
         content="${content//%_NGINX_HTTP_REDIRECT_%/}"
     fi
 
-    echo "$content" > "$out"
+    printf '%s\n' "$content" | write_root_file "$out"
     success "nginx.conf written to $out"
 }
 
@@ -173,21 +169,41 @@ deploy_docker() {
     local dir="${CFG[INSTALL_DIR]:-$INSTALL_DIR}"
     cd "$dir"
 
+    # .env and the compose file are root-owned 0600; run docker with whatever
+    # privilege can read them.
+    set_docker_cmd
+
     if [ "${CFG[OFFLINE_MODE]:-false}" = "true" ]; then
         info "Offline mode — building image locally..."
-        docker compose -f "$COMPOSE_FILE" build --pull=false
+        "${DOCKER[@]}" compose -f "$COMPOSE_FILE" build --pull=false
     fi
 
     info "Starting containers..."
     if [ "${CFG[BUILD_FROM_SOURCE]:-false}" = "true" ] || [ "${CFG[OFFLINE_MODE]:-false}" = "true" ]; then
-        docker compose -f "$COMPOSE_FILE" up -d --build
+        "${DOCKER[@]}" compose -f "$COMPOSE_FILE" up -d --build
     else
-        docker compose -f "$COMPOSE_FILE" pull --quiet 2>/dev/null || true
-        docker compose -f "$COMPOSE_FILE" up -d
+        "${DOCKER[@]}" compose -f "$COMPOSE_FILE" pull --quiet 2>/dev/null || true
+        "${DOCKER[@]}" compose -f "$COMPOSE_FILE" up -d
     fi
 
-    healthcheck "${CFG[BASE_URL]}/health" 60
-    return $?
+    # Probe the app directly, not BASE_URL. BASE_URL is the *user-facing* address:
+    # it may be a domain with no DNS yet, an HTTPS endpoint whose certificate is
+    # still being issued, or — with PROXY=none — a LAN address the container does
+    # not bind. Any of those make a healthy install report failure. What this
+    # step needs to answer is narrower: did the container come up and serve?
+    healthcheck "http://127.0.0.1:${CFG[PORT]:-8000}/health" 60 || return 1
+
+    # The proxy is a separate question, and a soft one — Let's Encrypt issuance
+    # can outlast the installer without anything being wrong.
+    if [ "${CFG[PROXY]:-caddy}" != "none" ]; then
+        if curl -skf --max-time 10 "${CFG[BASE_URL]}/health" >/dev/null 2>&1; then
+            success "Reachable through the proxy at ${CFG[BASE_URL]}"
+        else
+            warn "The app is healthy but not yet answering on ${CFG[BASE_URL]}."
+            warn "If TLS is via Let's Encrypt, certificate issuance may still be in progress."
+        fi
+    fi
+    return 0
 }
 
 # ── Main ───────────────────────────────────────────────────────────────────────
@@ -195,7 +211,7 @@ main() {
     header "Deploying reqmesh (Docker)"
 
     local dir="${CFG[INSTALL_DIR]:-$INSTALL_DIR}"
-    mkdir -p "$dir"
+    ensure_dir "$dir"
 
     # ── Re-install check ──────────────────────────────────────────────────
     local backups=()
@@ -247,12 +263,17 @@ main() {
     local cred_file
     cred_file="$(write_admin_credential)"
 
+    # Print the commands that will actually work for this user. The config is
+    # root-owned 0600, so an unprivileged operator copying a bare `docker compose`
+    # out of the summary hits the same "permission denied" the deploy just fixed.
+    local dc="${DOCKER[*]:-docker} compose -f $COMPOSE_FILE"
+
     echo ""
     summary_box "$cred_file" \
         "Manage:  cd $dir" \
-        "         docker compose -f $COMPOSE_FILE ps" \
-        "Logs:    docker compose -f $COMPOSE_FILE logs -f" \
-        "Stop:    docker compose -f $COMPOSE_FILE down"
+        "         $dc ps" \
+        "Logs:    $dc logs -f" \
+        "Stop:    $dc down"
     echo ""
 }
 

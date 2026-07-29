@@ -51,13 +51,23 @@ if [ -n "$(git status --porcelain)" ]; then
 fi
 
 CURRENT="$(cat VERSION)"
+# Ask set_version.py which files a bump touches rather than keeping a second
+# list here. The hardcoded copy this replaces omitted scripts/install.sh, so the
+# ref-pin bump it makes was never staged: v0.1.2 published an installer still
+# pointing at v0.1.1's lib.sh/wizard.sh.
+mapfile -t VERSIONED_FILES < <(/usr/bin/python3 scripts/set_version.py --files)
+if [ "${#VERSIONED_FILES[@]}" -eq 0 ]; then
+  echo "error: set_version.py --files returned nothing." >&2
+  exit 1
+fi
+
 NEW="$(/usr/bin/python3 scripts/set_version.py "$TARGET")"
 TAG="v${NEW}"
 echo "==> Releasing ${CURRENT} -> ${NEW} (${TAG})"
 
 if git rev-parse "$TAG" >/dev/null 2>&1; then
   echo "error: tag $TAG already exists." >&2
-  git checkout -- VERSION backend/app/core/_version.py frontend/package.json desktop/package.json
+  git checkout -- "${VERSIONED_FILES[@]}"
   exit 1
 fi
 
@@ -88,14 +98,23 @@ fi
 
 if [ "$DRY_RUN" = "1" ]; then
   echo "==> Dry run: version files bumped to ${NEW}, no commit/tag made."
-  echo "    Revert with: git checkout -- VERSION backend/app/core/_version.py frontend/package.json desktop/package.json"
+  echo "    Revert with: git checkout -- ${VERSIONED_FILES[*]}"
   rm -f "$NOTES_FILE"
   exit 0
 fi
 
 # ── Commit, tag, push ────────────────────────────────────────────────────────
-git add VERSION backend/app/core/_version.py frontend/package.json desktop/package.json
+git add "${VERSIONED_FILES[@]}"
 git commit -m "release: ${TAG}"
+
+# A file set_version.py rewrote but release.sh failed to stage would ship a tag
+# whose contents disagree with the release — exactly how v0.1.2's installer kept
+# v0.1.1's ref pin. Refuse to tag rather than publish that.
+if [ -n "$(git status --porcelain)" ]; then
+  echo "error: version bump left changes unstaged — the tag would be inconsistent." >&2
+  git status --short >&2
+  exit 1
+fi
 git tag -a "$TAG" -F "$NOTES_FILE"
 rm -f "$NOTES_FILE"
 
