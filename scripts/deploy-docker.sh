@@ -93,6 +93,12 @@ generate_compose() {
         content="${content//%_CADDY_VOLUME_%/$caddy_vol}"
         content="${content//%_NGINX_SERVICE_%/}"
     elif [ "$proxy" = "nginx" ]; then
+        # certs is a bind mount, not the named volume this used to reference.
+        # `nginx-certs` was never declared under `volumes:`, so compose rejected
+        # the whole project with "refers to undefined volume nginx-certs" —
+        # nginx mode could not start at all, in any configuration. A bind mount
+        # also lets the certificate generated on the host actually reach nginx,
+        # which an empty named volume never could.
         local nginx_svc='  nginx:
     image: nginx:alpine
     ports:
@@ -100,7 +106,7 @@ generate_compose() {
       - "443:443"
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - nginx-certs:/etc/nginx/certs:ro
+      - ./certs:/etc/nginx/certs:ro
     depends_on:
       - reqmesh
     restart: unless-stopped'
@@ -137,22 +143,48 @@ generate_nginx_conf() {
     local tls="${CFG[TLS]:-none}"
     local port="${CFG[PORT]:-8000}"
 
+    # nginx runs in its own container here, so `127.0.0.1:8000` — which the
+    # template carries for the bare-metal path, where it is correct — pointed
+    # nginx at itself and returned 502. Reach the app by its compose service
+    # name, the way the Caddyfile already did.
+    content="${content//%_NGINX_UPSTREAM_%/reqmesh:8000}"
     content="${content//\$\{DOMAIN\}/$domain}"
     content="${content//\$\{PORT\}/$port}"
 
     if [ "$tls" = "selfsigned" ] || [ "$tls" = "certfiles" ]; then
         content="${content//%_NGINX_LISTEN_%/    listen 443 ssl http2;}"
         if [ "$tls" = "selfsigned" ]; then
-            local certdir="${CFG[INSTALL_DIR]:-$INSTALL_DIR}/certs"
-            content="${content//%_NGINX_TLS_%/    ssl_certificate     $certdir/server.crt;
-    ssl_certificate_key $certdir/server.key;
+            # Paths as nginx sees them inside the container. These used to be
+            # host paths ($INSTALL_DIR/certs), which do not exist in the
+            # container's filesystem — and nothing created the files anyway.
+            local host_certdir="${CFG[INSTALL_DIR]:-$INSTALL_DIR}/certs"
+            local cert_cn="${CFG[DOMAIN]:-}"
+            [ -z "$cert_cn" ] || [ "$cert_cn" = "localserver.reqmesh.com" ] \
+                && cert_cn="${CFG[LAN_IP]:-localhost}"
+            ensure_selfsigned_cert "$host_certdir" "$cert_cn" \
+                || error "nginx will not start without a certificate."
+            content="${content//%_NGINX_TLS_%/    ssl_certificate     /etc/nginx/certs/server.crt;
+    ssl_certificate_key /etc/nginx/certs/server.key;
     ssl_protocols       TLSv1.2 TLSv1.3;
     ssl_ciphers         HIGH:!aNULL:!MD5;}"
         else
+            # Operator-supplied certificates. These are host paths, and the
+            # nginx container cannot see them — only ./certs is bind-mounted —
+            # so copy them in rather than referencing a path that resolves to
+            # nothing inside the container.
             local certpath="${CFG[CERT_PATH]:-/etc/ssl/certs}"
             local keypath="${CFG[KEY_PATH]:-/etc/ssl/private}"
-            content="${content//%_NGINX_TLS_%/    ssl_certificate     $certpath/fullchain.pem;
-    ssl_certificate_key $keypath/privkey.pem;
+            local host_certdir="${CFG[INSTALL_DIR]:-$INSTALL_DIR}/certs"
+            ensure_dir "$host_certdir"
+            if ! { cp -p "$certpath/fullchain.pem" "$host_certdir/server.crt" 2>/dev/null \
+                   && cp -p "$keypath/privkey.pem" "$host_certdir/server.key" 2>/dev/null; }; then
+                sudo cp -p "$certpath/fullchain.pem" "$host_certdir/server.crt" \
+                    || error "Could not read $certpath/fullchain.pem"
+                sudo cp -p "$keypath/privkey.pem" "$host_certdir/server.key" \
+                    || error "Could not read $keypath/privkey.pem"
+            fi
+            content="${content//%_NGINX_TLS_%/    ssl_certificate     /etc/nginx/certs/server.crt;
+    ssl_certificate_key /etc/nginx/certs/server.key;
     ssl_protocols       TLSv1.2 TLSv1.3;
     ssl_ciphers         HIGH:!aNULL:!MD5;}"
         fi
@@ -197,6 +229,19 @@ deploy_docker() {
     else
         "${DOCKER[@]}" compose -f "$COMPOSE_FILE" pull --quiet 2>/dev/null || true
         "${DOCKER[@]}" compose -f "$COMPOSE_FILE" up -d --remove-orphans
+    fi
+
+    # The proxy's configuration is a bind-mounted file, and `up -d` only
+    # recreates a container when its *service definition* changes. Rewriting
+    # Caddyfile or nginx.conf does not, so a proxy container that was already
+    # running kept serving the config it read at startup: switching nginx from
+    # HTTP to HTTPS regenerated the config and the certificate, reported
+    # success, and left port 443 closed. Restart it so the new config is read.
+    local proxy_svc="${CFG[PROXY]:-caddy}"
+    if [ "$proxy_svc" != "none" ]; then
+        info "Restarting $proxy_svc to load the new configuration..."
+        "${DOCKER[@]}" compose -f "$COMPOSE_FILE" restart "$proxy_svc" >/dev/null 2>&1 \
+            || warn "Could not restart $proxy_svc — it may still be serving the previous configuration."
     fi
 
     # Probe the app directly, not BASE_URL. BASE_URL is the *user-facing* address:

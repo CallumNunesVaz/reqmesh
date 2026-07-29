@@ -618,6 +618,65 @@ set_docker_cmd() {
     fi
 }
 
+# ── Self-signed certificates ───────────────────────────────────────────────────
+# ensure_selfsigned_cert <dir> <common_name> — create server.crt/server.key.
+#
+# Caddy mints its own via `tls internal`; nginx does not, and nothing in the
+# installer ever created one. `TLS=selfsigned` with nginx therefore pointed
+# ssl_certificate at files that had never existed, so nginx refused to start.
+#
+# Includes the name as a SAN: a certificate with only a CN is rejected outright
+# by every current browser, which would have replaced a startup failure with an
+# unfixable warning page.
+ensure_selfsigned_cert() {
+    local dir="$1" cn="${2:-localhost}"
+    local crt="$dir/server.crt" key="$dir/server.key"
+
+    if [ -f "$crt" ] && [ -f "$key" ]; then
+        info "Reusing the existing self-signed certificate in $dir"
+        return 0
+    fi
+    if ! has_cmd openssl; then
+        error "openssl is required to generate a self-signed certificate."
+        return 1
+    fi
+
+    ensure_dir "$dir"
+
+    # An IP needs an IP: SAN; a hostname needs a DNS: one.
+    local san="DNS:$cn"
+    case "$cn" in
+        [0-9]*.[0-9]*.[0-9]*.[0-9]*) san="IP:$cn" ;;
+    esac
+
+    info "Generating a self-signed certificate for $cn..."
+    local tmp
+    tmp="$(mktemp -d)"
+    if ! openssl req -x509 -newkey rsa:2048 -nodes -days 825 \
+            -keyout "$tmp/server.key" -out "$tmp/server.crt" \
+            -subj "/CN=$cn" \
+            -addext "subjectAltName=$san,DNS:localhost,IP:127.0.0.1" \
+            >/dev/null 2>&1; then
+        rm -rf "$tmp"
+        error "Failed to generate a self-signed certificate."
+        return 1
+    fi
+
+    # The key is a secret: 0600 before it leaves the temp directory.
+    chmod 600 "$tmp/server.key"; chmod 644 "$tmp/server.crt"
+    if ! cp -p "$tmp/server.key" "$key" 2>/dev/null; then
+        sudo cp -p "$tmp/server.key" "$key"
+        sudo cp -p "$tmp/server.crt" "$crt"
+    else
+        cp -p "$tmp/server.crt" "$crt"
+    fi
+    rm -rf "$tmp"
+
+    success "Self-signed certificate written to $dir (valid 825 days)"
+    warn "Browsers will warn on first visit — this certificate signs itself."
+    return 0
+}
+
 # ── Base URL ───────────────────────────────────────────────────────────────────
 # The address the deployment tells people to use. It has to follow the shape of
 # the deployment, because switching a machine between HTTP and HTTPS changes it:

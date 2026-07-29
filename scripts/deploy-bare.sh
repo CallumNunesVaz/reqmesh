@@ -223,6 +223,10 @@ EOF
         sudo ln -sf /etc/nginx/sites-available/reqmesh /etc/nginx/sites-enabled/reqmesh 2>/dev/null || true
         sudo sed -i "s/\${DOMAIN}/$domain/g" /etc/nginx/sites-available/reqmesh
         sudo sed -i "s/\${PORT}/$port/g" /etc/nginx/sites-available/reqmesh
+        # Bare metal runs the app on the host, so loopback is correct here. The
+        # placeholder exists because the Docker path shares this template and
+        # must reach the app by its compose service name instead.
+        sudo sed -i "s/%_NGINX_UPSTREAM_%/127.0.0.1:$port/g" /etc/nginx/sites-available/reqmesh
         # Default to HTTP for bare-metal
         sudo sed -i 's/%_NGINX_LISTEN_%/    listen 80;/g' /etc/nginx/sites-available/reqmesh
         sudo sed -i 's/%_NGINX_TLS_%//g' /etc/nginx/sites-available/reqmesh
