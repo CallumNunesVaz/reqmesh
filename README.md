@@ -348,15 +348,40 @@ User identity is extracted from the JWT token (not from query parameters). The e
 
 For production deployment on a local server with **TLS**, **multiple concurrent users**, **email notifications**, **git push to remote**, and **air-gapped offline mode**, see **[DEPLOYMENT.md](DEPLOYMENT.md)**.
 
-Quick-start for Docker:
+Quick start — the installer handles Docker or bare-metal, the reverse proxy,
+TLS, secrets and the systemd unit:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/CallumNunesVaz/reqmesh/v0.1.3/scripts/install.sh | bash
+```
+
+It walks through deployment mode, proxy, TLS and credentials, then deploys. For
+CI or a scripted rollout, drive it with environment variables instead:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/CallumNunesVaz/reqmesh/v0.1.3/scripts/install.sh \
+  | REQMESH_PROXY=caddy REQMESH_TLS=selfsigned bash -s -- --non-interactive
+```
+
+The admin password is written to `/opt/reqmesh/.initial-admin` (mode 0600), not
+printed — installers get piped into logs. Log in, change it, delete the file.
+
+**Re-running it upgrades in place.** Settings, the signing secret and existing
+accounts are kept; anything you set explicitly for that run wins. The admin
+password is *not* regenerated, because the application only seeds an admin when
+there is no account yet.
+
+Useful flags: `--debug` traces every command (the transcript then contains
+secrets, and is written 0600), `--no-log` disables the transcript. On failure
+the installer prints the transcript path.
+
+Raw `docker compose` still works if you prefer to wire it up yourself:
 
 ```bash
 export RT_SECRET=$(openssl rand -hex 32)
 export RT_ADMIN_PASSWORD=$(openssl rand -base64 16)
 docker compose -f docker-compose.prod.yml up -d
 ```
-
-Then open `http://<server-ip>:8000` and log in with `admin` / `$RT_ADMIN_PASSWORD`.
 
 Key environment variables:
 

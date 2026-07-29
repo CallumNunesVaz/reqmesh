@@ -6,10 +6,17 @@ reqmesh is a Python application backed by the filesystem — no database
 server is needed.
 
 - [Requirements](#requirements)
-- [Ubuntu 24.04 Script](#ubuntu-2404) – one command on a fresh server
+- [Ubuntu 24.04](#ubuntu-2404) – the installer, one command
+- [Upgrading](#upgrading) – re-running over an existing install
 - [Manual Installation](#manual) – Python venv + systemd
 - [Docker Containers](#docker) – Docker Compose with optional TLS
 - [Configuration Guide](#configuration)
+
+There is **one** installer, `scripts/install.sh`. It covers Docker and
+bare-metal, Caddy/nginx/no proxy, and TLS, and it is the only path tested end to
+end on a real host. Earlier releases also shipped `install-ubuntu-24.04.sh` and
+a separate installer inside the release bundle; both were parallel
+implementations that had drifted, and both have been removed.
 
 ---
 
@@ -70,13 +77,65 @@ curl -fsSL https://raw.githubusercontent.com/CallumNunesVaz/reqmesh/v0.1.3/scrip
 Re-running it over an existing installation keeps that machine's settings, its
 signing secret and its accounts; see [Upgrading](#upgrading).
 
-> A separate `scripts/install-ubuntu-24.04.sh` used to be documented here. It
-> was a second, parallel implementation of the bare-metal install that had
-> drifted badly from the maintained one: it ran the service as **root**, printed
-> the admin password to stdout (so it landed in any CI log or `tee`), cloned
-> `main` rather than a released tag, and never set `RT_COOKIE_SECURE` — so over
-> plain HTTP you could log in and then have every subsequent request rejected
-> with 401. It has been removed rather than fixed twice.
+---
+
+## Upgrading
+
+Re-run the installer. It detects the existing installation and keeps it:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/CallumNunesVaz/reqmesh/v0.1.3/scripts/install.sh \
+  | bash -s -- --non-interactive
+```
+
+| Kept across an upgrade | Note |
+|---|---|
+| Every `RT_*` setting | Anything you set explicitly for that run wins |
+| `RT_SECRET` | Regenerating it would log every session out |
+| Accounts and passwords | The app seeds an admin only when none exists |
+| Project data and git history | Untouched |
+
+The previous `.env` and compose file are backed up alongside them with a
+`.bak.<timestamp>` suffix.
+
+**Changing the deployment shape works too.** Switching between HTTP and HTTPS,
+or between Caddy, nginx and no proxy, re-derives the base URL, flips the cookie
+`Secure` flag and the listen address to match, removes the previous proxy's
+container, and restarts the new one so it actually reads its new config:
+
+```bash
+# turn TLS on
+... | REQMESH_PROXY=caddy REQMESH_TLS=selfsigned bash -s -- --non-interactive
+# turn it back off
+... | REQMESH_PROXY=none REQMESH_TLS=none bash -s -- --non-interactive
+```
+
+A base URL you set deliberately (an external load balancer, a CNAME) survives a
+re-run; one whose scheme or port contradicts the new configuration is replaced,
+and the change is printed.
+
+### From a release bundle (offline)
+
+The tarball unpacks to a directory containing the application and the installer:
+
+```bash
+tar xzf reqmesh-v0.1.3.tar.gz && cd reqmesh-v0.1.3
+sudo ./install.sh --non-interactive        # delegates to scripts/install.sh
+```
+
+The bare-metal path needs no network. For Docker offline, load the published
+image first and pin it:
+
+```bash
+docker load < reqmesh-v0.1.3-image.tar.gz
+REQMESH_VERSION=<loaded-tag> ./install.sh --non-interactive
+```
+
+### Diagnosing a failed install
+
+The installer writes a transcript (mode 0600) and prints its path on failure.
+`--debug` adds a full command trace — note it then captures `RT_SECRET` and the
+admin password, so treat it as a secret. `--no-log` disables it.
 
 ---
 
