@@ -469,6 +469,135 @@ load_cfg() {
     fi
 }
 
+# ── Transcript ─────────────────────────────────────────────────────────────────
+# Everything the installer said used to go to the terminal and nowhere else, so
+# under the documented `curl … | bash` a failure left nothing to send anyone once
+# the scrollback was gone. Six of the ten defects found on the first real
+# deployment were invisible in the terminal output anyway.
+#
+# Started around the deploy phase rather than the whole run: teeing stdout makes
+# it a pipe, and Gum drops to its plain-text fallback when stdout is not a tty.
+# The wizard is questions; the deploy is where things break.
+REQMESH_LOG_FILE="${REQMESH_LOG_FILE:-}"
+
+start_transcript() {
+    [ -n "${REQMESH_NO_LOG:-}" ] && return 0
+    [ -n "$REQMESH_LOG_FILE" ] && return 0        # already running
+
+    local candidate="${REQMESH_LOG:-${TMPDIR:-/tmp}/reqmesh-install-$(date +%Y%m%d-%H%M%S).log}"
+    # Created 0600 before a byte is written: under --debug the transcript
+    # contains RT_SECRET, the admin password and any SMTP password.
+    if ! install -m 600 /dev/null "$candidate" 2>/dev/null; then
+        warn "Could not create a transcript at $candidate — continuing without one."
+        return 0
+    fi
+
+    REQMESH_LOG_FILE="$candidate"
+    export REQMESH_LOG_FILE
+    exec > >(tee -a "$REQMESH_LOG_FILE") 2>&1
+
+    info "Transcript: $REQMESH_LOG_FILE"
+    if [ -n "${REQMESH_DEBUG:-}" ]; then
+        export REQMESH_DEBUG
+        warn "--debug: the transcript will contain secrets. It is mode 0600 — treat it as one."
+        set -x
+    fi
+}
+
+# Print where to look when something failed. Wired to an EXIT trap so it covers
+# `set -e` aborts, which is how most of these scripts stop.
+report_failure() {
+    local code="$1"
+    [ "$code" -eq 0 ] && return 0
+    error "Installation failed (exit $code)."
+    if [ -n "${REQMESH_LOG_FILE:-}" ]; then
+        error "Full transcript: $REQMESH_LOG_FILE"
+        error "The last 20 lines are usually enough to see what went wrong:"
+        error "  tail -20 $REQMESH_LOG_FILE"
+    else
+        error "Re-run with --debug for a full trace, or without --no-log for a transcript."
+    fi
+}
+
+# Child scripts (deploy-docker.sh, deploy-bare.sh) inherit the flag, not the
+# shell option, so honour it on source.
+#
+# Written as an `if`, not `[ -n "$x" ] && set -x`: this file runs under `set -e`,
+# and a bare AND-list whose left side is false returns non-zero at top level,
+# which aborts the `source` on the spot. Every function defined below this point
+# then silently does not exist.
+if [ -n "${REQMESH_DEBUG:-}" ]; then
+    set -x
+fi
+
+# ── Reading back an existing installation ──────────────────────────────────────
+# Re-running the installer used to regenerate every setting from its defaults,
+# because nothing ever read the deployed .env — load_cfg only reads the wizard's
+# own scratch file. Upgrading a box therefore reset RT_PROFILE from `hardened`
+# to `team`, blanked the SMTP host, reverted the commit schedule and minted a
+# fresh RT_SECRET (logging every session out), silently and with exit code 0.
+#
+# PREV_ENV holds the settings of the install already on this machine, so the
+# defaults below can be "what this box is already doing" instead of "factory".
+declare -A PREV_ENV
+PREV_FOUND=false
+
+load_installed_env() {
+    local dir="${1:-${CFG[INSTALL_DIR]:-$INSTALL_DIR}}"
+    local env_file="$dir/.env"
+    local content=""
+
+    # The file is 0600 and usually root-owned, so a plain read fails for the
+    # unprivileged operator who is running the installer.
+    if [ -r "$env_file" ]; then
+        content="$(cat "$env_file" 2>/dev/null)" || return 1
+    elif sudo test -r "$env_file" 2>/dev/null; then
+        content="$(sudo cat "$env_file" 2>/dev/null)" || return 1
+    else
+        return 1
+    fi
+    [ -n "$content" ] || return 1
+
+    local key value
+    while IFS='=' read -r key value; do
+        [[ -z "$key" || "$key" =~ ^[[:space:]]*# ]] && continue
+        PREV_ENV["$key"]="$value"
+    done <<< "$content"
+
+    PREV_FOUND=true
+    return 0
+}
+
+# prev_env <KEY> <fallback> — the existing install's value, else the fallback.
+prev_env() {
+    local key="$1" fallback="${2:-}"
+    if [ -n "${PREV_ENV[$key]:-}" ]; then
+        printf '%s' "${PREV_ENV[$key]}"
+    else
+        printf '%s' "$fallback"
+    fi
+}
+
+# ── Backups ────────────────────────────────────────────────────────────────────
+# backup_file <path> — copy to <path>.bak.<ts>, elevating if needed.
+#
+# This was `cp "$f" "${f}.bak.${ts}" 2>/dev/null || true` in the Docker path: an
+# unprivileged copy into a root-owned directory, with the failure discarded
+# twice. The installer announced "existing files will be backed up" and then
+# reliably backed nothing up. Returns non-zero so the caller can say so.
+backup_file() {
+    local path="$1" ts="${2:-$(date +%s)}"
+    [ -f "$path" ] || return 0
+    local dest="${path}.bak.${ts}"
+    if cp -p "$path" "$dest" 2>/dev/null; then
+        printf '%s' "$dest"; return 0
+    fi
+    if sudo cp -p "$path" "$dest" 2>/dev/null; then
+        printf '%s' "$dest"; return 0
+    fi
+    return 1
+}
+
 # ── Docker invocation ──────────────────────────────────────────────────────────
 # Sets DOCKER to the command prefix that can actually read INSTALL_DIR.
 #
@@ -573,6 +702,17 @@ write_admin_credential() {
     local install_dir="${CFG[INSTALL_DIR]:-$INSTALL_DIR}"
     local cred_file="$install_dir/.initial-admin"
 
+    # On a re-install the app ignores RT_ADMIN_PASSWORD entirely: load_users()
+    # seeds the admin only when users.yaml does not exist. Writing a freshly
+    # generated password here and captioning it "Admin password" handed the
+    # operator a credential that returns 401 — verified on the test host, where
+    # the reported password failed and the original still worked. Say what is
+    # actually true instead.
+    if [ "${CFG[EXISTING_INSTALL]:-false}" = "true" ]; then
+        printf ''
+        return 0
+    fi
+
     if [ -n "${CFG[ADMIN_PASSWORD]:-}" ]; then
         local writer=(tee)
         if ! install -m 600 /dev/null "$cred_file" 2>/dev/null; then
@@ -634,8 +774,15 @@ summary_box() {
     fi
 
     box_line "Admin user:  admin"
-    box_line "Password:    $cred_file (mode 0600)"
-    box_line "Log in, change the password, then delete that file." "$YELLOW"
+    if [ -z "$cred_file" ]; then
+        # Upgrade of an existing install: the accounts were already seeded, so
+        # whatever password is in use now is still the password.
+        box_line "Password:    unchanged - existing accounts were kept."
+        box_line "If it is lost, reset it from the container/host shell." "$YELLOW"
+    else
+        box_line "Password:    $cred_file (mode 0600)"
+        box_line "Log in, change the password, then delete that file." "$YELLOW"
+    fi
     box_line ""
 
     local line
@@ -659,11 +806,42 @@ healthcheck() {
         sleep 1
         elapsed=$((elapsed + 1))
     done
-    error "Health check timed out after ${timeout}s. Check logs:"
+    # A bare "timed out, check the logs" was the least useful message the
+    # installer produced: it fired while the container was healthy (the probe
+    # URL was wrong), and the command it suggested — `docker compose ... logs`
+    # unprefixed — is itself denied for the unprivileged operator, because the
+    # .env it must read is root-owned. So: show the state, show the tail, and
+    # print a command that actually runs.
+    error "Health check timed out after ${timeout}s: $url never answered."
     if [ "${CFG[DEPLOY_MODE]:-}" = "docker" ]; then
-        echo "  docker compose -f ${CFG[COMPOSE_FILE]:-docker-compose.prod.yml} logs"
+        local dc="${DOCKER[*]:-docker} compose -f ${CFG[COMPOSE_FILE]:-docker-compose.prod.yml}"
+        echo ""
+        echo "  Container state:"
+        ${DOCKER[@]:-docker} ps -a --filter 'name=reqmesh' \
+            --format '    {{.Names}}  {{.Status}}' 2>/dev/null || true
+        echo ""
+        echo "  Last 20 log lines:"
+        $dc logs --tail 20 2>&1 | sed 's/^/    /' || true
+        echo ""
+        echo "  Full logs:  $dc logs -f"
+        # The container reporting healthy while this probe fails means the app
+        # is up and the address is wrong — worth saying, because it sends the
+        # reader to the proxy and the bind address instead of the app.
+        if ${DOCKER[@]:-docker} ps --filter 'name=reqmesh' --filter 'health=healthy' \
+             --format '{{.Names}}' 2>/dev/null | grep -q .; then
+            warn "The container reports healthy — the app is running and this address is wrong."
+            warn "Check the published port and RT_BIND rather than the application logs."
+        fi
     else
-        echo "  journalctl -u reqmesh -f"
+        echo ""
+        echo "  Service state:"
+        systemctl is-active reqmesh 2>&1 | sed 's/^/    /' || true
+        echo ""
+        echo "  Last 20 log lines:"
+        sudo journalctl -u reqmesh -n 20 --no-pager 2>&1 | sed 's/^/    /' || true
+        echo ""
+        echo "  Full logs:  sudo journalctl -u reqmesh -f"
     fi
+    [ -n "${REQMESH_LOG_FILE:-}" ] && echo "  Transcript: $REQMESH_LOG_FILE"
     return 1
 }
