@@ -8,9 +8,14 @@ version (from a semver bump keyword or an explicit value) and writes it into:
   - backend/app/core/_version.py  (baked in so the backend has it after repackaging)
   - frontend/package.json
   - desktop/package.json
+  - scripts/install.sh            (the git ref its standalone bootstrap fetches from)
+
+``--files`` prints that list so release.sh can stage it without keeping a second
+copy that drifts out of step.
 
 Usage:
     python3 scripts/set_version.py --get           # print current version
+    python3 scripts/set_version.py --files         # list files a bump touches
     python3 scripts/set_version.py patch           # 0.4.0 -> 0.4.1
     python3 scripts/set_version.py minor           # 0.4.0 -> 0.5.0
     python3 scripts/set_version.py major           # 0.4.0 -> 1.0.0
@@ -57,6 +62,24 @@ def _sub_once(path: Path, pattern: str, replacement: str, *, required: bool = Tr
     return True
 
 
+def touched_files() -> list[str]:
+    """Repo-relative paths that `write_all` may modify.
+
+    release.sh stages exactly this list. It used to keep its own hardcoded copy,
+    which silently went stale when install.sh was added here: v0.1.2 shipped an
+    installer still pinned to v0.1.1, so the published one-liner bootstrapped the
+    previous release's wizard and deploy scripts.
+    """
+    paths = [
+        "VERSION",
+        "backend/app/core/_version.py",
+        "scripts/install.sh",
+    ]
+    paths += [p for p in ("frontend/package.json", "desktop/package.json")
+              if (ROOT / p).is_file()]
+    return sorted(paths)
+
+
 def write_all(version: str) -> None:
     VERSION_FILE.write_text(version + "\n")
     _sub_once(
@@ -81,7 +104,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("target", nargs="?", help="major | minor | patch | X.Y.Z")
     parser.add_argument("--get", action="store_true", help="print current version and exit")
+    parser.add_argument("--files", action="store_true",
+                        help="print the files a bump touches (one per line) and exit")
     args = parser.parse_args()
+
+    if args.files:
+        print("\n".join(touched_files()))
+        return
 
     current = read_current()
     if args.get or not args.target:

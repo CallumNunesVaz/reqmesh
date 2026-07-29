@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import itertools
+import logging
 import re
 import string
 import uuid
@@ -84,6 +85,8 @@ class RenameBaseline(BaseModel):
 
 router = APIRouter()
 
+logger = logging.getLogger(__name__)
+
 
 @router.get("/version")
 def api_version():
@@ -121,6 +124,18 @@ def create_project(data: ProjectCreate, user: dict = Depends(require_maintain_gl
     store = YamlStore(project_root)
     store.ensure_dirs()
     store.write_meta({"name": data.name or project_id})
+
+    # A project that is not a repository silently discards every auto-commit:
+    # auto_commit's is_repo guard returns False, which the caller cannot tell
+    # apart from "nothing changed". Initialise it here so the setting means what
+    # it says. Failure is not fatal — the project is still usable, just
+    # unversioned — but it is logged rather than swallowed.
+    if settings.git_autocommit:
+        from app.services.git_service import init_repo
+        if not init_repo(project_root, username=user.get("username", "")):
+            logger.warning("Project %s created without a git repository — "
+                           "auto-commit will not record changes", project_id)
+
     return {"id": project_id, "name": data.name or project_id, "path": str(project_root)}
 
 
