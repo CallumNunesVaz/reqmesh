@@ -317,7 +317,11 @@ main() {
     local ts
     ts="$(date +%s)"
     for f in "${backups[@]}"; do
-        sudo cp "$f" "${f}.bak.${ts}" 2>/dev/null || true
+        if dest="$(backup_file "$f" "$ts")"; then
+            info "Backed up $f -> $dest"
+        else
+            warn "Could not back up $f — continuing, but the old copy is gone."
+        fi
     done
 
     install_deps
