@@ -2,7 +2,7 @@
 ### Re-run ./install.sh to reconfigure.
 
 upstream reqmesh_backend {
-    server 127.0.0.1:${PORT};
+    server %_NGINX_UPSTREAM_%;
 }
 
 %_NGINX_HTTP_REDIRECT_%
