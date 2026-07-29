@@ -45,7 +45,13 @@ grep -q 'tls internal' <<<"$out" && ok "domain+internal: tls internal present" |
 CFG[DOMAIN]=""; CFG[TLS]="internal"
 out="$(render_caddyfile reqmesh:8000)"
 validate_caddy "$out" "no-domain (the LAN case)"
-grep -q '^:443 {' <<<"$out" && ok "no-domain: listens on :443" || bad "no-domain: missing :443 site"
+# Previously asserted a bare `^:443 {`. That site routes but cannot serve TLS —
+# nothing is named, so the internal CA has no certificate to issue and the
+# handshake fails. The domainless case must name its addresses instead.
+grep -q '^:443 {' <<<"$out" && bad "no-domain: unnamed :443 cannot serve TLS" \
+    || ok "no-domain: no unnamed :443 site"
+grep -q 'https://localhost' <<<"$out" && ok "no-domain: named site present" \
+    || bad "no-domain: no named site"
 grep -q 'redir https://{host}{uri} permanent' <<<"$out" && ok "no-domain: http->https redirect" || bad "no-domain: no redirect"
 grep -q 'reverse_proxy reqmesh:8000' <<<"$out" && ok "no-domain: docker backend target" || bad "no-domain: backend wrong"
 

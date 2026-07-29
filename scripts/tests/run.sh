@@ -16,7 +16,19 @@ set -uo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
-SUITES=(test_wizard.sh test_flow.sh test_e2e.sh)
+# Discovered, not listed. A hardcoded roster silently skips a newly added suite,
+# which is how test_deploy.sh sat in the directory passing nothing — the same
+# stale-list bug that let release.sh publish an installer pinned to the previous
+# version's scripts.
+SUITES=()
+for f in test_*.sh; do
+    [ -e "$f" ] && SUITES+=("$f")
+done
+if [ ${#SUITES[@]} -eq 0 ]; then
+    echo "error: no test_*.sh suites found in $(pwd)" >&2
+    exit 1
+fi
+
 if [ $# -gt 0 ]; then
     SUITES=()
     for arg in "$@"; do

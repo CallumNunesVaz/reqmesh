@@ -360,7 +360,8 @@ render_caddyfile() {
     local content
     content="$(< "$TEMPLATES_DIR/Caddyfile.tmpl")"
 
-    local site_address tls_directive
+    # Caddy requires the global options block to come first in the file.
+    local site_address tls_directive global_block=""
     if [ -n "$domain" ] && [ "$domain" != "localserver.reqmesh.com" ]; then
         site_address="$domain"
         if [ "$tls" = "letsencrypt" ]; then
@@ -369,24 +370,49 @@ render_caddyfile() {
             tls_directive="    tls internal"
         fi
     else
-        # `:443` answers on every hostname this box has — the LAN IP and
-        # localhost alike — which is exactly what a domainless install needs.
-        site_address=":443"
+        # A bare `:443` routes on every hostname, which is why it was used here,
+        # but it cannot *serve* TLS: `tls internal` has no name to issue a
+        # certificate for, and a client connecting to a bare IP sends no SNI, so
+        # Caddy has nothing to present. The handshake died with
+        # "tlsv1 alert internal error" — the site answered on :80 and was
+        # unreachable on :443.
+        #
+        # Naming the addresses gives the internal CA something to sign; Caddy
+        # supports IP addresses as site addresses and issues IP SANs for them.
+        site_address="https://localhost, https://127.0.0.1"
+        local lan="${CFG[LAN_IP]:-}"
+        [ -n "$lan" ] && site_address="https://$lan, $site_address"
         tls_directive="    tls internal"
+
+        # Naming the site is necessary but not sufficient. A client connecting
+        # to a bare IP sends no SNI at all (RFC 6066 forbids IP literals there),
+        # so Caddy has no name to match and aborts the handshake even though it
+        # holds a valid certificate for that IP. default_sni tells it which
+        # certificate to present when the client offers no name.
+        # $( ) strips trailing newlines, so the separating blank line is added
+        # explicitly — without it the block runs into the template's first
+        # comment and Caddy fails to parse the file.
+        if [ -n "$lan" ]; then
+            global_block="$(printf '{\n\tdefault_sni %s\n}' "$lan")"$'\n\n'
+        fi
     fi
 
+    content="${global_block}${content}"
     content="${content//%_SITE_ADDRESS_%/$site_address}"
     content="${content//%_TLS_%/$tls_directive}"
     content="${content//reqmesh:8000/$backend}"
 
-    # A bare `:443` site gets no automatic HTTP redirect (Caddy only issues one
-    # for named sites), so plain http:// would be refused outright.
-    if [ "$site_address" = ":443" ]; then
-        content+="
+    # Named sites get an automatic HTTP->HTTPS redirect from Caddy, but only for
+    # the names listed. A catch-all keeps http:// working for any other address
+    # this box answers on (a second interface, a hostname added later) instead of
+    # refusing the connection outright.
+    case "$site_address" in
+        *localhost*)
+            content+="
 :80 {
     redir https://{host}{uri} permanent
-}"
-    fi
+}" ;;
+    esac
 
     printf '%s\n' "$content"
 }
@@ -441,6 +467,93 @@ load_cfg() {
             CFG["$key"]="$value"
         done < "$CONFIG_FILE"
     fi
+}
+
+# ── Docker invocation ──────────────────────────────────────────────────────────
+# Sets DOCKER to the command prefix that can actually read INSTALL_DIR.
+#
+# The installer writes .env and the compose file as root, 0600 (they hold
+# RT_SECRET and the admin password). `docker compose` then has to *read* them as
+# the invoking user, and membership of the docker group does not grant that —
+# the deployment failed with "open /opt/reqmesh/.env: permission denied" at the
+# point where every file had been created correctly.
+#
+# Decided by testing readability rather than by assuming: a re-install over a
+# user-owned directory should not start requiring sudo it did not need before.
+set_docker_cmd() {
+    local dir="${CFG[INSTALL_DIR]:-$INSTALL_DIR}"
+    if [ "$(id -u)" = 0 ] || [ -r "$dir/.env" ]; then
+        DOCKER=(docker)
+    else
+        DOCKER=(sudo docker)
+    fi
+}
+
+# ── Listen address ─────────────────────────────────────────────────────────────
+# Which interface the app's published port binds to.
+#
+# Behind a reverse proxy, loopback is correct and deliberate: the proxy holds
+# 80/443 and reaches the app over the Docker network, so publishing the app
+# itself to the LAN would only offer an unencrypted way around the proxy.
+#
+# With PROXY=none there is nothing else listening, so loopback means the install
+# is reachable from precisely nowhere. The compose template's hardcoded
+# `${RT_BIND:-127.0.0.1}` was never overridden by the installer, so a
+# `--non-interactive` deployment with no proxy came up healthy, bound to
+# 127.0.0.1, and failed its own health check against the LAN BASE_URL.
+effective_bind() {
+    if [ -n "${CFG[BIND]:-}" ]; then
+        printf '%s' "${CFG[BIND]}"
+    elif [ "${CFG[PROXY]:-caddy}" = "none" ]; then
+        printf '0.0.0.0'
+    else
+        printf '127.0.0.1'
+    fi
+}
+
+# ── Privileged file writes ─────────────────────────────────────────────────────
+# The installer runs as an ordinary user and elevates per-command, so anything
+# under INSTALL_DIR (/opt/reqmesh by default) needs sudo. deploy-bare.sh did this
+# by hand everywhere; deploy-docker.sh did not do it at all, so the entire Docker
+# path — the *default* mode — died on `mkdir: cannot create directory
+# '/opt/reqmesh': Permission denied` for every non-root user.
+#
+# Elevation is decided by testing the target, not by checking for uid 0: the
+# directory may already be user-owned from a previous install, and a needless
+# sudo would then change ownership out from under the running service.
+
+# ensure_dir <dir> — mkdir -p, elevating only if the plain attempt fails.
+ensure_dir() {
+    local dir="$1"
+    [ -d "$dir" ] && return 0
+    mkdir -p "$dir" 2>/dev/null || sudo mkdir -p "$dir"
+}
+
+# write_root_file <path> [mode] — write stdin to <path>, elevating if needed.
+#
+# The writer is chosen *before* the pipe runs. `tee "$f" || sudo tee "$f"` looks
+# equivalent but is not: the first tee consumes stdin before failing on
+# permissions, so the sudo retry inherits a drained pipe and writes an empty
+# file. That exact bug once produced a 0-byte admin credential (see
+# write_admin_credential).
+write_root_file() {
+    local path="$1" mode="${2:-}"
+    ensure_dir "$(dirname "$path")"
+
+    local writer=(tee)
+    if [ -n "$mode" ]; then
+        # Create with the mode *before* writing, so the content is never briefly
+        # world-readable — `>` truncates but keeps the existing mode.
+        if ! install -m "$mode" /dev/null "$path" 2>/dev/null; then
+            sudo install -m "$mode" /dev/null "$path"
+            writer=(sudo tee)
+        fi
+    elif ! touch "$path" 2>/dev/null; then
+        sudo touch "$path"
+        writer=(sudo tee)
+    fi
+
+    "${writer[@]}" "$path" >/dev/null
 }
 
 # ── Credential reporting ───────────────────────────────────────────────────────
