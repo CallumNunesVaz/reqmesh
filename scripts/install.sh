@@ -21,7 +21,17 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Under the documented `curl … | bash`, BASH_SOURCE[0] is *unbound* — not merely
+# empty — so `set -u` made the installer's very first line print
+# "BASH_SOURCE[0]: unbound variable" before anything else. The value was then
+# whatever the failed subshell left behind. Resolve it deliberately instead:
+# piped input has no directory, and standalone mode below stages the companions
+# into its own temp dir anyway.
+if [ -n "${BASH_SOURCE[0]:-}" ]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+else
+    SCRIPT_DIR="$PWD"
+fi
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Standalone mode — if lib.sh is absent we are running with only this file.
@@ -38,7 +48,7 @@ if ! [ -f "$SCRIPT_DIR/lib.sh" ]; then
     # next month would silently pull different companion scripts than the ones
     # it was tested against — and a force-push would change them under a user
     # mid-install. Override REQMESH_REF to track a branch deliberately.
-    _REF="${REQMESH_REF:-v0.1.1}"
+    _REF="${REQMESH_REF:-v0.1.2}"
     _REPO_RAW="${REQMESH_INSTALL_REPO:-https://raw.githubusercontent.com/CallumNunesVaz/reqmesh/${_REF}/scripts}"
 
     case "$_REPO_RAW" in
@@ -218,13 +228,37 @@ non_interactive() {
     save_cfg "DOMAIN" "${REQMESH_DOMAIN:-}"
     save_cfg "HOST" "${RT_HOST:-0.0.0.0}"
     save_cfg "PORT" "${RT_PORT:-8000}"
+    # Empty means "derive from PROXY" — see effective_bind.
+    save_cfg "BIND" "${RT_BIND:-}"
     save_cfg "BASE_URL" "${RT_BASE_URL:-http://localhost:8000}"
+    # Which image tag to deploy. Default unchanged (`latest`); settable so an
+    # operator can pin a known-good build, or deploy one built locally.
+    save_cfg "IMAGE_TAG" "${REQMESH_VERSION:-latest}"
     save_cfg "PROFILE" "${RT_PROFILE:-team}"
     save_cfg "RT_SECRET" "${RT_SECRET:-$(rand_secret 32)}"
     save_cfg "ADMIN_PASSWORD" "${RT_ADMIN_PASSWORD:-$(rand_secret 12)}"
     save_cfg "REQUIRE_AUTH" "${RT_REQUIRE_AUTH:-true}"
     save_cfg "SELF_REG" "${RT_ALLOW_SELF_REGISTRATION:-false}"
-    save_cfg "COOKIE_SECURE" "${RT_COOKIE_SECURE:-true}"
+    # A Secure cookie is never sent over plain HTTP, so hardcoding `true` here
+    # produced a deployment where login returned 200 and every request after it
+    # returned 401 — the session cookie was set and then never sent back. The
+    # wizard already derives this from whether TLS is actually active; the
+    # non-interactive path has to apply the same rule rather than a constant.
+    # An explicit RT_COOKIE_SECURE still wins, for a TLS-terminating proxy in
+    # front that the installer cannot see.
+    _tls_active=false
+    case "${REQMESH_TLS:-letsencrypt}" in
+        ""|none) ;;
+        *) [ "${REQMESH_PROXY:-caddy}" != "none" ] && _tls_active=true ;;
+    esac
+    if [ -n "${RT_COOKIE_SECURE:-}" ]; then
+        save_cfg "COOKIE_SECURE" "$RT_COOKIE_SECURE"
+    else
+        save_cfg "COOKIE_SECURE" "$_tls_active"
+        [ "$_tls_active" = false ] && warn \
+            "No TLS configured — cookies will not be marked Secure. Do not expose this deployment to the internet."
+    fi
+    save_cfg "TLS_ACTIVE" "$_tls_active"
     save_cfg "REQUIRE_EMAIL_VERIFICATION" "${RT_REQUIRE_EMAIL_VERIFICATION:-false}"
     save_cfg "SMTP_HOST" "${RT_SMTP_HOST:-}"
     save_cfg "SMTP_PORT" "${RT_SMTP_PORT:-587}"
