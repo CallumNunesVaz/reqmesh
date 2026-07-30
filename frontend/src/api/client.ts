@@ -50,6 +50,8 @@ export interface Project {
    *  be bare name strings and hand-edited `_meta.yaml` may still hold those,
    *  so both shapes are accepted — use `baselineNames` to read them. */
   baselines?: (string | BaselineDef)[];
+  /** Only present on `getProject`. Normalized server-side, so always objects. */
+  stakeholders?: StakeholderDef[];
 }
 
 export interface BaselineDef {
@@ -96,6 +98,21 @@ export interface SearchResult {
   snippet: string;
   score: number;
   status: string;
+}
+
+export interface StakeholderDef { name: string; weight: number }
+
+export interface RequirementValue {
+  id: string;
+  /** null when no defined stakeholder has scored it — not the same as 0. */
+  value: number | null;
+  rank: number | null;
+  ranked_total: number;
+  scored_count: number;
+  stakeholder_count: number;
+  contributions: { name: string; weight: number; score: number | null; contribution: number | null }[];
+  /** Scores whose stakeholder is no longer defined on the project. */
+  unknown_stakeholders: string[];
 }
 
 export interface AllocationMatrixData {
@@ -656,7 +673,7 @@ export const api = {
   createProject: (data: { id: string; name: string }) => request<Project>('/projects', { method: 'POST', body: data }),
   getProject: (id: string) => request<Project>(`/projects/${id}`),
   deleteProject: (id: string) => request<void>(`/projects/${id}`, { method: 'DELETE' }),
-  updateProject: (id: string, data: { name?: string; naming?: Record<string, any>; quality?: Record<string, any>; workflow?: Record<string, any>; git?: Record<string, any>; baselines?: (string | BaselineDef)[] }) =>
+  updateProject: (id: string, data: { name?: string; naming?: Record<string, any>; quality?: Record<string, any>; workflow?: Record<string, any>; git?: Record<string, any>; baselines?: (string | BaselineDef)[]; stakeholders?: StakeholderDef[] }) =>
     request<any>(`/projects/${id}`, { method: 'PATCH', body: data }),
   getWorkflow: (projectId: string) =>
     request<{ states: string[]; transitions: Record<string, string[]>; default: string }>(`/projects/${projectId}/workflow`),
@@ -810,6 +827,9 @@ export const api = {
    *  than hardcoded so the picker cannot drift from what tracing.py satisfies. */
   getCoverageNeeds: () =>
     request<{ items: { value: string; label: string }[] }>(`/coverage-needs`),
+  /** Weighted stakeholder value of one requirement, plus its rank in the project. */
+  getRequirementValue: (projectId: string, reqId: string) =>
+    request<RequirementValue>(`/projects/${projectId}/requirements/${reqId}/value`),
   getConflicts: (projectId: string) =>
     request<{ count: number; conflicts: ConflictItem[] }>(`/projects/${projectId}/conflicts`),
   getQuality: (projectId: string) =>

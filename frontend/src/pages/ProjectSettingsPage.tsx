@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Save, CheckCircle2, Settings, Trash2, Pencil, X, Check, Plus, RotateCw, GitBranch, Clock, User } from 'lucide-react';
-import { api } from '../api/client';
+import { api, type StakeholderDef } from '../api/client';
 import { useAuthStore } from '../store/auth';
 
 interface NamingRule {
@@ -81,6 +81,19 @@ export default function ProjectSettingsPage() {
     setNewBaselineDef('');
     if (!name || baselineDefs.some((d) => d.name === name)) return;
     setBaselineDefs((prev) => [...prev, { name, symbol: '', description: '' }]);
+  };
+
+  // Stakeholders whose views a requirement is scored against. Defined per
+  // project so the scores are comparable between requirements — they used to
+  // be free text typed into each requirement, so "safety" and "Safety" were
+  // different stakeholders and nothing could be ranked.
+  const [stakeholders, setStakeholders] = useState<StakeholderDef[]>([]);
+  const [newStakeholder, setNewStakeholder] = useState('');
+  const addStakeholder = () => {
+    const name = newStakeholder.trim();
+    setNewStakeholder('');
+    if (!name || stakeholders.some((s) => s.name === name)) return;
+    setStakeholders((prev) => [...prev, { name, weight: 1 }]);
   };
 
   // Git history
@@ -170,6 +183,7 @@ export default function ProjectSettingsPage() {
       setGitCommitSchedule(git.commit_schedule || 'every_change');
       setGitCommitIntervalHours(git.commit_interval_hours || 0);
       setGitCommitChangesThreshold(git.commit_changes_threshold || 0);
+      setStakeholders(p.stakeholders || []);
       setBaselineDefs((p.baselines || []).map((b: any) => (
         typeof b === 'string'
           ? { name: b, symbol: '', description: '' }
@@ -201,6 +215,7 @@ export default function ProjectSettingsPage() {
       await api.updateProject(projectId, {
         name: projectName, naming,
         baselines: baselineDefs,
+        stakeholders,
         git: {
           user_name: gitUserName, user_email: gitUserEmail,
           remote_url: gitRemoteUrl, auto_commit: gitAutocommit,
@@ -309,6 +324,54 @@ export default function ProjectSettingsPage() {
             </div>
           ))}
         </div>
+      </motion.div>
+
+      {/* Stakeholders */}
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="card p-5 mb-6">
+        <h2 className="font-semibold text-sm text-card-foreground mb-1">Stakeholders</h2>
+        <p className="text-xs text-muted-foreground mb-3">
+          Whose views requirements are scored against, and how much each one counts.
+          Weights are relative — a stakeholder on 2 counts twice as much as one on 1.
+          Each requirement scores 0–10 per stakeholder; its value is the weighted mean of those scored.
+        </p>
+        <div className="space-y-1.5 mb-2">
+          {stakeholders.map((sh) => (
+            <div key={sh.name} className="flex items-center gap-2">
+              <span className="text-sm text-foreground flex-1 min-w-0 truncate">{sh.name}</span>
+              <label className="text-[10px] text-muted-foreground">weight</label>
+              <input
+                type="number" min={0} step={0.1}
+                className="input w-20 h-8 text-xs"
+                value={sh.weight}
+                disabled={!editable}
+                onChange={(e) => setStakeholders((prev) => prev.map((x) =>
+                  x.name === sh.name ? { ...x, weight: Number(e.target.value) } : x))}
+              />
+              {editable && (
+                <button
+                  onClick={() => setStakeholders((prev) => prev.filter((x) => x.name !== sh.name))}
+                  className="text-muted-foreground hover:text-destructive"
+                  title="Remove — existing scores for this stakeholder are kept but stop counting"
+                ><X size={13} /></button>
+              )}
+            </div>
+          ))}
+          {stakeholders.length === 0 && (
+            <span className="text-xs text-muted-foreground italic">
+              No stakeholders defined. Requirements cannot be scored until at least one exists.
+            </span>
+          )}
+        </div>
+        {editable && (
+          <div className="flex gap-2">
+            <input className="input text-sm flex-1" placeholder="Safety" value={newStakeholder}
+              onChange={(e) => setNewStakeholder(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addStakeholder(); } }} />
+            <button className="btn-secondary text-xs" onClick={addStakeholder}>
+              <Plus size={14} /> Add
+            </button>
+          </div>
+        )}
       </motion.div>
 
       {/* Baseline definitions */}
