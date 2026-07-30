@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { usePersistedState } from '../hooks/usePersistedState';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Trash2, GitPullRequest, Square, CheckSquare, X, Search } from 'lucide-react';
@@ -32,8 +33,10 @@ export default function ChangeRequestsPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const dataVersion = useStore((s) => s.dataVersion);
   const entityKinds = useEntityKinds(projectId);
-  const [search, setSearch] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
+  // Persisted per project — see RequirementsPage/ComponentsPage for why.
+  const pk = (field: string) => (projectId ? `rt-crs-${field}-${projectId}` : null);
+  const [search, setSearch] = usePersistedState(pk('search'), '');
+  const [filterStatus, setFilterStatus] = usePersistedState(pk('filter-status'), '');
 
   const load = () => {
     if (!projectId) return;

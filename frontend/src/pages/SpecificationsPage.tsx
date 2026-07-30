@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { usePersistedState, setCodec } from '../hooks/usePersistedState';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, FileText, Trash2, ChevronDown, Square, CheckSquare, X, Search } from 'lucide-react';
@@ -19,8 +20,10 @@ export default function SpecificationsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [newSpec, setNewSpec] = useState({ id: '', name: '', description: '' });
   const [requirements, setRequirements] = useState<Requirement[]>([]);
-  const [search, setSearch] = useState('');
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  // Persisted per project — see RequirementsPage/ComponentsPage for why.
+  const pk = (field: string) => (projectId ? `rt-specs-${field}-${projectId}` : null);
+  const [search, setSearch] = usePersistedState(pk('search'), '');
+  const [expanded, setExpanded] = usePersistedState<Set<string>>(pk('expanded'), new Set(), setCodec<string>());
   const entityKinds = useEntityKinds(projectId);
 
   const load = () => {

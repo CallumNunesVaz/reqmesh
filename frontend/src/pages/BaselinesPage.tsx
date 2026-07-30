@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { usePersistedState, setCodec } from '../hooks/usePersistedState';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Trash2, Edit3, Check, X, Snowflake, History, GitBranch, Clock, Layers, ArrowRight, ChevronDown, ChevronRight, Loader, Eye, EyeOff } from 'lucide-react';
@@ -31,7 +32,12 @@ export default function BaselinesPage() {
   const [freezing, setFreezing] = useState<string | null>(null);
   const [diffing, setDiffing] = useState<string | null>(null);
   const [diffResult, setDiffResult] = useState<BaselineDiff | null>(null);
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  // Which baseline rows are expanded — persisted per project for the same
+  // reason as the other list pages; the create/edit form state above it stays
+  // a plain useState, since re-opening a stale draft on return would be wrong.
+  const [expanded, setExpanded] = usePersistedState<Set<string>>(
+    projectId ? `rt-baselines-expanded-${projectId}` : null, new Set(), setCodec<string>(),
+  );
 
   const load = useCallback(async () => {
     if (!projectId) return;

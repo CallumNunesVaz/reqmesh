@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { usePersistedState } from '../hooks/usePersistedState';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Trash2, AlertTriangle, Square, CheckSquare, X, Search } from 'lucide-react';
@@ -30,10 +31,12 @@ export default function RisksPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const dataVersion = useStore((s) => s.dataVersion);
   const entityKinds = useEntityKinds(projectId);
-  const [search, setSearch] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
-  const [filterSeverity, setFilterSeverity] = useState('');
-  const [filterProbability, setFilterProbability] = useState('');
+  // Persisted per project — see RequirementsPage/ComponentsPage for why.
+  const pk = (field: string) => (projectId ? `rt-risks-${field}-${projectId}` : null);
+  const [search, setSearch] = usePersistedState(pk('search'), '');
+  const [filterStatus, setFilterStatus] = usePersistedState(pk('filter-status'), '');
+  const [filterSeverity, setFilterSeverity] = usePersistedState(pk('filter-severity'), '');
+  const [filterProbability, setFilterProbability] = usePersistedState(pk('filter-probability'), '');
 
   const load = () => { if (!projectId) return; api.listRisks(projectId).then(setRisks).catch(console.error); };
   useEffect(load, [projectId, dataVersion]);
