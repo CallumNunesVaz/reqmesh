@@ -709,6 +709,44 @@ ensure_data_root() {
     info "Data root: $projects (owner ${DATA_UID}:${DATA_GID})"
 }
 
+# ── Port holders ───────────────────────────────────────────────────────────────
+# Who is actually listening on a port, as a printable phrase.
+#
+# Every "likely holder" message so far guessed from filesystem evidence — a unit
+# file that still existed after the service was stopped, an nginx site config on a
+# host whose nginx was disabled. Each one sent the operator to stop something that
+# was not running while the real holder (a container) kept the port. Ask the
+# system instead.
+port_holder() {
+    local port="$1"
+    local cname
+    cname="$(${DOCKER[@]:-docker} ps --format '{{.Names}} {{.Ports}}' 2>/dev/null \
+             | awk -v p=":$port->" '$0 ~ p {print $1; exit}')"
+    if [ -n "$cname" ]; then
+        printf 'the container %s' "$cname"
+        return 0
+    fi
+    local proc
+    proc="$(sudo ss -tlnp 2>/dev/null | awk -v p=":$port\$" '
+        { for (i = 1; i <= NF; i++) if ($i ~ p) { match($0, /users:\(\("[^"]+"/); 
+          if (RSTART) { s = substr($0, RSTART + 8); gsub(/".*/, "", s); print s; exit } } }')"
+    if [ -n "$proc" ]; then
+        printf 'the process %s' "$proc"
+        return 0
+    fi
+    printf 'an unidentified process'
+}
+
+# Is this port held by a container belonging to our own compose project?
+# Replacing those in place is what an upgrade does, so they are never a conflict —
+# including when the proxy is being swapped, where --remove-orphans retires the
+# old one as the new one starts.
+port_held_by_us() {
+    local port="$1"
+    ${DOCKER[@]:-docker} ps --format '{{.Names}} {{.Ports}}' 2>/dev/null \
+        | awk -v p=":$port->" '$1 ~ /^reqmesh-/ && $0 ~ p { found = 1 } END { exit !found }'
+}
+
 # ── Mode conversion ────────────────────────────────────────────────────────────
 # Switching between bare metal and Docker is safe now that both modes share one
 # data root (see ensure_data_root): the projects and the account database stay

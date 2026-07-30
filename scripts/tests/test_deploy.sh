@@ -634,16 +634,25 @@ check "the app port conflict aborts" \
 # The holder is identified from what is *running*, not from a leftover unit file:
 # on a host where the service had been stopped and only its unit remained, the
 # check blamed bare metal and sent the operator to stop something already stopped.
-check "the holder is identified from running state" \
-      "$(grep -c 'The bare-metal reqmesh service is running and is the holder' \
-         "$REPO/scripts/deploy-docker.sh")" "1"
-check "it says so when reqmesh is not the holder" \
-      "$(grep -c 'reqmesh is not the holder' "$REPO/scripts/deploy-docker.sh")" "1"
-# Replacing our own container in place *is* the upgrade, so its port is not a
-# conflict. Without this every Docker-to-Docker upgrade failed on the container
-# it was about to replace.
-check "our own container is not a port conflict" \
-      "$(grep -c "Replacing the running reqmesh container in place" "$REPO/scripts/deploy-docker.sh")" "1"
+# Every "likely holder" message used to guess from filesystem evidence — a unit
+# file surviving a stopped service, an nginx site config on a host whose nginx was
+# disabled — and each sent the operator to stop something already stopped while a
+# container kept the port. The holder is now looked up.
+check "the port holder is looked up, not guessed" \
+      "$(grep -c 'is held by \$(port_holder' "$REPO/scripts/deploy-docker.sh")" "2"
+check "no filesystem guessing remains in the checks" \
+      "$(grep -c 'is present and is the likely holder' "$REPO/scripts/deploy-docker.sh")" "0"
+# Replacing our own container in place *is* the upgrade — for the app and for the
+# proxy, including when the proxy is being swapped for a different one.
+check "our own container is never a conflict" \
+      "$(grep -c 'port_held_by_us' "$REPO/scripts/deploy-docker.sh")" "2"
+check "the exemption matches any reqmesh container" \
+      "$(sed -n '/^port_held_by_us()/,/^}/p' "$REPO/scripts/lib.sh" \
+         | grep -c "\$1 ~ /\^reqmesh-/")" "1"
+check "a container holder is named" \
+      "$(grep -c 'the container %s' "$REPO/scripts/lib.sh")" "1"
+check "a process holder is named" \
+      "$(grep -c 'the process %s' "$REPO/scripts/lib.sh")" "1"
 check "the wizard defaults the data root to the existing install" \
       "$(grep -c 'prev_env REQMESH_DATA_ROOT' "$REPO/scripts/wizard.sh")" "1"
 check "no advisory-only port warning remains" \
