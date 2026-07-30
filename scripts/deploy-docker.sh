@@ -326,38 +326,41 @@ main() {
     # *is* the upgrade. Without this exemption every Docker-to-Docker upgrade
     # failed on the container it was about to replace.
     set_docker_cmd
-    local own_app; own_app="$("${DOCKER[@]}" ps -q --filter 'name=reqmesh-reqmesh' 2>/dev/null || true)"
-    if [ -n "$own_app" ]; then
+    if port_held_by_us "$port"; then
         info "Replacing the running reqmesh container in place."
     elif check_port "$port"; then
-        error "Port $port is already in use — this deployment cannot bind it."
-        # Identify the actual holder. Testing for the *unit file* blamed
-        # bare metal on a host where the service had already been stopped and
-        # only its unit remained, sending the operator to stop something that
-        # was not running.
+        error "Port $port is held by $(port_holder "$port") — this deployment cannot bind it."
         if systemctl is-active --quiet reqmesh 2>/dev/null; then
-            error "The bare-metal reqmesh service is running and is the holder:"
+            error "That is the bare-metal reqmesh service. Stop it, or keep it:"
             error "  sudo systemctl disable --now reqmesh"
-            error "Or keep it instead: REQMESH_DEPLOY_MODE=bare"
+            error "  REQMESH_DEPLOY_MODE=bare   (keep the current deployment)"
         else
-            error "reqmesh is not the holder. Find it with:"
-            error "  sudo ss -tlnp | grep :$port"
+            error "Stop it, or choose a different port with RT_PORT."
         fi
         return 1
     fi
     local proxy="${CFG[PROXY]:-caddy}"
     if [ "$proxy" != "none" ]; then
-        # Only fatal when the holder is not our own proxy container, which
-        # `up -d` will replace in place.
-        local ours=""
-        ours="$(${DOCKER[@]:-docker} ps -q --filter "name=reqmesh-${proxy}" 2>/dev/null || true)"
-        if [ -z "$ours" ] && { check_port 443 || check_port 80; }; then
-            error "Port 80/443 is already in use by something other than reqmesh's proxy."
-            if [ -f /etc/nginx/sites-enabled/reqmesh ]; then
-                error "A bare-metal nginx install is present and is the likely holder:"
-                error "  sudo systemctl disable --now nginx"
+        # Any container of ours holding 80/443 is fine, whichever proxy it is:
+        # --remove-orphans retires the old one as the new one starts, so swapping
+        # nginx for caddy is an upgrade, not a conflict. Filtering on the *newly
+        # requested* proxy name missed the running one and reported the operator's
+        # own container as foreign.
+        local blocked=""
+        for p in 80 443; do
+            port_held_by_us "$p" && continue
+            check_port "$p" && blocked="$blocked $p"
+        done
+        if [ -n "$blocked" ]; then
+            for p in $blocked; do
+                error "Port $p is held by $(port_holder "$p") — the $proxy proxy cannot bind it."
+            done
+            if systemctl is-active --quiet nginx 2>/dev/null; then
+                error "Stop the host nginx:  sudo systemctl disable --now nginx"
+            elif systemctl is-active --quiet caddy 2>/dev/null; then
+                error "Stop the host Caddy:  sudo systemctl disable --now caddy"
             else
-                error "Find the holder with:  sudo ss -tlnp | grep -E ':(80|443) '"
+                error "Stop it, or deploy without a proxy: REQMESH_PROXY=none"
             fi
             return 1
         fi
