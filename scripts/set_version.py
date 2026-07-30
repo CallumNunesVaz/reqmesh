@@ -62,6 +62,13 @@ def _sub_once(path: Path, pattern: str, replacement: str, *, required: bool = Tr
     return True
 
 
+# Docs that quote the release in an install command. Left to rot they send people
+# at an installer many releases old: the README still named v0.1.3 while v0.1.11
+# was current, so the documented one-liner deployed a script predating every fix
+# made since. Rewritten here for the same reason install.sh's ref pin is.
+DOC_FILES = ("README.md", "DEPLOYMENT.md")
+
+
 def touched_files() -> list[str]:
     """Repo-relative paths that `write_all` may modify.
 
@@ -75,6 +82,7 @@ def touched_files() -> list[str]:
         "backend/app/core/_version.py",
         "scripts/install.sh",
     ]
+    paths += [d for d in DOC_FILES if (ROOT / d).is_file()]
     paths += [p for p in ("frontend/package.json", "desktop/package.json")
               if (ROOT / p).is_file()]
     return sorted(paths)
@@ -98,6 +106,17 @@ def write_all(version: str) -> None:
         r"REQMESH_REF:-v\d+\.\d+\.\d+",
         f"REQMESH_REF:-v{version}",
     )
+    # Every occurrence, not the first: the docs quote the version in several
+    # commands (the one-liner, the bundle download, the unpack directory).
+    for doc in DOC_FILES:
+        path = ROOT / doc
+        if not path.is_file():
+            continue
+        text = path.read_text()
+        text = re.sub(r"/reqmesh/v\d+\.\d+\.\d+/", f"/reqmesh/v{version}/", text)
+        text = re.sub(r"/download/v\d+\.\d+\.\d+/", f"/download/v{version}/", text)
+        text = re.sub(r"reqmesh-v\d+\.\d+\.\d+", f"reqmesh-v{version}", text)
+        path.write_text(text)
 
 
 def main() -> None:

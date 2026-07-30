@@ -57,20 +57,39 @@ needs network access, after which it works offline.
 
 ---
 
+## Which URL to install from
+
+The install command names a **git tag or branch**, which is not the same as the
+`latest` container image tag:
+
+| URL | Meaning |
+|---|---|
+| `.../reqmesh/v0.1.11/scripts/install.sh` | that release — reproducible, recommended |
+| `.../reqmesh/main/scripts/install.sh` | current development tip |
+| `.../reqmesh/latest/scripts/install.sh` | **404** — there is no git ref called `latest` |
+
+`latest` exists only as a container image tag, and the installer already uses it
+by default for the application image: an unpinned run deploys the newest
+published image regardless of which installer tag you fetched. Pin the
+application with `REQMESH_VERSION=<x.y.z>` if you need a specific one — note that
+a pin is not remembered, so pass it on every run.
+
+---
+
 ## Ubuntu 24.04
 
 Use the standard installer — it covers Ubuntu 24.04 along with every other
 supported target, and is the only install path that is tested end to end:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/CallumNunesVaz/reqmesh/v0.1.3/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/CallumNunesVaz/reqmesh/v0.1.11/scripts/install.sh | bash
 ```
 
 For a bare-metal install (Python venv + systemd, no Docker), answer "bare" at
 the deployment-mode prompt, or run it scripted:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/CallumNunesVaz/reqmesh/v0.1.3/scripts/install.sh \
+curl -fsSL https://raw.githubusercontent.com/CallumNunesVaz/reqmesh/v0.1.11/scripts/install.sh \
   | REQMESH_DEPLOY_MODE=bare REQMESH_PROXY=nginx bash -s -- --non-interactive
 ```
 
@@ -84,7 +103,7 @@ signing secret and its accounts; see [Upgrading](#upgrading).
 Re-run the installer. It detects the existing installation and keeps it:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/CallumNunesVaz/reqmesh/v0.1.3/scripts/install.sh \
+curl -fsSL https://raw.githubusercontent.com/CallumNunesVaz/reqmesh/v0.1.11/scripts/install.sh \
   | bash -s -- --non-interactive
 ```
 
@@ -119,7 +138,7 @@ and the change is printed.
 The tarball unpacks to a directory containing the application and the installer:
 
 ```bash
-tar xzf reqmesh-v0.1.3.tar.gz && cd reqmesh-v0.1.3
+tar xzf reqmesh-v0.1.11.tar.gz && cd reqmesh-v0.1.11
 sudo ./install.sh --non-interactive        # delegates to scripts/install.sh
 ```
 
@@ -127,7 +146,7 @@ The bare-metal path needs no network. For Docker offline, load the published
 image first and pin it:
 
 ```bash
-docker load < reqmesh-v0.1.3-image.tar.gz
+docker load < reqmesh-v0.1.11-image.tar.gz
 REQMESH_VERSION=<loaded-tag> ./install.sh --non-interactive
 ```
 
