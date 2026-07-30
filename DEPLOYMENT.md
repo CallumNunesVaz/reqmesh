@@ -100,7 +100,17 @@ signing secret and its accounts; see [Upgrading](#upgrading).
 
 ## Upgrading
 
-Re-run the installer. It detects the existing installation and keeps it:
+```bash
+sudo ./install.sh --upgrade
+```
+
+That moves the application to the newest published release and changes nothing
+else. It refuses if there is no existing installation, and refuses if any
+configuration variable is set in the environment — an upgrade that quietly
+reshaped the deployment because a `REQMESH_PROXY` was left exported is not an
+upgrade. Drop `--upgrade` to apply such a change deliberately.
+
+A plain re-run behaves the same way for settings, but does allow changes:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/CallumNunesVaz/reqmesh/v0.1.11/scripts/install.sh \

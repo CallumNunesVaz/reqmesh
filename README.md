@@ -366,7 +366,11 @@ curl -fsSL https://raw.githubusercontent.com/CallumNunesVaz/reqmesh/v0.1.11/scri
 The admin password is written to `/opt/reqmesh/.initial-admin` (mode 0600), not
 printed — installers get piped into logs. Log in, change it, delete the file.
 
-**Re-running it upgrades in place.** Settings, the signing secret and existing
+**To upgrade**, `sudo ./install.sh --upgrade` — newest release, nothing else
+touched. It refuses rather than proceed if there is no existing install, or if a
+configuration variable is set that would change the deployment.
+
+A plain re-run also upgrades in place. Settings, the signing secret and existing
 accounts are kept; anything you set explicitly for that run wins. The admin
 password is *not* regenerated, because the application only seeds an admin when
 there is no account yet.

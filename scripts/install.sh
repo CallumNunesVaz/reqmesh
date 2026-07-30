@@ -234,6 +234,35 @@ non_interactive() {
         save_cfg "EXISTING_INSTALL" "false"
     fi
 
+    # ── --upgrade ─────────────────────────────────────────────────────────
+    # "Keep everything, just move the application forward." A plain
+    # --non-interactive run already preserves settings, but nothing stops a
+    # leftover REQMESH_PROXY in the environment from quietly reshaping the
+    # deployment as a side effect of an upgrade. This makes that a hard error
+    # instead, so the flag means what it says.
+    if [ "${REQMESH_UPGRADE:-0}" = "1" ]; then
+        if [ "${CFG[EXISTING_INSTALL]}" != "true" ]; then
+            error "--upgrade needs an existing installation, and none was found at $_install_dir."
+            error ""
+            error "Nothing has been changed. To install for the first time, run without"
+            error "--upgrade (or pass --non-interactive with the settings you want)."
+            exit 1
+        fi
+        local _shape_vars="" _v
+        for _v in REQMESH_DEPLOY_MODE REQMESH_PROXY REQMESH_TLS REQMESH_DOMAIN \
+                  RT_DATA_ROOT RT_PORT RT_BASE_URL RT_PROFILE; do
+            [ -n "${!_v:-}" ] && _shape_vars="$_shape_vars $_v"
+        done
+        if [ -n "$_shape_vars" ]; then
+            error "--upgrade does not change configuration, but these are set:$_shape_vars"
+            error ""
+            error "Nothing has been changed. Either unset them to upgrade in place, or"
+            error "drop --upgrade to apply them as a reconfiguration."
+            exit 1
+        fi
+        info "Upgrading in place — configuration, accounts and data are kept."
+    fi
+
     # Read settings from environment variables (RT_* prefix)
     # The deploy scripts pick these up from the saved config file
     # The deployment shape is recorded in the generated .env (see generate_env)
@@ -415,6 +444,8 @@ reqmesh install wizard
 Usage:
   ./install.sh                           Interactive wizard (recommended)
   ./install.sh --non-interactive         Scripted deployment (reads RT_* env vars)
+  ./install.sh --upgrade                 Move an existing install to the newest
+                                         release, changing nothing else
   ./install.sh --debug                   Trace every command (transcript holds secrets)
   ./install.sh --no-log                  Do not write a transcript
   ./install.sh --help                    This help
@@ -469,6 +500,10 @@ main() {
         case "$arg" in
             --debug|--verbose) REQMESH_DEBUG=1 ;;
             --no-log)          REQMESH_NO_LOG=1 ;;
+            # An upgrade is a scripted run that is not allowed to reshape the
+            # deployment, so it implies --non-interactive rather than adding a
+            # second mode that would need its own copy of the same logic.
+            --upgrade)         REQMESH_UPGRADE=1; args+=("--non-interactive") ;;
             *)                 args+=("$arg") ;;
         esac
     done
