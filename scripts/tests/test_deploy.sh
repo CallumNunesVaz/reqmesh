@@ -800,4 +800,28 @@ check "the running version is reported" \
 check "a mismatch against the requested tag warns" \
       "$(grep -c 'but the application reports' "$REPO/scripts/deploy-docker.sh")" "1"
 
+
+# ══════════════════════════════════════════════════════════════════════════════
+section "--upgrade"
+# ══════════════════════════════════════════════════════════════════════════════
+# "Keep everything, move the application forward." --non-interactive already
+# preserves settings, but a leftover REQMESH_PROXY in the environment could
+# reshape the deployment as a side effect of what the operator called an upgrade.
+check "--upgrade implies --non-interactive" \
+      "$(grep -c 'REQMESH_UPGRADE=1; args+=("--non-interactive")' "$REPO/scripts/install.sh")" "1"
+check "it refuses when there is nothing to upgrade" \
+      "$(grep -c 'needs an existing installation' "$REPO/scripts/install.sh")" "1"
+check "it says nothing was changed when it refuses" \
+      "$(grep -c 'Nothing has been changed' "$REPO/scripts/install.sh")" "2"
+check "it rejects shape-changing variables" \
+      "$(grep -c 'does not change configuration, but these are set' "$REPO/scripts/install.sh")" "1"
+# The list must cover everything that alters the deployment's shape or identity;
+# a variable missing here is one that could change silently under --upgrade.
+for v in REQMESH_DEPLOY_MODE REQMESH_PROXY REQMESH_TLS REQMESH_DOMAIN \
+         RT_DATA_ROOT RT_PORT RT_BASE_URL RT_PROFILE; do
+    check "  $v is guarded" \
+          "$(sed -n '/_shape_vars="" _v/,/done/p' "$REPO/scripts/install.sh" | grep -c "$v")" "1"
+done
+check "--upgrade is documented" "$(grep -c '\-\-upgrade  ' "$REPO/scripts/install.sh")" "1"
+
 finish
