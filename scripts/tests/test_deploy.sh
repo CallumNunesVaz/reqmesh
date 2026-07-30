@@ -232,8 +232,12 @@ out_domain="$( declare -A CFG=([TLS]=letsencrypt [DOMAIN]=reqs.example.com)
                source "$REPO/scripts/lib.sh" >/dev/null 2>&1
                render_caddyfile "reqmesh:8000" )"
 check "domain site is the bare name" "$(printf '%s' "$out_domain" | grep -c '^reqs.example.com {')" "1"
-check "no default_sni for a domain" "$(printf '%s' "$out_domain" | grep -c 'default_sni')" "0"
-check "no tls directive for Let's Encrypt" "$(printf '%s' "$out_domain" | grep -c 'tls internal')" "0"
+# Scoped to the domain's own block: the file also carries a LAN block that
+# legitimately uses the internal CA, so a whole-file grep now proves nothing.
+check "no tls directive in the domain block" \
+      "$(printf '%s' "$out_domain" | sed -n '/^reqs.example.com {/,/^}/p' | grep -c 'tls internal')" "0"
+check "the LAN fallback is present alongside it" \
+      "$(printf '%s' "$out_domain" | grep -c 'https://localhost')" "1"
 
 # ══════════════════════════════════════════════════════════════════════════════
 section "lib.sh sources completely under set -e"
@@ -700,5 +704,42 @@ check "the review screen does not invent a domain" \
       "$(grep -c 'CFG\[DOMAIN\]:-localhost' "$REPO/scripts/wizard.sh")" "0"
 check "it says plainly that none is set" \
       "$(grep -c 'none - using the LAN address' "$REPO/scripts/wizard.sh")" "1"
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+section "a domain is added, not swapped in"
+# ══════════════════════════════════════════════════════════════════════════════
+# Configuring a domain replaced the LAN site instead of joining it, so with only
+# the domain named https://<lan-ip> matched no site and returned nothing. While
+# DNS was wrong or a certificate pending, the deployment was reachable from
+# nowhere — the operator was locked out of their own box.
+with_domain="$( declare -A CFG=([DOMAIN]=reqs.example.com [TLS]=letsencrypt [LAN_IP]=10.1.1.5)
+                TEMPLATES_DIR="$REPO/scripts/templates"
+                source "$REPO/scripts/lib.sh" >/dev/null 2>&1
+                render_caddyfile "reqmesh:8000" )"
+check "the domain is served" "$(printf '%s' "$with_domain" | grep -c '^reqs.example.com {')" "1"
+check "the LAN address is still served" \
+      "$(printf '%s' "$with_domain" | grep -c '^https://10.1.1.5, https://localhost')" "1"
+check "localhost is still served" "$(printf '%s' "$with_domain" | grep -c 'https://localhost')" "1"
+check "the LAN block uses the internal CA" \
+      "$(printf '%s' "$with_domain" | grep -c 'tls internal')" "1"
+check "the domain block does not (Let's Encrypt is the default)" \
+      "$(printf '%s' "$with_domain" | sed -n '/^reqs.example.com {/,/^}/p' | grep -c 'tls internal')" "0"
+check "the app is reachable from both blocks" \
+      "$(printf '%s' "$with_domain" | grep -c 'reverse_proxy reqmesh:8000')" "2"
+check "default_sni is set for SNI-less clients" \
+      "$(printf '%s' "$with_domain" | grep -c 'default_sni 10.1.1.5')" "1"
+check "the global block is first" "$(printf '%s' "$with_domain" | head -1)" "{"
+check "http still redirects" \
+      "$(printf '%s' "$with_domain" | grep -c 'redir https://{host}{uri} permanent')" "1"
+check "the header block appears once per site" \
+      "$(printf '%s' "$with_domain" | grep -c 'Strict-Transport-Security')" "2"
+
+# A name that cannot be resolved guarantees the ACME challenge fails, so say so
+# at install time rather than leaving the operator to read Caddy's logs.
+check "an unresolvable domain is called out" \
+      "$(grep -c "does not resolve — Let's Encrypt will fail" "$REPO/scripts/lib.sh")" "1"
+check "a missing lookup tool does not block the install" \
+      "$(sed -n '/^domain_resolves()/,/^}/p' "$REPO/scripts/lib.sh" | tail -2 | grep -c 'return 0')" "1"
 
 finish
