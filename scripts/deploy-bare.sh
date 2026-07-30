@@ -199,6 +199,10 @@ REQMESH_DEPLOY_MODE=bare
 REQMESH_PROXY=${CFG[PROXY]:-none}
 REQMESH_TLS=${CFG[TLS]:-none}
 REQMESH_DOMAIN=${CFG[DOMAIN]:-}
+# The host path holding projects and accounts. Recorded because the Docker
+# path's RT_DATA_ROOT is a *container* path, so without this the host location
+# was not written anywhere and the next run relocated it to the default.
+REQMESH_DATA_ROOT=${CFG[DATA_ROOT]:-/data/projects}
 RT_PROFILE=${CFG[PROFILE]:-team}
 RT_SECRET=${CFG[RT_SECRET]}
 RT_ADMIN_PASSWORD=${CFG[ADMIN_PASSWORD]}
@@ -236,6 +240,7 @@ EOF
     sudo chown "$REQMESH_USER:$REQMESH_GROUP" "$env_file" 2>/dev/null || true
 
     # Tectonic cache directory
+    ensure_data_root
     sudo mkdir -p "$data_root/.tectonic-cache" "$STATE_DIR"
     sudo chown -R "$REQMESH_USER:$REQMESH_GROUP" "$STATE_DIR" 2>/dev/null || true
     sudo chown -R "$REQMESH_USER:$REQMESH_GROUP" "$data_root" 2>/dev/null || true

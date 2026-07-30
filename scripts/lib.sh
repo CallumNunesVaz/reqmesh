@@ -675,6 +675,85 @@ live_evidence() {
     fi
 }
 
+# ── Shared data root ───────────────────────────────────────────────────────────
+# Both deployment modes read and write the same directory, so switching between
+# them no longer strands the projects and the account database in storage the
+# other mode cannot reach. Docker bind-mounts it rather than using a private
+# named volume, and runs as the uid that owns it.
+#
+# Sets DATA_UID / DATA_GID for the compose file to consume. The bare-metal
+# service user's ids are authoritative when that user exists, because the same
+# files have to be writable by the systemd service; 999 matches the container's
+# built-in user otherwise.
+DATA_UID=999
+DATA_GID=999
+
+ensure_data_root() {
+    local projects="${CFG[DATA_ROOT]:-/data/projects}"
+    local root; root="$(dirname "$projects")"
+    local user="${CFG[REQMESH_USER]:-reqmesh}"
+
+    if id "$user" >/dev/null 2>&1; then
+        DATA_UID="$(id -u "$user")"
+        DATA_GID="$(id -g "$user")"
+    fi
+
+    ensure_dir "$projects"
+    ensure_dir "$root/.reqmesh"
+    ensure_dir "$root/.tectonic-cache"
+    # Not -R: an existing populated data root may legitimately contain files
+    # owned by another id, and rewriting every project's ownership on each
+    # upgrade is both slow and a good way to break a running deployment.
+    sudo chown "$DATA_UID:$DATA_GID" "$root" "$projects" \
+        "$root/.reqmesh" "$root/.tectonic-cache" 2>/dev/null || true
+    info "Data root: $projects (owner ${DATA_UID}:${DATA_GID})"
+}
+
+# ── Mode conversion ────────────────────────────────────────────────────────────
+# Switching between bare metal and Docker is safe now that both modes share one
+# data root (see ensure_data_root): the projects and the account database stay
+# where they are and the new deployment reads them in place.
+#
+# It was not always so. With Docker on a private named volume, a conversion came
+# up against an empty data root — projects and accounts still on disk, invisible
+# to the new deployment, and a fresh admin password generated. This function used
+# to refuse outright for that reason; it now explains what changes and continues,
+# and only objects if the data root itself would move.
+guard_mode_conversion() {
+    local requested="$1"
+    $PREV_FOUND || return 0
+
+    local current
+    current="$(prev_env REQMESH_DEPLOY_MODE '')"
+    [ -n "$current" ] || current="$(detect_deploy_mode)"
+    [ "$requested" = "$current" ] && return 0
+
+    local old_root new_root
+    old_root="$(prev_env REQMESH_DATA_ROOT "$(prev_env RT_DATA_ROOT '')")"
+    new_root="${CFG[DATA_ROOT]:-/data/projects}"
+
+    if [ -n "$old_root" ] && [ "$old_root" != "$new_root" ]; then
+        error "Refusing to convert $current -> $requested: the data root would move."
+        error "  now:   $old_root"
+        error "  after: $new_root"
+        error ""
+        error "Projects and accounts live in the first and would not be visible in"
+        error "the second. Either keep the current location:"
+        error "  RT_DATA_ROOT=$old_root REQMESH_DEPLOY_MODE=$requested ..."
+        error "or move the data yourself first, then re-run."
+        return 1
+    fi
+
+    warn "Converting this deployment from $current to $requested."
+    warn "  Data root $new_root is shared by both modes and will be reused in place."
+    if [ "$current" = "bare" ]; then
+        warn "  The systemd service must be stopped first: sudo systemctl disable --now reqmesh"
+    else
+        warn "  The containers must be stopped first: cd ${CFG[INSTALL_DIR]:-$INSTALL_DIR} && sudo docker compose -f docker-compose.prod.yml down"
+    fi
+    return 0
+}
+
 # ── Verified install state ─────────────────────────────────────────────────────
 # .env records what a run *attempted*; this file records what actually worked.
 #
@@ -696,6 +775,7 @@ REQMESH_DEPLOY_MODE=${CFG[DEPLOY_MODE]:-}
 REQMESH_PROXY=${CFG[PROXY]:-}
 REQMESH_TLS=${CFG[TLS]:-}
 REQMESH_DOMAIN=${CFG[DOMAIN]:-}
+REQMESH_DATA_ROOT=${CFG[DATA_ROOT]:-}
 REQMESH_VERIFIED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 STATE
 }

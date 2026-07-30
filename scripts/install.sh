@@ -263,6 +263,15 @@ non_interactive() {
         exit 1
     fi
 
+    # Both deployment modes default here, so switching mode does not move the
+    # data. An existing install keeps whatever it already uses — changing the
+    # default must never relocate a populated data root.
+    # REQMESH_DATA_ROOT, not RT_DATA_ROOT: under Docker the latter is the path
+    # *inside the container* and says nothing about where the host keeps the data.
+    # Reading it meant a Docker deploy erased the record and the next run
+    # relocated a populated data root to the default.
+    save_cfg "DATA_ROOT" "${RT_DATA_ROOT:-$(prev_env REQMESH_DATA_ROOT "$(prev_env RT_DATA_ROOT '/data/projects')")}"
+    guard_mode_conversion "$_mode" || exit 1
     save_cfg "DEPLOY_MODE" "$_mode"
     save_cfg "PROXY" "${REQMESH_PROXY:-$(prev_env REQMESH_PROXY "$($PREV_FOUND && detect_proxy || echo caddy)")}"
     save_cfg "TLS" "${REQMESH_TLS:-$(prev_env REQMESH_TLS "$($PREV_FOUND && detect_tls || echo letsencrypt)")}"
@@ -367,7 +376,6 @@ non_interactive() {
     save_cfg "SEED_DEMO" "${RT_SEED_DEMO:-$(prev_env RT_SEED_DEMO 'true')}"
     save_cfg "OFFLINE_MODE" "${RT_OFFLINE_MODE:-$(prev_env RT_OFFLINE_MODE 'false')}"
     save_cfg "INSTALL_DIR" "${REQMESH_INSTALL_DIR:-/opt/reqmesh}"
-    save_cfg "DATA_ROOT" "${RT_DATA_ROOT:-/opt/reqmesh/data/projects}"
     save_cfg "PROXY_TRUSTED_CIDR" "${RT_PROXY_TRUSTED_CIDR:-127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}"
     save_cfg "UPDATE_CONTROL_DIR" "${RT_UPDATE_CONTROL_DIR:-/control}"
     save_cfg "CORS_ORIGINS" "${RT_CORS_ORIGINS:-$(prev_env RT_CORS_ORIGINS '')}"
@@ -432,7 +440,7 @@ Non-interactive mode reads from these environment variables:
   RT_GIT_REMOTE_URL    Git remote for backup
   RT_SEED_DEMO         true | false  (default: true)
   REQMESH_INSTALL_DIR  Install path  (default: /opt/reqmesh)
-  RT_DATA_ROOT         Project data  (default: \$INSTALL_DIR/data/projects)
+  RT_DATA_ROOT         Project data  (default: /data/projects, both modes)
 
 All RT_* settings from config.py are accepted.
 
