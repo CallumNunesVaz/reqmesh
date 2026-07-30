@@ -568,6 +568,25 @@ check "release.sh stages the derived list" \
       "$(grep -c 'git add "\${VERSIONED_FILES\[@\]}"' "$REPO/scripts/release.sh")" "1"
 
 # The pin must match the version being released.
+# The documented install command quotes a tag. Unmaintained it rots: the README
+# named v0.1.3 while v0.1.11 was current, so following the docs installed a script
+# predating every fix made since. `latest` is not an alternative — it is a
+# container image tag, not a git ref, and raw.githubusercontent 404s on it.
+doc_ver="$(cat "$REPO/VERSION")"
+for doc in README.md DEPLOYMENT.md; do
+    stale="$(grep -o "/reqmesh/v[0-9.]*/" "$REPO/$doc" 2>/dev/null \
+             | grep -v "/reqmesh/v$doc_ver/" | sort -u | tr '\n' ' ')"
+    check "$doc install command names the current release" "$stale" ""
+done
+# Lines explaining that the ref 404s are fine; a line *recommending* it is not.
+# This is the third assertion this session to fire on prose rather than on a
+# command, so it excludes the rows that document the failure.
+check "no doc recommends a 'latest' git ref" \
+      "$(cat "$REPO/README.md" "$REPO/DEPLOYMENT.md" \
+         | grep 'reqmesh/latest/' | grep -vc '404')" "0"
+check "the docs are staged by a release" \
+      "$(/usr/bin/python3 "$REPO/scripts/set_version.py" --files | grep -c 'README.md\|DEPLOYMENT.md')" "2"
+
 ver="$(cat "$REPO/VERSION")"
 pin="$(grep -o 'REQMESH_REF:-v[0-9.]*' "$REPO/scripts/install.sh" | head -1 | cut -d- -f2)"
 check "install.sh ref pin matches VERSION" "$pin" "v$ver"
