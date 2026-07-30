@@ -678,6 +678,18 @@ def gap_analysis(project_id: str):
 
 # ── Coverage Analysis ─────────────────────────────────────────────────────────
 
+@router.get("/coverage-needs")
+def coverage_needs_vocabulary():
+    """The obligation kinds a requirement may declare in ``needs``.
+
+    Served rather than hardcoded in the UI so the picker cannot drift from what
+    tracing.py actually satisfies — the drift that left `design` and
+    `verification_case` unsatisfiable in the demo project.
+    """
+    from app.services.tracing import NEEDS_VOCABULARY
+    return {"items": [{"value": k, "label": v} for k, v in NEEDS_VOCABULARY.items()]}
+
+
 @router.get("/projects/{project_id}/coverage")
 def coverage_analysis(project_id: str, _rate: None = Depends(rate_limit(20, 60))):
     from app.services.tracing import trace_all

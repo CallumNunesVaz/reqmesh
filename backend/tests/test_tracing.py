@@ -24,21 +24,30 @@ def test_shallow_covered_with_needs_met(client, project):
 
 
 def test_deep_coverage_chain(client, project):
+    """A chain of decomposition is deep-covered only if every link is.
+
+    Was written against the previous model, where a ``needs`` entry matched the
+    ``type`` of a covering child requirement — so this declared
+    ``needs: ["design"]`` and satisfied it with a child of ``type: design``.
+    That model could not be satisfied at all for the two values the demo ships
+    (``design`` is not a RequirementType, so the API will not create one), which
+    is why ``needs`` now names artifact kinds instead. Decomposition is
+    ``child_requirement``.
+    """
     from app.services.yaml_store import YamlStore
     from app.core.config import settings
     from pathlib import Path
 
     store = YamlStore(Path(settings.data_root) / project)
-    store.create_requirement({"id": "SYS", "name": "System", "description": "S", "needs": ["design"]})
+    store.create_requirement({"id": "SYS", "name": "System", "description": "S",
+                              "needs": ["child_requirement"]})
     store.create_requirement({
         "id": "ARCH", "name": "Architecture", "description": "A",
-        "type": "design",
-        "needs": ["design"],
+        "needs": ["child_requirement"],
         "relations": [{"type": "refines", "target": "SYS"}],
     })
     store.create_requirement({
         "id": "IMPL", "name": "Implementation", "description": "I",
-        "type": "design",
         "needs": [],
         "relations": [{"type": "refines", "target": "ARCH"}],
     })
@@ -52,16 +61,18 @@ def test_deep_coverage_chain(client, project):
 
 
 def test_shallow_but_not_deep(client, project):
+    """SYS2 has a child, so it is shallow-covered; that child has an unmet
+    obligation of its own, so the chain below it is broken."""
     from app.services.yaml_store import YamlStore
     from app.core.config import settings
     from pathlib import Path
 
     store = YamlStore(Path(settings.data_root) / project)
-    store.create_requirement({"id": "SYS2", "name": "S2", "description": "S", "needs": ["design"]})
+    store.create_requirement({"id": "SYS2", "name": "S2", "description": "S",
+                              "needs": ["child_requirement"]})
     store.create_requirement({
         "id": "ARCH2", "name": "A2", "description": "A",
-        "type": "design",
-        "needs": ["design"],
+        "needs": ["child_requirement"],
         "relations": [{"type": "refines", "target": "SYS2"}],
     })
 
@@ -70,6 +81,89 @@ def test_shallow_but_not_deep(client, project):
     assert sys_item["shallow"] is True
     assert sys_item["deep"] is False
     assert sys_item["broken_chain"] is True
+
+
+# ── The obligation kinds, one test each ──────────────────────────────────────
+# Each of these was unsatisfiable under the old model: `needs` was compared
+# against the *type* of a covering child requirement, so no component,
+# verification case or analysis could ever discharge an obligation.
+
+def test_design_need_satisfied_by_a_component(client, project):
+    from app.services.yaml_store import YamlStore
+    from app.core.config import settings
+    from pathlib import Path
+
+    store = YamlStore(Path(settings.data_root) / project)
+    store.create_requirement({"id": "D1", "name": "D1", "description": "X", "needs": ["design"]})
+
+    items = trace_all(store)
+    assert next(i for i in items if i["id"] == "D1")["shallow"] is False
+
+    store.create_component({"id": "COMP1", "name": "Comp", "satisfies": ["D1"]})
+    items = trace_all(store)
+    d1 = next(i for i in items if i["id"] == "D1")
+    assert d1["shallow"] is True
+    assert "design" in d1["covered_types"]
+
+
+def test_verification_need_satisfied_by_a_case(client, project):
+    from app.services.yaml_store import YamlStore
+    from app.core.config import settings
+    from pathlib import Path
+
+    store = YamlStore(Path(settings.data_root) / project)
+    store.create_requirement({"id": "V1", "name": "V1", "description": "X",
+                              "needs": ["verification_case"]})
+    assert next(i for i in trace_all(store) if i["id"] == "V1")["shallow"] is False
+
+    store.create_verification_case({"id": "VC1", "name": "VC", "verified_requirements": ["V1"]})
+    v1 = next(i for i in trace_all(store) if i["id"] == "V1")
+    assert v1["shallow"] is True
+    assert "verification_case" in v1["covered_types"]
+
+
+def test_verification_need_satisfied_from_the_requirement_side(client, project):
+    """The UI writes the link on both entities, so either direction must count."""
+    from app.services.yaml_store import YamlStore
+    from app.core.config import settings
+    from pathlib import Path
+
+    store = YamlStore(Path(settings.data_root) / project)
+    store.create_verification_case({"id": "VC2", "name": "VC2"})
+    store.create_requirement({"id": "V2", "name": "V2", "description": "X",
+                              "needs": ["verification_case"],
+                              "verification_cases": ["VC2"]})
+
+    assert next(i for i in trace_all(store) if i["id"] == "V2")["shallow"] is True
+
+
+def test_reference_need_satisfied_by_an_attached_reference(client, project):
+    """References were keyed by ``ref["path"]`` — a filesystem path, never a
+    requirement id — so they counted towards nothing at all."""
+    from app.services.yaml_store import YamlStore
+    from app.core.config import settings
+    from pathlib import Path
+
+    store = YamlStore(Path(settings.data_root) / project)
+    store.create_requirement({"id": "R1", "name": "R1", "description": "X", "needs": ["reference"]})
+    assert next(i for i in trace_all(store) if i["id"] == "R1")["shallow"] is False
+
+    store.update_requirement("R1", {"references": [{"path": "src/wing.py", "kind": "impl"}]})
+    r1 = next(i for i in trace_all(store) if i["id"] == "R1")
+    assert r1["shallow"] is True
+    assert "reference" in r1["covered_types"]
+
+
+def test_coverage_needs_vocabulary_endpoint(client):
+    """The picker is served from the same constant tracing.py satisfies, so the
+    two cannot drift the way `design`/`verification_case` did."""
+    from app.services.tracing import NEEDS_VOCABULARY
+
+    res = client.get("/api/coverage-needs")
+    assert res.status_code == 200
+    values = {i["value"] for i in res.json()["items"]}
+    assert values == set(NEEDS_VOCABULARY)
+    assert "design" in values and "verification_case" in values
 
 
 def test_terminating_item(client, project):

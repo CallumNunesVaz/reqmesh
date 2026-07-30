@@ -806,6 +806,10 @@ export const api = {
     request<{ total: number; gaps: number; items: GapItem[] }>(`/projects/${projectId}/gap-analysis`),
   getCoverageAnalysis: (projectId: string) =>
     request<CoverageData>(`/projects/${projectId}/coverage`),
+  /** The obligation kinds a requirement may declare in `needs`. Served rather
+   *  than hardcoded so the picker cannot drift from what tracing.py satisfies. */
+  getCoverageNeeds: () =>
+    request<{ items: { value: string; label: string }[] }>(`/coverage-needs`),
   getConflicts: (projectId: string) =>
     request<{ count: number; conflicts: ConflictItem[] }>(`/projects/${projectId}/conflicts`),
   getQuality: (projectId: string) =>

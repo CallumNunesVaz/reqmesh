@@ -3,34 +3,84 @@ from __future__ import annotations
 from collections import defaultdict
 
 
+# The coverage obligations a requirement can declare in ``needs``.
+#
+# These are *artifact kinds*, satisfied by the existence of a linked artifact —
+# mirroring the SysML v2 relationships reqmesh already exports (``satisfy``,
+# ``verify``). They previously had to match the ``type`` of a child
+# requirement, which meant the two values the demo project ships with,
+# ``design`` and ``verification_case``, could never be satisfied by anything:
+# neither is a member of RequirementType, so the API will not create a
+# requirement of that type, and every project using them reported permanent
+# coverage gaps that no amount of modelling could close.
+NEEDS_VOCABULARY = {
+    # SysML v2 `satisfy` — a component claims to realise the requirement.
+    "design": "A component satisfies this requirement",
+    # SysML v2 `verify` — a verification case exercises it.
+    "verification_case": "A verification case verifies this requirement",
+    # An analysis case whose scope includes it.
+    "analysis_case": "An analysis case covers this requirement",
+    # Decomposition: any child requirement.
+    "child_requirement": "A child requirement decomposes this requirement",
+    # A source-code / document reference of any kind.
+    "reference": "An external reference (code, test, doc) is attached",
+}
+
+
 def _build_coverage_graph(store) -> dict:
     reqs = store.list_requirements()
     vcs = store.list_verification_cases()
+    components = store.list_components()
+    try:
+        analyses = store.list_items("analysis_cases")
+    except Exception:
+        analyses = []
     req_map = {r["id"]: r for r in reqs}
 
-    covering: dict[str, set] = defaultdict(set)
+    # requirement id -> {(need_kind, covering_entity_id)}
     covered_by: dict[str, set] = defaultdict(set)
+
+    # `design`: components that satisfy the requirement. This is the same
+    # relationship the allocation matrix and the SysML exporter both use.
+    for c in components:
+        for target in c.get("satisfies") or []:
+            covered_by[target].add(("design", c["id"]))
+
+    # `verification_case`: VCs that verify it, from either direction — the VC's
+    # own list, and the requirement's, since the UI writes both.
+    for vc in vcs:
+        for target in vc.get("verified_requirements") or []:
+            covered_by[target].add(("verification_case", vc["id"]))
+    for req in reqs:
+        for vc_id in req.get("verification_cases") or []:
+            covered_by[req["id"]].add(("verification_case", vc_id))
+
+    # `analysis_case`: an analysis whose scope names the requirement. An empty
+    # scope means "the whole project", so it covers every requirement.
+    for a in analyses:
+        scope = a.get("scope") or []
+        targets = scope if scope else [r["id"] for r in reqs]
+        for target in targets:
+            covered_by[target].add(("analysis_case", a["id"]))
 
     for req in reqs:
         rid = req["id"]
-        req_type = req.get("type", "functional")
-        for rel in req.get("relations", []):
-            target = rel["target"]
-            covered_by[target].add((req_type, rid))
 
-        for vc in vcs:
-            vcid = vc["id"]
-            for target in vc.get("verified_requirements", []):
-                covered_by[target].add(("verification_case", vcid))
-
-        for ref in req.get("references", []):
-            ref_kind = ref.get("kind", "impl")
-            covered_by[ref.get("path", "")].add((ref_kind, rid))
-
+        # `child_requirement`: decomposition, via parent links and the
+        # explicit refine/derive relations that mean the same thing.
         parent = req.get("parent")
         if parent and parent in req_map:
-            parent_type = req_map[parent].get("type", "functional")
-            covered_by[parent].add((parent_type, rid))
+            covered_by[parent].add(("child_requirement", rid))
+        for rel in req.get("relations", []):
+            if rel.get("type") in ("refines", "derives"):
+                covered_by[rel["target"]].add(("child_requirement", rid))
+
+        # `reference`: any attached external reference. Keyed by requirement id
+        # — the previous code keyed these by ``ref["path"]``, so they landed
+        # under a filesystem path that is never a requirement id and could not
+        # count towards anything.
+        if req.get("references"):
+            covered_by[rid].add(("reference", rid))
 
     return {
         "req_map": req_map,
@@ -93,9 +143,15 @@ def deep_status(req: dict, graph: dict, memo: dict | None = None, visiting: set 
     req_map = graph.get("req_map", {})
     covered = graph.get("covered_by", {}).get(rid, set())
 
+    # Only decomposition recurses. The other obligations are satisfied by
+    # artifacts that are not requirements — a component, a verification case,
+    # an analysis — and have no coverage of their own to be deep about. The
+    # previous code looked every covering id up in req_map and skipped the
+    # misses, which happened to work only because every covering id *was* a
+    # requirement then.
     all_covered_deep = True
     for ctype, source_id in covered:
-        if ctype not in needs:
+        if ctype != "child_requirement":
             continue
         source_req = req_map.get(source_id)
         if source_req is None:

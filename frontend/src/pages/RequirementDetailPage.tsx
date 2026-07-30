@@ -18,6 +18,7 @@ import { HelpTip } from '../components/HelpTip';
 import { useConfirm } from '../components/ConfirmDialog';
 import DescriptionHelper from '../components/DescriptionHelper';
 import ParametricsGuide from '../components/ParametricsGuide';
+import { LinkEditor } from '../components/LinkEditor';
 import { useKeyboardShortcuts } from '../components/useKeyboardShortcuts';
 import LoadingSplash from '../components/LoadingSplash';
 import { statusColors } from '../components/RequirementNode';
@@ -61,6 +62,8 @@ export default function RequirementDetailPage() {
   const [allReqs, setAllReqs] = useState<Requirement[]>([]);
   const [allVcs, setAllVcs] = useState<VerificationCase[]>([]);
   const [satisfiedBy, setSatisfiedBy] = useState<Component[]>([]);
+  const [allComponents, setAllComponents] = useState<Component[]>([]);
+  const [coverageNeedOptions, setCoverageNeedOptions] = useState<{ value: string; label: string }[]>([]);
   const [inSpecs, setInSpecs] = useState<Specification[]>([]);
   const [evaluated, setEvaluated] = useState<EvaluatedRequirement | undefined>();
   const [definitions, setDefinitions] = useState<Definition[]>([]);
@@ -143,6 +146,29 @@ export default function RequirementDetailPage() {
     showDerivation(req.id);
   };
 
+  // Allocation goes through the same endpoint the Allocation Matrix page uses
+  // (component.satisfies is the real relationship; req.allocated_to is a
+  // display string the backend derives from it), rather than through the
+  // normal dirty/save flow — the backend has already committed the change by
+  // the time this returns, so req/savedRef are updated directly to keep the
+  // dirty-diff and discard-changes logic from treating allocated_to as a
+  // pending edit.
+  const allocateComponent = async (componentId: string, allocated: boolean) => {
+    if (!projectId || !reqId) return;
+    try {
+      const result = await api.setAllocation(projectId, reqId, componentId, allocated);
+      setSatisfiedBy((prev) => allocated
+        ? (prev.some((c) => c.id === componentId)
+            ? prev
+            : [...prev, ...allComponents.filter((c) => c.id === componentId)])
+        : prev.filter((c) => c.id !== componentId));
+      setReq((r) => (r ? { ...r, allocated_to: result.allocated_to } : r));
+      if (savedRef.current) savedRef.current = { ...savedRef.current, allocated_to: result.allocated_to };
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const incomingRelations = useMemo(() => {
     if (!req) return [];
     const results: { source: string; type: string; sourceName: string }[] = [];
@@ -182,6 +208,8 @@ export default function RequirementDetailPage() {
       setLoading(false);
     }).catch((err) => { if (alive) console.error(err); });
     api.getComponentsForRequirement(projectId, reqId).then((v) => { if (alive) setSatisfiedBy(v); }).catch(() => { if (alive) setSatisfiedBy([]); });
+    api.listComponents(projectId).then((v) => { if (alive) setAllComponents(v); }).catch(() => { if (alive) setAllComponents([]); });
+    api.getCoverageNeeds().then((v) => { if (alive) setCoverageNeedOptions(v.items); }).catch(() => { if (alive) setCoverageNeedOptions([]); });
     // Backlinks: everything else in the project that names this requirement.
     api.listSpecifications(projectId)
       .then((specs) => { if (alive) setInSpecs(specs.filter((s) => s.requirements.includes(reqId))); })
@@ -734,19 +762,27 @@ export default function RequirementDetailPage() {
             )}
           </motion.div>
 
-          {/* The design side of the house: which components claim to realise
-              this requirement. Read-only here — the mapping is owned by the
-              component, so editing it lives on the Components page. */}
-          {satisfiedBy.length > 0 && (
+          {/* The design side of the house: which components satisfy this
+              requirement — allocation, in ISO 29148 terms. Used to be
+              read-only here with a comment pointing at the Components page,
+              plus a *second*, disconnected free-text "Allocated To" field
+              above that wrote to req.allocated_to directly. Both are now one
+              editable control, backed by the same /allocation endpoint the
+              Allocation Matrix page uses, so this can no longer disagree with
+              the matrix or go stale. */}
+          {(satisfiedBy.length > 0 || editable) && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.22 }} className="card p-5">
-              <h2 className="font-semibold text-sm text-card-foreground mb-3">Satisfied By</h2>
-              <div className="flex flex-wrap gap-2">
-                {satisfiedBy.map((c) => (
-                  <span key={c.id} className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-muted text-xs text-foreground">
-                    <EntityLink kind="component" id={c.id} name={c.name} className="hover:text-primary" />
-                  </span>
-                ))}
-              </div>
+              <h2 className="font-semibold text-sm text-card-foreground mb-1">Allocated To</h2>
+              <LinkEditor
+                hint="Components that satisfy this requirement" kind="component"
+                linked={satisfiedBy.map((c) => c.id)}
+                options={allComponents}
+                editable={editable}
+                onAdd={(id) => allocateComponent(id, true)}
+                onRemove={(id) => allocateComponent(id, false)}
+                nameOf={(id) => satisfiedBy.find((c) => c.id === id)?.name
+                  ?? allComponents.find((c) => c.id === id)?.name ?? ''}
+              />
             </motion.div>
           )}
 
@@ -962,32 +998,65 @@ export default function RequirementDetailPage() {
               </div>
               <div>
                 <label className="label">Coverage Needs</label>
-                <input
-                  className="input font-mono text-xs"
-                  placeholder="e.g. design, verification_case"
-                  value={(req.needs || []).join(', ')}
-                  onChange={(e) => {
-                    const needs = e.target.value ? e.target.value.split(',').map(s => s.trim()).filter(Boolean) : [];
-                    setReq({ ...req, needs });
-                  }}
-                  onBlur={(e) => {
-                    const needs = e.target.value ? e.target.value.split(',').map(s => s.trim()).filter(Boolean) : [];
-                    save({ needs });
-                  }}
-                  disabled={!editable}
-                />
-                <div className="text-[10px] text-muted-foreground mt-0.5">Artifact types that must cover this requirement</div>
+                {/* Checkboxes over the vocabulary the backend actually
+                    satisfies, fetched from /coverage-needs. Free text let a
+                    project declare obligations nothing could ever discharge —
+                    the demo shipped `design` and `verification_case`, which the
+                    old model compared against a child requirement's *type*, and
+                    neither is a valid RequirementType. Any value already stored
+                    that is not in the vocabulary is still listed, so an
+                    existing project can see and clear it rather than having it
+                    silently vanish on the next save. */}
+                <div className="space-y-1 mt-1">
+                  {[...coverageNeedOptions.map((o) => o.value),
+                    ...(req.needs || []).filter((n) => !coverageNeedOptions.some((o) => o.value === n)),
+                  ].map((value) => {
+                    const known = coverageNeedOptions.find((o) => o.value === value);
+                    const checked = (req.needs || []).includes(value);
+                    return (
+                      <label key={value} className="flex items-start gap-2 text-xs cursor-pointer group">
+                        <input
+                          type="checkbox"
+                          className="w-3.5 h-3.5 mt-0.5 rounded border-muted-foreground/30 shrink-0"
+                          checked={checked}
+                          disabled={!editable}
+                          onChange={(e) => {
+                            const next = e.target.checked
+                              ? [...(req.needs || []), value]
+                              : (req.needs || []).filter((n) => n !== value);
+                            save({ needs: next });
+                          }}
+                        />
+                        <span className="min-w-0">
+                          <span className="font-mono text-[11px] text-foreground">{value}</span>
+                          {known
+                            ? <span className="text-[10px] text-muted-foreground block">{known.label}</span>
+                            : <span className="text-[10px] text-amber-400 block">Not a recognised obligation — nothing can satisfy it</span>}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+                <div className="text-[10px] text-muted-foreground mt-1">Artifacts that must exist to cover this requirement</div>
               </div>
               <div>
                 <label className="label">Subject</label>
-                <input
-                  className="input font-mono text-xs"
-                  placeholder="e.g. WING (the part this requirement constrains)"
+                {/* Free text let this drift from any real component id, so the
+                    round-trip to SysML v2 (`subject X;`) exported a name
+                    nothing else in the project recognised. A dropdown of
+                    actual components keeps it referring to something real —
+                    same reasoning as Coverage Needs below. */}
+                <select
+                  className="select font-mono text-xs"
                   value={req.subject || ''}
-                  onChange={(e) => setReq({ ...req, subject: e.target.value })}
-                  onBlur={(e) => save({ subject: e.target.value || null } as Partial<Requirement>)}
+                  onChange={(e) => save({ subject: e.target.value || null } as Partial<Requirement>)}
                   disabled={!editable}
-                />
+                >
+                  <option value="">None</option>
+                  {allComponents.map((c) => (
+                    <option key={c.id} value={c.id}>{c.id} — {c.name}</option>
+                  ))}
+                </select>
                 <div className="text-[10px] text-muted-foreground mt-0.5">SysML v2 subject — the component this requirement is about</div>
               </div>
               <div>
@@ -1091,17 +1160,15 @@ export default function RequirementDetailPage() {
                   disabled={!editable}
                 />
               </div>
-              <div>
-                <label className="label">Allocated To</label>
-                <input
-                  className="input"
-                  placeholder="System element..."
-                  value={req.allocated_to || ''}
-                  onChange={(e) => setReq({ ...req, allocated_to: e.target.value })}
-                  onBlur={(e) => save({ allocated_to: e.target.value })}
-                  disabled={!editable}
-                />
-              </div>
+              {/* "Allocated To" used to be a free-text input here, writing straight
+                  to req.allocated_to — a field the allocation matrix already
+                  derives and overwrites from component.satisfies
+                  (extra_routes.py: set_allocation), so anything typed here
+                  disagreed with the matrix the moment anyone touched it there,
+                  and never reached the SysML export at all. The "Satisfied By"
+                  card below is the same relationship, backed by the same
+                  endpoint the matrix uses — editable there now instead of a
+                  second, disconnected copy of the same idea. */}
               <div>
                 <label className="label">Baselines</label>
                 <div className="flex flex-wrap gap-1.5 mt-1">
