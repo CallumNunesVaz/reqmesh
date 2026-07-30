@@ -347,6 +347,9 @@ main() {
 
     # ── Access instructions ────────────────────────────────────────────────
     local cred_file
+    # Only now, with the deploy verified healthy, record what is running.
+    write_install_state
+
     cred_file="$(write_admin_credential)"
 
     # Print the commands that will actually work for this user. The config is

@@ -565,6 +565,22 @@ load_installed_env() {
     done <<< "$content"
 
     PREV_FOUND=true
+
+    # The verified state file wins over .env for the deployment shape.
+    local state_file="$dir/$STATE_FILE_NAME"
+    local state=""
+    if [ -r "$state_file" ]; then
+        state="$(cat "$state_file" 2>/dev/null)"
+    elif sudo test -r "$state_file" 2>/dev/null; then
+        state="$(sudo cat "$state_file" 2>/dev/null)"
+    fi
+    if [ -n "$state" ]; then
+        while IFS='=' read -r key value; do
+            [[ -z "$key" || "$key" =~ ^[[:space:]]*# ]] && continue
+            PREV_ENV["$key"]="$value"
+        done <<< "$state"
+        STATE_VERIFIED=true
+    fi
     return 0
 }
 
@@ -575,6 +591,13 @@ load_installed_env() {
 # halfway through, having already rewritten .env.
 detect_deploy_mode() {
     local dir="${CFG[INSTALL_DIR]:-$INSTALL_DIR}"
+    # Running beats installed, and installed beats a leftover config file: a
+    # failed conversion leaves a compose file behind on a box whose systemd
+    # service is still the thing actually serving traffic.
+    if systemctl is-active --quiet reqmesh 2>/dev/null; then printf 'bare'; return 0; fi
+    if [ -n "$(${DOCKER[@]:-docker} ps -q --filter name=reqmesh 2>/dev/null)" ]; then
+        printf 'docker'; return 0
+    fi
     if [ -f /etc/systemd/system/reqmesh.service ]; then printf 'bare'; return 0; fi
     if [ -f "$dir/docker-compose.prod.yml" ]; then printf 'docker'; return 0; fi
     printf 'docker'
@@ -599,6 +622,82 @@ detect_tls() {
         http://*)  printf 'none' ;;
         *)         printf 'none' ;;
     esac
+}
+
+# ── Deployment shape reconciliation ────────────────────────────────────────────
+# resolve_deploy_mode — decide the mode, or refuse and explain.
+#
+# Precedence: an explicit REQMESH_DEPLOY_MODE always wins; then a *verified*
+# recorded mode; then whatever is actually live on the host. If an unverified
+# recorded mode contradicts the live one, refuse — that combination means a
+# previous run died partway and its claim cannot be trusted, and guessing
+# converted a running bare-metal machine to Docker.
+#
+# Prints the resolved mode on stdout, or returns 1 having explained the conflict.
+resolve_deploy_mode() {
+    if [ -n "${REQMESH_DEPLOY_MODE:-}" ]; then
+        printf '%s' "$REQMESH_DEPLOY_MODE"; return 0
+    fi
+
+    local recorded live
+    recorded="$(prev_env REQMESH_DEPLOY_MODE '')"
+    live="$(detect_deploy_mode)"
+
+    if [ -z "$recorded" ]; then
+        printf '%s' "$live"; return 0
+    fi
+    if $STATE_VERIFIED || [ "$recorded" = "$live" ]; then
+        printf '%s' "$recorded"; return 0
+    fi
+
+    error "Conflicting deployment state — refusing to guess."
+    error "  ${CFG[INSTALL_DIR]:-$INSTALL_DIR}/.env records: $recorded"
+    error "  actually live on this host:  $live$(live_evidence)"
+    error ""
+    error "The recorded value was written by a run that did not finish, so it"
+    error "describes a deployment that was never reached. Choose explicitly:"
+    error "  REQMESH_DEPLOY_MODE=$live    keep what is running now"
+    error "  REQMESH_DEPLOY_MODE=$recorded  convert (stop the current one first)"
+    return 1
+}
+
+# A short parenthetical naming why we think the live mode is what it is.
+live_evidence() {
+    local dir="${CFG[INSTALL_DIR]:-$INSTALL_DIR}"
+    if systemctl is-active --quiet reqmesh 2>/dev/null; then
+        printf ' (reqmesh.service is active)'
+    elif [ -f /etc/systemd/system/reqmesh.service ]; then
+        printf ' (reqmesh.service is installed)'
+    elif [ -n "$(${DOCKER[@]:-docker} ps -q --filter name=reqmesh 2>/dev/null)" ]; then
+        printf ' (reqmesh containers are running)'
+    elif [ -f "$dir/docker-compose.prod.yml" ]; then
+        printf ' (a compose file is present)'
+    fi
+}
+
+# ── Verified install state ─────────────────────────────────────────────────────
+# .env records what a run *attempted*; this file records what actually worked.
+#
+# The distinction matters because .env is written before the deploy can succeed —
+# compose has to read it — so a run that died afterwards left .env asserting a
+# deployment that was never reached. A Docker attempt that failed to bind its
+# port convinced every later run that the machine was a Docker install, and the
+# next upgrade converted a working bare-metal box on the strength of it.
+STATE_FILE_NAME=".reqmesh-state"
+STATE_VERIFIED=false
+
+# write_install_state — called only after a deploy has verified healthy.
+write_install_state() {
+    local dir="${CFG[INSTALL_DIR]:-$INSTALL_DIR}"
+    write_root_file "$dir/$STATE_FILE_NAME" 644 <<STATE
+# Written by install.sh after a successful deploy. Do not edit by hand.
+# This is what is actually running; .env is only what was last attempted.
+REQMESH_DEPLOY_MODE=${CFG[DEPLOY_MODE]:-}
+REQMESH_PROXY=${CFG[PROXY]:-}
+REQMESH_TLS=${CFG[TLS]:-}
+REQMESH_DOMAIN=${CFG[DOMAIN]:-}
+REQMESH_VERIFIED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+STATE
 }
 
 # prev_env <KEY> <fallback> — the existing install's value, else the fallback.
