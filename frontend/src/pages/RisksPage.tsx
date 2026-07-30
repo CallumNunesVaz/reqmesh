@@ -3,13 +3,14 @@ import { usePersistedState } from '../hooks/usePersistedState';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Trash2, AlertTriangle, Square, CheckSquare, X, Search } from 'lucide-react';
-import { api, type Risk } from '../api/client';
+import { api, type Risk, type Requirement } from '../api/client';
 import { useAuthStore } from '../store/auth';
 import { useStore } from '../store';
 import { CopyLinkButton, EntityLink } from '../components/entities';
 import { useFocusedEntity } from '../components/useFocusedEntity';
 import { AutoLinkText } from '../components/autoLink';
 import { useEntityKinds } from '../components/entityIndex';
+import { LinkEditor } from '../components/LinkEditor';
 
 const sevColors: Record<string, string> = {
   low: 'border-zinc-500/30 bg-zinc-500/10 text-zinc-400',
@@ -38,8 +39,35 @@ export default function RisksPage() {
   const [filterSeverity, setFilterSeverity] = usePersistedState(pk('filter-severity'), '');
   const [filterProbability, setFilterProbability] = usePersistedState(pk('filter-probability'), '');
 
+  // Requirements are loaded so the "Threatens" links can be edited here, not
+  // just displayed — previously this list and the requirement's own "Risks"
+  // card both showed the relationship read-only, so it could only be created
+  // by hand-editing YAML.
+  const [requirements, setRequirements] = useState<Requirement[]>([]);
+
   const load = () => { if (!projectId) return; api.listRisks(projectId).then(setRisks).catch(console.error); };
   useEffect(load, [projectId, dataVersion]);
+  useEffect(() => {
+    if (!projectId) return;
+    let alive = true;
+    api.listRequirements(projectId)
+      .then((v) => { if (alive) setRequirements(v); })
+      .catch(() => { if (alive) setRequirements([]); });
+    return () => { alive = false; };
+  }, [projectId, dataVersion]);
+
+  const setRiskRequirements = async (riskId: string, linked: string[]) => {
+    if (!projectId) return;
+    // Optimistic: the card re-renders from `risks`, and a round-trip through
+    // load() would make each add/remove feel like a page refresh.
+    setRisks((prev) => prev.map((r) => (r.id === riskId ? { ...r, linked_requirements: linked } : r)));
+    try {
+      await api.updateRisk(projectId, riskId, { linked_requirements: linked });
+    } catch (err) {
+      console.error(err);
+      load();
+    }
+  };
 
   const filteredRisks = useMemo(() => {
     if (!search && !filterStatus && !filterSeverity && !filterProbability) return risks;
@@ -178,14 +206,17 @@ export default function RisksPage() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2"><span className="font-mono text-xs text-muted-foreground">{r.id}</span><h3 className="font-medium text-card-foreground">{r.title}</h3><span className={`badge border ${sevColors[r.severity] || ''}`}>{r.severity}</span><span className="text-xs text-muted-foreground">prob: {r.probability}</span><CopyLinkButton kind="risk" id={r.id} className="opacity-0 group-hover:opacity-100" /></div>
                 {r.description && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1"><AutoLinkText text={r.description} kinds={entityKinds} /></p>}
-                {r.linked_requirements.length > 0 && (
-                  <div className="flex flex-wrap items-center gap-1.5 mt-2">
-                    <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Threatens</span>
-                    {r.linked_requirements.map((rid) => (
-                      <span key={rid} className="inline-flex items-center px-1.5 py-0.5 rounded bg-muted text-xs">
-                        <EntityLink kind="requirement" id={rid} className="hover:text-primary" />
-                      </span>
-                    ))}
+                {(r.linked_requirements.length > 0 || editable) && (
+                  <div className="mt-2">
+                    <LinkEditor
+                      label="Threatens" hint="Requirements this risk endangers" kind="requirement"
+                      linked={r.linked_requirements}
+                      options={requirements}
+                      editable={editable}
+                      onAdd={(id) => setRiskRequirements(r.id, [...r.linked_requirements, id])}
+                      onRemove={(id) => setRiskRequirements(r.id, r.linked_requirements.filter((x) => x !== id))}
+                      nameOf={(id) => requirements.find((q) => q.id === id)?.name ?? ''}
+                    />
                   </div>
                 )}
               </div>
