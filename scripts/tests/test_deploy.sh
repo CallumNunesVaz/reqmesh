@@ -631,8 +631,21 @@ check "https without a domain implies selfsigned" "$(tls_from https://10.0.0.5)"
 # file before failing, leaving the machine half-converted.
 check "the app port conflict aborts" \
       "$(grep -c 'this deployment cannot bind it' "$REPO/scripts/deploy-docker.sh")" "1"
-check "it names the likely holder" \
-      "$(grep -c 'A bare-metal reqmesh install is present' "$REPO/scripts/deploy-docker.sh")" "1"
+# The holder is identified from what is *running*, not from a leftover unit file:
+# on a host where the service had been stopped and only its unit remained, the
+# check blamed bare metal and sent the operator to stop something already stopped.
+check "the holder is identified from running state" \
+      "$(grep -c 'The bare-metal reqmesh service is running and is the holder' \
+         "$REPO/scripts/deploy-docker.sh")" "1"
+check "it says so when reqmesh is not the holder" \
+      "$(grep -c 'reqmesh is not the holder' "$REPO/scripts/deploy-docker.sh")" "1"
+# Replacing our own container in place *is* the upgrade, so its port is not a
+# conflict. Without this every Docker-to-Docker upgrade failed on the container
+# it was about to replace.
+check "our own container is not a port conflict" \
+      "$(grep -c "Replacing the running reqmesh container in place" "$REPO/scripts/deploy-docker.sh")" "1"
+check "the wizard defaults the data root to the existing install" \
+      "$(grep -c 'prev_env REQMESH_DATA_ROOT' "$REPO/scripts/wizard.sh")" "1"
 check "no advisory-only port warning remains" \
       "$(grep -c 'the app may fail to bind' "$REPO/scripts/deploy-docker.sh")" "0"
 

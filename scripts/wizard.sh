@@ -588,13 +588,19 @@ p8_paths() {
     clear
     phase "8" "Installation paths"
 
-    save_cfg "INSTALL_DIR" "$(gum_input "Install directory" "${CFG[INSTALL_DIR]:-/opt/reqmesh}" "/opt/reqmesh")"
+    save_cfg "INSTALL_DIR" "$(gum_input "Install directory" "${CFG[INSTALL_DIR]:-${REQMESH_INSTALL_DIR:-/opt/reqmesh}}" "/opt/reqmesh")"
 
+    # An existing install's data root is the default, not the factory path. The
+    # non-interactive path already did this; the wizard did not, so an interactive
+    # upgrade offered /data/projects to a machine whose projects and accounts were
+    # under /opt/reqmesh/data — accepting it would have pointed the deployment at
+    # an empty directory. Both modes share one root now, so it no longer depends
+    # on the deployment mode either.
     local data_root
-    if [ "${CFG[DEPLOY_MODE]}" = "docker" ]; then
-        data_root="/data/projects"  # Docker volume path, not host
-    else
-        data_root="${CFG[INSTALL_DIR]}/data/projects"
+    data_root="$(prev_env REQMESH_DATA_ROOT "$(prev_env RT_DATA_ROOT '/data/projects')")"
+    if $PREV_FOUND && [ -n "$data_root" ]; then
+        warn "Keeping the existing data root: $data_root"
+        warn "Changing it will not move your projects or accounts."
     fi
     save_cfg "DATA_ROOT" "$(gum_input "Project data directory" "${CFG[DATA_ROOT]:-$data_root}" "$data_root")"
 

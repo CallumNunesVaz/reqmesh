@@ -216,10 +216,6 @@ deploy_docker() {
     local dir="${CFG[INSTALL_DIR]:-$INSTALL_DIR}"
     cd "$dir"
 
-    # .env and the compose file are root-owned 0600; run docker with whatever
-    # privilege can read them.
-    set_docker_cmd
-
     if [ "${CFG[OFFLINE_MODE]:-false}" = "true" ]; then
         info "Offline mode — building image locally..."
         "${DOCKER[@]}" compose -f "$COMPOSE_FILE" build --pull=false
@@ -325,14 +321,27 @@ main() {
     # ahead, rewrote .env and the compose file, and then died on "failed to bind
     # host port 127.0.0.1:8000: address already in use" — leaving the machine
     # half-converted. If the port is taken, nothing below can succeed.
-    if check_port "$port"; then
+    #
+    # Our own container holding the port is not a conflict — replacing it in place
+    # *is* the upgrade. Without this exemption every Docker-to-Docker upgrade
+    # failed on the container it was about to replace.
+    set_docker_cmd
+    local own_app; own_app="$("${DOCKER[@]}" ps -q --filter 'name=reqmesh-reqmesh' 2>/dev/null || true)"
+    if [ -n "$own_app" ]; then
+        info "Replacing the running reqmesh container in place."
+    elif check_port "$port"; then
         error "Port $port is already in use — this deployment cannot bind it."
-        if [ -f /etc/systemd/system/reqmesh.service ]; then
-            error "A bare-metal reqmesh install is present and is the likely holder."
-            error "Either keep it (re-run with REQMESH_DEPLOY_MODE=bare) or stop it first:"
+        # Identify the actual holder. Testing for the *unit file* blamed
+        # bare metal on a host where the service had already been stopped and
+        # only its unit remained, sending the operator to stop something that
+        # was not running.
+        if systemctl is-active --quiet reqmesh 2>/dev/null; then
+            error "The bare-metal reqmesh service is running and is the holder:"
             error "  sudo systemctl disable --now reqmesh"
+            error "Or keep it instead: REQMESH_DEPLOY_MODE=bare"
         else
-            error "Find the holder with:  sudo ss -tlnp | grep :$port"
+            error "reqmesh is not the holder. Find it with:"
+            error "  sudo ss -tlnp | grep :$port"
         fi
         return 1
     fi
