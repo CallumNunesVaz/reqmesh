@@ -128,7 +128,33 @@ check "RT_STATE_DIR points at the data volume" \
 check "no tmpfs over the auth state dir" \
       "$(grep -c '^\s*- /app/.reqmesh\s*$' "$TMPL")" "0"
 check "/tmp is still tmpfs" "$(grep -c '^\s*- /tmp\s*$' "$TMPL")" "1"
-check "the data volume is still mounted" "$(grep -c 'reqmesh-data:/data' "$TMPL")" "1"
+# Was a private named volume; now a host bind mount shared with the bare-metal
+# mode, so switching mode no longer strands the data.
+check "the data root is a host bind mount" \
+      "$(grep -c '\${RT_DATA_HOST:-/data}:/data' "$TMPL")" "1"
+check "no private data volume remains" "$(grep -c 'reqmesh-data:/data' "$TMPL")" "0"
+check "the container runs as the data root's owner" \
+      "$(grep -c 'user: "\${RT_UID:-999}:\${RT_GID:-999}"' "$TMPL")" "1"
+check "both modes default to the same data root" \
+      "$(grep -c "prev_env RT_DATA_ROOT '/data/projects'" "$REPO/scripts/install.sh")" "1"
+check "an existing data root is preserved, not relocated" \
+      "$(grep -c 'save_cfg "DATA_ROOT" "\${RT_DATA_ROOT:-\$(prev_env' "$REPO/scripts/install.sh")" "1"
+check "the shared root is created by both paths" \
+      "$(grep -c 'ensure_data_root' "$REPO/scripts/deploy-docker.sh" "$REPO/scripts/deploy-bare.sh" \
+         | awk -F: '{s+=$2} END {print s}')" "2"
+# Under Docker, RT_DATA_ROOT is the path *inside the container*, so it records
+# nothing about the host. Reading it meant a Docker deploy erased the only record
+# of where the data lived and the next run relocated it to the default — the
+# projects stayed on disk, invisible to the new deployment.
+check "both generators record the host data root" \
+      "$(grep -c '^REQMESH_DATA_ROOT=' "$REPO/scripts/deploy-docker.sh" "$REPO/scripts/deploy-bare.sh" \
+         | awk -F: '{s+=$2} END {print s}')" "2"
+check "the verified state records it too" \
+      "$(grep -c 'REQMESH_DATA_ROOT=\${CFG\[DATA_ROOT\]:-}' "$REPO/scripts/lib.sh")" "1"
+check "resolution prefers the host key over the container one" \
+      "$(grep -c 'prev_env REQMESH_DATA_ROOT' "$REPO/scripts/install.sh")" "1"
+check "a conversion that would move the data still refuses" \
+      "$(grep -c 'the data root would move' "$REPO/scripts/lib.sh")" "1"
 check "rootfs stays read-only" "$(grep -c 'read_only: true' "$TMPL")" "1"
 
 # ══════════════════════════════════════════════════════════════════════════════

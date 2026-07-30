@@ -30,10 +30,17 @@ REQMESH_DEPLOY_MODE=${CFG[DEPLOY_MODE]:-docker}
 REQMESH_PROXY=${CFG[PROXY]:-caddy}
 REQMESH_TLS=${CFG[TLS]:-letsencrypt}
 REQMESH_DOMAIN=${CFG[DOMAIN]:-}
+# The host path holding projects and accounts. Recorded because the Docker
+# path's RT_DATA_ROOT is a *container* path, so without this the host location
+# was not written anywhere and the next run relocated it to the default.
+REQMESH_DATA_ROOT=${CFG[DATA_ROOT]:-/data/projects}
 RT_PROFILE=${CFG[PROFILE]:-team}
 RT_SECRET=${CFG[RT_SECRET]}
 RT_ADMIN_PASSWORD=${CFG[ADMIN_PASSWORD]}
 RT_BASE_URL=${CFG[BASE_URL]}
+RT_DATA_HOST=$(dirname "${CFG[DATA_ROOT]:-/data/projects}")
+RT_UID=$DATA_UID
+RT_GID=$DATA_GID
 RT_BIND=$(effective_bind)
 RT_COOKIE_SECURE=${CFG[COOKIE_SECURE]:-true}
 RT_REQUIRE_AUTH=${CFG[REQUIRE_AUTH]:-true}
@@ -223,11 +230,33 @@ deploy_docker() {
     # container running. It kept holding 80/443 and kept serving HTTPS from a
     # Caddyfile the installer no longer manages, so "disable TLS" disabled
     # nothing. The same applies to switching caddy -> nginx.
+    # The compose file carries a `build:` stanza for source checkouts, so a
+    # missing image makes compose try to build from INSTALL_DIR — which holds
+    # only generated config, no Dockerfile. The result was
+    # "failed to read dockerfile: open Dockerfile.prod: no such file or
+    # directory", which says nothing about the actual problem.
+    local image="ghcr.io/callumnunesvaz/reqmesh:${CFG[IMAGE_TAG]:-latest}"
+    if [ "${CFG[BUILD_FROM_SOURCE]:-false}" != "true" ] \
+       && [ "${CFG[OFFLINE_MODE]:-false}" != "true" ] \
+       && [ ! -f "$dir/Dockerfile.prod" ]; then
+        if ! "${DOCKER[@]}" image inspect "$image" >/dev/null 2>&1; then
+            info "Pulling $image..."
+            if ! "${DOCKER[@]}" compose -f "$COMPOSE_FILE" pull reqmesh 2>&1 | tail -3; then
+                error "Cannot obtain the application image: $image"
+                error ""
+                error "It is neither present locally nor pullable, and there is no"
+                error "Dockerfile in $dir to build from."
+                error "  - check the tag exists:  REQMESH_VERSION=<tag>"
+                error "  - or load it offline:    sudo docker load < reqmesh-<version>-image.tar.gz"
+                return 1
+            fi
+        fi
+    fi
+
     info "Starting containers..."
     if [ "${CFG[BUILD_FROM_SOURCE]:-false}" = "true" ] || [ "${CFG[OFFLINE_MODE]:-false}" = "true" ]; then
         "${DOCKER[@]}" compose -f "$COMPOSE_FILE" up -d --build --remove-orphans
     else
-        "${DOCKER[@]}" compose -f "$COMPOSE_FILE" pull --quiet 2>/dev/null || true
         "${DOCKER[@]}" compose -f "$COMPOSE_FILE" up -d --remove-orphans
     fi
 
@@ -270,6 +299,7 @@ main() {
 
     local dir="${CFG[INSTALL_DIR]:-$INSTALL_DIR}"
     ensure_dir "$dir"
+    ensure_data_root
 
     # ── Re-install check ──────────────────────────────────────────────────
     local backups=()
