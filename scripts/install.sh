@@ -105,6 +105,7 @@ if ! [ -f "$SCRIPT_DIR/lib.sh" ]; then
 
     chmod +x "$_STAGE"/*.sh "$_STAGE/updater"/*.sh
     SCRIPT_DIR="$_STAGE"
+    REQMESH_STANDALONE=1
     printf "${_GREEN}✓${_NC} Companion scripts ready (%s).\n\n" "$_STAGE"
     _warn "Integrity rests on TLS to the host above, exactly as it did for this"
     _warn "script. Review $_STAGE before continuing if that is not sufficient."
@@ -239,7 +240,30 @@ non_interactive() {
     # precisely so a re-install can recover it. Without that, upgrading a
     # domain-backed HTTPS install with a bare `install.sh --non-interactive`
     # silently rebuilt it as a domainless one.
-    save_cfg "DEPLOY_MODE" "${REQMESH_DEPLOY_MODE:-$(prev_env REQMESH_DEPLOY_MODE "$(detect_deploy_mode)")}"
+    _mode="$(resolve_deploy_mode)" || exit 1
+
+    # Standalone mode downloads the *scripts*, not the application. Docker mode
+    # is fine — it pulls an image — but bare metal copies from $SCRIPT_DIR/..,
+    # which under `curl | bash` is the bootstrap temp directory's parent. It used
+    # to discover this only in install_app, after apt had installed a reverse
+    # proxy and the existing unit had been backed up.
+    if [ "${REQMESH_STANDALONE:-0}" = "1" ] && [ "$_mode" = "bare" ]; then
+        # Not written as ${REQMESH_REF:-v...}: that literal collides with the
+        # ref-pin the release process rewrites, and with the test that checks it.
+        local _ver="${REQMESH_REF:-}"
+        [ -n "$_ver" ] || _ver="v$(cat "$SCRIPT_DIR/../VERSION" 2>/dev/null || echo 0.1.5)"
+        error "Bare-metal install needs the application source, which this"
+        error "one-liner does not download (it fetches only the scripts)."
+        error ""
+        error "Use the release bundle instead — it ships the application and"
+        error "this same installer, and needs no network once unpacked:"
+        error "  curl -fsSLO https://github.com/CallumNunesVaz/reqmesh/releases/download/${_ver}/reqmesh-${_ver}.tar.gz"
+        error "  tar xzf reqmesh-${_ver}.tar.gz && cd reqmesh-${_ver}"
+        error "  sudo REQMESH_DEPLOY_MODE=bare ./install.sh --non-interactive"
+        exit 1
+    fi
+
+    save_cfg "DEPLOY_MODE" "$_mode"
     save_cfg "PROXY" "${REQMESH_PROXY:-$(prev_env REQMESH_PROXY "$($PREV_FOUND && detect_proxy || echo caddy)")}"
     save_cfg "TLS" "${REQMESH_TLS:-$(prev_env REQMESH_TLS "$($PREV_FOUND && detect_tls || echo letsencrypt)")}"
     save_cfg "DOMAIN" "${REQMESH_DOMAIN:-$(prev_env REQMESH_DOMAIN '')}"

@@ -526,7 +526,7 @@ check "release.sh stages the derived list" \
 
 # The pin must match the version being released.
 ver="$(cat "$REPO/VERSION")"
-pin="$(grep -o 'REQMESH_REF:-v[0-9.]*' "$REPO/scripts/install.sh" | cut -d- -f2)"
+pin="$(grep -o 'REQMESH_REF:-v[0-9.]*' "$REPO/scripts/install.sh" | head -1 | cut -d- -f2)"
 check "install.sh ref pin matches VERSION" "$pin" "v$ver"
 
 
@@ -544,8 +544,27 @@ check "the bare path records proxy and TLS" \
       "$(grep -cE '^REQMESH_(PROXY|TLS)=' "$REPO/scripts/deploy-bare.sh")" "2"
 check "install.sh no longer defaults the mode to docker" \
       "$(grep -c "prev_env REQMESH_DEPLOY_MODE 'docker'" "$REPO/scripts/install.sh")" "0"
-check "install.sh detects the mode instead" \
-      "$(grep -c 'prev_env REQMESH_DEPLOY_MODE "$(detect_deploy_mode)"' "$REPO/scripts/install.sh")" "1"
+check "install.sh resolves the mode rather than assuming" \
+      "$(grep -c '_mode="$(resolve_deploy_mode)" || exit 1' "$REPO/scripts/install.sh")" "1"
+
+# An unverified recorded mode contradicting the live one must stop the run: that
+# combination means a previous attempt died, and trusting it converted a working
+# bare-metal box to Docker.
+check "a shape conflict refuses" \
+      "$(grep -c 'Conflicting deployment state — refusing to guess' "$REPO/scripts/lib.sh")" "1"
+check "the refusal names both candidates" \
+      "$(grep -c 'keep what is running now' "$REPO/scripts/lib.sh")" "1"
+check "state is recorded only after a verified deploy" \
+      "$(grep -c 'write_install_state' "$REPO/scripts/deploy-docker.sh" "$REPO/scripts/deploy-bare.sh" \
+         | awk -F: '{s+=$2} END {print s}')" "2"
+check "running services outrank leftover config files" \
+      "$(grep -c 'systemctl is-active --quiet reqmesh' "$REPO/scripts/lib.sh")" "2"
+check "standalone bare refuses before touching the host" \
+      "$(grep -c 'one-liner does not download (it fetches only the scripts)' "$REPO/scripts/install.sh")" "1"
+check "the bare path preflights its source" \
+      "$(grep -c 'No application source at' "$REPO/scripts/deploy-bare.sh")" "1"
+check "the bare port check is fatal" \
+      "$(grep -c 'already in use by something other than reqmesh' "$REPO/scripts/deploy-bare.sh")" "1"
 
 # TLS inferred from the URL the deployment was advertising — the only honest
 # signal when REQMESH_TLS was never written.

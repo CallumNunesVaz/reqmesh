@@ -353,13 +353,45 @@ main() {
     fi
 
     # ── Port conflict check ───────────────────────────────────────────────
+    # A port held by *our own* service is fine — restarting it is the upgrade.
+    # A port held by anything else cannot be, and warning then carrying on meant
+    # apt ran and configs were rewritten before the failure surfaced.
     local port="${CFG[PORT]:-8000}"
-    if check_port "$port"; then
-        warn "Port $port is already in use — the app may fail to bind."
+    if check_port "$port" && ! systemctl is-active --quiet reqmesh 2>/dev/null; then
+        error "Port $port is already in use by something other than reqmesh."
+        if [ -n "$(${DOCKER[@]:-docker} ps -q --filter name=reqmesh 2>/dev/null)" ]; then
+            error "A Docker reqmesh deployment is running and is the likely holder:"
+            error "  cd ${INSTALL_DIR} && sudo docker compose -f docker-compose.prod.yml down"
+        else
+            error "Find the holder with:  sudo ss -tlnp | grep :$port"
+        fi
+        return 1
     fi
-    if [ "$proxy" != "none" ]; then
-        if check_port 443; then warn "Port 443 (HTTPS) is already in use."; fi
-        if check_port 80; then warn "Port 80 (HTTP) is already in use."; fi
+    if [ "$proxy" != "none" ] && ! systemctl is-active --quiet "$proxy" 2>/dev/null; then
+        if check_port 443 || check_port 80; then
+            error "Port 80/443 is already in use by something other than $proxy."
+            error "Find the holder with:  sudo ss -tlnp | grep -E ':(80|443) '"
+            return 1
+        fi
+    fi
+
+    # ── Source preflight ──────────────────────────────────────────────────
+    # install_app discovers a missing source, but it runs after install_deps has
+    # already apt-installed a reverse proxy and after the existing unit has been
+    # backed up. Check it while the host is still untouched.
+    local _src="${CFG[APP_SOURCE]:-$SCRIPT_DIR/..}"
+    if [ ! -d "$_src/backend/app" ]; then
+        error "No application source at $_src/backend/app"
+        error ""
+        error "The bare-metal install copies the application from the directory"
+        error "containing this script. That works from a release bundle or a git"
+        error "checkout, but not from the `curl | bash` one-liner, which downloads"
+        error "only the scripts."
+        error ""
+        error "Use the release bundle:"
+        error "  tar xzf reqmesh-<version>.tar.gz && cd reqmesh-<version>"
+        error "  sudo REQMESH_DEPLOY_MODE=bare ./install.sh --non-interactive"
+        return 1
     fi
 
     # ── Back up existing files ────────────────────────────────────────────
@@ -382,6 +414,9 @@ main() {
 
     # ── Access instructions ────────────────────────────────────────────────
     local cred_file
+    # Only now, with the deploy verified healthy, record what is running.
+    write_install_state
+
     cred_file="$(write_admin_credential)"
 
     echo ""
