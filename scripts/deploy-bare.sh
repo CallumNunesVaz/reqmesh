@@ -358,26 +358,23 @@ main() {
     fi
 
     # ── Port conflict check ───────────────────────────────────────────────
-    # A port held by *our own* service is fine — restarting it is the upgrade.
-    # A port held by anything else cannot be, and warning then carrying on meant
-    # apt ran and configs were rewritten before the failure surfaced.
+    # Ours is stopped just before the service starts; anything else is a genuine
+    # conflict we have no business resolving.
     local port="${CFG[PORT]:-8000}"
-    if check_port "$port" && ! systemctl is-active --quiet reqmesh 2>/dev/null; then
-        error "Port $port is already in use by something other than reqmesh."
-        if [ -n "$(${DOCKER[@]:-docker} ps -q --filter name=reqmesh 2>/dev/null)" ]; then
-            error "A Docker reqmesh deployment is running and is the likely holder:"
-            error "  cd ${INSTALL_DIR} && sudo docker compose -f docker-compose.prod.yml down"
-        else
-            error "Find the holder with:  sudo ss -tlnp | grep :$port"
-        fi
+    if ! port_is_ours "$port" && check_port "$port"; then
+        error "Port $port is held by $(port_holder "$port") — this deployment cannot bind it."
+        error "That is not part of this reqmesh install, so it is not ours to stop."
         return 1
     fi
-    if [ "$proxy" != "none" ] && ! systemctl is-active --quiet "$proxy" 2>/dev/null; then
-        if check_port 443 || check_port 80; then
-            error "Port 80/443 is already in use by something other than $proxy."
-            error "Find the holder with:  sudo ss -tlnp | grep -E ':(80|443) '"
-            return 1
-        fi
+    if [ "$proxy" != "none" ]; then
+        local p
+        for p in 80 443; do
+            if ! port_is_ours "$p" && check_port "$p"; then
+                error "Port $p is held by $(port_holder "$p") — the $proxy proxy cannot bind it."
+                error "That is not part of this reqmesh install, so it is not ours to stop."
+                return 1
+            fi
+        done
     fi
 
     # ── Source preflight ──────────────────────────────────────────────────
@@ -413,6 +410,13 @@ main() {
     install_deps
     install_app
     install_python_deps
+
+    # Before generate_configs, not after: that step writes the nginx site and
+    # restarts the proxy, and stopping afterwards would delete the config it had
+    # just written. Late enough that a failed preflight, a missing source or a
+    # broken dependency install all leave the running deployment untouched.
+    stop_reqmesh_services || return 1
+
     generate_configs
     install_service
     start_service

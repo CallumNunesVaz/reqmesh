@@ -737,14 +737,102 @@ port_holder() {
     printf 'an unidentified process'
 }
 
-# Is this port held by a container belonging to our own compose project?
-# Replacing those in place is what an upgrade does, so they are never a conflict —
-# including when the proxy is being swapped, where --remove-orphans retires the
-# old one as the new one starts.
-port_held_by_us() {
-    local port="$1"
-    ${DOCKER[@]:-docker} ps --format '{{.Names}} {{.Ports}}' 2>/dev/null \
-        | awk -v p=":$port->" '$1 ~ /^reqmesh-/ && $0 ~ p { found = 1 } END { exit !found }'
+# ── This installation's services ───────────────────────────────────────────────
+# Everything the installer owns on this host, in either deployment mode.
+#
+# The alternative — checking each port, guessing its holder, and telling the
+# operator which service to stop — produced four rounds of wrong advice, because
+# the "evidence" used was files on disk rather than what was listening. An
+# install already knows what it deployed; it can simply stop it.
+#
+# A proxy counts as ours only with evidence: an nginx site named reqmesh, or a
+# Caddyfile that mentions it. A host may run nginx for something else entirely.
+reqmesh_owns_nginx() { [ -f /etc/nginx/sites-enabled/reqmesh ]; }
+reqmesh_owns_caddy() { sudo grep -q 'reqmesh' /etc/caddy/Caddyfile 2>/dev/null; }
+
+# reqmesh_services — one "kind:name" per line for everything of ours now running.
+reqmesh_services() {
+    local dir="${CFG[INSTALL_DIR]:-$INSTALL_DIR}"
+    systemctl is-active --quiet reqmesh 2>/dev/null && echo "unit:reqmesh"
+    if systemctl is-active --quiet nginx 2>/dev/null && reqmesh_owns_nginx; then
+        echo "unit:nginx"
+    fi
+    if systemctl is-active --quiet caddy 2>/dev/null && reqmesh_owns_caddy; then
+        echo "unit:caddy"
+    fi
+    local c
+    for c in $(${DOCKER[@]:-docker} ps --format '{{.Names}}' --filter 'name=reqmesh-' 2>/dev/null); do
+        echo "container:$c"
+    done
+}
+
+# port_is_ours <port> — is this port held by something we are about to stop?
+# Such a port is not a conflict, so the check must not treat it as one.
+port_is_ours() {
+    local port="$1" svc
+    while read -r svc; do
+        [ -n "$svc" ] || continue
+        case "$svc" in
+            container:*)
+                ${DOCKER[@]:-docker} port "${svc#container:}" 2>/dev/null \
+                    | grep -q ":${port}\$" && return 0
+                ;;
+            unit:reqmesh) [ "$port" = "${CFG[PORT]:-8000}" ] && return 0 ;;
+            unit:nginx|unit:caddy)
+                { [ "$port" = 80 ] || [ "$port" = 443 ]; } && return 0
+                ;;
+        esac
+    done <<< "$(reqmesh_services)"
+    return 1
+}
+
+# stop_reqmesh_services — stop all of it. Called once the deploy has passed every
+# preflight, so a failed check leaves the running deployment alone rather than
+# taking it down and then refusing to continue.
+stop_reqmesh_services() {
+    local dir="${CFG[INSTALL_DIR]:-$INSTALL_DIR}"
+    local svcs; svcs="$(reqmesh_services)"
+    [ -n "$svcs" ] || return 0
+
+    info "Stopping the current reqmesh deployment:"
+    local svc
+    while read -r svc; do
+        [ -n "$svc" ] || continue
+        info "  $svc"
+    done <<< "$svcs"
+
+    # Containers go as a project, so the network and any orphan go with them.
+    if printf '%s' "$svcs" | grep -q '^container:'; then
+        set_docker_cmd
+        ( cd "$dir" && "${DOCKER[@]}" compose \
+            -f "${CFG[COMPOSE_FILE]:-docker-compose.prod.yml}" down --remove-orphans ) \
+            >/dev/null 2>&1 || true
+        local stray; stray="$("${DOCKER[@]}" ps -aq --filter 'name=reqmesh-' 2>/dev/null || true)"
+        [ -n "$stray" ] && "${DOCKER[@]}" rm -f $stray >/dev/null 2>&1 || true
+    fi
+
+    # Units are disabled as well as stopped: leaving one enabled means it races
+    # the new deployment for the same port on the next boot.
+    printf '%s' "$svcs" | grep -q '^unit:reqmesh' && \
+        sudo systemctl disable --now reqmesh >/dev/null 2>&1 || true
+    if printf '%s' "$svcs" | grep -q '^unit:nginx'; then
+        sudo rm -f /etc/nginx/sites-enabled/reqmesh
+        sudo systemctl disable --now nginx >/dev/null 2>&1 || true
+    fi
+    printf '%s' "$svcs" | grep -q '^unit:caddy' && \
+        sudo systemctl disable --now caddy >/dev/null 2>&1 || true
+
+    # Verify, rather than assume. A port still held here means something we did
+    # not recognise owns it, and the deploy would fail on the bind instead.
+    local p
+    for p in "${CFG[PORT]:-8000}" 80 443; do
+        if check_port "$p" && port_is_ours "$p"; then
+            error "Port $p is still held after stopping our services."
+            error "  holder: $(port_holder "$p")"
+            return 1
+        fi
+    done
+    success "Stopped"
 }
 
 # ── Mode conversion ────────────────────────────────────────────────────────────
@@ -803,59 +891,7 @@ guard_mode_conversion() {
 
     warn "Converting this deployment from $current to $requested."
     warn "  Data root $new_root is shared by both modes and will be reused in place."
-    stop_deployment "$current" || return 1
-    return 0
-}
-
-# stop_deployment <mode> — stop the named deployment so the other can take its
-# ports. Reversible: re-running with the original mode brings it back, and the
-# data root is untouched either way.
-stop_deployment() {
-    local mode="$1" dir="${CFG[INSTALL_DIR]:-$INSTALL_DIR}"
-    case "$mode" in
-        bare)
-            info "Stopping the bare-metal deployment..."
-            sudo systemctl disable --now reqmesh >/dev/null 2>&1 || true
-            if systemctl is-active --quiet reqmesh 2>/dev/null; then
-                error "reqmesh.service is still active — cannot free its port."
-                return 1
-            fi
-            success "Stopped and disabled reqmesh.service"
-
-            # The app service is not the only thing holding a port. A bare
-            # install also runs nginx or Caddy on 80/443, which the containerised
-            # proxy needs — stopping only reqmesh left the conversion failing on
-            # "Port 80/443 is already in use" one step later.
-            #
-            # Only stopped where there is evidence the proxy is ours: a host may
-            # be running nginx for something else entirely, and taking that down
-            # is not ours to do.
-            if [ -f /etc/nginx/sites-enabled/reqmesh ] \
-               && systemctl is-active --quiet nginx 2>/dev/null; then
-                info "Stopping nginx (it serves this reqmesh install)..."
-                sudo rm -f /etc/nginx/sites-enabled/reqmesh
-                sudo systemctl disable --now nginx >/dev/null 2>&1 || true
-                success "Stopped nginx and removed its reqmesh site"
-            fi
-            if systemctl is-active --quiet caddy 2>/dev/null \
-               && sudo grep -q 'reqmesh' /etc/caddy/Caddyfile 2>/dev/null; then
-                info "Stopping Caddy (it serves this reqmesh install)..."
-                sudo systemctl disable --now caddy >/dev/null 2>&1 || true
-                success "Stopped Caddy"
-            fi
-            ;;
-        docker)
-            info "Stopping the Docker deployment..."
-            set_docker_cmd
-            ( cd "$dir" && "${DOCKER[@]}" compose -f "${CFG[COMPOSE_FILE]:-docker-compose.prod.yml}" down ) \
-                >/dev/null 2>&1 || true
-            if [ -n "$("${DOCKER[@]}" ps -q --filter name=reqmesh 2>/dev/null)" ]; then
-                error "reqmesh containers are still running — cannot free their ports."
-                return 1
-            fi
-            success "Stopped the reqmesh containers"
-            ;;
-    esac
+    warn "  The current $current deployment will be stopped once the checks pass."
     return 0
 }
 

@@ -153,25 +153,12 @@ check "the verified state records it too" \
       "$(grep -c 'REQMESH_DATA_ROOT=\${CFG\[DATA_ROOT\]:-}' "$REPO/scripts/lib.sh")" "1"
 check "resolution prefers the host key over the container one" \
       "$(grep -c 'prev_env REQMESH_DATA_ROOT' "$REPO/scripts/install.sh")" "1"
-# A conversion must stop the deployment it is converting away from — otherwise
-# the run advises stopping it and then fails on that very port conflict.
+# A conversion authorises the mode change; the stopping is done for every run by
+# stop_reqmesh_services, so the guard no longer has its own copy of that logic.
 check "conversion requires explicit authorisation" \
       "$(grep -c 'REQMESH_CONFIRM_CONVERT:-0' "$REPO/scripts/lib.sh")" "1"
-check "authorised conversion stops the old deployment" \
-      "$(grep -c 'stop_deployment "$current"' "$REPO/scripts/lib.sh")" "1"
-check "stopping is verified, not assumed" \
-      "$(grep -c 'still active — cannot free its port' "$REPO/scripts/lib.sh")" "1"
-# A bare install holds 80/443 via nginx or Caddy as well as :8000 via the app,
-# so stopping only the app left the conversion failing one step later.
-check "the bare proxy is stopped as well" \
-      "$(grep -c 'it serves this reqmesh install' "$REPO/scripts/lib.sh")" "2"
-# Scoped to the function: detect_proxy legitimately reads the same path, and a
-# whole-file tally broke as soon as it did.
-check "only a proxy we own is touched" \
-      "$(sed -n '/^stop_deployment()/,/^}/p' "$REPO/scripts/lib.sh" \
-         | grep -c '/etc/nginx/sites-enabled/reqmesh')" "2"
-check "the docker side is handled too" \
-      "$(grep -c 'still running — cannot free their ports' "$REPO/scripts/lib.sh")" "1"
+check "the guard says what will be stopped" \
+      "$(grep -c 'will be stopped once the checks pass' "$REPO/scripts/lib.sh")" "1"
 check "a conversion that would move the data still refuses" \
       "$(grep -c 'the data root would move' "$REPO/scripts/lib.sh")" "1"
 check "rootfs stays read-only" "$(grep -c 'read_only: true' "$TMPL")" "1"
@@ -616,7 +603,7 @@ check "standalone bare refuses before touching the host" \
 check "the bare path preflights its source" \
       "$(grep -c 'No application source at' "$REPO/scripts/deploy-bare.sh")" "1"
 check "the bare port check is fatal" \
-      "$(grep -c 'already in use by something other than reqmesh' "$REPO/scripts/deploy-bare.sh")" "1"
+      "$(grep -c 'is not ours to stop' "$REPO/scripts/deploy-bare.sh")" "2"
 
 # TLS inferred from the URL the deployment was advertising — the only honest
 # signal when REQMESH_TLS was never written.
@@ -644,11 +631,26 @@ check "no filesystem guessing remains in the checks" \
       "$(grep -c 'is present and is the likely holder' "$REPO/scripts/deploy-docker.sh")" "0"
 # Replacing our own container in place *is* the upgrade — for the app and for the
 # proxy, including when the proxy is being swapped for a different one.
-check "our own container is never a conflict" \
-      "$(grep -c 'port_held_by_us' "$REPO/scripts/deploy-docker.sh")" "2"
-check "the exemption matches any reqmesh container" \
-      "$(sed -n '/^port_held_by_us()/,/^}/p' "$REPO/scripts/lib.sh" \
-         | grep -c "\$1 ~ /\^reqmesh-/")" "1"
+# One function enumerates everything this install owns, and one stops all of it,
+# rather than each port check guessing which service to blame.
+check "our own services are never a conflict" \
+      "$(grep -c 'port_is_ours' "$REPO/scripts/deploy-docker.sh" "$REPO/scripts/deploy-bare.sh" \
+         | awk -F: '{s+=$2} END {print s}')" "4"
+check "detection covers units and containers" \
+      "$(sed -n '/^reqmesh_services()/,/^}/p' "$REPO/scripts/lib.sh" \
+         | grep -cE 'echo "(unit|container):')" "4"
+check "a proxy is only ours with evidence" \
+      "$(grep -c 'reqmesh_owns_nginx\|reqmesh_owns_caddy' "$REPO/scripts/lib.sh")" "4"
+check "both paths stop our services before deploying" \
+      "$(grep -c 'stop_reqmesh_services' "$REPO/scripts/deploy-docker.sh" "$REPO/scripts/deploy-bare.sh" \
+         | awk -F: '{s+=$2} END {print s}')" "2"
+check "units are disabled, not just stopped" \
+      "$(sed -n '/^stop_reqmesh_services()/,/^}/p' "$REPO/scripts/lib.sh" \
+         | grep -c 'disable --now')" "3"
+check "stopping is verified afterwards" \
+      "$(grep -c 'still held after stopping our services' "$REPO/scripts/lib.sh")" "1"
+check "the superseded helpers are gone" \
+      "$(grep -c 'stop_deployment\|port_held_by_us' "$REPO/scripts/lib.sh")" "0"
 check "a container holder is named" \
       "$(grep -c 'the container %s' "$REPO/scripts/lib.sh")" "1"
 check "a process holder is named" \
