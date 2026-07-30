@@ -189,6 +189,16 @@ generate_configs() {
     # the same defect the Docker path had.
     write_root_file "$env_file" 600 << EOF
 # reqmesh environment — generated $(date -u +"%Y-%m-%dT%H:%M:%SZ")
+#
+# The REQMESH_* lines record the installer's own choices so a re-run rebuilds
+# this same deployment. Only the Docker path used to write them, so a bare
+# install had no recorded mode: re-running the installer fell through to the
+# `docker` default and silently converted the machine, while the systemd
+# service and nginx still held :8000 and :80.
+REQMESH_DEPLOY_MODE=bare
+REQMESH_PROXY=${CFG[PROXY]:-none}
+REQMESH_TLS=${CFG[TLS]:-none}
+REQMESH_DOMAIN=${CFG[DOMAIN]:-}
 RT_PROFILE=${CFG[PROFILE]:-team}
 RT_SECRET=${CFG[RT_SECRET]}
 RT_ADMIN_PASSWORD=${CFG[ADMIN_PASSWORD]}
