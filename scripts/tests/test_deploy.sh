@@ -529,4 +529,40 @@ ver="$(cat "$REPO/VERSION")"
 pin="$(grep -o 'REQMESH_REF:-v[0-9.]*' "$REPO/scripts/install.sh" | cut -d- -f2)"
 check "install.sh ref pin matches VERSION" "$pin" "v$ver"
 
+
+# ══════════════════════════════════════════════════════════════════════════════
+section "an upgrade must not change the deployment mode"
+# ══════════════════════════════════════════════════════════════════════════════
+# Only the Docker path recorded REQMESH_DEPLOY_MODE, so a bare-metal install had
+# none. Re-running fell through to the `docker` default and silently converted
+# the machine: the compose project came up fresh while the systemd unit and nginx
+# still held :8000 and :80, and the deploy died on "address already in use"
+# having already rewritten .env.
+check "the bare path records its mode" \
+      "$(grep -c '^REQMESH_DEPLOY_MODE=bare' "$REPO/scripts/deploy-bare.sh")" "1"
+check "the bare path records proxy and TLS" \
+      "$(grep -cE '^REQMESH_(PROXY|TLS)=' "$REPO/scripts/deploy-bare.sh")" "2"
+check "install.sh no longer defaults the mode to docker" \
+      "$(grep -c "prev_env REQMESH_DEPLOY_MODE 'docker'" "$REPO/scripts/install.sh")" "0"
+check "install.sh detects the mode instead" \
+      "$(grep -c 'prev_env REQMESH_DEPLOY_MODE "$(detect_deploy_mode)"' "$REPO/scripts/install.sh")" "1"
+
+# TLS inferred from the URL the deployment was advertising — the only honest
+# signal when REQMESH_TLS was never written.
+tls_from() { ( declare -A CFG=() PREV_ENV=([RT_BASE_URL]="$1" [REQMESH_DOMAIN]="${2-}")
+               source "$REPO/scripts/lib.sh" >/dev/null 2>&1; detect_tls ); }
+check "an http deployment stays http" "$(tls_from http://10.0.0.5:8000)" "none"
+check "https with a domain implies letsencrypt" \
+      "$(tls_from https://reqs.example.com reqs.example.com)" "letsencrypt"
+check "https without a domain implies selfsigned" "$(tls_from https://10.0.0.5)" "selfsigned"
+
+# A port conflict is fatal: warning and carrying on rewrote .env and the compose
+# file before failing, leaving the machine half-converted.
+check "the app port conflict aborts" \
+      "$(grep -c 'this deployment cannot bind it' "$REPO/scripts/deploy-docker.sh")" "1"
+check "it names the likely holder" \
+      "$(grep -c 'A bare-metal reqmesh install is present' "$REPO/scripts/deploy-docker.sh")" "1"
+check "no advisory-only port warning remains" \
+      "$(grep -c 'the app may fail to bind' "$REPO/scripts/deploy-docker.sh")" "0"
+
 finish

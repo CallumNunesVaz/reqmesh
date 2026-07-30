@@ -291,13 +291,37 @@ main() {
     # ── Port conflict check ───────────────────────────────────────────────
     local port
     port="${CFG[PORT]:-8000}"
+    # Fatal, not advisory. This used to warn and carry on, so the deploy went
+    # ahead, rewrote .env and the compose file, and then died on "failed to bind
+    # host port 127.0.0.1:8000: address already in use" — leaving the machine
+    # half-converted. If the port is taken, nothing below can succeed.
     if check_port "$port"; then
-        warn "Port $port is already in use — the app may fail to bind."
+        error "Port $port is already in use — this deployment cannot bind it."
+        if [ -f /etc/systemd/system/reqmesh.service ]; then
+            error "A bare-metal reqmesh install is present and is the likely holder."
+            error "Either keep it (re-run with REQMESH_DEPLOY_MODE=bare) or stop it first:"
+            error "  sudo systemctl disable --now reqmesh"
+        else
+            error "Find the holder with:  sudo ss -tlnp | grep :$port"
+        fi
+        return 1
     fi
     local proxy="${CFG[PROXY]:-caddy}"
     if [ "$proxy" != "none" ]; then
-        if check_port 443; then warn "Port 443 (HTTPS) is already in use."; fi
-        if check_port 80; then warn "Port 80 (HTTP) is already in use."; fi
+        # Only fatal when the holder is not our own proxy container, which
+        # `up -d` will replace in place.
+        local ours=""
+        ours="$(${DOCKER[@]:-docker} ps -q --filter "name=reqmesh-${proxy}" 2>/dev/null || true)"
+        if [ -z "$ours" ] && { check_port 443 || check_port 80; }; then
+            error "Port 80/443 is already in use by something other than reqmesh's proxy."
+            if [ -f /etc/nginx/sites-enabled/reqmesh ]; then
+                error "A bare-metal nginx install is present and is the likely holder:"
+                error "  sudo systemctl disable --now nginx"
+            else
+                error "Find the holder with:  sudo ss -tlnp | grep -E ':(80|443) '"
+            fi
+            return 1
+        fi
     fi
 
     # ── Back up existing files ────────────────────────────────────────────

@@ -239,9 +239,9 @@ non_interactive() {
     # precisely so a re-install can recover it. Without that, upgrading a
     # domain-backed HTTPS install with a bare `install.sh --non-interactive`
     # silently rebuilt it as a domainless one.
-    save_cfg "DEPLOY_MODE" "${REQMESH_DEPLOY_MODE:-$(prev_env REQMESH_DEPLOY_MODE 'docker')}"
-    save_cfg "PROXY" "${REQMESH_PROXY:-$(prev_env REQMESH_PROXY 'caddy')}"
-    save_cfg "TLS" "${REQMESH_TLS:-$(prev_env REQMESH_TLS 'letsencrypt')}"
+    save_cfg "DEPLOY_MODE" "${REQMESH_DEPLOY_MODE:-$(prev_env REQMESH_DEPLOY_MODE "$(detect_deploy_mode)")}"
+    save_cfg "PROXY" "${REQMESH_PROXY:-$(prev_env REQMESH_PROXY "$($PREV_FOUND && detect_proxy || echo caddy)")}"
+    save_cfg "TLS" "${REQMESH_TLS:-$(prev_env REQMESH_TLS "$($PREV_FOUND && detect_tls || echo letsencrypt)")}"
     save_cfg "DOMAIN" "${REQMESH_DOMAIN:-$(prev_env REQMESH_DOMAIN '')}"
     save_cfg "HOST" "${RT_HOST:-0.0.0.0}"
     save_cfg "PORT" "${RT_PORT:-8000}"

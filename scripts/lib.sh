@@ -568,6 +568,39 @@ load_installed_env() {
     return 0
 }
 
+# What is already deployed on this box, for installs made before the shape was
+# recorded in .env. Guessing "docker" for those converted a running bare-metal
+# machine: the compose project came up fresh while the systemd unit and nginx
+# still held :8000 and :80, so the container could not bind and the upgrade died
+# halfway through, having already rewritten .env.
+detect_deploy_mode() {
+    local dir="${CFG[INSTALL_DIR]:-$INSTALL_DIR}"
+    if [ -f /etc/systemd/system/reqmesh.service ]; then printf 'bare'; return 0; fi
+    if [ -f "$dir/docker-compose.prod.yml" ]; then printf 'docker'; return 0; fi
+    printf 'docker'
+}
+
+detect_proxy() {
+    local dir="${CFG[INSTALL_DIR]:-$INSTALL_DIR}"
+    if [ -f /etc/nginx/sites-enabled/reqmesh ] || [ -f "$dir/nginx.conf" ]; then
+        printf 'nginx'; return 0
+    fi
+    if [ -f /etc/caddy/Caddyfile ] || [ -f "$dir/Caddyfile" ]; then
+        printf 'caddy'; return 0
+    fi
+    printf 'none'
+}
+
+# TLS inferred from the base URL the deployment was actually advertising, which
+# is the only honest signal available when REQMESH_TLS was never recorded.
+detect_tls() {
+    case "$(prev_env RT_BASE_URL '')" in
+        https://*) [ -n "$(prev_env REQMESH_DOMAIN '')" ] && printf 'letsencrypt' || printf 'selfsigned' ;;
+        http://*)  printf 'none' ;;
+        *)         printf 'none' ;;
+    esac
+}
+
 # prev_env <KEY> <fallback> — the existing install's value, else the fallback.
 prev_env() {
     local key="$1" fallback="${2:-}"
