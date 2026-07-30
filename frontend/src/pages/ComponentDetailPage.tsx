@@ -12,6 +12,7 @@ import { useAuthStore } from '../store/auth';
 import { useStore } from '../store';
 import { useKeyboardShortcuts } from '../components/useKeyboardShortcuts';
 import LoadingSplash from '../components/LoadingSplash';
+import { LinkEditor } from '../components/LinkEditor';
 
 /** Ids of a component and everything beneath it — a component may not be
  *  reparented into its own branch, so those options must be excluded. */
@@ -28,41 +29,6 @@ function branchIds(components: Component[], rootId: string): Set<string> {
     }
   }
   return ids;
-}
-
-/* Linked entities render as chips that navigate to the entity itself */
-function LinkEditor({ label, hint, kind, linked, options, editable, onAdd, onRemove, nameOf }: {
-  label: string; hint: string; kind: EntityKind;
-  linked: string[]; options: { id: string; name: string }[];
-  editable: boolean; onAdd: (id: string) => void; onRemove: (id: string) => void;
-  nameOf: (id: string) => string;
-}) {
-  const available = options.filter((o) => !linked.includes(o.id));
-  return (
-    <div>
-      <label className="label">{label}</label>
-      <p className="text-[11px] text-muted-foreground -mt-1 mb-1.5">{hint}</p>
-      {linked.length === 0 && <p className="text-xs text-muted-foreground italic mb-1.5">None linked</p>}
-      <div className="flex flex-wrap gap-1.5 mb-2">
-        {linked.map((id) => (
-          <span key={id} className="inline-flex items-center gap-1 pl-2 pr-1.5 py-0.5 rounded-full bg-muted text-xs">
-            <EntityLink kind={kind} id={id} name={nameOf(id) || undefined} className="max-w-[140px] hover:text-foreground" />
-            {editable && (
-              <button onClick={() => onRemove(id)} className="text-muted-foreground hover:text-destructive" title="Unlink">
-                <X size={11} />
-              </button>
-            )}
-          </span>
-        ))}
-      </div>
-      {editable && available.length > 0 && (
-        <select className="input text-xs" value="" onChange={(e) => onAdd(e.target.value)}>
-          <option value="">+ link…</option>
-          {available.map((o) => <option key={o.id} value={o.id}>{o.id} — {o.name}</option>)}
-        </select>
-      )}
-    </div>
-  );
 }
 
 export default function ComponentDetailPage() {
