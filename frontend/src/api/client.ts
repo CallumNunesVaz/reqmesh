@@ -52,6 +52,7 @@ export interface Project {
   baselines?: (string | BaselineDef)[];
   /** Only present on `getProject`. Normalized server-side, so always objects. */
   stakeholders?: StakeholderDef[];
+  risk_matrix?: RiskMatrix;
 }
 
 export interface BaselineDef {
@@ -243,7 +244,6 @@ export interface Requirement {
   normative: boolean;
   priorities: Record<string, number>;
   needs: string[];
-  requirement_kind: 'stakeholder_need' | 'system_requirement';
   system_states: string[];
   subject?: string | null;
   created: string;
@@ -345,12 +345,39 @@ export interface ChangeRequest {
   modified: string;
 }
 
+export interface RiskBand {
+  key: string;
+  label: string;
+  color: string;
+}
+
+export interface RiskMatrix {
+  severities: string[];
+  likelihoods: string[];
+  bands: RiskBand[];
+  /** cells[severityIndex][likelihoodIndex] -> band key */
+  cells: string[][];
+}
+
+/** Derived server-side from the project matrix; never stored on the risk. */
+export interface RiskRating {
+  band: string | null;
+  label: string | null;
+  color: string | null;
+  severity: string | null;
+  likelihood: string | null;
+  unrated_reason: string | null;
+}
+
 export interface Risk {
   id: string;
   title: string;
   description: string;
   severity: string;
+  likelihood: string;
+  /** Superseded by likelihood; still read for risks written before the matrix. */
   probability: string;
+  rating?: RiskRating;
   impact: string;
   mitigation: string;
   linked_requirements: string[];
@@ -673,7 +700,7 @@ export const api = {
   createProject: (data: { id: string; name: string }) => request<Project>('/projects', { method: 'POST', body: data }),
   getProject: (id: string) => request<Project>(`/projects/${id}`),
   deleteProject: (id: string) => request<void>(`/projects/${id}`, { method: 'DELETE' }),
-  updateProject: (id: string, data: { name?: string; naming?: Record<string, any>; quality?: Record<string, any>; workflow?: Record<string, any>; git?: Record<string, any>; baselines?: (string | BaselineDef)[]; stakeholders?: StakeholderDef[] }) =>
+  updateProject: (id: string, data: { name?: string; naming?: Record<string, any>; quality?: Record<string, any>; workflow?: Record<string, any>; git?: Record<string, any>; baselines?: (string | BaselineDef)[]; stakeholders?: StakeholderDef[]; risk_matrix?: RiskMatrix }) =>
     request<any>(`/projects/${id}`, { method: 'PATCH', body: data }),
   getWorkflow: (projectId: string) =>
     request<{ states: string[]; transitions: Record<string, string[]>; default: string }>(`/projects/${projectId}/workflow`),
@@ -790,6 +817,7 @@ export const api = {
 
   // Risks
   listRisks: (projectId: string) => request<Risk[]>(`/projects/${projectId}/risks`),
+  getRiskMatrix: (projectId: string) => request<RiskMatrix>(`/projects/${projectId}/risk-matrix`),
   createRisk: (projectId: string, data: Partial<Risk>) =>
     request<Risk>(`/projects/${projectId}/risks`, { method: 'POST', body: data }),
   updateRisk: (projectId: string, riskId: string, data: Partial<Risk>) =>

@@ -60,12 +60,6 @@ class Priority(str, Enum):
     CRITICAL = "critical"
 
 
-class RequirementKind(str, Enum):
-    """OOSEM / ISO 15288 distinction: stakeholder need vs system requirement."""
-    STAKEHOLDER_NEED = "stakeholder_need"
-    SYSTEM_REQUIREMENT = "system_requirement"
-
-
 class MeasureKind(str, Enum):
     """OOSEM measure taxonomy: MOE (operational), MOP (system), TPM (component)."""
     MOE = "MOE"
@@ -157,7 +151,6 @@ class Requirement(BaseModel):
     priorities: dict[str, int] = Field(default_factory=dict)
     needs: list[str] = Field(default_factory=list)
     references: list[Reference] = Field(default_factory=list)
-    requirement_kind: RequirementKind = RequirementKind.SYSTEM_REQUIREMENT
     system_states: list[str] = Field(default_factory=list)
     # SysML v2 requirement subject: the part/component this requirement constrains.
     subject: Optional[str] = None
@@ -199,7 +192,6 @@ class RequirementCreate(BaseModel):
     priorities: dict[str, int] = Field(default_factory=dict)
     needs: list[str] = Field(default_factory=list)
     references: list[Reference] = Field(default_factory=list)
-    requirement_kind: RequirementKind = RequirementKind.SYSTEM_REQUIREMENT
     system_states: list[str] = Field(default_factory=list)
     subject: Optional[str] = None
 
@@ -234,7 +226,6 @@ class RequirementUpdate(BaseModel):
     priorities: Optional[dict[str, int]] = None
     needs: Optional[list[str]] = None
     references: Optional[list[Reference]] = None
-    requirement_kind: Optional[RequirementKind] = None
     system_states: Optional[list[str]] = None
     subject: Optional[str] = None
 

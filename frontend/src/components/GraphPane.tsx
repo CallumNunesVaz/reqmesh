@@ -420,7 +420,10 @@ interface SavedView {
   linkDir?: LinkDir;
   filters: {
     search: string; status: string; priority: string; baselines: string[]; type: string;
-    verStatus: string; verMethod: string; allocated: string; components: string[]; kind: string;
+    verStatus: string; verMethod: string; allocated: string; components: string[];
+    /** Removed with requirement_kind; still read so saved views written before
+     *  that stay loadable instead of failing to restore. */
+    kind?: string;
   };
   viewport: { x: number; y: number; zoom: number } | null;
 }
@@ -477,7 +480,6 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
   const [filterVerStatus, setFilterVerStatus] = useState('');
   const [filterVerMethod, setFilterVerMethod] = useState('');
   const [filterAllocated, setFilterAllocated] = useState('');
-  const [filterKind, setFilterKind] = useState('');
 
   const baselineFilters = useStore((s) => s.baselineFilters);
   const setBaselineFilters = useStore((s) => s.setBaselineFilters);
@@ -688,12 +690,11 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
     if (filterVerStatus) out = out.filter(r => r.verification_status === filterVerStatus);
     if (filterVerMethod) out = out.filter(r => r.verification_method === filterVerMethod);
     if (filterAllocated) out = out.filter(r => r.allocated_to === filterAllocated);
-    if (filterKind) out = out.filter(r => r.requirement_kind === filterKind);
     if (componentFilters.length > 0) out = out.filter(r => componentReqIds.has(r.id));
     if (hideRoots) out = out.filter(r => r.parent);
     return out;
   }, [reqs, search, filterStatus, filterPriority, baselineFilters, filterType,
-      filterVerStatus, filterVerMethod, filterAllocated, filterKind, componentFilters, componentReqIds, hideRoots]);
+      filterVerStatus, filterVerMethod, filterAllocated, componentFilters, componentReqIds, hideRoots]);
 
   const distinct = (pick: (r: typeof reqs[number]) => string) =>
     [...new Set(reqs.map(pick).filter(Boolean))].sort();
@@ -703,7 +704,6 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
   const availableVerStatuses = useMemo(() => distinct(r => r.verification_status), [reqs]);
   const availableVerMethods = useMemo(() => distinct(r => r.verification_method), [reqs]);
   const availableAllocations = useMemo(() => distinct(r => r.allocated_to), [reqs]);
-  const availableKinds = useMemo(() => distinct(r => r.requirement_kind), [reqs]);
   const availableBaselines = useMemo(() => {
     const set = new Set<string>();
     for (const r of reqs) {
@@ -732,11 +732,10 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
     setFilterVerMethod('');
     setFilterAllocated('');
     setComponentFilters([]);
-    setFilterKind('');
   };
   const activeFilterCount = [
     search, filterStatus, filterPriority, filterType,
-    filterVerStatus, filterVerMethod, filterAllocated, filterKind,
+    filterVerStatus, filterVerMethod, filterAllocated,
   ].filter(Boolean).length + (baselineFilters.length > 0 ? 1 : 0) + (componentFilters.length > 0 ? 1 : 0);
   const hasActiveFilters = activeFilterCount > 0;
 
@@ -1083,7 +1082,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
       filters: {
         search, status: filterStatus, priority: filterPriority, baselines: [...baselineFilters],
         type: filterType, verStatus: filterVerStatus, verMethod: filterVerMethod,
-        allocated: filterAllocated, components: [...componentFilters], kind: filterKind,
+        allocated: filterAllocated, components: [...componentFilters],
       },
       viewport: rfRef.current?.getViewport() ?? null,
     };
@@ -1095,7 +1094,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
     });
   }, [collapsed, groupsOnly, selectedReqId, layoutMode, graphSettings, hopDepth, showAllLinks, linkDir, search,
       filterStatus, filterPriority, baselineFilters, filterType, filterVerStatus, filterVerMethod,
-      filterAllocated, componentFilters, filterKind, persistViews]);
+      filterAllocated, componentFilters, persistViews]);
 
   const clearView = useCallback((slot: number) => {
     setViews((prev) => {
@@ -1133,7 +1132,6 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
     setFilterVerMethod(f.verMethod ?? '');
     setFilterAllocated(f.allocated ?? '');
     setComponentFilters(f.components ?? []);
-    setFilterKind(f.kind ?? '');
     // Guarantee the layout effect runs (and thus consumes restoreRef) even if
     // the restored config is identical to the current one.
     setLayoutNonce((n) => n + 1);
@@ -1852,7 +1850,6 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
                     </div>
                   )}
                   <FilterField label="Type" options={availableTypes} value={filterType} onChange={setFilterType} format={formatReqType} colorOf={typeOptionColor} />
-                  <FilterField label="Requirement kind" options={availableKinds} value={filterKind} onChange={setFilterKind} format={formatUnderscored} />
                   <FilterField label="Verification status" options={availableVerStatuses} value={filterVerStatus} onChange={setFilterVerStatus} colorOf={verifStatusOptionColor} />
                   <FilterField label="Verification method" options={availableVerMethods} value={filterVerMethod} onChange={setFilterVerMethod} />
                   <FilterField label="Allocated team" options={availableAllocations} value={filterAllocated} onChange={setFilterAllocated} />

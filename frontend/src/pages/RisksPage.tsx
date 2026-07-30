@@ -3,7 +3,7 @@ import { usePersistedState } from '../hooks/usePersistedState';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Trash2, AlertTriangle, Square, CheckSquare, X, Search } from 'lucide-react';
-import { api, type Risk, type Requirement } from '../api/client';
+import { api, type Risk, type Requirement, type RiskMatrix, type RiskRating } from '../api/client';
 import { useAuthStore } from '../store/auth';
 import { useStore } from '../store';
 import { CopyLinkButton, EntityLink } from '../components/entities';
@@ -12,19 +12,37 @@ import { AutoLinkText } from '../components/autoLink';
 import { useEntityKinds } from '../components/entityIndex';
 import { LinkEditor } from '../components/LinkEditor';
 
-const sevColors: Record<string, string> = {
-  low: 'border-zinc-500/30 bg-zinc-500/10 text-zinc-400',
-  medium: 'border-blue-500/30 bg-blue-500/10 text-blue-400',
-  high: 'border-amber-500/30 bg-amber-500/10 text-amber-400',
-  critical: 'border-red-500/30 bg-red-500/10 text-red-400',
-};
+const formatLevel = (s: string) => s.replace(/_/g, ' ');
+
+/** The rating is derived server-side from the project matrix, so its colour
+ *  comes with it rather than from a table here — a project that re-bands its
+ *  matrix would otherwise get badges that disagree with its own settings. */
+function RatingBadge({ rating }: { rating?: RiskRating }) {
+  if (!rating || !rating.band) {
+    return (
+      <span className="badge border border-dashed border-muted-foreground/40 text-muted-foreground"
+        title={rating?.unrated_reason || 'Not rated'}>
+        unrated
+      </span>
+    );
+  }
+  return (
+    <span
+      className="badge border text-black/80"
+      style={{ backgroundColor: rating.color!, borderColor: rating.color! }}
+      title={`severity ${formatLevel(rating.severity || '')} x likelihood ${formatLevel(rating.likelihood || '')}`}
+    >
+      {rating.label}
+    </span>
+  );
+}
 
 export default function RisksPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const [risks, setRisks] = useState<Risk[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [error, setError] = useState('');
-  const [form, setForm] = useState({ id: '', title: '', description: '', severity: 'medium', probability: 'medium' });
+  const [form, setForm] = useState({ id: '', title: '', description: '', severity: '', likelihood: '' });
   const editable = useAuthStore((s) => s.canPropose());
   // Bulk operations are maintainer-tier (backend require_maintain), unlike
   // individual create/edit/delete which are propose-tier.
@@ -45,7 +63,28 @@ export default function RisksPage() {
   // by hand-editing YAML.
   const [requirements, setRequirements] = useState<Requirement[]>([]);
 
+  // The project's risk matrix: supplies the severity/likelihood vocabularies the
+  // dropdowns offer, so a project that renamed its axes does not get a form
+  // offering levels its own matrix cannot rate.
+  const [matrix, setMatrix] = useState<RiskMatrix | null>(null);
+
   const load = () => { if (!projectId) return; api.listRisks(projectId).then(setRisks).catch(console.error); };
+  useEffect(() => {
+    if (!projectId) return;
+    let alive = true;
+    api.getRiskMatrix(projectId).then((m) => {
+      if (!alive) return;
+      setMatrix(m);
+      // Seed the create form from the middle of each axis rather than a
+      // hardcoded 'medium', which a renamed axis would not contain.
+      setForm((f) => ({
+        ...f,
+        severity: f.severity || m.severities[Math.floor(m.severities.length / 2)] || '',
+        likelihood: f.likelihood || m.likelihoods[Math.floor(m.likelihoods.length / 2)] || '',
+      }));
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, [projectId, dataVersion]);
   useEffect(load, [projectId, dataVersion]);
   useEffect(() => {
     if (!projectId) return;
@@ -55,6 +94,22 @@ export default function RisksPage() {
       .catch(() => { if (alive) setRequirements([]); });
     return () => { alive = false; };
   }, [projectId, dataVersion]);
+
+  // Severity/likelihood are the rating's inputs, so the row is re-read from
+  // the response rather than patched locally — the new rating is computed
+  // server-side and guessing it here would let the badge drift.
+  const setRiskLevel = async (riskId: string, patch: { severity?: string; likelihood?: string }) => {
+    if (!projectId) return;
+    const before = risks;
+    setRisks((prev) => prev.map((r) => (r.id === riskId ? { ...r, ...patch } : r)));
+    try {
+      const updated = await api.updateRisk(projectId, riskId, patch);
+      setRisks((prev) => prev.map((r) => (r.id === riskId ? updated : r)));
+    } catch (err: any) {
+      setRisks(before);
+      setError(err.message || 'Failed to update risk');
+    }
+  };
 
   const setRiskRequirements = async (riskId: string, linked: string[]) => {
     if (!projectId) return;
@@ -75,7 +130,7 @@ export default function RisksPage() {
     return risks.filter((r) => {
       if (filterStatus && r.status !== filterStatus) return false;
       if (filterSeverity && r.severity !== filterSeverity) return false;
-      if (filterProbability && r.probability !== filterProbability) return false;
+      if (filterProbability && (r.rating?.likelihood ?? r.probability) !== filterProbability) return false;
       if (q) {
         const hay = `${r.id} ${r.title || ''} ${r.description || ''}`.toLowerCase();
         if (!hay.includes(q)) return false;
@@ -93,7 +148,7 @@ export default function RisksPage() {
     if (!projectId || !form.id.trim()) return;
     try {
       await api.createRisk(projectId, form);
-      setShowCreate(false); setForm({ id: '', title: '', description: '', severity: 'medium', probability: 'medium' });
+      setShowCreate(false); setForm({ id: '', title: '', description: '', severity: '', likelihood: '' });
       load();
     } catch (err: any) { setError(err.message || 'Failed to create'); }
   };
@@ -160,16 +215,11 @@ export default function RisksPage() {
           </select>
           <select className="select w-32 h-9 text-xs" value={filterSeverity} onChange={(e) => setFilterSeverity(e.target.value)}>
             <option value="">All severities</option>
-            <option value="low">Low</option>
-            <option value="medium">Medium</option>
-            <option value="high">High</option>
-            <option value="critical">Critical</option>
+            {(matrix?.severities ?? []).map((sv) => <option key={sv} value={sv}>{formatLevel(sv)}</option>)}
           </select>
-          <select className="select w-32 h-9 text-xs" value={filterProbability} onChange={(e) => setFilterProbability(e.target.value)}>
-            <option value="">All probabilities</option>
-            <option value="low">Low</option>
-            <option value="medium">Medium</option>
-            <option value="high">High</option>
+          <select className="select w-36 h-9 text-xs" value={filterProbability} onChange={(e) => setFilterProbability(e.target.value)}>
+            <option value="">All likelihoods</option>
+            {(matrix?.likelihoods ?? []).map((l) => <option key={l} value={l}>{formatLevel(l)}</option>)}
           </select>
         </div>
       </div>
@@ -180,8 +230,12 @@ export default function RisksPage() {
             <div className="flex items-end gap-3">
               <div className="w-32"><label className="label">ID</label><input className="input font-mono" placeholder="RSK-001" value={form.id} onChange={e => setForm({...form, id: e.target.value})} autoFocus /></div>
               <div className="flex-1"><label className="label">Title</label><input className="input" placeholder="Risk title" value={form.title} onChange={e => setForm({...form, title: e.target.value})} /></div>
-              <div><label className="label">Severity</label><select className="select" value={form.severity} onChange={e => setForm({...form, severity: e.target.value})}><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="critical">Critical</option></select></div>
-              <div><label className="label">Prob.</label><select className="select" value={form.probability} onChange={e => setForm({...form, probability: e.target.value})}><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></div>
+              <div><label className="label">Severity</label><select className="select" value={form.severity} onChange={e => setForm({...form, severity: e.target.value})}>
+                {(matrix?.severities ?? []).map((sv) => <option key={sv} value={sv}>{formatLevel(sv)}</option>)}
+              </select></div>
+              <div><label className="label">Likelihood</label><select className="select" value={form.likelihood} onChange={e => setForm({...form, likelihood: e.target.value})}>
+                {(matrix?.likelihoods ?? []).map((l) => <option key={l} value={l}>{formatLevel(l)}</option>)}
+              </select></div>
               <button type="submit" className="btn-primary">Create</button>
               <button type="button" onClick={() => setShowCreate(false)} className="btn-secondary">Cancel</button>
             </div>
@@ -204,7 +258,39 @@ export default function RisksPage() {
               )}
               <div className="w-9 h-9 bg-red-500/10 text-red-400 rounded-lg flex items-center justify-center"><AlertTriangle size={18} /></div>
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2"><span className="font-mono text-xs text-muted-foreground">{r.id}</span><h3 className="font-medium text-card-foreground">{r.title}</h3><span className={`badge border ${sevColors[r.severity] || ''}`}>{r.severity}</span><span className="text-xs text-muted-foreground">prob: {r.probability}</span><CopyLinkButton kind="risk" id={r.id} className="opacity-0 group-hover:opacity-100" /></div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-mono text-xs text-muted-foreground">{r.id}</span>
+                  <h3 className="font-medium text-card-foreground">{r.title}</h3>
+                  <RatingBadge rating={r.rating} />
+                  <CopyLinkButton kind="risk" id={r.id} className="opacity-0 group-hover:opacity-100" />
+                </div>
+                {/* The two inputs the rating is derived from. Editable here
+                    because there is no risk detail page — before the matrix
+                    they could only be set at creation time. */}
+                <div className="flex items-center gap-2 mt-1.5">
+                  <label className="text-[10px] text-muted-foreground">severity</label>
+                  <select
+                    className="select h-8 py-0 text-[11px] w-32" disabled={!editable}
+                    value={r.severity || ''}
+                    onChange={(e) => setRiskLevel(r.id, { severity: e.target.value })}
+                  >
+                    {!(matrix?.severities ?? []).includes(r.severity) && (
+                      <option value={r.severity}>{r.severity || '—'}</option>
+                    )}
+                    {(matrix?.severities ?? []).map((sv) => <option key={sv} value={sv}>{formatLevel(sv)}</option>)}
+                  </select>
+                  <label className="text-[10px] text-muted-foreground">likelihood</label>
+                  <select
+                    className="select h-8 py-0 text-[11px] w-36" disabled={!editable}
+                    value={r.rating?.likelihood ?? r.likelihood ?? ''}
+                    onChange={(e) => setRiskLevel(r.id, { likelihood: e.target.value })}
+                  >
+                    {!(matrix?.likelihoods ?? []).includes(r.rating?.likelihood ?? r.likelihood ?? '') && (
+                      <option value={r.rating?.likelihood ?? r.likelihood ?? ''}>{r.rating?.likelihood ?? r.likelihood ?? '—'}</option>
+                    )}
+                    {(matrix?.likelihoods ?? []).map((l) => <option key={l} value={l}>{formatLevel(l)}</option>)}
+                  </select>
+                </div>
                 {r.description && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1"><AutoLinkText text={r.description} kinds={entityKinds} /></p>}
                 {(r.linked_requirements.length > 0 || editable) && (
                   <div className="mt-2">

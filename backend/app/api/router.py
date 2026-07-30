@@ -24,6 +24,7 @@ from app.models.verification import VerificationCaseCreate, VerificationCaseUpda
 from app.services.yaml_store import YamlStore
 from app.services.search import search_requirements
 from app.services.history import record_change
+from app.services.risk_matrix import normalize_matrix
 
 
 class ProjectCreate(BaseModel):
@@ -178,6 +179,7 @@ def get_project(project_id: str, request: Request,
         "quality": meta.get("quality"),
         "baselines": normalize_baseline_defs(meta.get("baselines", [])),
         "stakeholders": normalize_stakeholders(meta.get("stakeholders", [])),
+        "risk_matrix": normalize_matrix(meta.get("risk_matrix")),
     }
     # Git settings can hold a credentialed remote URL, so unlike the rest of
     # the project metadata they are only shown to those who manage settings
@@ -200,6 +202,7 @@ class ProjectSettings(BaseModel):
     git: Optional[dict] = None
     baselines: Optional[list] = None  # list of BaselineDefItem-compatible dicts or legacy strings
     stakeholders: Optional[list] = None  # [{name, weight}]; bare strings tolerated
+    risk_matrix: Optional[dict] = None  # {severities, likelihoods, bands, cells}
     permissions: Optional[dict] = None
 
 
@@ -235,7 +238,8 @@ def update_project_settings(project_id: str, data: ProjectSettings, user: dict =
     store = get_store(project_id)
     meta = store.read_meta()
     updates = {}
-    for field in ("name", "naming", "quality", "workflow", "git", "baselines", "permissions", "stakeholders"):
+    for field in ("name", "naming", "quality", "workflow", "git", "baselines",
+                  "permissions", "stakeholders", "risk_matrix"):
         val = getattr(data, field, None)
         if val is not None:
             updates[field] = val
@@ -258,6 +262,11 @@ def update_project_settings(project_id: str, data: ProjectSettings, user: dict =
         ]
     if "stakeholders" in updates and updates["stakeholders"] is not None:
         updates["stakeholders"] = normalize_stakeholders(updates["stakeholders"])
+    if "risk_matrix" in updates and updates["risk_matrix"] is not None:
+        # Normalized on write as well as on read: a matrix stored with a
+        # mis-sized cell grid would silently re-rate risks against fallback
+        # bands every time it was read back.
+        updates["risk_matrix"] = normalize_matrix(updates["risk_matrix"])
     meta.update(updates)
     store.write_meta(meta)
     return meta
