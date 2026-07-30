@@ -249,6 +249,8 @@ deploy_docker() {
         fi
     fi
 
+    stop_reqmesh_services || return 1
+
     info "Starting containers..."
     if [ "${CFG[BUILD_FROM_SOURCE]:-false}" = "true" ] || [ "${CFG[OFFLINE_MODE]:-false}" = "true" ]; then
         "${DOCKER[@]}" compose -f "$COMPOSE_FILE" up -d --build --remove-orphans
@@ -326,42 +328,26 @@ main() {
     # *is* the upgrade. Without this exemption every Docker-to-Docker upgrade
     # failed on the container it was about to replace.
     set_docker_cmd
-    if port_held_by_us "$port"; then
-        info "Replacing the running reqmesh container in place."
-    elif check_port "$port"; then
+    if ! port_is_ours "$port" && check_port "$port"; then
         error "Port $port is held by $(port_holder "$port") — this deployment cannot bind it."
-        if systemctl is-active --quiet reqmesh 2>/dev/null; then
-            error "That is the bare-metal reqmesh service. Stop it, or keep it:"
-            error "  sudo systemctl disable --now reqmesh"
-            error "  REQMESH_DEPLOY_MODE=bare   (keep the current deployment)"
-        else
-            error "Stop it, or choose a different port with RT_PORT."
-        fi
+        error "That is not part of this reqmesh install, so it is not ours to stop."
+        error "Stop it, or choose a different port with RT_PORT."
         return 1
     fi
     local proxy="${CFG[PROXY]:-caddy}"
     if [ "$proxy" != "none" ]; then
-        # Any container of ours holding 80/443 is fine, whichever proxy it is:
-        # --remove-orphans retires the old one as the new one starts, so swapping
-        # nginx for caddy is an upgrade, not a conflict. Filtering on the *newly
-        # requested* proxy name missed the running one and reported the operator's
-        # own container as foreign.
+        # Ours will be stopped below; anything else is not ours to touch.
         local blocked=""
         for p in 80 443; do
-            port_held_by_us "$p" && continue
+            port_is_ours "$p" && continue
             check_port "$p" && blocked="$blocked $p"
         done
         if [ -n "$blocked" ]; then
             for p in $blocked; do
                 error "Port $p is held by $(port_holder "$p") — the $proxy proxy cannot bind it."
             done
-            if systemctl is-active --quiet nginx 2>/dev/null; then
-                error "Stop the host nginx:  sudo systemctl disable --now nginx"
-            elif systemctl is-active --quiet caddy 2>/dev/null; then
-                error "Stop the host Caddy:  sudo systemctl disable --now caddy"
-            else
-                error "Stop it, or deploy without a proxy: REQMESH_PROXY=none"
-            fi
+            error "That is not part of this reqmesh install, so it is not ours to stop."
+            error "Stop it, or deploy without a proxy: REQMESH_PROXY=none"
             return 1
         fi
     fi
