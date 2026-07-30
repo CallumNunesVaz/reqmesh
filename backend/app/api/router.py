@@ -54,6 +54,30 @@ def normalize_baseline_defs(baselines: list) -> list[dict]:
     return result
 
 
+def normalize_stakeholders(stakeholders: list) -> list[dict]:
+    """Normalize project stakeholder definitions to {name, weight}.
+
+    Accepts a bare string (weight defaults to 1.0) so a project that listed
+    stakeholder names before weights existed keeps working, mirroring how
+    normalize_baseline_defs tolerates legacy string baselines.
+
+    Weights are relative, not required to sum to anything: the value shown per
+    requirement is a weighted mean, so adding a stakeholder does not silently
+    rescale every existing score.
+    """
+    result: list[dict] = []
+    for item in (stakeholders or []):
+        if isinstance(item, str):
+            result.append({"name": item, "weight": 1.0})
+        elif isinstance(item, dict) and item.get("name"):
+            try:
+                weight = float(item.get("weight", 1.0))
+            except (TypeError, ValueError):
+                weight = 1.0
+            result.append({"name": item["name"], "weight": max(0.0, weight)})
+    return result
+
+
 def _baseline_def_by_name(baselines: list, name: str) -> dict | None:
     for b in normalize_baseline_defs(baselines):
         if b["name"] == name:
@@ -153,6 +177,7 @@ def get_project(project_id: str, request: Request,
         "naming": naming,
         "quality": meta.get("quality"),
         "baselines": normalize_baseline_defs(meta.get("baselines", [])),
+        "stakeholders": normalize_stakeholders(meta.get("stakeholders", [])),
     }
     # Git settings can hold a credentialed remote URL, so unlike the rest of
     # the project metadata they are only shown to those who manage settings
@@ -174,6 +199,7 @@ class ProjectSettings(BaseModel):
     workflow: Optional[dict] = None
     git: Optional[dict] = None
     baselines: Optional[list] = None  # list of BaselineDefItem-compatible dicts or legacy strings
+    stakeholders: Optional[list] = None  # [{name, weight}]; bare strings tolerated
     permissions: Optional[dict] = None
 
 
@@ -209,7 +235,7 @@ def update_project_settings(project_id: str, data: ProjectSettings, user: dict =
     store = get_store(project_id)
     meta = store.read_meta()
     updates = {}
-    for field in ("name", "naming", "quality", "workflow", "git", "baselines", "permissions"):
+    for field in ("name", "naming", "quality", "workflow", "git", "baselines", "permissions", "stakeholders"):
         val = getattr(data, field, None)
         if val is not None:
             updates[field] = val
@@ -230,6 +256,8 @@ def update_project_settings(project_id: str, data: ProjectSettings, user: dict =
         updates["baselines"] = [
             {k: v for k, v in d.items() if k == "name" or v} for d in defs
         ]
+    if "stakeholders" in updates and updates["stakeholders"] is not None:
+        updates["stakeholders"] = normalize_stakeholders(updates["stakeholders"])
     meta.update(updates)
     store.write_meta(meta)
     return meta

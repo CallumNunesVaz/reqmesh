@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { GuardedLink as Link } from '../components/navGuard';
 import { motion } from 'framer-motion';
 import { Trash2, ArrowLeft, Plus, X, ArrowRight, ArrowLeftRight, Sparkles, ShieldCheck, ExternalLink, ChevronRight, Waypoints, AlertTriangle, CheckCircle2, GitFork, Loader, Save, Undo2 } from 'lucide-react';
-import { api, baselineNames, type Requirement, type VerificationCase, type QualityItem, type Component, type Specification, type ChangeRequest, type Risk, type EvaluatedRequirement, type Definition, type Comment, type DecisionRecord } from '../api/client';
+import { api, baselineNames, type StakeholderDef, type RequirementValue, type Requirement, type VerificationCase, type QualityItem, type Component, type Specification, type ChangeRequest, type Risk, type EvaluatedRequirement, type Definition, type Comment, type DecisionRecord } from '../api/client';
 import { ParametricsCard } from '../components/parametrics';
 import RichTextEditor from '../components/RichTextEditor';
 import AutocompleteInput from '../components/AutocompleteInput';
@@ -64,6 +64,8 @@ export default function RequirementDetailPage() {
   const [satisfiedBy, setSatisfiedBy] = useState<Component[]>([]);
   const [allComponents, setAllComponents] = useState<Component[]>([]);
   const [coverageNeedOptions, setCoverageNeedOptions] = useState<{ value: string; label: string }[]>([]);
+  const [projectStakeholders, setProjectStakeholders] = useState<StakeholderDef[]>([]);
+  const [reqValue, setReqValue] = useState<RequirementValue | null>(null);
   const [inSpecs, setInSpecs] = useState<Specification[]>([]);
   const [evaluated, setEvaluated] = useState<EvaluatedRequirement | undefined>();
   const [definitions, setDefinitions] = useState<Definition[]>([]);
@@ -267,7 +269,12 @@ export default function RequirementDetailPage() {
     api.getUnreviewed(projectId).then((u) => {
       if (alive) setUnreviewedIds(new Set(u.items.map((r) => r.id)));
     }).catch(() => {});
-    api.getProject(projectId).then((p) => { if (alive) setProjectBaselines(baselineNames(p.baselines)); }).catch(() => {});
+    api.getProject(projectId).then((p) => {
+      if (!alive) return;
+      setProjectBaselines(baselineNames(p.baselines));
+      setProjectStakeholders(p.stakeholders || []);
+    }).catch(() => {});
+    api.getRequirementValue(projectId, reqId).then((v) => { if (alive) setReqValue(v); }).catch(() => { if (alive) setReqValue(null); });
     api.listComments(projectId, reqId).then((v) => { if (alive) setComments(v); }).catch(() => { if (alive) setComments([]); });
     api.listDecisions(projectId).then((decs) => { if (alive) setDecisions(decs.filter((d) => d.linked_requirements?.includes(reqId))); }).catch(() => { if (alive) setDecisions([]); });
     return () => { alive = false; };
@@ -332,6 +339,12 @@ export default function RequirementDetailPage() {
       api.getUnreviewed(projectId).then((u) => {
         setUnreviewedIds(new Set(u.items.map((r) => r.id)));
       }).catch(() => {});
+      // The value and rank depend on this requirement's scores *and* on every
+      // other requirement's, so they are recomputed server-side after a save
+      // rather than derived locally.
+      if (diff.priorities) {
+        api.getRequirementValue(projectId, reqId).then(setReqValue).catch(() => {});
+      }
     } catch (err: any) {
       setSaveError(err?.message || 'Save failed');
       setTimeout(() => setSaveError(''), 5000);
@@ -1105,30 +1118,85 @@ export default function RequirementDetailPage() {
                 <div className="text-[10px] text-muted-foreground mt-0.5">SysML v2 subject — the component this requirement is about</div>
               </div>
               <div>
-                <label className="label">Stakeholder Priorities</label>
-                <textarea
-                  className="input font-mono text-xs h-16 resize-none"
-                  placeholder="development: 5&#10;customers: 8&#10;safety: 10"
-                  value={Object.entries(req.priorities || {}).map(([k, v]) => `${k}: ${v}`).join('\n')}
-                  onChange={(e) => {
-                    const prio: Record<string, number> = {};
-                    for (const line of e.target.value.split('\n')) {
-                      const [k, v] = line.split(':').map(s => s.trim());
-                      if (k && v && !isNaN(Number(v))) prio[k] = Number(v);
-                    }
-                    setReq({ ...req, priorities: prio });
-                  }}
-                  onBlur={(e) => {
-                    const prio: Record<string, number> = {};
-                    for (const line of e.target.value.split('\n')) {
-                      const [k, v] = line.split(':').map(s => s.trim());
-                      if (k && v && !isNaN(Number(v))) prio[k] = Number(v);
-                    }
-                    save({ priorities: prio });
-                  }}
-                  disabled={!editable}
-                />
-                <div className="text-[10px] text-muted-foreground mt-0.5">Per-stakeholder priority scores (e.g. development: 5)</div>
+                <label className="label flex items-center justify-between">
+                  <span>Stakeholder Priorities</span>
+                  {reqValue?.value != null && (
+                    <span className="text-[10px] font-normal text-muted-foreground">
+                      value <span className="font-mono text-foreground">{reqValue.value}</span>
+                      {reqValue.rank != null && <> · #{reqValue.rank} of {reqValue.ranked_total}</>}
+                    </span>
+                  )}
+                </label>
+                {/* Was a textarea parsed as `name: score` lines. It reparsed on
+                    every keystroke and rebuilt its own value from the result, so
+                    a half-typed line ("safety" before the colon) failed to parse
+                    and vanished under the cursor — the field genuinely could not
+                    be typed into. One numeric input per project stakeholder
+                    instead, which also makes the scores comparable across
+                    requirements: they are keyed to a defined list rather than to
+                    whatever each author happened to type. */}
+                {projectStakeholders.length === 0 ? (
+                  <p className="text-[11px] text-muted-foreground">
+                    No stakeholders defined.{' '}
+                    <Link to={`/project/${projectId}/settings`} className="text-primary hover:underline">
+                      Add them in project settings
+                    </Link>{' '}
+                    to score this requirement.
+                  </p>
+                ) : (
+                  <div className="space-y-1">
+                    {projectStakeholders.map((s) => {
+                      const score = req.priorities?.[s.name];
+                      return (
+                        <div key={s.name} className="flex items-center gap-2">
+                          <span className="text-xs text-foreground flex-1 min-w-0 truncate" title={s.name}>{s.name}</span>
+                          <span className="text-[10px] text-muted-foreground shrink-0 w-10 text-right">×{s.weight}</span>
+                          <input
+                            type="number" min={0} max={10} step={1}
+                            className="input w-16 h-7 text-xs shrink-0"
+                            placeholder="–"
+                            value={score ?? ''}
+                            onChange={(e) => {
+                              const next = { ...(req.priorities || {}) };
+                              if (e.target.value === '') delete next[s.name];
+                              else next[s.name] = Number(e.target.value);
+                              save({ priorities: next });
+                            }}
+                            disabled={!editable}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {/* Scores left over from a stakeholder that has since been
+                    renamed or removed. Shown so they can be cleared, rather
+                    than sitting in the data invisibly and unused. */}
+                {(reqValue?.unknown_stakeholders?.length ?? 0) > 0 && (
+                  <div className="mt-1.5 space-y-1">
+                    {reqValue!.unknown_stakeholders.map((name) => (
+                      <div key={name} className="flex items-center gap-2 text-[10px] text-amber-400">
+                        <span className="flex-1 min-w-0 truncate">{name}: {req.priorities?.[name]} — not a project stakeholder</span>
+                        {editable && (
+                          <button
+                            className="hover:text-destructive shrink-0"
+                            title="Remove this score"
+                            onClick={() => {
+                              const next = { ...(req.priorities || {}) };
+                              delete next[name];
+                              save({ priorities: next });
+                            }}
+                          ><X size={11} /></button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="text-[10px] text-muted-foreground mt-1">
+                  0–10 per stakeholder. Value is the weighted mean of those scored
+                  {reqValue && reqValue.stakeholder_count > 0 &&
+                    <> ({reqValue.scored_count} of {reqValue.stakeholder_count} scored)</>}.
+                </div>
               </div>
               <div>
                 <label className="label">Verification Method</label>

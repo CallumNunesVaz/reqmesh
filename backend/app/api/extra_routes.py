@@ -858,20 +858,56 @@ def project_metrics(project_id: str, _rate: None = Depends(rate_limit(20, 60))):
 
 @router.get("/projects/{project_id}/backlog")
 def prioritized_backlog(project_id: str, sort: str = "priority", _rate: None = Depends(rate_limit(20, 60))):
+    """Requirements ranked by weighted stakeholder value, best first.
+
+    ``combined_priority`` was a plain sum of the per-stakeholder scores, which
+    ranked a requirement higher for having been scored by more people rather
+    than for being more valuable. It is now the weighted mean from
+    stakeholder_value, so this and the value shown in the inspector cannot
+    disagree. The key is kept for compatibility with anything reading it.
+    """
+    from app.api.router import normalize_stakeholders
+    from app.services.stakeholder_value import rank_requirements
+
     store = get_store(project_id)
-    reqs = store.list_requirements()
+    stakeholders = normalize_stakeholders(store.read_meta().get("stakeholders", []))
+    reqs = [r for r in store.list_requirements()
+            if r.get("status") not in ("rejected", "deprecated")]
+    by_id = {r["id"]: r for r in reqs}
+
     results = []
-    for r in reqs:
-        if r.get("status") in ("rejected", "deprecated"):
-            continue
-        priorities = r.get("priorities", {})
-        combined = sum(priorities.values()) if priorities else 0
+    for item in rank_requirements(reqs, stakeholders):
         results.append({
-            "id": r["id"], "name": r.get("name", ""), "status": r.get("status", "proposed"),
-            "priorities": priorities, "combined_priority": combined,
+            **item,
+            "priorities": by_id[item["id"]].get("priorities", {}),
+            "combined_priority": item["value"] if item["value"] is not None else 0,
         })
-    results.sort(key=lambda x: -x["combined_priority"])
-    return {"items": results}
+    # Unscored last, otherwise by value.
+    results.sort(key=lambda x: (x["value"] is None, -(x["value"] or 0)))
+    return {"items": results, "stakeholders": stakeholders}
+
+
+@router.get("/projects/{project_id}/requirements/{req_id}/value")
+def requirement_value(project_id: str, req_id: str):
+    """The weighted stakeholder value of one requirement, and its rank."""
+    from app.api.router import normalize_stakeholders
+    from app.services.stakeholder_value import rank_requirements
+
+    store = get_store(project_id)
+    if not store.get_requirement(req_id):
+        raise HTTPException(status_code=404, detail="Requirement not found")
+    stakeholders = normalize_stakeholders(store.read_meta().get("stakeholders", []))
+    reqs = [r for r in store.list_requirements()
+            if r.get("status") not in ("rejected", "deprecated")]
+    ranked = rank_requirements(reqs, stakeholders)
+    mine = next((r for r in ranked if r["id"] == req_id), None)
+    if mine is None:
+        # Excluded from ranking (rejected/deprecated): still report its value.
+        from app.services.stakeholder_value import compute_value
+        req = store.get_requirement(req_id)
+        mine = {"id": req_id, "name": req.get("name", ""), "status": req.get("status", ""),
+                **compute_value(req.get("priorities") or {}, stakeholders), "rank": None}
+    return {**mine, "ranked_total": sum(1 for r in ranked if r["value"] is not None)}
 
 
 # ── Publishing ────────────────────────────────────────────────────────────────
