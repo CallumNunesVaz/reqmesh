@@ -790,7 +790,6 @@ function BulkEditModal({
     status: '',
     verification_method: '',
     verification_status: '',
-    requirement_kind: '',
     rationale: '',
     source: '',
     allocated_to: '',
@@ -827,7 +826,6 @@ function BulkEditModal({
     if (form.status) updates.status = form.status;
     if (form.verification_method) updates.verification_method = form.verification_method;
     if (form.verification_status) updates.verification_status = form.verification_status;
-    if (form.requirement_kind) updates.requirement_kind = form.requirement_kind;
     if (form.rationale) updates.rationale = form.rationale;
     if (form.source) updates.source = form.source;
     if (form.allocated_to) updates.allocated_to = form.allocated_to;
@@ -955,8 +953,8 @@ function BulkEditModal({
                 </div>
               </div>
 
-              {/* Row 2: Ver Method / Ver Status / Req Kind */}
-              <div className="grid grid-cols-3 gap-3">
+              {/* Row 2: Ver Method / Ver Status */}
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="label">Verification Method</label>
                   <select className="select" value={form.verification_method} onChange={(e) => setForm({ ...form, verification_method: e.target.value })}>
@@ -975,14 +973,6 @@ function BulkEditModal({
                     <option value="in_progress">In Progress</option>
                     <option value="passed">Passed</option>
                     <option value="failed">Failed</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="label">Requirement Kind</label>
-                  <select className="select" value={form.requirement_kind} onChange={(e) => setForm({ ...form, requirement_kind: e.target.value })}>
-                    <option value="">No change</option>
-                    <option value="stakeholder_need">Stakeholder Need</option>
-                    <option value="system_requirement">System Requirement</option>
                   </select>
                 </div>
               </div>

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Save, CheckCircle2, Settings, Trash2, Pencil, X, Check, Plus, RotateCw, GitBranch, Clock, User } from 'lucide-react';
-import { api, type StakeholderDef } from '../api/client';
+import { api, type StakeholderDef, type RiskMatrix } from '../api/client';
 import { useAuthStore } from '../store/auth';
 
 interface NamingRule {
@@ -88,6 +88,42 @@ export default function ProjectSettingsPage() {
   // be free text typed into each requirement, so "safety" and "Safety" were
   // different stakeholders and nothing could be ranked.
   const [stakeholders, setStakeholders] = useState<StakeholderDef[]>([]);
+
+  // The risk matrix turns a risk's two inputs (severity, likelihood) into its
+  // rating. Held here as the whole object because the axes and the cell grid
+  // have to stay the same shape — renaming a level and re-banding a cell are
+  // one edit as far as the server is concerned.
+  const [riskMatrix, setRiskMatrix] = useState<RiskMatrix | null>(null);
+  const setCell = (si: number, li: number, band: string) => setRiskMatrix((m) => {
+    if (!m) return m;
+    const cells = m.cells.map((row) => [...row]);
+    cells[si][li] = band;
+    return { ...m, cells };
+  });
+  // Renaming an axis level must move the cells with it, so the grid is rebuilt
+  // from the current one rather than left indexed against the old names.
+  const renameLevel = (axis: 'severities' | 'likelihoods', i: number, name: string) =>
+    setRiskMatrix((m) => (m ? { ...m, [axis]: m[axis].map((x, j) => (j === i ? name : x)) } : m));
+  const addLevel = (axis: 'severities' | 'likelihoods') => setRiskMatrix((m) => {
+    if (!m) return m;
+    const name = `level_${m[axis].length + 1}`;
+    const fallback = m.bands[0].key;
+    if (axis === 'severities') {
+      return { ...m, severities: [...m.severities, name],
+               cells: [...m.cells, m.likelihoods.map(() => fallback)] };
+    }
+    return { ...m, likelihoods: [...m.likelihoods, name],
+             cells: m.cells.map((row) => [...row, fallback]) };
+  });
+  const removeLevel = (axis: 'severities' | 'likelihoods', i: number) => setRiskMatrix((m) => {
+    if (!m || m[axis].length <= 1) return m;   // an axis with no levels rates nothing
+    if (axis === 'severities') {
+      return { ...m, severities: m.severities.filter((_, j) => j !== i),
+               cells: m.cells.filter((_, j) => j !== i) };
+    }
+    return { ...m, likelihoods: m.likelihoods.filter((_, j) => j !== i),
+             cells: m.cells.map((row) => row.filter((_, j) => j !== i)) };
+  });
   const [newStakeholder, setNewStakeholder] = useState('');
   const addStakeholder = () => {
     const name = newStakeholder.trim();
@@ -184,6 +220,7 @@ export default function ProjectSettingsPage() {
       setGitCommitIntervalHours(git.commit_interval_hours || 0);
       setGitCommitChangesThreshold(git.commit_changes_threshold || 0);
       setStakeholders(p.stakeholders || []);
+      setRiskMatrix(p.risk_matrix || null);
       setBaselineDefs((p.baselines || []).map((b: any) => (
         typeof b === 'string'
           ? { name: b, symbol: '', description: '' }
@@ -216,6 +253,7 @@ export default function ProjectSettingsPage() {
         name: projectName, naming,
         baselines: baselineDefs,
         stakeholders,
+        ...(riskMatrix ? { risk_matrix: riskMatrix } : {}),
         git: {
           user_name: gitUserName, user_email: gitUserEmail,
           remote_url: gitRemoteUrl, auto_commit: gitAutocommit,
@@ -373,6 +411,128 @@ export default function ProjectSettingsPage() {
           </div>
         )}
       </motion.div>
+
+      {/* Risk matrix */}
+      {riskMatrix && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="card p-5 mb-6">
+          <h2 className="font-semibold text-sm text-card-foreground mb-1">Risk Matrix</h2>
+          <p className="text-xs text-muted-foreground mb-3">
+            Every risk states a severity and a likelihood; this grid turns that pair into its rating.
+            Ratings are derived on read, so re-banding a cell re-rates every existing risk at once.
+            {editable && ' Click a cell to cycle its band.'}
+          </p>
+
+          <div className="overflow-x-auto">
+            <table className="border-separate border-spacing-1">
+              <thead>
+                <tr>
+                  <th className="text-[10px] text-muted-foreground font-normal text-right pr-2 align-bottom">
+                    severity &darr; / likelihood &rarr;
+                  </th>
+                  {riskMatrix.likelihoods.map((l, li) => (
+                    <th key={li} className="align-bottom">
+                      <div className="flex flex-col items-center gap-1">
+                        {editable && riskMatrix.likelihoods.length > 1 && (
+                          <button onClick={() => removeLevel('likelihoods', li)}
+                            className="text-muted-foreground hover:text-destructive" title="Remove this likelihood">
+                            <X size={10} />
+                          </button>
+                        )}
+                        <input
+                          className="input h-7 py-0 text-[10px] w-24 text-center"
+                          value={l} disabled={!editable}
+                          onChange={(e) => renameLevel('likelihoods', li, e.target.value)}
+                        />
+                      </div>
+                    </th>
+                  ))}
+                  {editable && (
+                    <th className="align-bottom">
+                      <button onClick={() => addLevel('likelihoods')} className="btn-secondary text-[10px] px-1.5 py-1" title="Add a likelihood level">
+                        <Plus size={11} />
+                      </button>
+                    </th>
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {/* Rendered most-severe first so the grid reads like a
+                    conventional matrix, while the stored order stays
+                    least-severe first to match the server's indexing. */}
+                {[...riskMatrix.severities].map((_, i) => riskMatrix.severities.length - 1 - i).map((si) => (
+                  <tr key={si}>
+                    <td className="whitespace-nowrap">
+                      <div className="flex items-center gap-1 justify-end">
+                        <input
+                          className="input h-7 py-0 text-[10px] w-24 text-right"
+                          value={riskMatrix.severities[si]} disabled={!editable}
+                          onChange={(e) => renameLevel('severities', si, e.target.value)}
+                        />
+                        {editable && riskMatrix.severities.length > 1 && (
+                          <button onClick={() => removeLevel('severities', si)}
+                            className="text-muted-foreground hover:text-destructive" title="Remove this severity">
+                            <X size={10} />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                    {riskMatrix.likelihoods.map((_, li) => {
+                      const key = riskMatrix.cells[si]?.[li] ?? riskMatrix.bands[0].key;
+                      const band = riskMatrix.bands.find((b) => b.key === key) ?? riskMatrix.bands[0];
+                      const next = riskMatrix.bands[
+                        (riskMatrix.bands.findIndex((b) => b.key === key) + 1) % riskMatrix.bands.length
+                      ];
+                      return (
+                        <td key={li}>
+                          <button
+                            disabled={!editable}
+                            onClick={() => setCell(si, li, next.key)}
+                            title={editable ? `${band.label} — click for ${next.label}` : band.label}
+                            className="w-24 h-9 rounded text-[10px] font-medium text-black/80 disabled:cursor-default"
+                            style={{ backgroundColor: band.color }}
+                          >
+                            {band.label}
+                          </button>
+                        </td>
+                      );
+                    })}
+                    {editable && <td />}
+                  </tr>
+                ))}
+                {editable && (
+                  <tr>
+                    <td className="text-right">
+                      <button onClick={() => addLevel('severities')} className="btn-secondary text-[10px] px-1.5 py-1" title="Add a severity level">
+                        <Plus size={11} />
+                      </button>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 mt-3 pt-3 border-t">
+            {riskMatrix.bands.map((b, bi) => (
+              <div key={b.key} className="flex items-center gap-1.5">
+                <input
+                  type="color" value={b.color} disabled={!editable}
+                  className="w-6 h-6 rounded border-0 bg-transparent p-0 cursor-pointer disabled:cursor-default"
+                  onChange={(e) => setRiskMatrix((m) => (m ? {
+                    ...m, bands: m.bands.map((x, j) => (j === bi ? { ...x, color: e.target.value } : x)),
+                  } : m))}
+                />
+                <input
+                  className="input h-7 py-0 text-[10px] w-24" value={b.label} disabled={!editable}
+                  onChange={(e) => setRiskMatrix((m) => (m ? {
+                    ...m, bands: m.bands.map((x, j) => (j === bi ? { ...x, label: e.target.value } : x)),
+                  } : m))}
+                />
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      )}
 
       {/* Baseline definitions */}
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="card p-5 mb-6">

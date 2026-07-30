@@ -130,13 +130,28 @@ def delete_change_request(project_id: str, cr_id: str, user: dict = Depends(requ
 
 # ── Risks ─────────────────────────────────────────────────────────────────────
 
+def _rated(store, risks: list[dict]) -> list[dict]:
+    """Attach the derived rating. Computed on read so that re-tuning the matrix
+    re-rates the whole register at once instead of leaving stored ratings that
+    disagree with the matrix they came from."""
+    from app.services.risk_matrix import apply_rating
+    return apply_rating(risks, store.read_meta().get("risk_matrix"))
+
+
+@router.get("/projects/{project_id}/risk-matrix")
+def get_risk_matrix(project_id: str):
+    from app.services.risk_matrix import normalize_matrix
+    return normalize_matrix(get_store(project_id).read_meta().get("risk_matrix"))
+
+
 @router.get("/projects/{project_id}/risks")
 def list_risks(
     project_id: str,
     offset: Optional[int] = Query(None, ge=0),
     limit: Optional[int] = Query(None, ge=1, le=2000),
 ):
-    items = _sorted_by_modified(get_store(project_id).list_items("risks"))
+    store = get_store(project_id)
+    items = _rated(store, _sorted_by_modified(store.list_items("risks")))
     if offset is None and limit is None:
         return items
     off = offset or 0
@@ -154,7 +169,10 @@ def create_risk(project_id: str, data: RiskCreate, user: dict = Depends(require_
     r.setdefault("status", "open")
     store = get_store(project_id)
     result = store.create_item("risks", r)
+    # Rated after the history entry: the rating is derived, and recording it
+    # would put a value in the changelog that no edit ever set.
     record_change(store, result["id"], "create", None, result, user.get("username", ""))
+    _rated(store, [result])
     try:
         from app.services.email_service import notify_risk
         notify_risk(store, project_id, result["id"], "created", user.get("username", ""))
@@ -171,6 +189,7 @@ def update_risk(project_id: str, risk_id: str, data: RiskUpdate, user: dict = De
     if result is None:
         raise HTTPException(status_code=404, detail="Risk not found")
     record_change(store, risk_id, "update", before, result, user.get("username", ""))
+    _rated(store, [result])
     try:
         from app.services.email_service import notify_risk
         notify_risk(store, project_id, risk_id, "updated", user.get("username", ""))

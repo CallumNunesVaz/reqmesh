@@ -1010,14 +1010,6 @@ export default function RequirementDetailPage() {
                 </select>
               </div>
               <div>
-                <label className="label">Kind</label>
-                <select className="select" value={req.requirement_kind || 'system_requirement'} onChange={(e) => save({ requirement_kind: e.target.value as any })} disabled={!editable}>
-                  <option value="system_requirement">System Requirement</option>
-                  <option value="stakeholder_need">Stakeholder Need</option>
-                </select>
-                <div className="text-[10px] text-muted-foreground mt-0.5">OOSEM: system requirement vs stakeholder need</div>
-              </div>
-              <div>
                 <label className="label">System States</label>
                 <input
                   className="input font-mono text-xs"

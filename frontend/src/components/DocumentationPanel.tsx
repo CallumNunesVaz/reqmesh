@@ -111,7 +111,6 @@ const DOCS: DocSection[] = [
             ['Technical Mgmt', '§6.3.7', 'Measurement', 1, 'Parametrics + evaluation (no formal measurement plan)'],
             ['Technical Mgmt', '§6.3.8', 'Quality Assurance', 2, 'Quality linting (INCOSE / EARS / ISO 29148)'],
             ['Technical', '§6.4.1', 'Business/Mission Analysis', 0, '—'],
-            ['Technical', '§6.4.2.1', 'Stakeholder Needs Definition', 1, 'RequirementKind (stakeholder_need); no separate Stakeholder entity'],
             ['Technical', '§6.4.2.2', 'System Requirements Definition', 2, 'Full requirement model with types, priorities, traceability'],
             ['Technical', '§6.4.3', 'Architecture Definition', 1, 'Component tree (physical only; no logical architecture layer)'],
             ['Technical', '§6.4.4', 'Design Definition', 2, 'Component parameters + constraints + budget rollups'],
