@@ -316,6 +316,24 @@ p4_domain() {
         "example.com or leave blank for localhost" valid_domain)"
     save_cfg "DOMAIN" "$domain"
 
+    # The TLS mode was chosen in phase 3a, before this answer existed, so
+    # "letsencrypt — requires public domain" could be picked and then left without
+    # one. Offer one more chance to supply it here, where the contradiction is
+    # visible, rather than silently issuing a self-signed certificate and leaving
+    # the config claiming otherwise.
+    if [ "$tls" = "letsencrypt" ] && [ -z "$domain" ]; then
+        echo ""
+        warn "You chose Let's Encrypt, which needs a public domain name."
+        domain="$(gum_input_valid "Public domain for the certificate (blank to use self-signed)" \
+            "" "reqs.example.com" valid_domain)"
+        save_cfg "DOMAIN" "$domain"
+        echo ""
+    fi
+    # Records what will actually be used, so the review screen and .env agree
+    # with the certificate the deployment ends up serving.
+    tls="$(reconcile_tls_with_domain)"
+    save_cfg "TLS" "$tls"
+
     host="$(gum_input "Bind address" "${CFG[HOST]:-0.0.0.0}" "0.0.0.0 = all interfaces, 127.0.0.1 = localhost only")"
     save_cfg "HOST" "$host"
 
@@ -635,7 +653,7 @@ p9_review() {
         "Deployment mode:    ${CFG[DEPLOY_MODE]:-}" \
         "Reverse proxy:      ${CFG[PROXY]:-none}" \
         "TLS mode:           ${CFG[TLS]:-none}" \
-        "Domain:             ${CFG[DOMAIN]:-localhost}" \
+        "Domain:             ${CFG[DOMAIN]:-(none - using the LAN address)}" \
         "Base URL:           ${CFG[BASE_URL]:-}" \
         "LAN address:        ${CFG[LAN_IP]:-N/A}" \
         "Profile:            ${CFG[PROFILE]:-team}" \

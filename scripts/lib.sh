@@ -1030,6 +1030,46 @@ ensure_selfsigned_cert() {
     return 0
 }
 
+# ── TLS / domain reconciliation ─────────────────────────────────────────────────
+# Let's Encrypt needs a public domain it can be reached at. It cannot issue for a
+# bare IP, for "localhost", or for a name that resolves nowhere.
+#
+# The wizard asks for the TLS mode in phase 3a and the domain in phase 4, so
+# "requires public domain" could be chosen and then contradicted. The deployment
+# then quietly rendered `tls internal` — a self-signed certificate — while .env
+# and the state file went on claiming letsencrypt. The only clue was a warning in
+# the closing summary that looked like a bug rather than the truth.
+#
+# Prints the TLS mode that will actually be used, and explains any change.
+reconcile_tls_with_domain() {
+    local tls="${CFG[TLS]:-none}"
+    local domain="${CFG[DOMAIN]:-}"
+
+    [ "$tls" = "letsencrypt" ] || { printf '%s' "$tls"; return 0; }
+
+    if [ -n "$domain" ] && [ "$domain" != "localhost" ] \
+       && [ "$domain" != "localserver.reqmesh.com" ]; then
+        # Must look like a hostname, not an address: an IP has dots too, and
+        # Let's Encrypt cannot issue for one. Anything without a dot is a bare
+        # label that resolves only on a local network.
+        case "$domain" in
+            *[!0-9.]*)
+                case "$domain" in
+                    *.*) printf 'letsencrypt'; return 0 ;;
+                esac
+                ;;
+        esac
+    fi
+
+    warn "Let's Encrypt needs a public domain name, and none is configured."
+    if [ -n "$domain" ]; then
+        warn "  '$domain' is not a name Let's Encrypt can issue for."
+    fi
+    warn "  Using a self-signed certificate instead. Browsers will warn on first visit."
+    warn "  Re-run with REQMESH_DOMAIN=<your.domain> for a trusted certificate."
+    printf 'internal'
+}
+
 # ── Base URL ───────────────────────────────────────────────────────────────────
 # The address the deployment tells people to use. It has to follow the shape of
 # the deployment, because switching a machine between HTTP and HTTPS changes it:
