@@ -660,4 +660,45 @@ check "the wizard defaults the data root to the existing install" \
 check "no advisory-only port warning remains" \
       "$(grep -c 'the app may fail to bind' "$REPO/scripts/deploy-docker.sh")" "0"
 
+
+# ══════════════════════════════════════════════════════════════════════════════
+section "Let's Encrypt without a public domain"
+# ══════════════════════════════════════════════════════════════════════════════
+# The wizard asks for TLS in phase 3a and the domain in phase 4, so letsencrypt
+# could be chosen and then left without a domain. The deployment rendered
+# `tls internal` — self-signed — while .env and the state file still claimed
+# letsencrypt, and the only hint was a warning that looked like a bug.
+tls_for() {   # <tls> <domain>
+    ( declare -A CFG=([TLS]="$1" [DOMAIN]="${2-}")
+      source "$REPO/scripts/lib.sh" >/dev/null 2>&1
+      reconcile_tls_with_domain 2>/dev/null )
+}
+check "a real domain keeps letsencrypt" "$(tls_for letsencrypt reqs.example.com)" "letsencrypt"
+check "no domain downgrades to internal" "$(tls_for letsencrypt '')" "internal"
+check "localhost is not a public domain" "$(tls_for letsencrypt localhost)" "internal"
+check "the placeholder domain is not one either" \
+      "$(tls_for letsencrypt localserver.reqmesh.com)" "internal"
+# An IP has dots but Let's Encrypt cannot issue for one. This assertion was first
+# written to match the implementation (which passed IPs through) rather than the
+# intent — the code was wrong, not the requirement.
+check "an IP is not a public domain" "$(tls_for letsencrypt 192.168.0.163)" "internal"
+check "a bare label is not a public domain" "$(tls_for letsencrypt intranet)" "internal"
+check "a subdomain is fine" "$(tls_for letsencrypt reqs.eng.example.com)" "letsencrypt"
+check "other TLS modes are untouched" "$(tls_for selfsigned '')" "selfsigned"
+check "none stays none" "$(tls_for none '')" "none"
+check "the downgrade is explained" \
+      "$( ( declare -A CFG=([TLS]=letsencrypt [DOMAIN]='')
+            source "$REPO/scripts/lib.sh" >/dev/null 2>&1
+            reconcile_tls_with_domain 2>&1 >/dev/null ) | grep -c 'self-signed certificate instead')" "1"
+
+check "both paths reconcile it" \
+      "$(grep -c 'reconcile_tls_with_domain' "$REPO/scripts/install.sh" "$REPO/scripts/wizard.sh" \
+         | awk -F: '{s+=$2} END {print s}')" "2"
+# The review screen printed "localhost" for an empty domain, so an operator who
+# had entered nothing believed they had configured a public name.
+check "the review screen does not invent a domain" \
+      "$(grep -c 'CFG\[DOMAIN\]:-localhost' "$REPO/scripts/wizard.sh")" "0"
+check "it says plainly that none is set" \
+      "$(grep -c 'none - using the LAN address' "$REPO/scripts/wizard.sh")" "1"
+
 finish

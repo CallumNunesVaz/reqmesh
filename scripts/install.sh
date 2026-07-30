@@ -276,6 +276,9 @@ non_interactive() {
     save_cfg "PROXY" "${REQMESH_PROXY:-$(prev_env REQMESH_PROXY "$($PREV_FOUND && detect_proxy || echo caddy)")}"
     save_cfg "TLS" "${REQMESH_TLS:-$(prev_env REQMESH_TLS "$($PREV_FOUND && detect_tls || echo letsencrypt)")}"
     save_cfg "DOMAIN" "${REQMESH_DOMAIN:-$(prev_env REQMESH_DOMAIN '')}"
+    # letsencrypt without a public domain cannot work; record what will actually
+    # be used rather than leaving .env claiming otherwise.
+    save_cfg "TLS" "$(reconcile_tls_with_domain)"
     save_cfg "HOST" "${RT_HOST:-0.0.0.0}"
     save_cfg "PORT" "${RT_PORT:-8000}"
     # Empty means "derive from PROXY" — see effective_bind.
