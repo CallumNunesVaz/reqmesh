@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
+import { copyText } from '../lib/clipboard';
 import {
   ShieldCheck, RefreshCw, Download, CheckCircle2, AlertTriangle, Loader,
   ArrowUpCircle, GitBranch, Server, ExternalLink, Terminal, X, Upload,
@@ -552,11 +553,14 @@ export default function SystemPage() {
             <div className="bg-muted rounded-lg p-3 relative">
               <pre className="text-xs font-mono text-foreground whitespace-pre-wrap">{installDep.guide}</pre>
               <button
-                onClick={() => {
-                  navigator.clipboard.writeText(installDep.guide).then(() => {
+                onClick={async () => {
+                  // navigator.clipboard is undefined outside a secure context,
+                  // so the unguarded call this replaces threw a TypeError on any
+                  // plain-HTTP deployment and the .catch(() => {}) hid it.
+                  if (await copyText(installDep.guide)) {
                     setCopiedId(installDep.id);
                     setTimeout(() => setCopiedId(null), 2000);
-                  }).catch(() => {});
+                  }
                 }}
                 className="absolute top-2 right-2 p-1.5 rounded bg-card border text-muted-foreground hover:text-foreground transition-colors"
                 title="Copy to clipboard"

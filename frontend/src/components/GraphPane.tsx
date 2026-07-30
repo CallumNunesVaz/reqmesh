@@ -30,7 +30,7 @@ import OrthoEdge from './OrthoEdge';
 import LoadingSplash from './LoadingSplash';
 import { zoomLevel, LEVEL_LABELS } from './semanticZoom';
 import { useTheme } from './ThemeProvider';
-import { useSelectedReq } from './Layout';
+import { useSelectedReq, useContextPane } from './Layout';
 import { useStore } from '../store';
 import { useWhatIf } from './WhatIfContext';
 
@@ -488,6 +488,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
   const [showFilters, setShowFilters] = useState(false);
   const [hideRoots, setHideRoots] = useState(false);
   const { selectedReqId, selectReq, derivationReq } = useSelectedReq();
+  const { openContext } = useContextPane();
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   // How many relationship hops out from the focused node stay highlighted.
   const [hopDepth, setHopDepth] = useState(() => {
@@ -1656,16 +1657,14 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
     });
   }, [edges, hasSelection, connectedIds, focus, showAllLinks, perfMode, linkDir, derivationActive]);
 
-  const onNodeClick = useCallback(
-    (_: React.MouseEvent, node: Node) => {
-      if (selectedReqId === node.id) navigate(`/project/${projectId}/requirements/${node.id}`);
-      else { selectReq(node.id); setHoveredNodeId(null); }
-    },
-    [navigate, projectId, selectedReqId, selectReq],
-  );
-
-  const onNodeDoubleClick = useCallback(
-    (_: React.MouseEvent, node: Node) => {
+  const handleNodeDoubleClick = useCallback(
+    (node: Node) => {
+      // Reveal the inspector first, and for every node — not just ones with
+      // children. Double-clicking a leaf otherwise does nothing visible, and on
+      // a node *with* children it collapsed the subtree while the detail it had
+      // selected stayed hidden behind a shut pane.
+      selectReq(node.id);
+      openContext();
       if (!(node.data as any).hasChildren) return;
       // Collapsing via double-click re-frames the node too (expanding is handled
       // by the expand choreography). Double-click doesn't change the selection,
@@ -1674,8 +1673,34 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
       setGroupsOnly(prev => { const n = new Set(prev); n.delete(node.id); return n; });
       setCollapsed(prev => { const next = new Set(prev); if (next.has(node.id)) next.delete(node.id); else next.add(node.id); return next; });
     },
-    [],
+    [selectReq, openContext],
   );
+
+  // Double-click is detected here rather than through ReactFlow's
+  // onNodeDoubleClick, which never fires for these nodes: the first click
+  // selects, the node re-renders with its selected styling, and the browser
+  // only emits `dblclick` when both clicks land on the *same* DOM element.
+  // Measured on the running app — two onNodeClick calls, zero onNodeDoubleClick
+  // — which also means the collapse-on-double-click this was meant to drive has
+  // never worked. Timing beats the DOM here because the ref survives re-render.
+  const lastClickRef = useRef<{ id: string; t: number }>({ id: '', t: 0 });
+  const DOUBLE_CLICK_MS = 400;
+
+  const onNodeClick = useCallback(
+    (_: React.MouseEvent, node: Node) => {
+      const now = Date.now();
+      const prev = lastClickRef.current;
+      const isDouble = prev.id === node.id && now - prev.t < DOUBLE_CLICK_MS;
+      lastClickRef.current = { id: node.id, t: isDouble ? 0 : now };
+
+      if (isDouble) { handleNodeDoubleClick(node); return; }
+
+      if (selectedReqId === node.id) navigate(`/project/${projectId}/requirements/${node.id}`);
+      else { selectReq(node.id); setHoveredNodeId(null); }
+    },
+    [navigate, projectId, selectedReqId, selectReq, handleNodeDoubleClick],
+  );
+
 
   const onPaneClick = useCallback(() => { selectReq(null); setHoveredNodeId(null); }, [selectReq]);
   const handleNodeEnter = useCallback((_: React.MouseEvent, node: Node) => {
@@ -1712,7 +1737,6 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onNodeClick={onNodeClick}
-        onNodeDoubleClick={onNodeDoubleClick}
         onNodeMouseEnter={handleNodeEnter}
         onNodeMouseLeave={handleNodeLeave}
         onPaneClick={onPaneClick}

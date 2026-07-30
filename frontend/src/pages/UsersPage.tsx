@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
+import { copyText } from '../lib/clipboard';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Users, Plus, Trash2, ShieldCheck, User as UserIcon, KeyRound, X, Loader, Search, Filter, Pencil, Check, Clock, Ban, CircleCheck, Unlock, LogOut, UserPlus, Download, Upload, Copy, Lock } from 'lucide-react';
 import { api, type ManagedUser } from '../api/client';
@@ -65,6 +66,10 @@ export default function UsersPage() {
   const [invite, setInvite] = useState({ username: '', email: '', full_name: '', role: 'contributor' });
   const [inviting, setInviting] = useState(false);
   const [inviteLink, setInviteLink] = useState<string | null>(null);
+  // The link is already shown in a readonly input, so a failed copy just
+  // needs to point at it rather than leave the admin believing they hold an
+  // invite they can paste.
+  const [inviteCopyFailed, setInviteCopyFailed] = useState(false);
   const [importText, setImportText] = useState<string | null>(null);
   const [importResult, setImportResult] = useState<{ created: string[]; skipped: string[]; invites: { username: string; invite_link: string }[] } | null>(null);
 
@@ -531,8 +536,11 @@ export default function UsersPage() {
                 <div className="space-y-3">
                   <p className="text-xs text-emerald-500 flex items-center gap-1"><Check size={13} /> Account created. Share this set-password link:</p>
                   <div className="flex gap-1">
-                    <input readOnly className="input text-xs font-mono flex-1" value={inviteLink} onFocus={(e) => e.target.select()} />
-                    <button type="button" onClick={() => navigator.clipboard?.writeText(inviteLink)} className="btn-secondary shrink-0 p-2" title="Copy"><Copy size={13} /></button>
+                    <input readOnly className="input text-xs font-mono flex-1" value={inviteLink} onFocus={(e) => e.target.select()} autoFocus={inviteCopyFailed} />
+                    <button type="button" onClick={async () => { if (!await copyText(inviteLink)) setInviteCopyFailed(true); }} className="btn-secondary shrink-0 p-2" title="Copy"><Copy size={13} /></button>
+                    {inviteCopyFailed && (
+                      <span className="text-[10px] text-cs-amber shrink-0">Copy blocked — select the link above</span>
+                    )}
                   </div>
                   <button type="button" onClick={() => { setShowInvite(false); setInviteLink(null); }} className="btn-primary w-full justify-center">Done</button>
                 </div>

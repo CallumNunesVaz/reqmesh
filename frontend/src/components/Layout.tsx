@@ -1,7 +1,7 @@
 import { Outlet, useParams } from 'react-router-dom';
 import { GuardedLink as Link } from './navGuard';
 import { PanelRight, PanelRightClose, PanelRightOpen, LogIn, LogOut, User, Pencil, Eye, FileDown, FileUp, Users, Search, HelpCircle, BookOpen, Server, SlidersHorizontal, Undo2, Redo2 } from 'lucide-react';
-import { useState, useEffect, useCallback, createContext, useContext, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, createContext, useContext, useRef } from 'react';
 import { ThemeToggle } from './ThemeToggle';
 import RequirementNav from './RequirementNav';
 import GraphPane from './GraphPane';
@@ -22,6 +22,12 @@ import WhatIfPanel from './WhatIfPanel';
 
 const GraphPaneCtx = createContext({ graphOpen: false, toggleGraph: () => {} });
 export function useGraphPane() { return useContext(GraphPaneCtx); }
+
+/** Lets the canvas reveal the inspector. Double-clicking a node selects it and
+ *  loads its detail, which is invisible while the pane is collapsed — the
+ *  interaction appeared to do nothing at all. */
+const ContextPaneCtx = createContext({ contextOpen: false, openContext: () => {} });
+export function useContextPane() { return useContext(ContextPaneCtx); }
 
 // Fetched once per page load; the version rarely changes within a session.
 let _versionCache: string | null = null;
@@ -122,6 +128,11 @@ export default function Layout() {
   const selectReq = useCallback((id: string | null) => {
     setSelectedReqId(id);
   }, []);
+
+  // Idempotent: revealing an already-open pane must not toggle it shut, so this
+  // is deliberately not the existing toggle.
+  const openContext = useCallback(() => setContextOpen(true), []);
+  const contextPaneValue = useMemo(() => ({ contextOpen, openContext }), [contextOpen, openContext]);
 
   const [derivationReq, setDerivationReq] = useState<{ id: string; nonce: number } | null>(null);
   const showDerivation = useCallback((id: string) => {
@@ -256,6 +267,7 @@ export default function Layout() {
 
   return (
     <GraphPaneCtx.Provider value={{ graphOpen, toggleGraph }}>
+    <ContextPaneCtx.Provider value={contextPaneValue}>
     <SelectedReqCtx.Provider value={{ selectedReqId, selectReq, derivationReq, showDerivation }}>
       <div className="h-screen flex flex-col bg-background">
         {/* overflow-x-auto: at very narrow windows the icon row degrades to a
@@ -493,7 +505,15 @@ export default function Layout() {
                 <main
                   className="overflow-auto @container relative"
                   style={{
-                    flex: isInProject ? `${1 - graphFrac} 1 0%` : '1 1 0%',
+                    // `1 - graphFrac` only makes sense while the canvas is
+                    // actually rendered and taking the other share. With the
+                    // canvas closed this is the row's only flex item, and a
+                    // flex-grow below 1 against a 0 basis leaves the remainder
+                    // of the row simply empty — the page drew at ~48% width with
+                    // blank space beside it. Worst on wide grids like the
+                    // allocation matrix, which then scrolled inside half a
+                    // window for no reason.
+                    flex: isInProject && graphOpen ? `${1 - graphFrac} 1 0%` : '1 1 0%',
                     minWidth: 0,
                     transition: resizing ? 'none' : 'flex-grow 0.3s ease',
                   }}
@@ -527,6 +547,7 @@ export default function Layout() {
       <ShortcutHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
       <DocumentationPanel open={docsOpen} onClose={() => setDocsOpen(false)} />
     </SelectedReqCtx.Provider>
+    </ContextPaneCtx.Provider>
     </GraphPaneCtx.Provider>
   );
 }
