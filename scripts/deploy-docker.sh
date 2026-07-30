@@ -235,12 +235,22 @@ deploy_docker() {
     if [ "${CFG[BUILD_FROM_SOURCE]:-false}" != "true" ] \
        && [ "${CFG[OFFLINE_MODE]:-false}" != "true" ] \
        && [ ! -f "$dir/Dockerfile.prod" ]; then
-        if ! "${DOCKER[@]}" image inspect "$image" >/dev/null 2>&1; then
-            info "Pulling $image..."
-            if ! "${DOCKER[@]}" compose -f "$COMPOSE_FILE" pull reqmesh 2>&1 | tail -3; then
+        # Pulled every time, rather than accepted from cache. Skipping the pull
+        # when `image inspect` found the tag locally meant a mutable tag like
+        # `latest` was never refreshed: one host went on serving 0.1.4 for six
+        # releases while the installer that deployed it was 0.1.10, and every
+        # line of output said the deployment was healthy.
+        info "Pulling $image..."
+        if ! "${DOCKER[@]}" compose -f "$COMPOSE_FILE" pull reqmesh 2>&1 | tail -2; then
+            # Only fatal with nothing usable locally: an air-gapped host with a
+            # docker-loaded image must still deploy, as must one briefly offline.
+            if "${DOCKER[@]}" image inspect "$image" >/dev/null 2>&1; then
+                warn "Could not pull $image — using the copy already on this host."
+                warn "  It may be older than this installer."
+            else
                 error "Cannot obtain the application image: $image"
                 error ""
-                error "It is neither present locally nor pullable, and there is no"
+                error "It is neither pullable nor present locally, and there is no"
                 error "Dockerfile in $dir to build from."
                 error "  - check the tag exists:  REQMESH_VERSION=<tag>"
                 error "  - or load it offline:    sudo docker load < reqmesh-<version>-image.tar.gz"
@@ -277,6 +287,20 @@ deploy_docker() {
     # not bind. Any of those make a healthy install report failure. What this
     # step needs to answer is narrower: did the container come up and serve?
     healthcheck "http://127.0.0.1:${CFG[PORT]:-8000}/health" 60 || return 1
+
+    # State the version actually serving. A deployment several releases behind the
+    # installer that placed it there looked entirely healthy, and nothing in the
+    # output would have told the operator.
+    local running
+    running="$(curl -sf --max-time 5 "http://127.0.0.1:${CFG[PORT]:-8000}/health" 2>/dev/null \
+               | sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')"
+    if [ -n "$running" ]; then
+        if [ "${CFG[IMAGE_TAG]:-latest}" != "latest" ] && [ "$running" != "${CFG[IMAGE_TAG]}" ]; then
+            warn "Requested image ${CFG[IMAGE_TAG]} but the application reports $running."
+        else
+            success "Running reqmesh $running"
+        fi
+    fi
 
     # The proxy is a separate question, and a soft one — Let's Encrypt issuance
     # can outlast the installer without anything being wrong.
