@@ -320,6 +320,29 @@ run pip with `--require-hashes` or `--no-index --find-links <bundle/wheels>`.
 | Scanner follows directory symlinks | `code_scan.py:139` | `rglob` fallback escapes the `relative_to` confinement on Python < 3.13 |
 | `python-multipart==0.0.9` | `requirements.txt` | CVE-2024-53981 (multipart DoS), fixed in 0.0.18 |
 
+## SEC-11 — Dependency CVEs blocked behind major upgrades 📄 STATIC
+
+**Severity: MEDIUM (runtime), LOW (dev toolchain)**
+
+Recorded 2026-07-31, when the `security` workflow first ran against `main` after
+v0.1.13. None of these were introduced by that release — no dependency manifest
+had changed since v0.1.12; the advisories accumulated while `main` sat unpushed.
+
+Cleared in that pass: `python-multipart` 0.0.19 → 0.0.31 (6 CVEs), `postcss`
+→ 8.5.25 (1 high). Remaining, each needing a breaking upgrade:
+
+| Item | Where | Note |
+|---|---|---|
+| `starlette` 0.38.6 — 9 CVEs | transitive via `fastapi==0.115.0` | Not pinned directly; `fastapi<0.39` caps it below the first fix (0.40.0), and clearing all nine needs ≥1.3.1. `fastapi` 0.141.1 requires `starlette>=0.46.0` with **no upper bound**, so bumping fastapi is the whole fix — but starlette 0.x→1.x is the breaking line. **This keeps `python-audit` red.** |
+| `vite` 5.4.21, `vitest` 2.x — 1 high + 1 critical | `frontend/devDependencies` | Dev-server advisories; nothing reaches the built artifact. `node-audit` now runs `--omit=dev` so they no longer gate releases. Fix is vite 5→8 / vitest 2→4. |
+| `react-router-dom` ^6 — open redirect + constructor injection | `frontend/dependencies` | **Runtime**, but moderate, so below the job's `--audit-level=high` gate. Every 6.x is affected (range 6.0.0–7.17.0); fix starts at 7.18.0, a major. |
+
+**Fix.** Take the fastapi bump first — it is the only one of the three that is
+both runtime-facing and fully blocking a CI job, and 693 backend tests exist to
+catch the starlette API changes.
+
+---
+
 ## Verified safe (no action needed)
 
 - **YAML deserialization is NOT vulnerable** — all four `yaml.load()` sites use `ruamel.yaml`,
