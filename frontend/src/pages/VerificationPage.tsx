@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, useMemo } from 'react';
+import { usePersistedState, setCodec } from '../hooks/usePersistedState';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, CheckCircle2, Trash2, XCircle, Clock, ChevronDown, X, Link as LinkIcon, Play, ListChecks, ClipboardList, FlaskConical, Loader, Search, UploadCloud } from 'lucide-react';
@@ -41,7 +42,9 @@ export default function VerificationPage() {
   const [newVC, setNewVC] = useState({ id: '', name: '', description: '', method: 'test' });
   const [requirements, setRequirements] = useState<Requirement[]>([]);
   const [components, setComponents] = useState<Component[]>([]);
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  // Persisted per project — see RequirementsPage/ComponentsPage for why.
+  const pk = (field: string) => (projectId ? `rt-verification-${field}-${projectId}` : null);
+  const [expanded, setExpanded] = usePersistedState<Set<string>>(pk('expanded'), new Set(), setCodec<string>());
   const entityKinds = useEntityKinds(projectId);
   const [linkReqInput, setLinkReqInput] = useState<Record<string, string>>({});
   const [newStepAction, setNewStepAction] = useState<Record<string, string>>({});
@@ -60,9 +63,9 @@ export default function VerificationPage() {
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<TestResultImportSummary | null>(null);
   const [importError, setImportError] = useState('');
-  const [search, setSearch] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
-  const [filterMethod, setFilterMethod] = useState('');
+  const [search, setSearch] = usePersistedState(pk('search'), '');
+  const [filterStatus, setFilterStatus] = usePersistedState(pk('filter-status'), '');
+  const [filterMethod, setFilterMethod] = usePersistedState(pk('filter-method'), '');
 
   const load = () => {
     if (!projectId) return;

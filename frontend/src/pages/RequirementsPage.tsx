@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { usePersistedState, setCodec } from '../hooks/usePersistedState';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -67,14 +68,20 @@ export default function RequirementsPage() {
   const showConfirm = useConfirm();
   const { selectedReqId, selectReq } = useSelectedReq();
 
-  const [search, setSearch] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
-  const [filterType, setFilterType] = useState('');
-  const [filterPriority, setFilterPriority] = useState('');
-  const [filterBaseline, setFilterBaseline] = useState('');
-  const [filterVerStatus, setFilterVerStatus] = useState('');
-  const [filterAllocated, setFilterAllocated] = useState('');
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  // Search, filters and the collapsed-tree state persist per project, so
+  // navigating to another requirement (or another page) and back does not
+  // silently reset a list the operator just spent time configuring — the
+  // same reset that made "collapse everything, drill into one, come back"
+  // undo itself on every visit.
+  const pk = (field: string) => (projectId ? `rt-reqs-${field}-${projectId}` : null);
+  const [search, setSearch] = usePersistedState(pk('search'), '');
+  const [filterStatus, setFilterStatus] = usePersistedState(pk('filter-status'), '');
+  const [filterType, setFilterType] = usePersistedState(pk('filter-type'), '');
+  const [filterPriority, setFilterPriority] = usePersistedState(pk('filter-priority'), '');
+  const [filterBaseline, setFilterBaseline] = usePersistedState(pk('filter-baseline'), '');
+  const [filterVerStatus, setFilterVerStatus] = usePersistedState(pk('filter-verstatus'), '');
+  const [filterAllocated, setFilterAllocated] = usePersistedState(pk('filter-allocated'), '');
+  const [collapsed, setCollapsed] = usePersistedState<Set<string>>(pk('collapsed'), new Set(), setCodec<string>());
   const [showCreate, setShowCreate] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [projectBaselines, setProjectBaselines] = useState<string[]>([]);

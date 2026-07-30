@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
+import { usePersistedState, setCodec } from '../hooks/usePersistedState';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, ChevronRight, Boxes, Square, CheckSquare, Trash2, X, Search, Eye, EyeOff } from 'lucide-react';
@@ -23,10 +24,14 @@ export default function ComponentsPage() {
 
   const [components, setComponents] = useState<Component[]>([]);
   const [tree, setTree] = useState<ComponentTreeNode[]>([]);
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  // Persisted per project: navigating to a component's detail (or off the
+  // page entirely) and back used to reset the collapsed tree and any filter,
+  // undoing exactly the configuration the operator was there to set up.
+  const pk = (field: string) => (projectId ? `rt-components-${field}-${projectId}` : null);
+  const [collapsed, setCollapsed] = usePersistedState<Set<string>>(pk('collapsed'), new Set(), setCodec<string>());
   const [showCreate, setShowCreate] = useState(false);
-  const [search, setSearch] = useState('');
-  const [filterType, setFilterType] = useState('');
+  const [search, setSearch] = usePersistedState(pk('search'), '');
+  const [filterType, setFilterType] = usePersistedState(pk('filter-type'), '');
   const [draft, setDraft] = useState(EMPTY_DRAFT);
   const [error, setError] = useState('');
   const [focusedIndex, setFocusedIndex] = useState(-1);
