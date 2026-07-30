@@ -106,6 +106,7 @@ if ! [ -f "$SCRIPT_DIR/lib.sh" ]; then
     chmod +x "$_STAGE"/*.sh "$_STAGE/updater"/*.sh
     SCRIPT_DIR="$_STAGE"
     REQMESH_STANDALONE=1
+    REQMESH_RESOLVED_REF="$_REF"
     printf "${_GREEN}✓${_NC} Companion scripts ready (%s).\n\n" "$_STAGE"
     _warn "Integrity rests on TLS to the host above, exactly as it did for this"
     _warn "script. Review $_STAGE before continuing if that is not sufficient."
@@ -311,9 +312,24 @@ non_interactive() {
             save_cfg "BASE_URL" "$_derived"
         fi
     fi
-    # Which image tag to deploy. Default unchanged (`latest`); settable so an
-    # operator can pin a known-good build, or deploy one built locally.
-    save_cfg "IMAGE_TAG" "${REQMESH_VERSION:-latest}"
+    # Which image tag to deploy. Defaults to *this installer's own version*, not
+    # `latest`: the scripts are pinned to a release, and the application should
+    # match them. Defaulting to a floating tag meant `v0.1.10/install.sh`
+    # deployed whichever image `latest` happened to point at — on one host that
+    # was 0.1.4, six releases behind the installer that placed it there. Same
+    # drift as an unpinned companion script, in a different artifact.
+    _tag="${REQMESH_VERSION:-}"
+    if [ -z "$_tag" ]; then
+        _ref="${REQMESH_RESOLVED_REF:-${REQMESH_REF:-}}"
+        if [ -n "$_ref" ]; then
+            _tag="${_ref#v}"
+        elif [ -r "$SCRIPT_DIR/../VERSION" ]; then
+            _tag="$(cat "$SCRIPT_DIR/../VERSION")"
+        else
+            _tag="latest"
+        fi
+    fi
+    save_cfg "IMAGE_TAG" "$_tag"
     save_cfg "PROFILE" "${RT_PROFILE:-$(prev_env RT_PROFILE 'team')}"
 
     # Keep the signing secret across a re-install. Minting a new one on every

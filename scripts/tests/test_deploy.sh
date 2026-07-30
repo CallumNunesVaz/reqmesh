@@ -742,4 +742,36 @@ check "an unresolvable domain is called out" \
 check "a missing lookup tool does not block the install" \
       "$(sed -n '/^domain_resolves()/,/^}/p' "$REPO/scripts/lib.sh" | tail -2 | grep -c 'return 0')" "1"
 
+
+# ══════════════════════════════════════════════════════════════════════════════
+section "the deployed image matches the installer"
+# ══════════════════════════════════════════════════════════════════════════════
+# A host ran 0.1.4 for six releases while the installer that deployed it was
+# 0.1.10: the tag defaulted to `latest`, and the pull was skipped whenever
+# `image inspect` found that tag cached. Both halves are the same drift the ref
+# pin fixed for companion scripts, in a different artifact.
+check "the image tag is not hardcoded to latest" \
+      "$(grep -c 'save_cfg "IMAGE_TAG" "${REQMESH_VERSION:-latest}"' "$REPO/scripts/install.sh")" "0"
+check "it derives from the installer's own ref" \
+      "$(grep -c '_tag="${_ref#v}"' "$REPO/scripts/install.sh")" "1"
+check "the bootstrapped ref is recorded for it" \
+      "$(grep -c 'REQMESH_RESOLVED_REF="$_REF"' "$REPO/scripts/install.sh")" "1"
+check "an explicit REQMESH_VERSION still wins" \
+      "$(grep -c '_tag="${REQMESH_VERSION:-}"' "$REPO/scripts/install.sh")" "1"
+
+check "the pull is unconditional" \
+      "$(sed -n '/Pulled every time/,/^        fi$/p' "$REPO/scripts/deploy-docker.sh" \
+         | grep -c 'compose -f "\$COMPOSE_FILE" pull reqmesh')" "1"
+check "a cached image no longer skips the pull" \
+      "$(grep -c 'if ! "\${DOCKER\[@\]}" image inspect "\$image" >/dev/null 2>&1; then' \
+         "$REPO/scripts/deploy-docker.sh")" "0"
+check "a failed pull falls back to a local copy" \
+      "$(grep -c 'using the copy already on this host' "$REPO/scripts/deploy-docker.sh")" "1"
+check "with nothing local it is fatal" \
+      "$(grep -c 'neither pullable nor present locally' "$REPO/scripts/deploy-docker.sh")" "1"
+check "the running version is reported" \
+      "$(grep -c 'Running reqmesh \$running' "$REPO/scripts/deploy-docker.sh")" "1"
+check "a mismatch against the requested tag warns" \
+      "$(grep -c 'but the application reports' "$REPO/scripts/deploy-docker.sh")" "1"
+
 finish
