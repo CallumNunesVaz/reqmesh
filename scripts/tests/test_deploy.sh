@@ -153,6 +153,25 @@ check "the verified state records it too" \
       "$(grep -c 'REQMESH_DATA_ROOT=\${CFG\[DATA_ROOT\]:-}' "$REPO/scripts/lib.sh")" "1"
 check "resolution prefers the host key over the container one" \
       "$(grep -c 'prev_env REQMESH_DATA_ROOT' "$REPO/scripts/install.sh")" "1"
+# A conversion must stop the deployment it is converting away from — otherwise
+# the run advises stopping it and then fails on that very port conflict.
+check "conversion requires explicit authorisation" \
+      "$(grep -c 'REQMESH_CONFIRM_CONVERT:-0' "$REPO/scripts/lib.sh")" "1"
+check "authorised conversion stops the old deployment" \
+      "$(grep -c 'stop_deployment "$current"' "$REPO/scripts/lib.sh")" "1"
+check "stopping is verified, not assumed" \
+      "$(grep -c 'still active — cannot free its port' "$REPO/scripts/lib.sh")" "1"
+# A bare install holds 80/443 via nginx or Caddy as well as :8000 via the app,
+# so stopping only the app left the conversion failing one step later.
+check "the bare proxy is stopped as well" \
+      "$(grep -c 'it serves this reqmesh install' "$REPO/scripts/lib.sh")" "2"
+# Scoped to the function: detect_proxy legitimately reads the same path, and a
+# whole-file tally broke as soon as it did.
+check "only a proxy we own is touched" \
+      "$(sed -n '/^stop_deployment()/,/^}/p' "$REPO/scripts/lib.sh" \
+         | grep -c '/etc/nginx/sites-enabled/reqmesh')" "2"
+check "the docker side is handled too" \
+      "$(grep -c 'still running — cannot free their ports' "$REPO/scripts/lib.sh")" "1"
 check "a conversion that would move the data still refuses" \
       "$(grep -c 'the data root would move' "$REPO/scripts/lib.sh")" "1"
 check "rootfs stays read-only" "$(grep -c 'read_only: true' "$TMPL")" "1"
@@ -583,8 +602,15 @@ check "the refusal names both candidates" \
 check "state is recorded only after a verified deploy" \
       "$(grep -c 'write_install_state' "$REPO/scripts/deploy-docker.sh" "$REPO/scripts/deploy-bare.sh" \
          | awk -F: '{s+=$2} END {print s}')" "2"
+# Checked inside detect_deploy_mode rather than by counting occurrences across
+# the file — the tally broke the moment another function legitimately consulted
+# the same service state.
 check "running services outrank leftover config files" \
-      "$(grep -c 'systemctl is-active --quiet reqmesh' "$REPO/scripts/lib.sh")" "2"
+      "$(sed -n '/^detect_deploy_mode()/,/^}/p' "$REPO/scripts/lib.sh" \
+         | grep -c 'systemctl is-active --quiet reqmesh')" "1"
+check "detection checks running containers too" \
+      "$(sed -n '/^detect_deploy_mode()/,/^}/p' "$REPO/scripts/lib.sh" \
+         | grep -c 'ps -q --filter name=reqmesh')" "1"
 check "standalone bare refuses before touching the host" \
       "$(grep -c 'one-liner does not download (it fetches only the scripts)' "$REPO/scripts/install.sh")" "1"
 check "the bare path preflights its source" \

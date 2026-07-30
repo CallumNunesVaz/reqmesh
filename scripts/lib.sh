@@ -744,13 +744,80 @@ guard_mode_conversion() {
         return 1
     fi
 
+    # The old deployment holds the ports the new one needs, so converting always
+    # means stopping it. Asking the operator to do that by hand meant the run
+    # advised it and then failed on the very conflict it had just described —
+    # two messages and two commands for one stated intent. Stopping it is the
+    # disruptive half of the conversion, so it needs explicit authorisation, but
+    # once given there is nothing left to ask.
+    if [ "${REQMESH_CONFIRM_CONVERT:-0}" != "1" ]; then
+        error "Converting this deployment from $current to $requested."
+        error "  Data root $new_root is shared by both modes and is reused in place,"
+        error "  so no projects or accounts move."
+        error ""
+        error "This has to stop the current $current deployment to free its ports."
+        error "Re-run with REQMESH_CONFIRM_CONVERT=1 to do that and convert:"
+        error "  REQMESH_CONFIRM_CONVERT=1 REQMESH_DEPLOY_MODE=$requested ..."
+        error ""
+        error "Or keep the current deployment: REQMESH_DEPLOY_MODE=$current"
+        return 1
+    fi
+
     warn "Converting this deployment from $current to $requested."
     warn "  Data root $new_root is shared by both modes and will be reused in place."
-    if [ "$current" = "bare" ]; then
-        warn "  The systemd service must be stopped first: sudo systemctl disable --now reqmesh"
-    else
-        warn "  The containers must be stopped first: cd ${CFG[INSTALL_DIR]:-$INSTALL_DIR} && sudo docker compose -f docker-compose.prod.yml down"
-    fi
+    stop_deployment "$current" || return 1
+    return 0
+}
+
+# stop_deployment <mode> — stop the named deployment so the other can take its
+# ports. Reversible: re-running with the original mode brings it back, and the
+# data root is untouched either way.
+stop_deployment() {
+    local mode="$1" dir="${CFG[INSTALL_DIR]:-$INSTALL_DIR}"
+    case "$mode" in
+        bare)
+            info "Stopping the bare-metal deployment..."
+            sudo systemctl disable --now reqmesh >/dev/null 2>&1 || true
+            if systemctl is-active --quiet reqmesh 2>/dev/null; then
+                error "reqmesh.service is still active — cannot free its port."
+                return 1
+            fi
+            success "Stopped and disabled reqmesh.service"
+
+            # The app service is not the only thing holding a port. A bare
+            # install also runs nginx or Caddy on 80/443, which the containerised
+            # proxy needs — stopping only reqmesh left the conversion failing on
+            # "Port 80/443 is already in use" one step later.
+            #
+            # Only stopped where there is evidence the proxy is ours: a host may
+            # be running nginx for something else entirely, and taking that down
+            # is not ours to do.
+            if [ -f /etc/nginx/sites-enabled/reqmesh ] \
+               && systemctl is-active --quiet nginx 2>/dev/null; then
+                info "Stopping nginx (it serves this reqmesh install)..."
+                sudo rm -f /etc/nginx/sites-enabled/reqmesh
+                sudo systemctl disable --now nginx >/dev/null 2>&1 || true
+                success "Stopped nginx and removed its reqmesh site"
+            fi
+            if systemctl is-active --quiet caddy 2>/dev/null \
+               && sudo grep -q 'reqmesh' /etc/caddy/Caddyfile 2>/dev/null; then
+                info "Stopping Caddy (it serves this reqmesh install)..."
+                sudo systemctl disable --now caddy >/dev/null 2>&1 || true
+                success "Stopped Caddy"
+            fi
+            ;;
+        docker)
+            info "Stopping the Docker deployment..."
+            set_docker_cmd
+            ( cd "$dir" && "${DOCKER[@]}" compose -f "${CFG[COMPOSE_FILE]:-docker-compose.prod.yml}" down ) \
+                >/dev/null 2>&1 || true
+            if [ -n "$("${DOCKER[@]}" ps -q --filter name=reqmesh 2>/dev/null)" ]; then
+                error "reqmesh containers are still running — cannot free their ports."
+                return 1
+            fi
+            success "Stopped the reqmesh containers"
+            ;;
+    esac
     return 0
 }
 
