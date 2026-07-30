@@ -35,7 +35,15 @@ CFG[DOMAIN]="example.com"; CFG[TLS]="letsencrypt"
 out="$(render_caddyfile reqmesh:8000)"
 validate_caddy "$out" "domain+letsencrypt"
 grep -q '^example.com {' <<<"$out" && ok "domain+letsencrypt: address is the domain" || bad "domain+letsencrypt: address wrong"
-grep -q 'tls internal' <<<"$out" && bad "domain+letsencrypt: should not force internal TLS" || ok "domain+letsencrypt: uses ACME default"
+# Only the domain's own block: the LAN block below it uses the internal CA on
+# purpose, so that a misconfigured or pending certificate does not lock the
+# operator out of the box.
+sed -n '/^example.com {/,/^}/p' <<<"$out" | grep -q 'tls internal' \
+    && bad "domain+letsencrypt: should not force internal TLS in the domain block" \
+    || ok "domain+letsencrypt: uses ACME default"
+grep -q 'https://localhost' <<<"$out" \
+    && ok "domain+letsencrypt: LAN access retained" \
+    || bad "domain+letsencrypt: LAN access was replaced by the domain"
 
 CFG[DOMAIN]="example.com"; CFG[TLS]="internal"
 out="$(render_caddyfile reqmesh:8000)"
