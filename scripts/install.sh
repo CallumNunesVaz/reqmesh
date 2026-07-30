@@ -106,7 +106,6 @@ if ! [ -f "$SCRIPT_DIR/lib.sh" ]; then
     chmod +x "$_STAGE"/*.sh "$_STAGE/updater"/*.sh
     SCRIPT_DIR="$_STAGE"
     REQMESH_STANDALONE=1
-    REQMESH_RESOLVED_REF="$_REF"
     printf "${_GREEN}✓${_NC} Companion scripts ready (%s).\n\n" "$_STAGE"
     _warn "Integrity rests on TLS to the host above, exactly as it did for this"
     _warn "script. Review $_STAGE before continuing if that is not sufficient."
@@ -312,24 +311,19 @@ non_interactive() {
             save_cfg "BASE_URL" "$_derived"
         fi
     fi
-    # Which image tag to deploy. Defaults to *this installer's own version*, not
-    # `latest`: the scripts are pinned to a release, and the application should
-    # match them. Defaulting to a floating tag meant `v0.1.10/install.sh`
-    # deployed whichever image `latest` happened to point at — on one host that
-    # was 0.1.4, six releases behind the installer that placed it there. Same
-    # drift as an unpinned companion script, in a different artifact.
-    _tag="${REQMESH_VERSION:-}"
-    if [ -z "$_tag" ]; then
-        _ref="${REQMESH_RESOLVED_REF:-${REQMESH_REF:-}}"
-        if [ -n "$_ref" ]; then
-            _tag="${_ref#v}"
-        elif [ -r "$SCRIPT_DIR/../VERSION" ]; then
-            _tag="$(cat "$SCRIPT_DIR/../VERSION")"
-        else
-            _tag="latest"
-        fi
-    fi
-    save_cfg "IMAGE_TAG" "$_tag"
+    # Which image tag to deploy: the newest published release unless pinned.
+    #
+    # This briefly defaulted to the installer's own version, after a host was
+    # found serving 0.1.4 having been installed by v0.1.10. That diagnosis was
+    # half right — the tag was floating, but the reason it never moved was a
+    # preflight that skipped `docker pull` whenever the tag was already present
+    # locally. With the pull unconditional (see deploy-docker.sh), `latest`
+    # resolves to the newest image on every run, which is what an operator
+    # running the installer almost always wants.
+    #
+    # A pin is an explicit REQMESH_VERSION, and it is not remembered across runs:
+    # re-running without it deliberately moves the deployment forward again.
+    save_cfg "IMAGE_TAG" "${REQMESH_VERSION:-latest}"
     save_cfg "PROFILE" "${RT_PROFILE:-$(prev_env RT_PROFILE 'team')}"
 
     # Keep the signing secret across a re-install. Minting a new one on every

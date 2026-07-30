@@ -757,14 +757,14 @@ section "the deployed image matches the installer"
 # 0.1.10: the tag defaulted to `latest`, and the pull was skipped whenever
 # `image inspect` found that tag cached. Both halves are the same drift the ref
 # pin fixed for companion scripts, in a different artifact.
-check "the image tag is not hardcoded to latest" \
-      "$(grep -c 'save_cfg "IMAGE_TAG" "${REQMESH_VERSION:-latest}"' "$REPO/scripts/install.sh")" "0"
-check "it derives from the installer's own ref" \
-      "$(grep -c '_tag="${_ref#v}"' "$REPO/scripts/install.sh")" "1"
-check "the bootstrapped ref is recorded for it" \
-      "$(grep -c 'REQMESH_RESOLVED_REF="$_REF"' "$REPO/scripts/install.sh")" "1"
-check "an explicit REQMESH_VERSION still wins" \
-      "$(grep -c '_tag="${REQMESH_VERSION:-}"' "$REPO/scripts/install.sh")" "1"
+# The newest release by default; REQMESH_VERSION pins. Safe only because the pull
+# below is unconditional — the stale 0.1.4 was a skipped pull, not the tag itself.
+check "the image tag defaults to latest" \
+      "$(grep -c 'save_cfg "IMAGE_TAG" "${REQMESH_VERSION:-latest}"' "$REPO/scripts/install.sh")" "1"
+check "an explicit REQMESH_VERSION pins it" \
+      "$(grep -c 'REQMESH_VERSION:-latest' "$REPO/scripts/install.sh")" "1"
+check "the pin is not remembered across runs" \
+      "$(grep -c 'prev_env REQMESH_VERSION' "$REPO/scripts/install.sh")" "0"
 
 check "the pull is unconditional" \
       "$(sed -n '/Pulled every time/,/^        fi$/p' "$REPO/scripts/deploy-docker.sh" \
