@@ -69,6 +69,7 @@ export default function RequirementDetailPage() {
   const [definitions, setDefinitions] = useState<Definition[]>([]);
   const [affectingCrs, setAffectingCrs] = useState<ChangeRequest[]>([]);
   const [linkedRisks, setLinkedRisks] = useState<Risk[]>([]);
+  const [allRisksRaw, setAllRisksRaw] = useState<Risk[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
   const [decisions, setDecisions] = useState<DecisionRecord[]>([]);
   const entityKinds = useEntityKinds(projectId);
@@ -153,6 +154,36 @@ export default function RequirementDetailPage() {
   // the time this returns, so req/savedRef are updated directly to keep the
   // dirty-diff and discard-changes logic from treating allocated_to as a
   // pending edit.
+  // LinkEditor's option shape is {id, name}; a Risk calls its label `title`.
+  const allRisks = useMemo(
+    () => allRisksRaw.map((r) => ({ id: r.id, name: r.title })),
+    [allRisksRaw],
+  );
+
+  /** Add or remove this requirement from a risk's linked_requirements. The
+   *  link is owned by the risk, so this writes the risk — the same record the
+   *  Risks page edits — rather than anything on the requirement. */
+  const setRiskLink = async (riskId: string, linked: boolean) => {
+    if (!projectId || !reqId) return;
+    const risk = allRisksRaw.find((r) => r.id === riskId);
+    if (!risk) return;
+    const next = linked
+      ? [...risk.linked_requirements, reqId]
+      : risk.linked_requirements.filter((x) => x !== reqId);
+    const updated = { ...risk, linked_requirements: next };
+    setAllRisksRaw((prev) => prev.map((r) => (r.id === riskId ? updated : r)));
+    setLinkedRisks((prev) => (linked ? [...prev, updated] : prev.filter((r) => r.id !== riskId)));
+    try {
+      await api.updateRisk(projectId, riskId, { linked_requirements: next });
+    } catch (err) {
+      console.error(err);
+      api.listRisks(projectId).then((risks) => {
+        setAllRisksRaw(risks);
+        setLinkedRisks(risks.filter((r) => r.linked_requirements.includes(reqId)));
+      }).catch(() => {});
+    }
+  };
+
   const allocateComponent = async (componentId: string, allocated: boolean) => {
     if (!projectId || !reqId) return;
     try {
@@ -218,8 +249,12 @@ export default function RequirementDetailPage() {
       .then((crs) => { if (alive) setAffectingCrs(crs.filter((c) => c.affected_requirements.includes(reqId))); })
       .catch(() => { if (alive) setAffectingCrs([]); });
     api.listRisks(projectId)
-      .then((risks) => { if (alive) setLinkedRisks(risks.filter((r) => r.linked_requirements.includes(reqId))); })
-      .catch(() => { if (alive) setLinkedRisks([]); });
+      .then((risks) => {
+        if (!alive) return;
+        setAllRisksRaw(risks);
+        setLinkedRisks(risks.filter((r) => r.linked_requirements.includes(reqId)));
+      })
+      .catch(() => { if (alive) { setAllRisksRaw([]); setLinkedRisks([]); } });
     api.getEvaluation(projectId)
       .then((ev) => { if (alive) setEvaluated(ev.requirements.find((r) => r.id === reqId)); })
       .catch(() => { if (alive) setEvaluated(undefined); });
@@ -854,7 +889,7 @@ export default function RequirementDetailPage() {
             </motion.div>
           )}
 
-          {(affectingCrs.length > 0 || linkedRisks.length > 0) && (
+          {(affectingCrs.length > 0 || linkedRisks.length > 0 || editable) && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.24 }} className="card p-5">
               <h2 className="font-semibold text-sm text-card-foreground mb-3">Change Requests &amp; Risks</h2>
               <div className="space-y-1.5">
@@ -864,12 +899,22 @@ export default function RequirementDetailPage() {
                     <span className="badge bg-muted text-muted-foreground shrink-0">{c.status}</span>
                   </div>
                 ))}
-                {linkedRisks.map((r) => (
-                  <div key={r.id} className="flex items-center gap-2 text-xs py-1 px-2 rounded hover:bg-accent">
-                    <EntityLink kind="risk" id={r.id} name={r.title} className="flex-1 min-w-0 text-foreground hover:text-primary" />
-                    <span className="badge bg-muted text-muted-foreground shrink-0">{r.severity}</span>
-                  </div>
-                ))}
+              </div>
+              {/* Risks are editable from here as well as from the Risks page.
+                  The link lives on the risk (risk.linked_requirements), so both
+                  views used to render it read-only and it could only be created
+                  by hand-editing YAML. Writing from this side updates the risk,
+                  which is the same record the Risks page edits. */}
+              <div className={affectingCrs.length > 0 ? 'mt-3 pt-3 border-t' : ''}>
+                <LinkEditor
+                  label="Risks" hint="Risks that threaten this requirement" kind="risk"
+                  linked={linkedRisks.map((r) => r.id)}
+                  options={allRisks}
+                  editable={editable}
+                  onAdd={(id) => setRiskLink(id, true)}
+                  onRemove={(id) => setRiskLink(id, false)}
+                  nameOf={(id) => allRisks.find((r) => r.id === id)?.name ?? ''}
+                />
               </div>
             </motion.div>
           )}
