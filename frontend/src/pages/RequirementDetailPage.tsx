@@ -1060,14 +1060,25 @@ export default function RequirementDetailPage() {
               </div>
               <div>
                 <label className="label">Rationale</label>
-                <input
-                  className="input"
-                  placeholder="Why this requirement exists..."
-                  value={req.rationale || ''}
-                  onChange={(e) => setReq({ ...req, rationale: e.target.value })}
-                  onBlur={(e) => save({ rationale: e.target.value })}
-                  disabled={!editable}
-                />
+                {/* A single-line <input> for the "why" behind a requirement was
+                    too small to write in and lost every bit of structure. Same
+                    editor as Description, so [[SYST0001]] entity links and
+                    formatting work here too — and rationale already round-trips
+                    to SysML v2 as doc text, so structure is worth keeping. */}
+                {editable ? (
+                  <RichTextEditor
+                    content={req.rationale || ''}
+                    onChange={(html) => { setReq({ ...req, rationale: html }); }}
+                    onBlur={(html) => save({ rationale: html })}
+                    disabled={false}
+                  />
+                ) : (
+                  <AutoLinkHtml
+                    html={req.rationale || ''}
+                    kinds={entityKinds}
+                    className="prose prose-sm dark:prose-invert max-w-none border rounded-lg p-3 min-h-[60px] opacity-90"
+                  />
+                )}
               </div>
               <div>
                 <label className="label">Source</label>

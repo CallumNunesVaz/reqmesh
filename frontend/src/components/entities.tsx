@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams } from 'react-router-dom';
 import { GuardedLink } from './navGuard';
+import { copyText } from '../lib/clipboard';
 import {
   ClipboardList, CheckCircle2, Boxes, FileText, GitPullRequest, AlertTriangle,
   Box, Layers, Cog, Binary, Plug, Link2, Check,
@@ -195,29 +196,40 @@ interface CopyLinkButtonProps {
 export function CopyLinkButton({ kind, id, projectId, className = '' }: CopyLinkButtonProps) {
   const { projectId: routeProjectId } = useParams<{ projectId: string }>();
   const pid = projectId ?? routeProjectId;
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<false | 'ok' | 'fail'>(false);
   const resetTimer = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => () => clearTimeout(resetTimer.current), []);
 
   if (!pid) return null;
 
-  const copy = (e: React.MouseEvent) => {
+  const copy = async (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
-    navigator.clipboard?.writeText(window.location.origin + ENTITY_META[kind].path(pid, id));
-    setCopied(true);
+    const url = window.location.origin + ENTITY_META[kind].path(pid, id);
+    const ok = await copyText(url);
+    // Only claim success when the text actually reached the clipboard. The
+    // previous form was `navigator.clipboard?.writeText(...)` followed by an
+    // unconditional setCopied(true): on any non-secure origin — which includes
+    // every plain-HTTP deployment — `navigator.clipboard` is undefined, the
+    // optional chain swallowed it, and the button still showed a tick having
+    // copied nothing.
+    setCopied(ok ? 'ok' : 'fail');
     clearTimeout(resetTimer.current);
-    resetTimer.current = setTimeout(() => setCopied(false), 1500);
+    resetTimer.current = setTimeout(() => setCopied(false), ok ? 1500 : 2500);
   };
 
   return (
     <button
       onClick={copy}
-      title={copied ? 'Copied!' : `Copy link to ${id}`}
+      title={copied === 'ok' ? 'Copied!'
+           : copied === 'fail' ? 'Could not copy — select the link and copy manually'
+           : `Copy link to ${id}`}
       className={`p-1 rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-colors ${className}`}
     >
-      {copied ? <Check size={12} className="text-cs-green" /> : <Link2 size={12} />}
+      {copied === 'ok' ? <Check size={12} className="text-cs-green" />
+       : copied === 'fail' ? <AlertTriangle size={12} className="text-cs-amber" />
+       : <Link2 size={12} />}
     </button>
   );
 }
