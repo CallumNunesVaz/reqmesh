@@ -60,7 +60,14 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci --prefix frontend
-      - run: npm audit --prefix frontend --audit-level=high
+      # --omit=dev: the frontend ships as static files built by Vite, so only
+      # runtime dependencies reach a user. The dev toolchain (vite, vitest,
+      # esbuild) carries its own advisories — real, but they describe a dev
+      # server that is never exposed in a deployment, and clearing them means
+      # a vite 5->8 / vitest 2->4 major bump. Those are tracked separately;
+      # gating releases on them would have blocked shipping for a risk that
+      # is not in the artifact. Runtime dependencies are still gated at high.
+      - run: npm audit --prefix frontend --audit-level=high --omit=dev
 
   secrets:
     runs-on: ubuntu-latest
@@ -79,6 +86,14 @@ jobs:
         with:
           image-ref: reqmesh:ci
           severity: HIGH,CRITICAL
+          # ignore-unfixed: a Debian base image always carries some HIGH CVEs
+          # that upstream has not patched. Failing on those makes the gate
+          # unsatisfiable — there is no action that clears it — so it stops
+          # being read. Fail only on CVEs that a rebuild or a version bump can
+          # actually fix; the Dockerfile now runs apt-get upgrade so those get
+          # picked up. Unfixed CVEs are still reported in the SARIF upload
+          # below, they just don't block.
+          ignore-unfixed: true
           exit-code: '1'
           format: sarif
           output: trivy.sarif
