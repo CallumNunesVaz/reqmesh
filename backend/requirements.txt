@@ -1,4 +1,10 @@
-fastapi==0.115.0
+fastapi==0.141.1
+# Pinned explicitly even though fastapi pulls it: fastapi requires only
+# starlette>=0.46 with no upper bound, and the 9 CVEs that forced this upgrade
+# (SEC-11) are only clear from 1.3.1. Without a pin a fresh install could
+# resolve back onto a vulnerable starlette while requirements.txt still looked
+# fixed.
+starlette==1.3.1
 uvicorn[standard]==0.30.0
 pydantic==2.9.0
 pydantic-settings==2.5.0
