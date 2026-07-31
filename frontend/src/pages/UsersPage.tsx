@@ -7,6 +7,29 @@ import { useAuthStore } from '../store/auth';
 import BodyPortal from '../components/BodyPortal';
 
 const ROLE_LABELS: Record<string, string> = { admin: 'Administrator', maintainer: 'Maintainer', contributor: 'Contributor', guest: 'Guest' };
+
+/** The four roles the backend accepts (`auth.ALLOWED_ROLES`), most privileged
+ *  first. Every role picker on this page renders from this one list.
+ *
+ *  Maintainer used to be missing from all five of them: it was labelled and
+ *  badged, and `canEdit()` grants editing to maintainers, but no dropdown
+ *  offered it — so the tier that actually unlocks editing could not be
+ *  assigned through the UI at all, and a maintainer created via the API
+ *  rendered with a blank role select that silently demoted them on the next
+ *  unrelated edit. Hardcoding the options per-select is what let that drift. */
+const ROLES = ['admin', 'maintainer', 'contributor', 'guest'] as const;
+
+function RoleOptions({ describe = false }: { describe?: boolean }) {
+  return (
+    <>
+      {ROLES.map((r) => (
+        <option key={r} value={r}>
+          {ROLE_LABELS[r]}{describe && r === 'guest' ? ' (read-only)' : ''}
+        </option>
+      ))}
+    </>
+  );
+}
 const ROLE_BADGE: Record<string, string> = {
   admin: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
   maintainer: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
@@ -356,8 +379,7 @@ export default function UsersPage() {
                 <div className="min-w-[130px]">
                   <label className="label text-[10px]">Role</label>
                   <select className="input text-sm" value={newRole} onChange={(e) => setNewRole(e.target.value)}>
-                    <option value="contributor">Contributor</option>
-                    <option value="admin">Administrator</option>
+                    <RoleOptions />
                   </select>
                 </div>
                 <button type="submit" className="btn-primary" disabled={creating}>
@@ -380,9 +402,7 @@ export default function UsersPage() {
               <Filter size={12} className="text-muted-foreground" />
               <select className="input text-xs !w-auto !py-1.5" value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
                 <option value="all">All roles</option>
-                <option value="admin">Administrator</option>
-                <option value="contributor">Contributor</option>
-                <option value="guest">Guest</option>
+                <RoleOptions />
               </select>
               <select className="input text-xs !w-auto !py-1.5" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
                 <option value="all">All statuses</option>
@@ -406,9 +426,7 @@ export default function UsersPage() {
                 <button onClick={() => handleBulk('enable')} className="btn-ghost text-xs"><CircleCheck size={13} /> Enable</button>
                 <select className="input text-xs !w-auto !py-1" defaultValue="" onChange={(e) => { if (e.target.value) { handleBulk('set_role', e.target.value); e.target.value = ''; } }}>
                   <option value="">Set role…</option>
-                  <option value="contributor">Contributor</option>
-                  <option value="admin">Administrator</option>
-                  <option value="guest">Guest</option>
+                  <RoleOptions />
                 </select>
                 <button onClick={() => handleBulk('delete')} className="btn-ghost text-xs text-destructive"><Trash2 size={13} /> Delete</button>
                 <button onClick={() => setSelected(new Set())} className="btn-ghost text-xs"><X size={13} /></button>
@@ -478,9 +496,7 @@ export default function UsersPage() {
                             onChange={(e) => handleRoleChange(u.username, e.target.value)}
                             disabled={isSelf && u.role === 'admin'}
                           >
-                            <option value="contributor">Contributor</option>
-                            <option value="admin">Administrator</option>
-                            <option value="guest">Guest (read-only)</option>
+                            <RoleOptions describe />
                           </select>
                         </td>
                         <td className="px-4 py-2.5"><StatusBadge u={u} /></td>
@@ -551,7 +567,7 @@ export default function UsersPage() {
                   <div><label className="label text-[10px]">Full name</label><input className="input text-sm" value={invite.full_name} onChange={(e) => setInvite({ ...invite, full_name: e.target.value })} placeholder="Jane Doe" /></div>
                   <div><label className="label text-[10px]">Role</label>
                     <select className="input text-sm" value={invite.role} onChange={(e) => setInvite({ ...invite, role: e.target.value })}>
-                      <option value="contributor">Contributor</option><option value="admin">Administrator</option><option value="guest">Guest</option>
+                      <RoleOptions />
                     </select>
                   </div>
                   <button type="submit" className="btn-primary w-full justify-center" disabled={inviting || !invite.username.trim()}>
