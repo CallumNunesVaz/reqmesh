@@ -10,6 +10,10 @@ import { api, type SearchResult } from '../api/client';
 function highlightMatch(text: string, query: string): React.ReactNode {
   if (!query.trim()) return text;
   const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // `escaped` has already had every regex metacharacter escaped, so the query
+  // cannot introduce alternation, nesting or backtracking — it can only ever
+  // match itself literally.
+  // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp
   const parts = text.split(new RegExp(`(${escaped})`, 'gi'));
   return parts.map((part, i) =>
     part.toLowerCase() === query.toLowerCase() ? <mark key={i}>{part}</mark> : part

@@ -80,6 +80,10 @@ def _github_latest_release() -> dict:
     })
     if settings.github_token:
         req.add_header("Authorization", f"Bearer {settings.github_token}")
+    # The scheme and host are literal 'https://api.github.com'; only the repo
+    # path segment comes from operator config, so this cannot be redirected to
+    # file:// or to another host.
+    # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
     with urllib.request.urlopen(req, timeout=10) as resp:
         return json.loads(resp.read().decode())
 

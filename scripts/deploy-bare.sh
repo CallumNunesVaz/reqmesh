@@ -52,7 +52,12 @@ install_deps() {
             info "Installing Node.js 20.x..."
             case "$OS_ID" in
                 ubuntu|debian)
-                    curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+  # NodeSource's documented install path. Piping it to a shell trusts
+  # deb.nodesource.com, which this script already trusts for the packages it
+  # then installs from that repo, so pinning a checksum here would not change
+  # who has to be trusted. Kept visible rather than hidden.
+                    # nosemgrep: bash.curl.security.curl-pipe-bash.curl-pipe-bash
+  curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
                     sudo apt-get install -y -qq nodejs
                     ;;
                 *)
@@ -387,7 +392,7 @@ main() {
         error ""
         error "The bare-metal install copies the application from the directory"
         error "containing this script. That works from a release bundle or a git"
-        error "checkout, but not from the `curl | bash` one-liner, which downloads"
+        error 'checkout, but not from the `curl | bash` one-liner, which downloads'
         error "only the scripts."
         error ""
         error "Use the release bundle:"

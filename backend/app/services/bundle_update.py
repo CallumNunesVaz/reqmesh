@@ -376,8 +376,13 @@ def reexec() -> None:
     argv = list(getattr(sys, "orig_argv", None) or [sys.executable, *sys.argv])
     logger.info("re-executing process: %s", " ".join(argv))
     try:
+        # argv is this process's own orig_argv, not request data. The real
+        # exposure in the update path is the *bundle*, which is unsigned and
+        # tracked as SEC-9 — re-exec is the last step, not the weak one.
+        # nosemgrep: python.lang.security.audit.dangerous-os-exec-tainted-env-args.dangerous-os-exec-tainted-env-args
         os.execv(argv[0], argv)
     except OSError:
+        # nosemgrep: python.lang.security.audit.dangerous-os-exec-tainted-env-args.dangerous-os-exec-tainted-env-args
         os.execv(sys.executable, [sys.executable, *sys.argv])
 
 

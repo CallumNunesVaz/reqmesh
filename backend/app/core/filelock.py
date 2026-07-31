@@ -30,7 +30,9 @@ def file_lock(target: Path):
         return
     lock_dir = Path(tempfile.gettempdir()) / "reqmesh-locks"
     lock_dir.mkdir(parents=True, exist_ok=True)
-    digest = hashlib.sha1(str(Path(target).absolute()).encode()).hexdigest()
+    # sha256 purely to name the lock file; not a security boundary, but there
+    # is no reason to keep sha1 here and trip every scanner that looks.
+    digest = hashlib.sha256(str(Path(target).absolute()).encode()).hexdigest()
     lock_file = lock_dir / f"{digest}.lock"
     with open(lock_file, "w") as fh:
         fcntl.flock(fh.fileno(), fcntl.LOCK_EX)

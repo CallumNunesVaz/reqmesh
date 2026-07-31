@@ -30,4 +30,9 @@ COPY . .
 
 EXPOSE 8000
 
+# See frontend/Dockerfile: dev images should not run as root either.
+# Dockerfile.prod has had its own `USER reqmesh` since it was written.
+RUN useradd -r -m -d /home/reqmesh reqmesh && chown -R reqmesh /app
+USER reqmesh
+
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

@@ -1,25 +1,41 @@
 version: 2
+
+# `cooldown` holds a newly published version back before Dependabot proposes
+# it. The window that matters is the one right after a release: a compromised
+# or hijacked package is usually caught and yanked within a couple of days, and
+# an auto-raised PR that lands inside that window is how the compromise reaches
+# a repo. Waiting costs a few days of patch latency and skips most of the risk.
+# Security advisories are exempt from cooldown by design, so this does not
+# delay a real CVE fix.
 updates:
   - package-ecosystem: pip
     directory: /backend
     schedule:
       interval: weekly
       day: sunday
+    cooldown:
+      default-days: 7
 
   - package-ecosystem: npm
     directory: /frontend
     schedule:
       interval: weekly
       day: sunday
+    cooldown:
+      default-days: 7
 
   - package-ecosystem: docker
     directory: /
     schedule:
       interval: weekly
       day: sunday
+    cooldown:
+      default-days: 7
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
       day: sunday
+    cooldown:
+      default-days: 7

@@ -15,6 +15,10 @@ const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 export function autoLinkParts(text: string, ids: Iterable<string>): AutoLinkSegment[] {
   const sorted = [...ids].filter(Boolean).sort((a, b) => b.length - a.length);
   if (!text || sorted.length === 0) return text ? [{ text }] : [];
+  // Every id is escapeRe'd, and they are joined as a flat alternation of
+  // literals — no nesting, so no catastrophic backtracking. The ids are
+  // entity ids from this project, not free user input.
+  // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp
   const re = new RegExp(`(?<![\\w-])(${sorted.map(escapeRe).join('|')})(?![\\w-])`, 'g');
 
   const parts: AutoLinkSegment[] = [];
