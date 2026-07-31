@@ -14,6 +14,7 @@ import { useSelectedReq } from '../components/Layout';
 import LoadingSplash from '../components/LoadingSplash';
 import RichTextEditor from '../components/RichTextEditor';
 import { useConfirm } from '../components/ConfirmDialog';
+import { deleteWithReferenceCheck } from '../lib/forceDelete';
 import BodyPortal from '../components/BodyPortal';
 
 const statusStyles: Record<string, { dot: string; text: string }> = {
@@ -202,13 +203,17 @@ export default function RequirementsPage() {
     if (!ok) return;
     try {
       const before = requirements.find((r) => r.id === reqId);
-      await api.deleteRequirement(projectId, reqId);
+      const done = await deleteWithReferenceCheck(
+        (force) => api.deleteRequirement(projectId, reqId, force),
+        (msg) => showConfirm(msg, 'Referenced by other records'),
+      );
+      if (!done) return;
       if (before) {
         const snap = { ...before };
         useUndoStore.getState().push({
           description: `Delete ${reqId}`,
           undo: async () => { await api.createRequirement(projectId, snap); },
-          redo: async () => { await api.deleteRequirement(projectId, reqId); },
+          redo: async () => { await api.deleteRequirement(projectId, reqId, true); },
         });
       }
       bumpGraphVersion();

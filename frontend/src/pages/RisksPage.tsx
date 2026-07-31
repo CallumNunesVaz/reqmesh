@@ -11,6 +11,7 @@ import { useFocusedEntity } from '../components/useFocusedEntity';
 import { AutoLinkText } from '../components/autoLink';
 import { useEntityKinds } from '../components/entityIndex';
 import { LinkEditor } from '../components/LinkEditor';
+import { deleteWithReferenceCheck } from '../lib/forceDelete';
 
 const formatLevel = (s: string) => s.replace(/_/g, ' ');
 
@@ -156,8 +157,11 @@ export default function RisksPage() {
   const handleDelete = async (id: string) => {
     if (!projectId || !confirm('Delete this risk?')) return;
     try {
-      await api.deleteRisk(projectId, id);
-      setRisks(risks.filter(r => r.id !== id));
+      const done = await deleteWithReferenceCheck(
+        (force) => api.deleteRisk(projectId, id, force),
+        (msg) => window.confirm(msg),
+      );
+      if (done) setRisks(risks.filter(r => r.id !== id));
     } catch (err: any) { setError(err.message || 'Failed to delete'); }
   };
 

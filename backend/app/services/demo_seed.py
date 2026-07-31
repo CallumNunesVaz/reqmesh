@@ -2115,6 +2115,20 @@ def seed_demo_project(data_root: Path, force: bool = False) -> bool:
     vcs["VCEN0001"]["measurements"] = [
         {"parameter": "ENVR0001.temp_rise_c", "value": 26, "unit": "degC"}]
 
+    # `allocated_to` is derived from component.satisfies (the allocation
+    # matrix maintains both). The hand-written values here predated that and
+    # named owning *teams* ("Airframe Team", "Structures") rather than the
+    # components that satisfy the requirement, so the seeded project shipped
+    # 54 of 57 requirements whose allocation disagreed with its own allocation
+    # matrix. Derive it instead, so the demo shows the field meaning what the
+    # UI now says it means.
+    _owners: dict[str, list[str]] = {}
+    for comp in COMPONENTS:
+        for req_id in (comp.get("satisfies") or []):
+            _owners.setdefault(req_id, []).append(comp.get("name") or comp["id"])
+    for r in reqs.values():
+        r["allocated_to"] = ", ".join(sorted(_owners.get(r["id"], [])))
+
     # Write everything to disk
     for r in reqs.values():
         store.create_requirement(r)

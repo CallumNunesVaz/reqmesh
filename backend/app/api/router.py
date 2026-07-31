@@ -25,6 +25,10 @@ from app.services.yaml_store import YamlStore
 from app.services.search import search_requirements
 from app.services.history import record_change
 from app.services.risk_matrix import normalize_matrix
+from app.services.verification_links import (
+    attach as attach_verification_cases,
+    sync_from_requirement as sync_verification_from_requirement,
+)
 
 
 class ProjectCreate(BaseModel):
@@ -209,6 +213,7 @@ class ProjectSettings(BaseModel):
 # Single definition, shared with git_service.test_remote — see the note there.
 from app.services.git_service import ALLOWED_REMOTE_SCHEMES as _ALLOWED_REMOTE_SCHEMES
 from app.services.git_service import REMOTE_SCHEME_ERROR as _REMOTE_SCHEME_ERROR
+from app.services.delete_guard import check_deletable
 
 
 def _guard_git_settings(new_git: dict, existing_git: dict, user: dict) -> None:
@@ -424,6 +429,9 @@ def list_requirements(
     # path, so it covers the evaluator and publisher too and runs once per
     # directory generation rather than once per request.
     reqs = store.list_requirements()
+    # verification_cases is derived from verification_case.verified_requirements
+    # (services/verification_links.py), which owns the relationship.
+    attach_verification_cases(store, reqs)
     if search or type or status or priority:
         filters = {k: v for k, v in [("type", type), ("status", status), ("priority", priority)] if v}
         reqs = search_requirements(reqs, search or "", filters)
@@ -444,6 +452,7 @@ def get_requirement(project_id: str, req_id: str):
     checked = validate_on_load("requirements", dict(req))
     if checked is None:
         raise HTTPException(status_code=404, detail="Requirement not found")
+    attach_verification_cases(store, [checked])
     return checked
 
 
@@ -459,6 +468,9 @@ def create_requirement(project_id: str, data: RequirementCreate, user: dict = De
     req_dict.setdefault("verification_cases", [])
     req_dict.setdefault("verification_status", "pending")
     result = store.create_requirement(req_dict)
+    if req_dict.get("verification_cases"):
+        sync_verification_from_requirement(store, data.id, req_dict["verification_cases"])
+    attach_verification_cases(store, [result])
     record_change(store, data.id, "create", None, result, user.get("username", ""))
     return result
 
@@ -491,9 +503,16 @@ def update_requirement(project_id: str, req_id: str, data: RequirementUpdate, us
             seen.add(cursor)
             cursor = parent_of.get(cursor)
 
+    # A write arriving on the requirement side is applied to the owning
+    # verification cases, so setting the list actually changes the
+    # relationship rather than leaving the two sides disagreeing.
+    if "verification_cases" in update_dict:
+        sync_verification_from_requirement(store, req_id, update_dict["verification_cases"])
+
     result = store.update_requirement(req_id, update_dict)
     if result is None:
         raise HTTPException(status_code=404, detail="Requirement not found")
+    attach_verification_cases(store, [result])
     record_change(store, req_id, "update", before, result, user.get("username", ""))
 
     propagated_fields = {"name", "description", "priority", "status", "type", "verification_method", "rationale", "source", "allocated_to"}
@@ -535,8 +554,9 @@ def update_requirement(project_id: str, req_id: str, data: RequirementUpdate, us
 
 
 @router.delete("/projects/{project_id}/requirements/{req_id}")
-def delete_requirement(project_id: str, req_id: str, user: dict = Depends(require_maintain)):
+def delete_requirement(project_id: str, req_id: str, force: bool = False, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
+    check_deletable(store, "requirements", req_id, force)
     before = store.get_requirement(req_id)
     if not store.delete_requirement(req_id):
         raise HTTPException(status_code=404, detail="Requirement not found")
@@ -656,8 +676,9 @@ def update_specification(project_id: str, spec_id: str, data: SpecificationUpdat
 
 
 @router.delete("/projects/{project_id}/specifications/{spec_id}")
-def delete_specification(project_id: str, spec_id: str, user: dict = Depends(require_maintain)):
+def delete_specification(project_id: str, spec_id: str, force: bool = False, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
+    check_deletable(store, "specifications", spec_id, force)
     before = store.get_specification(spec_id)
     if not store.delete_specification(spec_id):
         raise HTTPException(status_code=404, detail="Specification not found")
@@ -847,8 +868,9 @@ def update_definition(project_id: str, def_id: str, data: DefinitionUpdate, user
 
 
 @router.delete("/projects/{project_id}/definitions/{def_id}")
-def delete_definition(project_id: str, def_id: str, user: dict = Depends(require_maintain)):
+def delete_definition(project_id: str, def_id: str, force: bool = False, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
+    check_deletable(store, "definitions", def_id, force)
     store.delete_item("definitions", def_id)
     return {"ok": True}
 
@@ -893,8 +915,9 @@ def update_analysis_case(project_id: str, case_id: str, data: AnalysisCaseUpdate
 
 
 @router.delete("/projects/{project_id}/analysis/{case_id}")
-def delete_analysis_case(project_id: str, case_id: str, user: dict = Depends(require_maintain)):
+def delete_analysis_case(project_id: str, case_id: str, force: bool = False, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
+    check_deletable(store, "analysis_cases", case_id, force)
     store.delete_item("analysis_cases", case_id)
     return {"ok": True}
 
@@ -964,8 +987,9 @@ def update_verification_case(project_id: str, vc_id: str, data: VerificationCase
 
 
 @router.delete("/projects/{project_id}/verification/{vc_id}")
-def delete_verification_case(project_id: str, vc_id: str, user: dict = Depends(require_maintain)):
+def delete_verification_case(project_id: str, vc_id: str, force: bool = False, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
+    check_deletable(store, "verification_cases", vc_id, force)
     before = store.get_verification_case(vc_id)
     if not store.delete_verification_case(vc_id):
         raise HTTPException(status_code=404, detail="Verification case not found")

@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { GuardedLink as Link } from '../components/navGuard';
 import { motion } from 'framer-motion';
 import { Trash2, ArrowLeft, Plus, X, ArrowRight, ArrowLeftRight, Sparkles, ShieldCheck, ExternalLink, ChevronRight, Waypoints, AlertTriangle, CheckCircle2, GitFork, Loader, Save, Undo2 } from 'lucide-react';
-import { api, baselineNames, type StakeholderDef, type RequirementValue, type Requirement, type VerificationCase, type QualityItem, type Component, type Specification, type ChangeRequest, type Risk, type EvaluatedRequirement, type Definition, type Comment, type DecisionRecord } from '../api/client';
+import { api, baselineNames, type StakeholderDef, type RequirementValue, type Requirement, type VerificationCase, type QualityItem, type Component, type Specification, type ChangeRequest, type Risk, type EvaluatedRequirement, type Definition, type Comment, type DecisionRecord, type Backlinks } from '../api/client';
 import { ParametricsCard } from '../components/parametrics';
 import RichTextEditor from '../components/RichTextEditor';
 import AutocompleteInput from '../components/AutocompleteInput';
@@ -16,6 +16,7 @@ import { useUndoStore } from '../store/undo';
 import { useGraphPane, useSelectedReq } from '../components/Layout';
 import { HelpTip } from '../components/HelpTip';
 import { useConfirm } from '../components/ConfirmDialog';
+import { deleteWithReferenceCheck } from '../lib/forceDelete';
 import DescriptionHelper from '../components/DescriptionHelper';
 import ParametricsGuide from '../components/ParametricsGuide';
 import { LinkEditor } from '../components/LinkEditor';
@@ -54,6 +55,18 @@ const verifStatusColorMap: Record<string, string> = {
   failed: 'hsl(0,84%,68%)',
 };
 
+/** Registry collection -> the entity kinds EntityLink knows how to render.
+ *  Collections without a detail page of their own (decisions, analysis cases)
+ *  fall back to a plain chip rather than linking somewhere that 404s. */
+const BACKLINK_KINDS: Record<string, EntityKind> = {
+  requirements: 'requirement',
+  components: 'component',
+  verification_cases: 'verification',
+  specifications: 'specification',
+  change_requests: 'change',
+  risks: 'risk',
+};
+
 export default function RequirementDetailPage() {
   const { projectId, reqId } = useParams<{ projectId: string; reqId: string }>();
   const navigate = useNavigate();
@@ -72,6 +85,7 @@ export default function RequirementDetailPage() {
   const [affectingCrs, setAffectingCrs] = useState<ChangeRequest[]>([]);
   const [linkedRisks, setLinkedRisks] = useState<Risk[]>([]);
   const [allRisksRaw, setAllRisksRaw] = useState<Risk[]>([]);
+  const [backlinks, setBacklinks] = useState<Backlinks | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [decisions, setDecisions] = useState<DecisionRecord[]>([]);
   const entityKinds = useEntityKinds(projectId);
@@ -257,6 +271,9 @@ export default function RequirementDetailPage() {
         setLinkedRisks(risks.filter((r) => r.linked_requirements.includes(reqId)));
       })
       .catch(() => { if (alive) { setAllRisksRaw([]); setLinkedRisks([]); } });
+    api.getBacklinks(projectId, reqId)
+      .then((b) => { if (alive) setBacklinks(b); })
+      .catch(() => { if (alive) setBacklinks(null); });
     api.getEvaluation(projectId)
       .then((ev) => { if (alive) setEvaluated(ev.requirements.find((r) => r.id === reqId)); })
       .catch(() => { if (alive) setEvaluated(undefined); });
@@ -385,7 +402,11 @@ export default function RequirementDetailPage() {
     if (!ok) return;
     const snap = { ...req };
     try {
-      await api.deleteRequirement(projectId, reqId);
+      const done = await deleteWithReferenceCheck(
+        (force) => api.deleteRequirement(projectId, reqId, force),
+        (msg) => showConfirm(msg, 'Referenced by other records'),
+      );
+      if (!done) return;
     } catch (e: any) {
       setSaveError(e?.message || 'Delete failed');
       return;
@@ -393,7 +414,7 @@ export default function RequirementDetailPage() {
     useUndoStore.getState().push({
       description: `Delete ${reqId}`,
       undo: async () => { await api.createRequirement(projectId, snap); },
-      redo: async () => { await api.deleteRequirement(projectId, reqId); },
+      redo: async () => { await api.deleteRequirement(projectId, reqId, true); },
     });
     bumpGraphVersion();
     bumpDataVersion();
@@ -886,9 +907,45 @@ export default function RequirementDetailPage() {
             )}
           </motion.div>
 
-          {/* Backlinks: things that name this requirement from their own
-              side. Read-only here — each mapping is owned by the other
-              entity, so editing lives on its page. */}
+          {/* Everything that points at this requirement, computed server-side
+              from the link registry rather than assembled from a handful of
+              per-entity fetches. Read-only: each link is owned by the record
+              holding it, so editing lives on that record's page. */}
+          {backlinks && backlinks.total > 0 && (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.225 }} className="card p-5">
+              <h2 className="font-semibold text-sm text-card-foreground mb-1">Referenced By</h2>
+              <p className="text-[11px] text-muted-foreground mb-3">
+                {backlinks.total} record{backlinks.total === 1 ? '' : 's'} depend on this requirement.
+                Deleting it will ask before breaking them.
+              </p>
+              <div className="space-y-2.5">
+                {backlinks.groups.map((g) => (
+                  <div key={g.collection}>
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
+                      {g.label}{g.items.length === 1 ? '' : 's'}
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {g.items.map((it) => (
+                        <span key={`${g.collection}-${it.id}`}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-muted text-xs"
+                          title={it.label}>
+                          {BACKLINK_KINDS[g.collection] ? (
+                            <EntityLink kind={BACKLINK_KINDS[g.collection]} id={it.id}
+                              name={it.name || undefined} className="hover:text-primary max-w-[180px]" />
+                          ) : (
+                            <span className="text-foreground truncate max-w-[180px]">
+                              <span className="font-mono">{it.id}</span>{it.name ? ` — ${it.name}` : ''}
+                            </span>
+                          )}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          )}
+
           {inSpecs.length > 0 && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.23 }} className="card p-5">
               <h2 className="font-semibold text-sm text-card-foreground mb-3">In Specifications</h2>

@@ -81,6 +81,43 @@ def check_suspect_links(store) -> list[dict]:
                     "current_fingerprint": current,
                     "reason": "Target content changed since review",
                 })
+
+    # Requirement-to-requirement relations were the only thing ever checked, so
+    # a specification containing a changed requirement, a verification case
+    # verifying one, or a risk assessed against one stayed silently out of
+    # date. Walk the link registry and flag those holders too.
+    #
+    # The baseline is the requirement's own `reviewed` fingerprint. Only a
+    # requirement that *was* reviewed and has since changed counts: treating
+    # never-reviewed as suspect would flag every citation in a new project and
+    # the signal would be ignored.
+    changed = {
+        r["id"] for r in reqs
+        if r.get("reviewed") and r["reviewed"] != compute_fingerprint(r)
+    }
+    if changed:
+        from app.services.link_registry import LINKS, targets_of
+
+        for link in LINKS:
+            if link.target != "requirements" or link.tree or link.holder == "requirements":
+                continue
+            try:
+                holders = store.list_items(link.holder)
+            except Exception:
+                continue
+            for h in holders:
+                for req_id in targets_of(h, link):
+                    if req_id in changed:
+                        suspect.append({
+                            "source": h["id"],
+                            "source_collection": link.holder,
+                            "target": req_id,
+                            "type": link.label,
+                            "stored_fingerprint": req_map[req_id].get("reviewed"),
+                            "current_fingerprint": compute_fingerprint(req_map[req_id]),
+                            "reason": f"{link.label.capitalize()} a requirement that "
+                                      f"changed since it was reviewed",
+                        })
     return suspect
 
 

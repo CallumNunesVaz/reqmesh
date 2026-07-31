@@ -1,5 +1,40 @@
 const BASE = '/api';
 
+/** An error carrying the server's structured `detail`, when it sent one. */
+export class ApiError extends Error {
+  status: number;
+  data?: any;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
+
+export interface Referrer {
+  holder: string;
+  id: string;
+  name: string;
+  field: string;
+  label: string;
+}
+
+/** 409 body from the delete guard. */
+export interface ReferencedError {
+  error: 'referenced';
+  message: string;
+  id: string;
+  collection: string;
+  referrers: Referrer[];
+}
+
+export interface Backlinks {
+  id: string;
+  collection: string;
+  total: number;
+  groups: { collection: string; label: string; items: Referrer[] }[];
+}
+
 interface RequestOptions {
   method?: string;
   body?: unknown;
@@ -33,7 +68,17 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail || `Request failed: ${res.status}`);
+    const detail = err.detail;
+    // A structured detail (the delete guard's 409 carries the referrer list)
+    // used to be interpolated into a string as "[object Object]", losing the
+    // very information the caller needs to offer a sensible next step.
+    if (detail && typeof detail === 'object') {
+      const e = new ApiError(detail.message || `Request failed: ${res.status}`, res.status);
+      e.data = detail;
+      throw e;
+    }
+    const e = new ApiError(detail || `Request failed: ${res.status}`, res.status);
+    throw e;
   }
 
   if (res.status === 204) return undefined as T;
@@ -742,8 +787,8 @@ export const api = {
     request<Component>(`/projects/${projectId}/components`, { method: 'POST', body: data }),
   updateComponent: (projectId: string, componentId: string, data: Partial<Component>) =>
     request<Component>(`/projects/${projectId}/components/${componentId}`, { method: 'PUT', body: data }),
-  deleteComponent: (projectId: string, componentId: string) =>
-    request<{ ok: boolean; promoted_children: string[] }>(`/projects/${projectId}/components/${componentId}`, { method: 'DELETE' }),
+  deleteComponent: (projectId: string, componentId: string, force = false) =>
+    request<any>(`/projects/${projectId}/components/${componentId}${force ? '?force=true' : ''}`, { method: 'DELETE' }),
   getComponentsForRequirement: (projectId: string, reqId: string) =>
     request<Component[]>(`/projects/${projectId}/requirements/${reqId}/components`),
   getComponentsForVerificationCase: (projectId: string, vcId: string) =>
@@ -754,8 +799,8 @@ export const api = {
     request<Requirement>(`/projects/${projectId}/requirements`, { method: 'POST', body: data }),
   updateRequirement: (projectId: string, reqId: string, data: Partial<Requirement>) =>
     request<Requirement>(`/projects/${projectId}/requirements/${reqId}`, { method: 'PUT', body: data }),
-  deleteRequirement: (projectId: string, reqId: string) =>
-    request<void>(`/projects/${projectId}/requirements/${reqId}`, { method: 'DELETE' }),
+  deleteRequirement: (projectId: string, reqId: string, force = false) =>
+    request<any>(`/projects/${projectId}/requirements/${reqId}${force ? '?force=true' : ''}`, { method: 'DELETE' }),
   cascadeRequirement: (projectId: string, reqId: string) =>
     request<{ cascaded: boolean; created: string[]; source: string }>(`/projects/${projectId}/requirements/${reqId}/cascade`, { method: 'POST' }),
   breakCascade: (projectId: string, reqId: string, breakChildren?: boolean) =>
@@ -787,8 +832,8 @@ export const api = {
     request<Specification>(`/projects/${projectId}/specifications`, { method: 'POST', body: data }),
   updateSpecification: (projectId: string, specId: string, data: Partial<Specification>) =>
     request<Specification>(`/projects/${projectId}/specifications/${specId}`, { method: 'PUT', body: data }),
-  deleteSpecification: (projectId: string, specId: string) =>
-    request<void>(`/projects/${projectId}/specifications/${specId}`, { method: 'DELETE' }),
+  deleteSpecification: (projectId: string, specId: string, force = false) =>
+    request<any>(`/projects/${projectId}/specifications/${specId}${force ? '?force=true' : ''}`, { method: 'DELETE' }),
 
   // Verification Cases
   listVerificationCases: (projectId: string) => request<VerificationCase[]>(`/projects/${projectId}/verification`),
@@ -796,8 +841,8 @@ export const api = {
     request<VerificationCase>(`/projects/${projectId}/verification`, { method: 'POST', body: data }),
   updateVerificationCase: (projectId: string, vcId: string, data: Partial<VerificationCase>) =>
     request<VerificationCase>(`/projects/${projectId}/verification/${vcId}`, { method: 'PUT', body: data }),
-  deleteVerificationCase: (projectId: string, vcId: string) =>
-    request<void>(`/projects/${projectId}/verification/${vcId}`, { method: 'DELETE' }),
+  deleteVerificationCase: (projectId: string, vcId: string, force = false) =>
+    request<any>(`/projects/${projectId}/verification/${vcId}${force ? '?force=true' : ''}`, { method: 'DELETE' }),
   runVerification: (projectId: string, vcId: string, data: { status: string; notes?: string; step_results?: Record<string, string> }) =>
     request<VerificationCase>(`/projects/${projectId}/verification/${vcId}/run`, { method: 'POST', body: data }),
 
@@ -812,18 +857,20 @@ export const api = {
     request<ChangeRequest>(`/projects/${projectId}/change-requests`, { method: 'POST', body: data }),
   updateChangeRequest: (projectId: string, crId: string, data: Partial<ChangeRequest>) =>
     request<ChangeRequest>(`/projects/${projectId}/change-requests/${crId}`, { method: 'PUT', body: data }),
-  deleteChangeRequest: (projectId: string, crId: string) =>
-    request<void>(`/projects/${projectId}/change-requests/${crId}`, { method: 'DELETE' }),
+  deleteChangeRequest: (projectId: string, crId: string, force = false) =>
+    request<any>(`/projects/${projectId}/change-requests/${crId}${force ? '?force=true' : ''}`, { method: 'DELETE' }),
 
   // Risks
+  getBacklinks: (projectId: string, entityId: string) =>
+    request<Backlinks>(`/projects/${projectId}/entities/${entityId}/backlinks`),
   listRisks: (projectId: string) => request<Risk[]>(`/projects/${projectId}/risks`),
   getRiskMatrix: (projectId: string) => request<RiskMatrix>(`/projects/${projectId}/risk-matrix`),
   createRisk: (projectId: string, data: Partial<Risk>) =>
     request<Risk>(`/projects/${projectId}/risks`, { method: 'POST', body: data }),
   updateRisk: (projectId: string, riskId: string, data: Partial<Risk>) =>
     request<Risk>(`/projects/${projectId}/risks/${riskId}`, { method: 'PUT', body: data }),
-  deleteRisk: (projectId: string, riskId: string) =>
-    request<void>(`/projects/${projectId}/risks/${riskId}`, { method: 'DELETE' }),
+  deleteRisk: (projectId: string, riskId: string, force = false) =>
+    request<any>(`/projects/${projectId}/risks/${riskId}${force ? '?force=true' : ''}`, { method: 'DELETE' }),
 
   // Comments
   listComments: (projectId: string, requirementId?: string) => {
@@ -841,8 +888,8 @@ export const api = {
     request<DecisionRecord>(`/projects/${projectId}/decisions`, { method: 'POST', body: data }),
   updateDecision: (projectId: string, decId: string, data: Partial<DecisionRecord>) =>
     request<DecisionRecord>(`/projects/${projectId}/decisions/${decId}`, { method: 'PUT', body: data }),
-  deleteDecision: (projectId: string, decId: string) =>
-    request<void>(`/projects/${projectId}/decisions/${decId}`, { method: 'DELETE' }),
+  deleteDecision: (projectId: string, decId: string, force = false) =>
+    request<any>(`/projects/${projectId}/decisions/${decId}${force ? '?force=true' : ''}`, { method: 'DELETE' }),
 
   // Analysis
   getImpact: (projectId: string, reqId: string) =>

@@ -18,6 +18,8 @@ class IntegrityChecker:
         self._parent_of = {r["id"]: r.get("parent") for r in self.reqs}
 
     def check_all(self) -> dict:
+        self._check_dangling_references()
+        self._check_asymmetric_derived_links()
         self._check_dangling_links()
         self._check_missing_verification()
         self._check_orphan_requirements()
@@ -53,6 +55,67 @@ class IntegrityChecker:
                 "detail": c["error"],
                 "severity": "error",
             })
+
+    def _check_dangling_references(self):
+        """Every reference in the model whose target no longer exists.
+
+        Driven by the link registry rather than a hand-written list per
+        collection. The hand-written version covered requirements and
+        components only, so deleting a requirement cited by a specification or
+        a decision left a dangling reference that nothing ever reported.
+        """
+        from app.services.link_registry import find_dangling
+        self.issues.extend(find_dangling(self.store))
+
+    def _check_asymmetric_derived_links(self):
+        """A derived inverse that disagrees with the field it is derived from.
+
+        These are reqmesh bugs rather than user mistakes — the server maintains
+        both sides — so finding one means a write path skipped its sync step.
+        Previously nothing checked, and the verify relationship in particular
+        could be desynced by one ordinary PUT and stay that way indefinitely,
+        with coverage and SysML export silently disagreeing about it.
+        """
+        from app.services.link_registry import LINKS, targets_of
+
+        for link in LINKS:
+            if not link.derived_inverse or not link.inverse_stored:
+                continue
+            try:
+                holders = self.store.list_items(link.holder)
+                targets = self.store.list_items(link.target)
+            except Exception:
+                continue
+
+            # Some inverses store ids (requirement.verification_cases), others a
+            # comma-joined display string of holder *names* (allocated_to, built
+            # by set_allocation as `name or id`). Compare like with like.
+            string_inverse = any(isinstance(t.get(link.derived_inverse), str)
+                                 for t in targets)
+
+            forward: dict[str, set] = {}
+            for h in holders:
+                token = (h.get("name") or h["id"]) if string_inverse else h["id"]
+                for t in targets_of(h, link):
+                    forward.setdefault(t, set()).add(token)
+
+            for t in targets:
+                raw = t.get(link.derived_inverse)
+                if isinstance(raw, str):
+                    back = {x.strip() for x in raw.split(",") if x.strip()}
+                else:
+                    back = {str(x) for x in (raw or [])}
+                expected = forward.get(t["id"], set())
+                if back != expected:
+                    self.issues.append({
+                        "type": "asymmetric_link",
+                        "id": t["id"],
+                        "field": link.derived_inverse,
+                        "source": f"{link.holder}.{link.field}",
+                        "expected": sorted(expected),
+                        "found": sorted(back),
+                        "severity": "warning",
+                    })
 
     def _check_dangling_links(self):
         for r in self.reqs:
@@ -248,18 +311,25 @@ def mark_links_suspect(store, updated_req_id: str):
     existing = store._read_yaml(suspect_file) if suspect_file.exists() else {}
     links = existing.get("links", [])
 
+    now = datetime.now(timezone.utc).isoformat()
+
+    def add(source: str, rel_type: str, reason: str) -> None:
+        if any(l["source"] == source and l["target"] == updated_req_id for l in links):
+            return
+        links.append({"source": source, "target": updated_req_id, "type": rel_type,
+                      "marked": now, "reason": reason})
+
     for r in reqs:
         for rel in r.get("relations", []):
             if rel["target"] == updated_req_id:
-                entry = {
-                    "source": r["id"],
-                    "target": updated_req_id,
-                    "type": rel["type"],
-                    "marked": datetime.now(timezone.utc).isoformat(),
-                    "reason": f"Target requirement {updated_req_id} was modified",
-                }
-                if not any(l["source"] == entry["source"] and l["target"] == entry["target"] for l in links):
-                    links.append(entry)
+                add(r["id"], rel["type"],
+                    f"Target requirement {updated_req_id} was modified")
+
+    # NOTE: this function has no callers. The live suspect-link mechanism is
+    # fingerprint-based (services/fingerprint.py, surfaced by GET
+    # /suspect-links); this writes a _suspect.yaml that nothing reads. Left
+    # as-is rather than extended — cross-entity propagation belongs on the
+    # path that actually runs. See check_suspect_links.
 
     store.ensure_dirs()
     store._write_yaml(suspect_file, {"links": links, "updated": datetime.now(timezone.utc).isoformat()})
