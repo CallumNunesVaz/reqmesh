@@ -107,13 +107,51 @@ _PERM_DEP_NAMES = frozenset({
 _PROJECT_ID_RE = re.compile(r"^/api/projects/\{[^}]+\}(/.*)?$")
 
 
+class _PrefixedRoute:
+    """An APIRoute paired with its fully-qualified path.
+
+    Starlette 1.x stopped flattening ``include_router`` into ``app.routes``:
+    an included router now appears as a single wrapper object holding the
+    original router plus the prefix it was mounted under, and the routes
+    inside it keep their *unprefixed* paths.
+    """
+
+    def __init__(self, route, path):
+        self._route = route
+        self.path = path
+
+    def __getattr__(self, name):
+        return getattr(self._route, name)
+
+
 def _collect_api_routes():
-    """Walk the live FastAPI route table and return every APIRoute under /api."""
-    routes = []
-    for r in app.routes:
-        if isinstance(r, APIRoute) and r.path.startswith("/api"):
-            routes.append(r)
-    return routes
+    """Walk the live FastAPI route table and return every APIRoute under /api.
+
+    This must recurse. The flat ``app.routes`` scan it replaced silently
+    stopped finding anything when fastapi/starlette were upgraded — it did not
+    fail, it just parametrised zero routes, so the guarantee that every
+    mutating endpoint carries a permission guard quietly went untested. Any
+    future change to how routers are mounted must keep this returning a
+    non-empty list; ``test_route_collection_is_not_silently_empty`` enforces
+    that.
+    """
+    found: list[_PrefixedRoute] = []
+
+    def walk(routes, prefix: str) -> None:
+        for r in routes:
+            if isinstance(r, APIRoute):
+                found.append(_PrefixedRoute(r, prefix + r.path))
+                continue
+            # An included sub-router: descend, carrying its mount prefix.
+            original = getattr(r, "original_router", None)
+            context = getattr(r, "include_context", None)
+            if original is not None and hasattr(original, "routes"):
+                walk(original.routes, prefix + getattr(context, "prefix", ""))
+            elif hasattr(r, "routes"):
+                walk(r.routes, prefix + getattr(r, "path", ""))
+
+    walk(app.routes, "")
+    return [r for r in found if r.path.startswith("/api")]
 
 
 def _dep_name(dep):
@@ -214,6 +252,25 @@ _MUTATING_ROUTES = [
     for m in sorted(r.methods or set())
     if m in {"POST", "PUT", "PATCH", "DELETE"}
 ]
+
+
+def test_route_collection_is_not_silently_empty():
+    """The two tests below are parametrised over the live route table, so if
+    collection breaks they pass vacuously rather than failing.
+
+    That is exactly what happened on the fastapi 0.115 -> 0.141 upgrade:
+    starlette 1.x stopped flattening included routers into ``app.routes``, the
+    scan found 2 routes instead of 159, and 188 permission checks disappeared
+    from the suite without a single failure. Assert the floor explicitly.
+    """
+    assert len(_API_ROUTES) > 100, (
+        f"only {len(_API_ROUTES)} /api routes collected — _collect_api_routes "
+        f"is no longer walking the route table correctly"
+    )
+    assert len(_MUTATING_ROUTES) > 80, (
+        f"only {len(_MUTATING_ROUTES)} mutating route cases — permission "
+        f"coverage has silently shrunk"
+    )
 
 
 @pytest.mark.parametrize("route,method", _MUTATING_ROUTES,
