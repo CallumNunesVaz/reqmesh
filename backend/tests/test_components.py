@@ -235,7 +235,9 @@ def test_component_is_stored_as_yaml(client, project, workspace):
 
 def test_integrity_flags_a_requirement_deleted_out_from_under_a_component(client, wired):
     make_component(client, wired, "C-001", satisfies=["REQ-001"])
-    client.delete(f"/api/projects/{wired}/requirements/REQ-001")
+    # force: the delete guard now refuses this precisely because C-001 cites
+    # it. Forcing is what creates the dangling state this test is about.
+    client.delete(f"/api/projects/{wired}/requirements/REQ-001?force=true")
 
     issues = client.get(f"/api/projects/{wired}/validate").json()["issues"]
     dangling = [i for i in issues if i["type"] == "component_dangling_requirement"]
@@ -246,7 +248,7 @@ def test_integrity_flags_a_requirement_deleted_out_from_under_a_component(client
 
 def test_integrity_flags_a_deleted_verification_case(client, wired):
     make_component(client, wired, "C-001", verification_cases=["VC-001"])
-    client.delete(f"/api/projects/{wired}/verification/VC-001")
+    client.delete(f"/api/projects/{wired}/verification/VC-001?force=true")
 
     issues = client.get(f"/api/projects/{wired}/validate").json()["issues"]
     assert any(i["type"] == "component_dangling_verification" for i in issues)

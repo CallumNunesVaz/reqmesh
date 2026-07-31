@@ -27,6 +27,7 @@ from app.services.publisher import Publisher, compile_latex_to_pdf
 from app.services.integrity import IntegrityChecker, clear_suspect_links
 from app.services.git_hooks import install_hook, uninstall_hook
 from app.services.history import record_change
+from app.services.delete_guard import check_deletable
 
 class CommentUpdate(BaseModel):
     resolved: Optional[bool] = None
@@ -119,8 +120,9 @@ def update_change_request(project_id: str, cr_id: str, data: ChangeRequestUpdate
 
 
 @router.delete("/projects/{project_id}/change-requests/{cr_id}")
-def delete_change_request(project_id: str, cr_id: str, user: dict = Depends(require_edit)):
+def delete_change_request(project_id: str, cr_id: str, force: bool = False, user: dict = Depends(require_edit)):
     store = get_store(project_id)
+    check_deletable(store, "change_requests", cr_id, force)
     before = store.get_item("change_requests", cr_id)
     if not store.delete_item("change_requests", cr_id):
         raise HTTPException(status_code=404, detail="Change request not found")
@@ -199,8 +201,9 @@ def update_risk(project_id: str, risk_id: str, data: RiskUpdate, user: dict = De
 
 
 @router.delete("/projects/{project_id}/risks/{risk_id}")
-def delete_risk(project_id: str, risk_id: str, user: dict = Depends(require_edit)):
+def delete_risk(project_id: str, risk_id: str, force: bool = False, user: dict = Depends(require_edit)):
     store = get_store(project_id)
+    check_deletable(store, "risks", risk_id, force)
     before = store.get_item("risks", risk_id)
     if not store.delete_item("risks", risk_id):
         raise HTTPException(status_code=404, detail="Risk not found")
@@ -322,8 +325,9 @@ def update_decision(project_id: str, dec_id: str, data: DecisionRecordUpdate, us
 
 
 @router.delete("/projects/{project_id}/decisions/{dec_id}")
-def delete_decision(project_id: str, dec_id: str, user: dict = Depends(require_edit)):
+def delete_decision(project_id: str, dec_id: str, force: bool = False, user: dict = Depends(require_edit)):
     store = get_store(project_id)
+    check_deletable(store, "decisions", dec_id, force)
     before = store.get_item("decisions", dec_id)
     if not store.delete_item("decisions", dec_id):
         raise HTTPException(status_code=404, detail="Decision not found")
@@ -696,6 +700,51 @@ def gap_analysis(project_id: str):
 
 
 # ── Coverage Analysis ─────────────────────────────────────────────────────────
+
+@router.get("/projects/{project_id}/entities/{entity_id}/backlinks")
+def entity_backlinks(project_id: str, entity_id: str,
+                     collection: Optional[str] = Query(None)):
+    """Everything in the project that points at this entity, grouped by kind.
+
+    Derived from the link registry, so a new relationship shows up here without
+    anyone writing a panel for it. This is the general form of the risk<->
+    requirement editing added earlier: rather than storing an inverse on each
+    target so a page can display "what references this", the inverse is
+    computed on demand and nothing can fall out of sync with it.
+
+    ``collection`` disambiguates when two entity types share an id; without it
+    the id is looked up across the collections that can be link targets.
+    """
+    from app.services.link_registry import COLLECTION_LABELS, LINKS, find_referrers
+
+    store = get_store(project_id)
+    candidates = [collection] if collection else sorted({ln.target for ln in LINKS})
+
+    found_in = None
+    for coll in candidates:
+        try:
+            if any(i.get("id") == entity_id for i in store.list_items(coll)):
+                found_in = coll
+                break
+        except Exception:
+            continue
+    if found_in is None:
+        raise HTTPException(status_code=404, detail="Entity not found")
+
+    groups: dict[str, list] = {}
+    for ref in find_referrers(store, found_in, entity_id):
+        groups.setdefault(ref["holder"], []).append(ref)
+
+    return {
+        "id": entity_id,
+        "collection": found_in,
+        "total": sum(len(v) for v in groups.values()),
+        "groups": [
+            {"collection": k, "label": COLLECTION_LABELS.get(k, k), "items": v}
+            for k, v in sorted(groups.items())
+        ],
+    }
+
 
 @router.get("/coverage-needs")
 def coverage_needs_vocabulary():

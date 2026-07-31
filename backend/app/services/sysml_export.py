@@ -129,10 +129,16 @@ def export_sysml_v2(store) -> str:
             elif rel_type == "derives":
                 body.append(f"{prefix}  derive requirement {tgt};")
 
-        # Verification cases
-        for vc_id in r.get("verification_cases") or []:
-            vc_safe = vc_id.replace("-", "_").replace(".", "_")
-            body.append(f"{prefix}  verify requirement {vc_safe};")
+        # The verify relationship is emitted from the verification case that
+        # owns it (see the "Verification Cases" section below), not from here.
+        #
+        # This block used to emit `verify requirement <VC_ID>` inside the
+        # requirement, which is backwards twice over: in SysML v2 a
+        # verification case verifies a requirement, not the reverse, and the
+        # id named as a requirement was actually a verification case. Every
+        # relationship was therefore exported twice, once inverted — 68 verify
+        # lines for 34 relationships. Consumers reading the export got an edge
+        # pointing the wrong way to an entity of the wrong type.
 
         # Parametrics: typed attributes and assume/require constraints.
         if r.get("subject"):

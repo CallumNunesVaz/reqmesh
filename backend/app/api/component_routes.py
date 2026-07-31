@@ -19,6 +19,7 @@ from app.core.tree_utils import build_flat_tree
 from app.models.component import ComponentCreate, ComponentUpdate
 from app.services.yaml_store import YamlStore
 from app.services.history import record_change
+from app.services.delete_guard import check_deletable
 
 router = APIRouter()
 
@@ -177,8 +178,9 @@ def update_component(
 
 
 @router.delete("/projects/{project_id}/components/{component_id}")
-def delete_component(project_id: str, component_id: str, user: dict = Depends(require_maintain)):
+def delete_component(project_id: str, component_id: str, force: bool = False, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
+    check_deletable(store, "components", component_id, force)
     doomed = store.get_component(component_id)
     if doomed is None:
         raise HTTPException(status_code=404, detail="Component not found")
