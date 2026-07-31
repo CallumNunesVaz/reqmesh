@@ -342,6 +342,7 @@ export function helpers(page) {
       const p = await probe(sel)
       if (p.err) { console.log('NO_ELEMENT:', sel); return null }
       if (p.onTarget) return p
+      // nosemgrep: javascript.lang.security.audit.unsafe-formatstring.unsafe-formatstring
       console.log(`occluded (${sel}) by:`, p.hitDesc, '— retrying')
       await sleep(400)
     }
