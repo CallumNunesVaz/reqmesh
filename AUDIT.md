@@ -320,7 +320,15 @@ run pip with `--require-hashes` or `--no-index --find-links <bundle/wheels>`.
 | Scanner follows directory symlinks | `code_scan.py:139` | `rglob` fallback escapes the `relative_to` confinement on Python < 3.13 |
 | `python-multipart==0.0.9` | `requirements.txt` | CVE-2024-53981 (multipart DoS), fixed in 0.0.18 |
 
-## SEC-11 — Dependency CVEs blocked behind major upgrades 📄 STATIC
+## SEC-11 — Dependency CVEs blocked behind major upgrades 📄 STATIC · 🛠 PARTLY FIXED
+
+> ✅ **The runtime half is fixed.** `fastapi` 0.141.1 + `starlette` 1.3.1 (both pinned)
+> clear all 9 starlette CVEs; `pip-audit` reports no known vulnerabilities for the backend.
+> The upgrade also silently emptied `test_permissions`' route-table parametrisation —
+> 188 checks disappeared without a failure. Fixed, and now guarded by
+> `test_route_collection_is_not_silently_empty`. See commit `285c509`.
+> Still open: `react-router` (runtime, moderate) and the vite/vitest dev toolchain.
+
 
 **Severity: MEDIUM (runtime), LOW (dev toolchain)**
 
