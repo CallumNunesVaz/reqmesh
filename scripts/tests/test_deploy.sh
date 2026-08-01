@@ -128,6 +128,18 @@ check "RT_STATE_DIR points at the data volume" \
 check "no tmpfs over the auth state dir" \
       "$(grep -c '^\s*- /app/.reqmesh\s*$' "$TMPL")" "0"
 check "/tmp is still tmpfs" "$(grep -c '^\s*- /tmp\s*$' "$TMPL")" "1"
+
+# The same three properties on the repo-root compose file. The template was
+# fixed and this one was not, so anyone deploying straight from the checkout
+# still hit the original failure: uid 999 could not write users.yaml on the
+# root-owned tmpfs, and login failed on a freshly installed instance.
+ROOTC="$REPO/docker-compose.prod.yml"
+check "root compose sets RT_STATE_DIR" \
+      "$(grep -c 'RT_STATE_DIR=/data/.reqmesh' "$ROOTC")" "1"
+check "root compose has no tmpfs over the auth state dir" \
+      "$(grep -c '^\s*- /app/.reqmesh\s*$' "$ROOTC")" "0"
+check "root compose keeps /tmp as tmpfs" \
+      "$(grep -c '^\s*- /tmp\s*$' "$ROOTC")" "1"
 # Was a private named volume; now a host bind mount shared with the bare-metal
 # mode, so switching mode no longer strands the data.
 check "the data root is a host bind mount" \
