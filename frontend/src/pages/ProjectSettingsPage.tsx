@@ -542,21 +542,25 @@ export default function ProjectSettingsPage() {
           {baselineDefs.map((def) => (
             <span key={def.name} className="inline-flex items-center gap-1 rounded-full bg-accent px-2.5 py-0.5 text-xs">
               {def.symbol ? `${def.symbol} · ${def.name}` : def.name}
-              <button onClick={() => setBaselineDefs((prev) => prev.filter((d) => d.name !== def.name))} className="text-muted-foreground hover:text-destructive"><X size={11} /></button>
+              {editable && (
+                <button onClick={() => setBaselineDefs((prev) => prev.filter((d) => d.name !== def.name))} className="text-muted-foreground hover:text-destructive"><X size={11} /></button>
+              )}
             </span>
           ))}
           {baselineDefs.length === 0 && (
             <span className="text-xs text-muted-foreground italic">No baselines defined. Add names like PDR, CDR below.</span>
           )}
         </div>
-        <div className="flex gap-2">
-          <input className="input text-sm flex-1" placeholder="PDR" value={newBaselineDef}
-            onChange={(e) => setNewBaselineDef(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addBaselineDef(); } }} />
-          <button className="btn-secondary text-xs" onClick={addBaselineDef}>
-            <Plus size={14} /> Add
-          </button>
-        </div>
+        {editable && (
+          <div className="flex gap-2">
+            <input className="input text-sm flex-1" placeholder="PDR" value={newBaselineDef}
+              onChange={(e) => setNewBaselineDef(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addBaselineDef(); } }} />
+            <button className="btn-secondary text-xs" onClick={addBaselineDef}>
+              <Plus size={14} /> Add
+            </button>
+          </div>
+        )}
       </motion.div>
 
       {/* Baselines */}

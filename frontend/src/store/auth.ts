@@ -79,12 +79,22 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const s = get();
     return s.user !== null && (s.user.role === 'maintainer' || s.user.role === 'admin') && s.editMode;
   },
+  // Edit mode is the guard against changing data you only meant to read, so it
+  // has to bind every tier that writes — not just the maintainer tier.
+  // canPropose ignored it, which left risks, change requests and comments
+  // fully editable (and deletable) while the header said VIEWING.
   canPropose: () => {
     const s = get();
-    return s.user !== null && ['contributor', 'maintainer', 'admin'].includes(s.user.role);
+    return s.user !== null
+      && ['contributor', 'maintainer', 'admin'].includes(s.user.role)
+      && s.editMode;
   },
+  // Contributors are included here for the same reason: without it, making
+  // canPropose respect edit mode would leave them permanently unable to
+  // propose anything, because nothing could ever turn edit mode on for them.
   canToggleEdit: () => {
     const s = get();
-    return s.user !== null && (s.user.role === 'maintainer' || s.user.role === 'admin');
+    return s.user !== null
+      && ['contributor', 'maintainer', 'admin'].includes(s.user.role);
   },
 }));
