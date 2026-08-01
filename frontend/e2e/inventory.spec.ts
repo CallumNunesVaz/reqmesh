@@ -2,6 +2,7 @@ import { test, expect, signIn } from './fixtures';
 import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { REQUIREMENT_TYPES } from '../src/lib/requirementTypes';
 
 const E2E_DIR = dirname(fileURLToPath(import.meta.url));
 const APP_TSX = resolve(E2E_DIR, '../src/App.tsx');
@@ -51,6 +52,30 @@ test('every route in App.tsx is exercised by some spec', () => {
 test('the spec suite has not silently shrunk', () => {
   const files = readdirSync(E2E_DIR).filter((f) => f.endsWith('.spec.ts'));
   expect(files.length).toBeGreaterThanOrEqual(5);
+});
+
+test('the UI offers exactly the requirement types the API accepts', async ({ app }) => {
+  // The list was previously copied into six files and had drifted: the
+  // allocation matrix filter offered 5 of the 16, so filtering there silently
+  // hid most of the register. One shared table fixes today's drift; this stops
+  // tomorrow's, by failing when the enum and the UI disagree in either
+  // direction — a type added to the backend and forgotten in the UI is just as
+  // broken as the reverse.
+  await signIn(app);
+  const schema = await app.evaluate(async () => {
+    const r = await fetch('/openapi.json', { credentials: 'include' });
+    return r.json();
+  });
+  const schemas = schema.components?.schemas ?? {};
+  const enumDef = schemas.RequirementType;
+  expect(enumDef, 'RequirementType is no longer in the OpenAPI schema').toBeTruthy();
+
+  const apiTypes: string[] = enumDef.enum;
+  expect(apiTypes.length).toBeGreaterThan(10);
+  expect([...apiTypes].sort()).toEqual([...REQUIREMENT_TYPES].sort());
+  // Order matters too: it is the order every dropdown renders in, and the
+  // backend enum is the declared reference for it.
+  expect(REQUIREMENT_TYPES).toEqual(apiTypes);
 });
 
 test('every documented API path is reachable through the running app', async ({ app }) => {

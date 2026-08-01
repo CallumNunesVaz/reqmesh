@@ -55,11 +55,16 @@ test.describe('viewing mode', () => {
       await app.goto(`${server.baseURL}/project/${DEMO_PROJECT}/${route}`);
       await app.waitForSelector('main', { timeout: 20_000 });
 
-      // Wait on the badge rather than on the clock. `main` appearing does not
-      // mean the header has settled, and a fixed pause plus the default 5 s
-      // assertion timeout was occasionally short on the heavier routes — this
-      // failed once on /components and then passed nine times running.
-      await expect(app.getByText('VIEWING')).toBeVisible({ timeout: 20_000 });
+      // Wait on the mode badge rather than on the clock — `main` appearing does
+      // not mean the header has settled.
+      //
+      // Matched as a control, not as text: `getByText('VIEWING')` is a
+      // case-insensitive substring match, so while a loading splash was up it
+      // also hit the tagline "Reviewing everything at once…" and failed on a
+      // strict-mode violation. That is what the intermittent failures on the
+      // slower routes actually were — not a timeout, which is what the previous
+      // note here guessed.
+      await expect(app.getByRole('button', { name: 'VIEWING' })).toBeVisible({ timeout: 20_000 });
       // Then let the page's own data land, so a control that renders late is
       // still counted.
       await app.waitForTimeout(1200);

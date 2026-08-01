@@ -4,8 +4,14 @@ from __future__ import annotations
 
 A Requirement represents either a stakeholder requirement (expressing a need
 or expectation) or a system requirement (derived from stakeholder requirements,
-expressed in technical terms). The 'type' field distinguishes these:
-functional, non_functional, interface, design, and constraint.
+expressed in technical terms). The 'type' field distinguishes these — see
+``RequirementType`` below for the vocabulary, which is the single reference the
+UI's dropdowns are generated from and checked against.
+
+Note the vocabulary changed: it was once functional / non_functional /
+interface / design / constraint. ``design`` and ``constraint`` are gone, but the
+bundled demo project still carries them, so readers and importers must tolerate
+a type outside this enum rather than coercing it to ``functional``.
 """
 
 from datetime import datetime, timezone

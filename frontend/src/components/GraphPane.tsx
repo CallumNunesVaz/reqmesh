@@ -33,6 +33,7 @@ import { useTheme } from './ThemeProvider';
 import { useSelectedReq, useContextPane } from './Layout';
 import { useStore } from '../store';
 import { useWhatIf } from './WhatIfContext';
+import { formatReqType, reqTypeColor } from '../lib/requirementTypes';
 
 const edgeColors: Record<string, string> = {
   refines: 'hsl(207,90%,64%)',
@@ -60,18 +61,10 @@ const verifStatusFilterColors: Record<string, string> = {
   pending: 'hsl(195,6%,62%)',
   na: 'hsl(195,6%,62%)',
 };
-const typeCsToken: Record<string, string> = {
-  functional: 'blue', interface: 'purple', user: 'yellow', system: 'pink',
-  business: 'blue', regulatory_compliance: 'red', safety: 'orange',
-  environmental: 'green', verification: 'teal',
-  design: 'pink', constraint: 'orange', // legacy demo types
-};
 const statusOptionColor = (s: string) => statusColors[s]?.text;
 const priorityOptionColor = (p: string) => priorityFilterColors[p];
 const verifStatusOptionColor = (v: string) => verifStatusFilterColors[v];
-const typeOptionColor = (t: string) =>
-  t.startsWith('non_functional') ? 'hsl(var(--cs-teal))'
-    : typeCsToken[t] ? `hsl(var(--cs-${typeCsToken[t]}))` : undefined;
+const typeOptionColor = (t: string) => reqTypeColor(t);
 
 const statusMinimapColors: Record<string, string> = {
   proposed: '#539fe6',
@@ -2212,19 +2205,6 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
       `}</style>
     </div>
   );
-}
-
-/** Title-case a snake_case value, e.g. system_requirement → System Requirement. */
-function formatUnderscored(v: string): string {
-  return v.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-/** Humanise a requirement type, keeping the "Non-Functional – X" shape. */
-function formatReqType(t: string): string {
-  if (t.startsWith('non_functional_')) {
-    return 'Non-Functional – ' + formatUnderscored(t.slice('non_functional_'.length));
-  }
-  return formatUnderscored(t);
 }
 
 /** A labelled full-width dropdown for the Filters popover. Hides itself when
