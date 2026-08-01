@@ -7,6 +7,7 @@ import asyncio
 import json
 import time
 import uuid
+from dataclasses import dataclass
 
 from fastapi import APIRouter, HTTPException, Query, Depends, File, Form, UploadFile, WebSocket
 from fastapi.responses import StreamingResponse, PlainTextResponse
@@ -16,6 +17,7 @@ from app.core.config import settings
 from app.core.dependencies import get_store, require_maintain, get_current_user
 from app.core.rate_limit import rate_limit
 from app.api._utils import read_upload_capped
+from app.services.link_registry import COLLECTION_LABELS, LINKS
 
 router = APIRouter()
 
@@ -150,94 +152,196 @@ def search_project(project_id: str, q: str = Query(""), kind: str | None = Query
     return {"query": q, "results": results, "total": len(results)}
 
 
-# ── Allocation matrix ─────────────────────────────────────────────────────────
+# ── Allocation matrices ───────────────────────────────────────────────────────
+#
+# Three matrices, one mechanism. Each is a view of a link already declared in
+# services/link_registry.py whose target is ``requirements``: requirements are
+# always the rows, and the collection *holding* the link supplies the columns.
+#
+#   components          component.satisfies              "is satisfied by"
+#   verification        verification_case.verified_...   "is verified by"
+#   risks               risk.linked_requirements         "is threatened by"
+#
+# Writing these as three endpoints would have meant three copies of the same
+# filtering, counting and toggling — and the registry already knows which field
+# holds each relationship, so there is nothing left for a bespoke handler to
+# add. Adding a fourth axis (specifications, change requests, decisions…) is a
+# row in AXES.
+
+
+def _link_for(holder: str, field: str):
+    return next(ln for ln in LINKS
+                if ln.holder == holder and ln.field == field and ln.target == "requirements")
+
+
+@dataclass(frozen=True)
+class MatrixAxis:
+    """One matrix: which link it shows, and what to call it."""
+    key: str
+    holder: str
+    field: str
+    #: Reads as "<requirement> <verb> <column>", for the UI's own wording.
+    verb: str
+    column_label: str
+
+    @property
+    def link(self):
+        return _link_for(self.holder, self.field)
+
+
+AXES: dict[str, MatrixAxis] = {
+    "components": MatrixAxis("components", "components", "satisfies",
+                             "is satisfied by", "Components"),
+    "verification": MatrixAxis("verification", "verification_cases", "verified_requirements",
+                               "is verified by", "Verification Cases"),
+    "risks": MatrixAxis("risks", "risks", "linked_requirements",
+                        "is threatened by", "Risks"),
+}
+
 
 class AllocationRequest(BaseModel):
     req_id: str
-    component_id: str
+    #: The column entity. ``component_id`` is the original spelling and still
+    #: works, so existing callers of the components matrix are unaffected.
+    target_id: str | None = None
+    component_id: str | None = None
+    axis: str = "components"
     allocated: bool = True
+
+    def resolved_target(self) -> str:
+        target = self.target_id or self.component_id
+        if not target:
+            raise HTTPException(status_code=422, detail="target_id is required")
+        return target
+
+
+def _axis_or_404(axis: str) -> MatrixAxis:
+    found = AXES.get(axis)
+    if found is None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown matrix axis: {axis} (use {', '.join(AXES)})")
+    return found
+
+
+def _column_items(store, axis: MatrixAxis) -> list[dict]:
+    return store.list_items(axis.holder)
+
+
+def _column_name(item: dict) -> str:
+    # Risks and change requests carry `title`; the rest carry `name`.
+    return item.get("name") or item.get("title") or ""
 
 
 @router.get("/projects/{project_id}/allocation-matrix")
-def allocation_matrix(project_id: str, search: str = Query(""), filter_type: str = Query(""),
-                            _rate: None = Depends(rate_limit(20, 60))):
-    """Returns a requirements x components matrix showing allocation status."""
+def allocation_matrix(project_id: str, axis: str = Query("components"),
+                      search: str = Query(""), filter_type: str = Query(""),
+                      _rate: None = Depends(rate_limit(20, 60))):
+    """Requirements against components, verification cases, or risks."""
+    ax = _axis_or_404(axis)
     store = get_store(project_id)
     reqs = store.list_requirements()
-    comps = store.list_components()
+    cols = _column_items(store, ax)
 
     if filter_type:
         reqs = [r for r in reqs if r.get("type") == filter_type]
     if search:
         q = search.lower()
         reqs = [r for r in reqs if q in r["id"].lower() or q in r.get("name", "").lower()]
-        comps = [c for c in comps if q in c["id"].lower() or q in c.get("name", "").lower()]
+        cols = [c for c in cols if q in c["id"].lower() or q in _column_name(c).lower()]
 
-    allocation: dict[str, set[str]] = {}
-    for c in comps:
-        for rid in c.get("satisfies") or []:
+    linked: dict[str, set[str]] = {}
+    for c in cols:
+        for rid in (c.get(ax.field) or []):
             if rid:
-                allocation.setdefault(rid, set()).add(c["id"])
+                linked.setdefault(rid, set()).add(c["id"])
 
     rows = []
     for r in reqs:
-        alloc_set = allocation.get(r["id"], set())
-        cells: dict[str, bool] = {}
-        for c in comps:
-            cells[c["id"]] = c["id"] in alloc_set
+        hits = linked.get(r["id"], set())
         rows.append({
             "req_id": r["id"],
             "req_name": r.get("name", ""),
             "req_status": r.get("status", ""),
+            "req_type": r.get("type", ""),
             "allocated_to": r.get("allocated_to", ""),
-            "cells": cells,
+            "cells": {c["id"]: c["id"] in hits for c in cols},
         })
 
-    columns = [{"comp_id": c["id"], "comp_name": c.get("name", ""), "comp_type": c.get("type", "")}
-               for c in comps]
-    allocated = sum(1 for r in rows if any(r["cells"].values()))
-    unallocated = len(rows) - allocated
+    columns = [{
+        "id": c["id"],
+        "name": _column_name(c),
+        # Whatever secondary label the column entity has: a component's type, a
+        # verification case's method, a risk's severity.
+        "kind": c.get("type") or c.get("method") or c.get("severity") or "",
+        # Kept so the components matrix's original response shape still parses
+        # for anyone reading comp_id/comp_name.
+        **({"comp_id": c["id"], "comp_name": _column_name(c), "comp_type": c.get("type", "")}
+           if ax.key == "components" else {}),
+    } for c in cols]
 
+    covered = sum(1 for r in rows if any(r["cells"].values()))
     return {
+        "axis": ax.key,
+        "verb": ax.verb,
+        "column_label": ax.column_label,
         "rows": rows,
         "columns": columns,
         "total_requirements": len(rows),
-        "total_components": len(columns),
-        "allocated": allocated,
-        "unallocated": unallocated,
-        "allocation_pct": round(allocated / len(rows) * 100, 1) if rows else 0,
+        "total_columns": len(columns),
+        "total_components": len(columns),   # legacy name, components axis
+        "allocated": covered,
+        "unallocated": len(rows) - covered,
+        "allocation_pct": round(covered / len(rows) * 100, 1) if rows else 0,
     }
 
 
 @router.post("/projects/{project_id}/allocation")
 def set_allocation(project_id: str, data: AllocationRequest, user: dict = Depends(require_maintain)):
-    """Allocate or deallocate a requirement to/from a component."""
+    """Toggle one cell of any of the three matrices.
+
+    The write always goes to the *holder* of the link — the component, the
+    verification case, the risk — because that is the side the model stores.
+    Only ``component.satisfies`` has a persisted mirror to keep in step
+    (``requirement.allocated_to``); the others are recomputed on read, so
+    writing anything back to the requirement would create a second copy that
+    could disagree with the first.
+    """
+    ax = _axis_or_404(data.axis)
+    target_id = data.resolved_target()
     store = get_store(project_id)
-    req = store.get_requirement(data.req_id)
-    comp = store.get_component(data.component_id)
-    if not req:
+
+    if not store.get_requirement(data.req_id):
         raise HTTPException(status_code=404, detail="Requirement not found")
-    if not comp:
-        raise HTTPException(status_code=404, detail="Component not found")
+    holder = store.get_item(ax.holder, target_id)
+    if not holder:
+        raise HTTPException(
+            status_code=404,
+            detail=f"{COLLECTION_LABELS.get(ax.holder, ax.holder).capitalize()} not found")
 
-    satisfies = list(comp.get("satisfies") or [])
+    current = [x for x in (holder.get(ax.field) or []) if x]
     if data.allocated:
-        if data.req_id not in satisfies:
-            satisfies.append(data.req_id)
+        if data.req_id not in current:
+            current.append(data.req_id)
     else:
-        satisfies = [r for r in satisfies if r != data.req_id]
+        current = [r for r in current if r != data.req_id]
+    store.update_item(ax.holder, target_id, {ax.field: current})
 
-    store.update_component(data.component_id, {"satisfies": satisfies})
+    allocated_to = ""
+    if ax.link.inverse_stored and ax.link.derived_inverse:
+        # Recomputed from every holder, not cleared: deallocating one component
+        # used to blank the field while another still satisfied the requirement.
+        owners = [
+            _column_name(c) or c["id"]
+            for c in store.list_items(ax.holder)
+            if data.req_id in (c.get(ax.field) or [])
+        ]
+        allocated_to = ", ".join(sorted(owners))
+        store.update_requirement(data.req_id, {ax.link.derived_inverse: allocated_to})
 
-    owners = [
-        c.get("name") or c["id"]
-        for c in store.list_components()
-        if data.req_id in (c.get("satisfies") or [])
-    ]
-    allocated_to = ", ".join(sorted(owners))
-    store.update_requirement(data.req_id, {"allocated_to": allocated_to})
-
-    return {"req_id": data.req_id, "component_id": data.component_id,
+    return {"req_id": data.req_id, "axis": ax.key, "target_id": target_id,
+            # Original spelling, so callers of the components matrix still parse.
+            "component_id": target_id,
             "allocated": data.allocated, "allocated_to": allocated_to}
 
 
