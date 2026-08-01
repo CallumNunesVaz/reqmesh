@@ -525,6 +525,41 @@ export interface EvaluationData {
   parameter_count: number;
   measurement_count: number;
 }
+export interface RiskBand {
+  key: string;
+  label: string;
+  color: string;
+}
+
+export interface TopRisk {
+  id: string;
+  title: string;
+  band: string;
+  label: string;
+  color: string;
+  severity: string;
+  likelihood: string;
+  mitigated: boolean;
+}
+
+export interface RiskMetrics {
+  total: number;
+  open: number;
+  unrated: number;
+  severe_open: number;
+  severe_bands: string[];
+  /** Bands come from the project's own matrix — do not hardcode a palette. */
+  bands: RiskBand[];
+  by_band: Record<string, number>;
+  open_by_band: Record<string, number>;
+  by_status: Record<string, number>;
+  with_mitigation: number;
+  with_requirements: number;
+  mitigation_pct: number;
+  linked_pct: number;
+  top_open: TopRisk[];
+}
+
 export interface MetricsData {
   total: number;
   verification_cases: number;
@@ -532,6 +567,7 @@ export interface MetricsData {
   status_distribution: Record<string, number>;
   quality: Record<string, number>;
   quality_pct: Record<string, number>;
+  risks: RiskMetrics;
 }
 
 export interface ImportSummary {
