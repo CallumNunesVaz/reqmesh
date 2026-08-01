@@ -4,7 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus, Search, X, Trash2, ChevronRight, ChevronDown, ChevronsDownUp, ChevronsUpDown,
-  Zap, Gauge, Plug, User, Cpu, Briefcase, Shield, AlertTriangle, Leaf, CheckCircle, Inbox, Square, CheckSquare, ArrowUp, SlidersHorizontal,
+  Inbox, Square, CheckSquare, ArrowUp, SlidersHorizontal,
 } from 'lucide-react';
 import { api, baselineNames, type Requirement, type EvalVerdict } from '../api/client';
 import { useStore } from '../store';
@@ -15,6 +15,7 @@ import LoadingSplash from '../components/LoadingSplash';
 import RichTextEditor from '../components/RichTextEditor';
 import { useConfirm } from '../components/ConfirmDialog';
 import { deleteWithReferenceCheck } from '../lib/forceDelete';
+import { REQUIREMENT_TYPES, REQUIREMENT_TYPE_META, reqTypeClass, reqTypeIcon } from '../lib/requirementTypes';
 import BodyPortal from '../components/BodyPortal';
 
 const statusStyles: Record<string, { dot: string; text: string }> = {
@@ -31,24 +32,8 @@ const priorityChips: Record<string, string> = {
   critical: 'bg-cs-red/10 text-cs-red border-cs-red/25',
 };
 
-const typeMeta: Record<string, { icon: typeof Zap; cls: string; label: string }> = {
-  functional: { icon: Zap, cls: 'text-cs-blue', label: 'Functional' },
-  non_functional_performance: { icon: Gauge, cls: 'text-cs-teal', label: 'Non-Functional \u2013 Performance' },
-  non_functional_security: { icon: Gauge, cls: 'text-cs-teal', label: 'Non-Functional \u2013 Security' },
-  non_functional_usability: { icon: Gauge, cls: 'text-cs-teal', label: 'Non-Functional \u2013 Usability' },
-  non_functional_maintainability: { icon: Gauge, cls: 'text-cs-teal', label: 'Non-Functional \u2013 Maintainability' },
-  non_functional_reliability: { icon: Gauge, cls: 'text-cs-teal', label: 'Non-Functional \u2013 Reliability' },
-  non_functional_scalability: { icon: Gauge, cls: 'text-cs-teal', label: 'Non-Functional \u2013 Scalability' },
-  non_functional_portability: { icon: Gauge, cls: 'text-cs-teal', label: 'Non-Functional \u2013 Portability' },
-  interface: { icon: Plug, cls: 'text-cs-purple', label: 'Interface' },
-  user: { icon: User, cls: 'text-cs-yellow', label: 'User' },
-  system: { icon: Cpu, cls: 'text-cs-pink', label: 'System' },
-  business: { icon: Briefcase, cls: 'text-cs-blue', label: 'Business' },
-  regulatory_compliance: { icon: Shield, cls: 'text-cs-red', label: 'Regulatory/Compliance' },
-  safety: { icon: AlertTriangle, cls: 'text-cs-orange', label: 'Safety' },
-  environmental: { icon: Leaf, cls: 'text-cs-green', label: 'Environmental' },
-  verification: { icon: CheckCircle, cls: 'text-cs-teal', label: 'Verification' },
-};
+// Types live in ../lib/requirementTypes \u2014 see the note there on why they used
+// to be declared in six places.
 
 interface Row {
   req: Requirement;
@@ -353,8 +338,8 @@ export default function RequirementsPage() {
           </select>
           <select className="select w-36 h-9 text-xs" value={filterType} onChange={(e) => setFilterType(e.target.value)}>
             <option value="">All types</option>
-            {Object.entries(typeMeta).map(([k, v]) => (
-              <option key={k} value={k}>{v.label}</option>
+            {REQUIREMENT_TYPES.map((k) => (
+              <option key={k} value={k}>{REQUIREMENT_TYPE_META[k].label}</option>
             ))}
           </select>
           <select className="select w-32 h-9 text-xs" value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)}>
@@ -429,8 +414,8 @@ export default function RequirementsPage() {
               </div>
             )}
             {rows.map(({ req, depth, childCount }) => {
-            const TypeIcon = (typeMeta[req.type] || typeMeta.functional).icon;
-            const typeCls = (typeMeta[req.type] || typeMeta.functional).cls;
+            const TypeIcon = reqTypeIcon(req.type);
+            const typeCls = reqTypeClass(req.type);
             const status = statusStyles[req.status] || statusStyles.proposed;
             const isCollapsed = collapsed.has(req.id);
             const dimByFilter = matchIds && !matchIds.has(req.id);
@@ -737,7 +722,7 @@ function CreateRequirementModal({
                 <div>
                   <label className="label">Type</label>
                   <select className="select" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
-                    {Object.entries(typeMeta).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                    {REQUIREMENT_TYPES.map((k) => <option key={k} value={k}>{REQUIREMENT_TYPE_META[k].label}</option>)}
                   </select>
                 </div>
                 <div>
@@ -931,7 +916,7 @@ function BulkEditModal({
                   <label className="label">Type</label>
                   <select className="select" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
                     <option value="">No change</option>
-                    {Object.entries(typeMeta).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                    {REQUIREMENT_TYPES.map((k) => <option key={k} value={k}>{REQUIREMENT_TYPE_META[k].label}</option>)}
                   </select>
                 </div>
                 <div>
