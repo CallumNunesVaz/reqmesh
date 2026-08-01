@@ -23,7 +23,12 @@ services:
       # login returned 500, and any account that had been written would have
       # been discarded on the next restart.
       - RT_STATE_DIR=/data/.reqmesh
-      - TECTONIC_CACHE_DIR=/data/.tectonic-cache
+      # TECTONIC_CACHE_DIR is deliberately NOT set here. The image ships a
+      # pre-warmed cache at /opt/tectonic-cache (see Dockerfile.prod), so
+      # rendering needs no network. Pointing it at /data put the cache on the
+      # volume, which meant every fresh install started cold and had to
+      # download TeX packages during someone's first export — or, air-gapped,
+      # never, silently falling back to the degraded HTML renderer.
       - RT_HOST=0.0.0.0
       - RT_PORT=8000
       - "RT_SECRET=${RT_SECRET:?RT_SECRET is required}"

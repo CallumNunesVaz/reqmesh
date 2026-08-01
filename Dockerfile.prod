@@ -33,14 +33,23 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-reco
     && rm -rf /var/lib/apt/lists/*
 
 # tectonic: self-contained LaTeX engine for the primary (LaTeX) PDF report path.
-# Only the ~30MB binary is baked into the image; its ~300MB TeX package bundle is
-# fetched on demand at the first PDF export and cached under TECTONIC_CACHE_DIR,
-# which points at the persistent /data volume so it downloads once and survives
-# restarts and image upgrades. If tectonic or the network is unavailable, report
-# generation falls back to the weasyprint (HTML→PDF) renderer.
 RUN curl --proto '=https' --tlsv1.2 -fsSL https://drop-sh.fullyjustified.net | sh \
     && mv tectonic /usr/local/bin/tectonic
-ENV TECTONIC_CACHE_DIR=/data/.tectonic-cache
+
+# The cache lives in the *image*, not on the /data volume.
+#
+# It used to point at /data/.tectonic-cache, which looks sensible — download
+# once, survive restarts — but /data is the bind-mounted volume, so:
+#
+#   * a fresh install starts cold and has to fetch TeX packages during the
+#     user's first export, inside the compile timeout, or silently fall back;
+#   * an air-gapped install can never fetch them at all, so LaTeX reports are
+#     permanently unavailable and nothing says so;
+#   * the image is not self-contained, despite shipping the engine.
+#
+# Baking the cache in makes rendering a property of the image rather than of
+# the network at first use. Cost is ~20MB.
+ENV TECTONIC_CACHE_DIR=/opt/tectonic-cache
 
 WORKDIR /app
 
@@ -50,6 +59,17 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ ./
 COPY --from=frontend-build /app/frontend/dist /app/frontend/dist
 
+# Fetch every TeX package a real report needs, now, and fail the build if a
+# report cannot be produced. The script compiles an actual report from the
+# seeded demo project rather than a stand-in document, so the warm cache cannot
+# drift out of step with the preamble the publisher emits.
+#
+# The `rm` is not tidiness. Seeding the demo project takes file locks, which
+# creates /tmp/reqmesh-locks owned by root (this stage runs as root). Baked into
+# the image, that directory is unwritable by the `reqmesh` runtime user, and
+# every write fails with EACCES the moment /tmp is not a fresh tmpfs.
+RUN python scripts/warm_tectonic.py && rm -rf /tmp/reqmesh-locks
+
 # GPLv3 §4: a copy of the Licence must travel with every conveyed copy of the
 # Program, and an image pushed to a registry is a conveyed copy. The
 # third-party notices ship alongside for the same reason.
@@ -57,7 +77,7 @@ COPY LICENSE THIRD_PARTY_NOTICES.md /app/
 
 RUN mkdir -p /data/projects && \
     groupadd -r reqmesh && useradd -r -g reqmesh -d /app reqmesh && \
-    chown -R reqmesh:reqmesh /app /data && \
+    chown -R reqmesh:reqmesh /app /data /opt/tectonic-cache && \
     git config --global user.email "${GIT_USER_EMAIL:-reqmesh@localhost}" && \
     git config --global user.name "${GIT_USER_NAME:-reqmesh}" && \
     git config --global init.defaultBranch main
