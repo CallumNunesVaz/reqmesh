@@ -48,7 +48,12 @@ def publish_project(project_id: str, data: PublishRequest, user: dict = Depends(
 @router.get("/projects/{project_id}/publish/download")
 def download_report(project_id: str, format: str = "html", subsystems: str | None = None,
                           sections: str | None = None, changelog_from: str = "", changelog_to: str = "",
-                          _rate: None = Depends(rate_limit(5, 60))):
+                          # Buckets are keyed by path, and every format shares this
+                          # one — so the old budget of 5 blocked a user who simply
+                          # tried each of the nine offered formats once. 15 still
+                          # bounds the cost (a PDF is ~11 s of CPU) while leaving
+                          # room to work through the format list and retry.
+                          _rate: None = Depends(rate_limit(15, 60))):
     store = get_store(project_id)
     sub_list = [s.strip() for s in subsystems.split(",") if s.strip()] if subsystems is not None else None
     pub = Publisher(store, sub_list)
