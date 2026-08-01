@@ -218,18 +218,53 @@ install_nginx() {
 }
 
 # Tectonic LaTeX engine (used for PDF report generation)
+#
+# Without it, reports silently drop to the weasyprint HTML->PDF fallback, which
+# omits tables, badges and the table of contents. The degradation is invisible
+# from the install log, so this reports what actually happened rather than
+# assuming the download worked.
 install_tectonic() {
     if has_cmd tectonic; then
-        info "tectonic already installed"
+        info "tectonic already installed: $(tectonic --version 2>&1 | head -1)"
         return 0
     fi
     info "Installing tectonic PDF engine..."
-    curl --proto '=https' --tlsv1.2 -fsSL https://drop-sh.fullyjustified.net | sh
-    if [ -f tectonic ]; then
-        sudo mv tectonic /usr/local/bin/tectonic
+    # The upstream script drops the binary into the *current* directory, so run
+    # it somewhere writable and known rather than wherever the installer was
+    # invoked from — which may be read-only, or already hold a stale binary.
+    local tmp
+    tmp="$(mktemp -d)"
+    ( cd "$tmp" && curl --proto '=https' --tlsv1.2 -fsSL https://drop-sh.fullyjustified.net | sh ) || true
+    if [ -f "$tmp/tectonic" ]; then
+        sudo install -m 0755 "$tmp/tectonic" /usr/local/bin/tectonic
+        rm -rf "$tmp"
         success "tectonic installed to /usr/local/bin/tectonic"
     else
-        warn "tectonic download failed — PDF reports will use weasyprint fallback"
+        rm -rf "$tmp"
+        warn "tectonic download failed — PDF reports will use the weasyprint fallback,"
+        warn "which omits tables, badges and the table of contents."
+        warn "Install it from https://tectonic-typesetting.github.io and re-run to fix."
+    fi
+}
+
+# Fetch the TeX packages a real report needs, so a user's first export does not
+# have to do it inside the compile timeout. See backend/scripts/warm_tectonic.py
+# for the full reasoning. Best-effort: failing here costs a slow first report,
+# not a broken install — but it is reported, because a silent slow path is how
+# this went unnoticed in the first place.
+warm_tectonic_cache() {
+    local backend_dir="$1" venv_python="$2" cache_dir="$3" run_as="${4:-}"
+    has_cmd tectonic || return 0
+    [ -x "$venv_python" ] || return 0
+
+    info "Pre-fetching LaTeX packages (one-off, ~20MB)..."
+    local -a runner=()
+    [ -n "$run_as" ] && runner=(sudo -u "$run_as")
+    if (cd "$backend_dir" && "${runner[@]}" env TECTONIC_CACHE_DIR="$cache_dir" \
+            "$venv_python" scripts/warm_tectonic.py); then
+        success "LaTeX packages cached in $cache_dir"
+    else
+        warn "Could not pre-fetch LaTeX packages — the first PDF export will be slower."
     fi
 }
 

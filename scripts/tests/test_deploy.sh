@@ -176,8 +176,10 @@ check "both modes default to the same data root" \
       "$(grep -c "prev_env RT_DATA_ROOT '/data/projects'" "$REPO/scripts/install.sh")" "1"
 check "an existing data root is preserved, not relocated" \
       "$(grep -c 'save_cfg "DATA_ROOT" "\${RT_DATA_ROOT:-\$(prev_env' "$REPO/scripts/install.sh")" "1"
+# Counts *call sites*, not mentions: the bare match also counted the function
+# name appearing in a comment, so documenting the call broke the check.
 check "the shared root is created by both paths" \
-      "$(grep -c 'ensure_data_root' "$REPO/scripts/deploy-docker.sh" "$REPO/scripts/deploy-bare.sh" \
+      "$(grep -cE '^[[:space:]]*ensure_data_root' "$REPO/scripts/deploy-docker.sh" "$REPO/scripts/deploy-bare.sh" \
          | awk -F: '{s+=$2} END {print s}')" "2"
 # Under Docker, RT_DATA_ROOT is the path *inside the container*, so it records
 # nothing about the host. Reading it meant a Docker deploy erased the only record
@@ -860,5 +862,38 @@ for v in REQMESH_DEPLOY_MODE REQMESH_PROXY REQMESH_TLS REQMESH_DOMAIN \
           "$(sed -n '/_shape_vars="" _v/,/done/p' "$REPO/scripts/install.sh" | grep -c "$v")" "1"
 done
 check "--upgrade is documented" "$(grep -c '\-\-upgrade  ' "$REPO/scripts/install.sh")" "1"
+
+# ══════════════════════════════════════════════════════════════════════════════
+section "PDF reports render through LaTeX, not the fallback"
+# ══════════════════════════════════════════════════════════════════════════════
+# Reports are generated as LaTeX and compiled by tectonic; without it they drop
+# to a weasyprint HTML->PDF fallback that omits tables, badges and the table of
+# contents. tectonic fetches TeX packages on demand, so an install that does not
+# pre-fetch them renders the degraded report until someone notices — and a
+# cold-cache compile measured 137s, longer than the compile timeout used to be,
+# so the *first* export on a fresh install could not succeed at all.
+DF="$REPO/Dockerfile.prod"
+check "the image warms the TeX cache at build time" \
+      "$(grep -c 'warm_tectonic.py' "$DF")" "1"
+check "the cache is baked into the image, not left on the data volume" \
+      "$(grep -c 'TECTONIC_CACHE_DIR=/opt/tectonic-cache' "$DF")" "1"
+check "the runtime user owns the cache" \
+      "$(grep -c '/opt/tectonic-cache' "$DF" | head -1)" "2"
+# Compose used to override the image's cache path back onto /data, which undid
+# the baked-in cache entirely.
+TMPL="$REPO/scripts/templates/docker-compose.prod.yml.tmpl"
+check "compose does not override the cache path" \
+      "$(grep -v '^[[:space:]]*#' "$TMPL" | grep -c 'TECTONIC_CACHE_DIR')" "0"
+# Bare metal: install the engine, warm the cache, and point the service at it.
+check "the bare-metal install installs tectonic" \
+      "$(grep -cE '^[[:space:]]*install_tectonic' "$REPO/scripts/deploy-bare.sh")" "1"
+check "the bare-metal install warms the cache" \
+      "$(grep -cE '^[[:space:]]*warm_tectonic_cache' "$REPO/scripts/deploy-bare.sh")" "1"
+check "the service is told where the warmed cache is" \
+      "$(grep -c 'TECTONIC_CACHE_DIR=' "$REPO/scripts/deploy-bare.sh")" "1"
+# The timeout has to exceed a cold-cache compile, or the fallback is guaranteed
+# on any install whose warming did not happen.
+check "the compile timeout allows for a cold cache" \
+      "$(grep -c 'timeout=300' "$REPO/backend/app/services/publishers/latex_helpers.py")" "1"
 
 finish

@@ -167,6 +167,13 @@ install_python_deps() {
     sudo -u "$REQMESH_USER" git config --global user.name "$git_name" 2>/dev/null || true
     sudo -u "$REQMESH_USER" git config --global init.defaultBranch main 2>/dev/null || true
 
+    # Needs both tectonic and the venv, so it lands here rather than in
+    # install_deps. The cache dir matches the one ensure_data_root creates and
+    # chowns to the service user.
+    warm_tectonic_cache "$BACKEND_DIR" "$VENV_DIR/bin/python" \
+        "$(dirname "${CFG[DATA_ROOT]:-${INSTALL_DIR}/data/projects}")/.tectonic-cache" \
+        "$REQMESH_USER"
+
     success "Python dependencies installed"
 }
 
@@ -215,6 +222,11 @@ RT_HOST=$host
 RT_PORT=$port
 RT_DATA_ROOT=$data_root
 RT_STATE_DIR=$STATE_DIR
+# The cache install_python_deps warmed. Without this the service runs with
+# tectonic's default per-user cache, which for a systemd unit is an empty
+# \$HOME — so the warmed packages are ignored and the first export downloads
+# them again, or falls back to the degraded renderer if it cannot.
+TECTONIC_CACHE_DIR=$(dirname "$data_root")/.tectonic-cache
 RT_STATIC_DIR=${CFG[STATIC_DIR]:-$INSTALL_DIR/frontend/dist}
 RT_BASE_URL=${CFG[BASE_URL]:-http://localhost:8000}
 RT_COOKIE_SECURE=${CFG[COOKIE_SECURE]:-true}

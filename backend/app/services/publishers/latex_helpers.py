@@ -53,12 +53,22 @@ def compile_latex_to_pdf(latex: str, out_path: str) -> bool:
             cmds = [base, base]
         try:
             for cmd in cmds:
-                subprocess.run(cmd, cwd=tmp_dir, capture_output=True, timeout=120,
+                # 120s was tight enough to matter: tectonic fetches any TeX
+                # package it does not have cached *inside* this call, so a cold
+                # cache on a slow link timed out and the report silently
+                # dropped to the HTML renderer. Deployments now ship a warmed
+                # cache (see backend/scripts/warm_tectonic.py), which makes a
+                # typical compile ~12s; the wider budget is for the case where
+                # that warming did not happen.
+                subprocess.run(cmd, cwd=tmp_dir, capture_output=True, timeout=300,
                                check=True)
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
             log = ""
             if isinstance(exc, subprocess.CalledProcessError) and exc.stdout:
                 log = exc.stdout.decode("utf-8", "replace")[-2000:]
+            elif isinstance(exc, subprocess.TimeoutExpired):
+                log = ("compile exceeded the timeout — if this deployment has a cold "
+                       "TeX cache, run backend/scripts/warm_tectonic.py")
             logger.warning("LaTeX compile with %s failed: %s\n%s", engine, exc, log)
             return False
         pdf = tmp_dir / "report.pdf"
