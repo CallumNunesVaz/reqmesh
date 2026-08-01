@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { FolderOpen, Plus, Trash2, WifiOff, RotateCw } from 'lucide-react';
+import { FolderOpen, Plus, Trash2, WifiOff, RotateCw, LogIn } from 'lucide-react';
 import { api, type Project } from '../api/client';
 import { useStore } from '../store';
 import { useAuthStore } from '../store/auth';
@@ -14,16 +14,31 @@ export default function ProjectsPage() {
   const [newId, setNewId] = useState('');
   const [newName, setNewName] = useState('');
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [needsAuth, setNeedsAuth] = useState(false);
+  // Re-running the fetch when the signed-in user changes is the whole point:
+  // on a deployment with RT_REQUIRE_AUTH the first load 401s, and without this
+  // the page kept its error state after a successful sign-in. The projects
+  // only appeared after a manual browser reload, which reads as "login didn't
+  // work" rather than "the list is stale".
+  const username = useAuthStore((s) => s.user?.username ?? null);
 
   const loadProjects = () => {
     setLoadError(null);
+    setNeedsAuth(false);
     api.listProjects().then(setProjects).catch((err) => {
+      // 401 is not a connectivity problem, and telling someone to check
+      // whether the API is running on port 8000 sends them to inspect a
+      // healthy server. Say what actually happened.
+      if (err?.status === 401 || /authentication required/i.test(err?.message || '')) {
+        setNeedsAuth(true);
+        return;
+      }
       console.error(err);
       setLoadError(err.message || 'Failed to load projects');
     });
   };
 
-  useEffect(loadProjects, [setProjects]);
+  useEffect(loadProjects, [setProjects, username]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -92,7 +107,15 @@ export default function ProjectsPage() {
         </motion.form>
       )}
 
-      {loadError ? (
+      {needsAuth ? (
+        <div className="card p-12 text-center">
+          <LogIn size={32} className="mx-auto mb-4 text-muted-foreground" />
+          <p className="text-foreground font-medium">Sign in to see your projects</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            This instance requires an account. Use the sign-in button in the header.
+          </p>
+        </div>
+      ) : loadError ? (
         <div className="card p-12 text-center">
           <WifiOff size={32} className="mx-auto mb-4 text-destructive" />
           <p className="text-foreground font-medium">Can't reach the backend</p>
