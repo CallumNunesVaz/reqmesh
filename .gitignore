@@ -25,3 +25,9 @@ desktop/release/
 # OS
 .DS_Store
 Thumbs.db
+
+# Playwright
+frontend/test-results/
+frontend/playwright-report/
+frontend/blob-report/
+frontend/.last-run.json
