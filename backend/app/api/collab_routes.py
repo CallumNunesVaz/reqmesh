@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 import uuid
 
 from fastapi import APIRouter, HTTPException, Query, Depends, File, Form, UploadFile, WebSocket
@@ -21,8 +22,48 @@ router = APIRouter()
 # ── SSE state ─────────────────────────────────────────────────────────────────
 
 _sse_lock: asyncio.Lock = asyncio.Lock()
-_sse_conns_by_user: dict[str, int] = {}
-_sse_conns_global: int = 0
+
+# Open SSE connections, as *leases* rather than bare counters: client_id ->
+# (username, last_seen_monotonic).
+#
+# A plain counter incremented in the handler and decremented in the generator's
+# `finally` leaks whenever the generator never runs to completion — the response
+# is abandoned before it is iterated, the worker is killed mid-stream, an
+# exception fires between acquire and the first `yield`. Nothing ever gives the
+# slot back, so the count only ever rises. On the production host this had
+# reached the per-user cap of 5, and every reconnect had 429'd for eight hours
+# while the browser retried in a tight loop.
+#
+# A lease cannot leak permanently: it is renewed by the same 30 s heartbeat the
+# presence roster uses (see EventBus._PRESENCE_TTL_SECONDS, deliberately the
+# same ten-missed-beats budget), and anything that stops heartbeating is
+# reclaimed on the next acquire. Release on clean exit is still immediate — the
+# TTL is the backstop, not the mechanism.
+_sse_leases: dict[str, tuple[str, float]] = {}
+_SSE_LEASE_TTL_SECONDS = 300
+
+
+def _reap_expired_leases(now: float) -> None:
+    """Drop leases that have stopped heartbeating. Caller must hold ``_sse_lock``."""
+    for cid in [c for c, (_, seen) in _sse_leases.items()
+                if now - seen > _SSE_LEASE_TTL_SECONDS]:
+        del _sse_leases[cid]
+
+
+def _acquire_lease(client_id: str, username: str, now: float) -> str | None:
+    """Take an SSE slot for ``username``, or return why it cannot be taken.
+
+    Split out from the route so the cap can be tested without opening a real
+    stream — an SSE response never ends on its own, so a test that drives it
+    over HTTP hangs rather than asserts. Caller must hold ``_sse_lock``.
+    """
+    _reap_expired_leases(now)
+    if len(_sse_leases) >= settings.max_sse_conns_global:
+        return "Too many SSE connections. Try again later."
+    if sum(1 for u, _ in _sse_leases.values() if u == username) >= settings.max_sse_conns_per_user:
+        return "Too many SSE connections from this user. Try again later."
+    _sse_leases[client_id] = (username, now)
+    return None
 
 
 # ── Presence roster ───────────────────────────────────────────────────────────
@@ -44,19 +85,22 @@ async def project_events(project_id: str, user: dict = Depends(get_current_user)
     from app.services.event_bus import get_event_bus
 
     username = user.get("username", "guest")
+    client_id = uuid.uuid4().hex
+
     async with _sse_lock:
-        global _sse_conns_global
-        if _sse_conns_global >= settings.max_sse_conns_global:
-            raise HTTPException(status_code=429, detail="Too many SSE connections. Try again later.")
-        if _sse_conns_by_user.get(username, 0) >= settings.max_sse_conns_per_user:
-            raise HTTPException(status_code=429, detail="Too many SSE connections from this user. Try again later.")
-        _sse_conns_global += 1
-        _sse_conns_by_user[username] = _sse_conns_by_user.get(username, 0) + 1
+        refused = _acquire_lease(client_id, username, time.monotonic())
+    if refused:
+        raise HTTPException(status_code=429, detail=refused)
 
     bus = get_event_bus()
     queue: asyncio.Queue = bus.subscribe(project_id)
-    client_id = uuid.uuid4().hex
     role = user.get("role", "guest")
+
+    async def renew_lease() -> None:
+        """Keep this connection's lease alive alongside the presence heartbeat."""
+        async with _sse_lock:
+            if client_id in _sse_leases:
+                _sse_leases[client_id] = (username, time.monotonic())
 
     async def event_stream():
         try:
@@ -67,10 +111,12 @@ async def project_events(project_id: str, user: dict = Depends(get_current_user)
                 try:
                     event = await asyncio.wait_for(queue.get(), timeout=30.0)
                     bus.touch(project_id, client_id)
+                    await renew_lease()
                     channel = "presence" if event.get("type") == "presence" else "change"
                     yield f"event: {channel}\ndata: {json.dumps(event)}\n\n"
                 except asyncio.TimeoutError:
                     bus.touch(project_id, client_id)
+                    await renew_lease()
                     yield "event: heartbeat\ndata: {}\n\n"
         except asyncio.CancelledError:
             pass
@@ -78,11 +124,7 @@ async def project_events(project_id: str, user: dict = Depends(get_current_user)
             bus.leave(project_id, client_id)
             bus.unsubscribe(project_id, queue)
             async with _sse_lock:
-                _sse_conns_by_user[username] = _sse_conns_by_user.get(username, 0) - 1
-                if _sse_conns_by_user[username] <= 0:
-                    _sse_conns_by_user.pop(username, None)
-                global _sse_conns_global
-                _sse_conns_global -= 1
+                _sse_leases.pop(client_id, None)
 
     return StreamingResponse(
         event_stream(),

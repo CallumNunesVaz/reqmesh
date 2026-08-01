@@ -65,16 +65,25 @@ export default function PublishPage() {
     setDownloading(true);
     const isPdf = selectedFormat === 'pdf';
     setDownloadStatus(isPdf ? 'Building report…' : 'Preparing download…');
+    // These are elapsed-time hints, so they may only describe what is *likely*
+    // still happening — never claim an outcome. The previous phase-3 message
+    // announced "Rendering PDF via HTML fallback…" on a timer, so every report
+    // that took longer than 8 s looked like it had fallen back, including the
+    // ones where LaTeX succeeded (a full Cessna report compiles in ~11 s). The
+    // real answer arrives in the X-Render-Fallback header below.
     const phase2 = setTimeout(() => {
       setDownloadStatus(isPdf ? 'Compiling LaTeX to PDF…' : 'Still working…');
     }, 2500);
     const phase3 = setTimeout(() => {
-      if (isPdf) setDownloadStatus('Rendering PDF via HTML fallback…');
+      if (isPdf) setDownloadStatus('Still compiling — large reports take a while…');
     }, 8000);
     try {
       const secsParam = reportFormatIds.has(selectedFormat) ? `&sections=${encodeURIComponent(sections.join(','))}` : '';
       // Auth is an HttpOnly cookie now — no bearer token to attach.
       const res = await fetch(`/api/projects/${projectId}/publish/download?format=${selectedFormat}${secsParam}`, { credentials: 'include' });
+      if (res.status === 429) {
+        throw new Error('Export limit reached — reports are capped per minute because each one is expensive to build. Wait a moment and try again.');
+      }
       if (!res.ok) throw new Error((await res.json().catch(() => ({ detail: 'Export failed' }))).detail || 'Export failed');
       const fb = res.headers.get('X-Render-Fallback');
       if (fb) setFallbackMessage(fb);
