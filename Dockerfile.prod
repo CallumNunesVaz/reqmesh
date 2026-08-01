@@ -3,7 +3,7 @@
 # FastAPI backend on a single origin — no Vite dev server, no CORS issues.
 
 # ═══ Stage 1 — build frontend ═══════════════════════════════════════════════════
-FROM node:20-slim AS frontend-build
+FROM node:25-slim AS frontend-build
 
 WORKDIR /app/frontend
 
