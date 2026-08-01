@@ -11,7 +11,10 @@ export function summarise(referrers: Referrer[]): string {
 
 export function referencedDetail(err: unknown): ReferencedError | null {
   const data = err instanceof ApiError ? err.data : undefined;
-  return data && data.error === 'referenced' ? (data as ReferencedError) : null;
+  if (data && typeof data === 'object' && (data as Record<string, unknown>).error === 'referenced') {
+    return data as ReferencedError;
+  }
+  return null;
 }
 
 /**

@@ -38,7 +38,7 @@ _ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._ -]*$")
 
 # Fields stored as HTML and rendered as HTML. Everything else is escaped at the
 # point of use, so this is the whole of the stored-XSS surface.
-_HTML_FIELDS = ("description",)
+_HTML_FIELDS = ("description", "rationale")
 
 
 def is_safe_id(value: object) -> bool:

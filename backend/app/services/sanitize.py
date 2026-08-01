@@ -43,6 +43,11 @@ VOID_TAGS = frozenset({"br", "img"})
 
 _DATA_IMAGE = re.compile(r"^data:image/(png|jpeg|jpg|gif|webp);base64,[A-Za-z0-9+/=\s]+$", re.I)
 
+# Maximum decoded size for an embedded image, in bytes (10 MiB).
+# Larger base64 payloads are dropped to prevent memory exhaustion during
+# PDF rendering or when thousands of requirements each embed an image.
+_MAX_DATA_IMAGE_BYTES = 10 * 1024 * 1024
+
 
 class _Sanitiser(HTMLParser):
     def __init__(self) -> None:
@@ -55,7 +60,14 @@ class _Sanitiser(HTMLParser):
     def _img_src(self, attrs) -> str | None:
         for name, value in attrs:
             if name.lower() == "src" and value and _DATA_IMAGE.match(value.strip()):
-                return value.strip()
+                src = value.strip()
+                # --- size cap ---
+                # base64 over-estimates: each 4 chars encode 3 bytes, so
+                # len(b64) * 3/4 is a safe upper bound without decoding.
+                b64 = src.split("base64,", 1)[-1]
+                if len(b64) * 3 // 4 > _MAX_DATA_IMAGE_BYTES:
+                    return None
+                return src
         return None
 
     # -- parser callbacks -------------------------------------------------

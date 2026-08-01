@@ -1,3 +1,8 @@
+"""Risk model — project risks with severity, likelihood, and mitigation.
+
+Comment and DecisionRecord were extracted to their own modules; they are
+re-exported here for backward compatibility.
+"""
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -5,6 +10,12 @@ from enum import Enum
 from typing import Optional
 
 from pydantic import BaseModel, Field
+
+# Backward-compat re-exports — callers that imported from risk.py keep working.
+from app.models.comment import Comment, CommentCreate          # noqa: F401
+from app.models.decision import (                              # noqa: F401
+    DecisionRecord, DecisionRecordCreate, DecisionRecordUpdate,
+)
 
 
 class RiskSeverity(str, Enum):
@@ -53,51 +64,4 @@ class RiskUpdate(BaseModel):
     impact: Optional[str] = None
     mitigation: Optional[str] = None
     status: Optional[str] = None
-    linked_requirements: Optional[list[str]] = None
-
-
-class Comment(BaseModel):
-    id: str
-    requirement_id: str
-    author: str = ""
-    text: str = ""
-    resolved: bool = False
-    created: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-
-
-class CommentCreate(BaseModel):
-    requirement_id: str
-    author: str = ""
-    text: str = ""
-
-
-class DecisionRecord(BaseModel):
-    id: str
-    title: str = ""
-    context: str = ""
-    decision: str = ""
-    rationale: str = ""
-    consequences: str = ""
-    linked_requirements: list[str] = Field(default_factory=list)
-    status: str = "accepted"
-    decided_by: str = ""
-    created: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    modified: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-
-
-class DecisionRecordCreate(BaseModel):
-    id: str
-    title: str = ""
-    context: str = ""
-    decision: str = ""
-
-
-class DecisionRecordUpdate(BaseModel):
-    title: Optional[str] = None
-    context: Optional[str] = None
-    decision: Optional[str] = None
-    rationale: Optional[str] = None
-    consequences: Optional[str] = None
-    status: Optional[str] = None
-    decided_by: Optional[str] = None
     linked_requirements: Optional[list[str]] = None

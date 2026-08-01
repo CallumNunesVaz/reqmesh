@@ -65,12 +65,19 @@ def _dir_signature(d: Path) -> tuple:
 
 
 def invalidate_cache(path: Optional[Path] = None) -> None:
-    """Drop cached collections. Called after every write."""
+    """Drop cached collections. Called after every write.
+
+    When *path* is a file, only the file's parent directory is invalidated.
+    This is still a whole-collection drop, but it's targeted to the affected
+    collection rather than clearing everything. A per-file invalidation would
+    need to re-read the directory signature and merge the changed file into
+    the cached list, which is safe to add later.
+    """
     with _cache_lock:
         if path is None:
             _collection_cache.clear()
         else:
-            _collection_cache.pop(str(path), None)
+            _collection_cache.pop(str(path.parent), None)
 
 # Every entity type is a directory of one-YAML-file-per-item. New entity
 # types only need an entry here.
@@ -148,7 +155,7 @@ class YamlStore:
         # Any write invalidates the cached parse of its collection. The mtime
         # signature would catch it anyway, but only at ~1s granularity on some
         # filesystems — an explicit drop avoids a stale read right after a save.
-        invalidate_cache(path.parent)
+        invalidate_cache(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
         try:
@@ -338,7 +345,7 @@ class YamlStore:
                 os.remove(path)
             except FileNotFoundError:
                 return False
-        invalidate_cache(path.parent)
+        invalidate_cache(path)
         return True
 
     def write_item(self, collection: str, item_id: str, data: dict) -> dict:
