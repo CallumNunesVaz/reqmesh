@@ -78,6 +78,16 @@ def download_report(project_id: str, format: str = "html", subsystems: str | Non
         elif format == "pdf":
             latex = pub.build_latex(sec_list, changelog_from, changelog_to)
             if not compile_latex_to_pdf(latex, path):
+                # Loud on purpose. The fallback produces a visibly worse report,
+                # and the only previous signal was a response header the browser
+                # threw away — so a deployment could render degraded PDFs for
+                # months with nothing in the logs to say why.
+                import logging
+                logging.getLogger(__name__).error(
+                    "PDF report for %s fell back to weasyprint: no working LaTeX engine. "
+                    "Reports will omit tables, badges and the table of contents until "
+                    "tectonic is installed and its package cache warmed "
+                    "(backend/scripts/warm_tectonic.py).", project_id)
                 from weasyprint import HTML as WHTML
                 from app.services.sanitize import safe_url_fetcher
                 WHTML(
