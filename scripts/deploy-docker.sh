@@ -287,6 +287,9 @@ deploy_docker() {
     # not bind. Any of those make a healthy install report failure. What this
     # step needs to answer is narrower: did the container come up and serve?
     healthcheck "http://127.0.0.1:${CFG[PORT]:-8000}/health" 60 || return 1
+    # /health only proves the process answers. Prove someone can actually get
+    # in, which is the failure this installer used to report as success.
+    login_check "http://127.0.0.1:${CFG[PORT]:-8000}" "${CFG[ADMIN_PASSWORD]:-}" || true
 
     # State the version actually serving. A deployment several releases behind the
     # installer that placed it there looked entirely healthy, and nothing in the

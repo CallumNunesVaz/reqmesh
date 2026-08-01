@@ -310,5 +310,55 @@ def import_(project_path, input_file, fmt, mode):
     ))
 
 
+@cli.command("reset-admin")
+@click.option("--username", "-u", default="admin", help="Account to reset (default: admin)")
+@click.option("--password", "-p", default="", help="New password; prompted for if omitted")
+@click.option("--make-admin", is_flag=True, help="Also restore the admin role")
+def reset_admin(username, password, make_admin):
+    """Reset a user's password from the host or container shell.
+
+    RT_ADMIN_PASSWORD only seeds the admin account when users.yaml does not yet
+    exist, so on any later deploy it is silently ignored — the installer even
+    reports "existing accounts kept". Without this command the documented
+    recovery was to hand-edit YAML or delete every account, and with SMTP
+    disabled the forgot-password flow is unavailable too.
+
+    Reads the same RT_STATE_DIR the server does, so run it with the same
+    environment (in Docker: `docker compose exec reqmesh python -m app.cli
+    reset-admin`).
+    """
+    from app.core import auth
+
+    if not password:
+        password = click.prompt("New password", hide_input=True, confirmation_prompt=True)
+    if len(password) < 12:
+        raise click.ClickException("Password must be at least 12 characters.")
+
+    users = auth.load_users()
+    user = users.get(username)
+    if user is None:
+        raise click.ClickException(
+            f"No account named {username!r}. Existing accounts: "
+            f"{', '.join(sorted(users)) or '(none)'}"
+        )
+
+    user["password_hash"] = auth.hash_password(password).decode()
+    # Clear the lockout too: five failed attempts locks an account for fifteen
+    # minutes, so resetting without this leaves the new password rejected and
+    # looking as broken as the old one.
+    user["failed_attempts"] = 0
+    user.pop("locked_until", None)
+    user["disabled"] = False
+    # A reset performed here is a deliberate recovery by the operator, not a
+    # provisioning step, so don't force another change at next login.
+    user["password_change_required"] = False
+    if make_admin:
+        user["role"] = "admin"
+
+    auth.save_users(users)
+    click.echo(f"Password reset for {username!r} (role: {user.get('role', 'unknown')}).")
+    click.echo(f"Accounts file: {auth.USERS_FILE}")
+
+
 if __name__ == "__main__":
     cli()

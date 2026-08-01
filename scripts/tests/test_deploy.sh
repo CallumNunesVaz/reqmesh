@@ -140,6 +140,31 @@ check "root compose has no tmpfs over the auth state dir" \
       "$(grep -c '^\s*- /app/.reqmesh\s*$' "$ROOTC")" "0"
 check "root compose keeps /tmp as tmpfs" \
       "$(grep -c '^\s*- /tmp\s*$' "$ROOTC")" "1"
+
+# ══════════════════════════════════════════════════════════════════════════════
+section "the installer proves someone can actually log in"
+# ══════════════════════════════════════════════════════════════════════════════
+# /health only proves the process answers. The two failures that stranded a real
+# install were both invisible to it: a seed password that no longer applies
+# because users.yaml already exists, and auth state landing somewhere
+# unwritable. Both ended with the installer reporting success while nobody
+# could get in.
+check "login_check exists" \
+      "$(grep -c '^login_check()' "$REPO/scripts/lib.sh")" "1"
+check "docker deploy runs it" \
+      "$(grep -c 'login_check "http' "$REPO/scripts/deploy-docker.sh")" "1"
+check "bare-metal deploy runs it" \
+      "$(grep -c 'login_check "http' "$REPO/scripts/deploy-bare.sh")" "1"
+check "a 401 is explained rather than just reported" \
+      "$(grep -c 'seed password only applies' "$REPO/scripts/lib.sh")" "1"
+check "the password is JSON-encoded, not interpolated raw" \
+      "$(grep -c '^json_string()' "$REPO/scripts/lib.sh")" "1"
+# Exact counts here are brittle — the command is named in both the 401
+# remediation and the summary box, for docker and bare metal. Assert presence.
+check "the summary names the reset command" \
+      "$([ "$(grep -c 'app.cli reset-admin' "$REPO/scripts/lib.sh")" -ge 2 ] && echo yes)" "yes"
+check "no dead 'reset it from the shell' advice" \
+      "$(grep -c 'reset it from the container/host shell' "$REPO/scripts/lib.sh")" "0"
 # Was a private named volume; now a host bind mount shared with the bare-metal
 # mode, so switching mode no longer strands the data.
 check "the data root is a host bind mount" \

@@ -16,6 +16,23 @@ GPL-3.0-or-later choice keeps that combination compatible:
 - All remaining dependencies are permissive (MIT, BSD, ISC) and impose no
   combination restrictions.
 
+## Bundled fonts
+
+The web bundle embeds two typefaces as `.woff2` rather than loading them from a
+CDN, so an air-gapped or CSP-restricted deployment renders as designed instead
+of silently falling back to system faces. Latin subsets only.
+
+- **Inter** — Copyright 2016 The Inter Project Authors
+  (https://github.com/rsms/inter), SIL Open Font License 1.1.
+- **JetBrains Mono** — Copyright 2020 The JetBrains Mono Project Authors
+  (https://github.com/JetBrains/JetBrainsMono), SIL Open Font License 1.1.
+
+Both are vendored through the `@fontsource/*` npm packages, which carry the
+full OFL text in their `LICENSE` files. The OFL permits bundling and
+redistribution, including inside a GPLv3 work: it is a font licence covering
+the font files themselves, and imposes no condition on the licence of the
+software that displays them. Neither font is modified.
+
 ## Bundled binaries (Docker images)
 
 The Docker images additionally bundle third-party software, invoked as separate
