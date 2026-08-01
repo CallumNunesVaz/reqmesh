@@ -16,6 +16,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app import main as main_mod
+from app.services import git_auto_commit as gac
 from app.core.config import settings
 from app.core.dependencies import (require_admin, require_edit,
                                    require_maintain, require_maintain_global)
@@ -46,10 +47,10 @@ def git_project(tmp_path, monkeypatch):
     for dep in (require_edit, require_maintain, require_maintain_global, require_admin):
         app.dependency_overrides[dep] = lambda: admin
 
-    main_mod._git_change_counts.clear()
-    main_mod._git_last_commit_time.clear()
-    main_mod._git_pending_roots.clear()
-    main_mod._git_locks.clear()
+    gac._git_change_counts.clear()
+    gac._git_last_commit_time.clear()
+    gac._git_pending_roots.clear()
+    gac._git_locks.clear()
 
     client = TestClient(app)
     client.post("/api/projects", json={"id": "p", "name": "P"})
@@ -81,7 +82,7 @@ def test_rapid_edits_are_all_committed_by_the_flusher(git_project, monkeypatch):
     assert _dirty(root), "expected the debounce to suppress at least one commit"
 
     # ...but the flusher must pick it up once the window has passed.
-    monkeypatch.setattr(main_mod, "_GIT_DEBOUNCE_S", 0.0)
+    monkeypatch.setattr(gac, "_GIT_DEBOUNCE_S", 0.0)
     asyncio.run(flush_pending_commits())
 
     assert _dirty(root) == [], f"still uncommitted: {_dirty(root)}"
@@ -98,9 +99,9 @@ def test_shutdown_commits_outstanding_changes(tmp_path, monkeypatch):
     admin = {"username": "tester", "role": "admin"}
     for dep in (require_edit, require_maintain, require_maintain_global, require_admin):
         app.dependency_overrides[dep] = lambda: admin
-    main_mod._git_change_counts.clear()
-    main_mod._git_last_commit_time.clear()
-    main_mod._git_pending_roots.clear()
+    gac._git_change_counts.clear()
+    gac._git_last_commit_time.clear()
+    gac._git_pending_roots.clear()
 
     # `with` runs lifespan startup and shutdown.
     with TestClient(app) as client:

@@ -15,9 +15,19 @@ import smtplib
 import threading
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from typing import Optional
+from html import escape as esc_html_text
+from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
+
+
+def _safe_notify(fn: Callable, store, project_id: str, *args) -> None:
+    """Call *fn* for its side-effect (sending an email), logging and suppressing
+    any exception so an email outage never breaks an API response."""
+    try:
+        fn(store, project_id, *args)
+    except Exception:
+        logger.exception("Email notification failed")
 
 
 def _is_configured() -> bool:
@@ -116,7 +126,17 @@ def _user_email(username: str) -> Optional[str]:
 
 
 def _project_name(store) -> str:
-    return store.read_meta().get("name", "project")
+    """The project's display name, HTML-escaped.
+
+    Escaped here rather than at each call site because every caller
+    interpolates it into an email body, and it is free text a maintainer sets
+    from project settings — `<img src=x onerror=...>` as a project name would
+    otherwise reach every user subscribed to notifications. Subjects carry the
+    escaped form too: entities render as literal text in a subject line, which
+    is ugly but not dangerous, and matching the body is worth more than the
+    cosmetics of a hostile name.
+    """
+    return esc_html_text(store.read_meta().get("name", "project"))
 
 
 def _link(project_id: str, path: str = "") -> str:
@@ -138,11 +158,11 @@ def notify_reviewed(store, project_id: str, req_id: str, reviewer: str, comment:
     url = _link(project_id, f"/requirements/{req_id}")
     subject = f"{reviewer} reviewed {req_id} in {pname}"
     body = (
-        f"<p><strong>{reviewer}</strong> reviewed requirement <strong>{req_id}</strong>"
+        f"<p><strong>{esc_html_text(reviewer)}</strong> reviewed requirement <strong>{req_id}</strong>"
         f" in project <strong>{pname}</strong>.</p>"
     )
     if comment:
-        body += f"<p><em>{comment}</em></p>"
+        body += f"<p>{esc_html_text(comment)}</p>"
     body += f'<p><a href="{url}">View in reqmesh</a></p>'
     emails = _user_emails(store, project_id)
     if emails:
@@ -158,7 +178,7 @@ def notify_change_request(store, project_id: str, cr_id: str, action: str, user:
     url = _link(project_id, f"/change-requests?focus={cr_id}")
     body = (
         f"<p>Change request <strong>{cr_id}</strong> was <strong>{action}</strong>"
-        f" by <strong>{user}</strong> in project <strong>{pname}</strong>.</p>"
+        f" by <strong>{esc_html_text(user)}</strong> in project <strong>{pname}</strong>.</p>"
         f'<p><a href="{url}">View in reqmesh</a></p>'
     )
     emails = _user_emails(store, project_id)
@@ -175,7 +195,7 @@ def notify_risk(store, project_id: str, risk_id: str, action: str, user: str) ->
     url = _link(project_id, f"/risks?focus={risk_id}")
     body = (
         f"<p>Risk <strong>{risk_id}</strong> was <strong>{action}</strong>"
-        f" by <strong>{user}</strong> in project <strong>{pname}</strong>.</p>"
+        f" by <strong>{esc_html_text(user)}</strong> in project <strong>{pname}</strong>.</p>"
         f'<p><a href="{url}">View in reqmesh</a></p>'
     )
     emails = _user_emails(store, project_id)
@@ -192,7 +212,7 @@ def notify_decision(store, project_id: str, dec_id: str, action: str, user: str)
     url = _link(project_id, f"/decisions?focus={dec_id}")
     body = (
         f"<p>Decision record <strong>{dec_id}</strong> was <strong>{action}</strong>"
-        f" by <strong>{user}</strong> in project <strong>{pname}</strong>.</p>"
+        f" by <strong>{esc_html_text(user)}</strong> in project <strong>{pname}</strong>.</p>"
         f'<p><a href="{url}">View in reqmesh</a></p>'
     )
     emails = _user_emails(store, project_id)
@@ -223,9 +243,9 @@ def notify_comment(store, project_id: str, req_id: str, author: str, text: str) 
     snippet = text[:120] + ("..." if len(text) > 120 else "")
     subject = f"Comment on {req_id} by {author} in {pname}"
     body = (
-        f"<p><strong>{author}</strong> commented on requirement"
+        f"<p><strong>{esc_html_text(author)}</strong> commented on requirement"
         f" <strong>{req_id}</strong> in project <strong>{pname}</strong>.</p>"
-        f"<blockquote>{text}</blockquote>"
+        f"<blockquote>{esc_html_text(text)}</blockquote>"
         f'<p><a href="{url}">View in reqmesh</a></p>'
     )
     emails = _user_emails(store, project_id)

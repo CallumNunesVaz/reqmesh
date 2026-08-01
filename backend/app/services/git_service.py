@@ -10,6 +10,10 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+# Cache of per-project git identities to avoid re-reading _meta.yaml
+# for every git subprocess call. Invalidated when the meta file's mtime changes.
+_identity_cache: dict[Path, tuple[float, list[str]]] = {}
+
 # https://user:token@host/repo.git — git echoes remote URLs back in its stderr,
 # so both the URLs we log ourselves and anything git prints must be scrubbed
 # before it reaches a log file or a log shipper.
@@ -99,17 +103,30 @@ def _identity_for(project_root: Path, username: str = "") -> list[str]:
     name = _FALLBACK_NAME
     email = _FALLBACK_EMAIL
 
+    meta_file = project_root.resolve() / "_meta.yaml"
     try:
-        from app.services.yaml_store import YamlStore
-        store = YamlStore(project_root)
-        meta = store.read_meta()
-        git_cfg = meta.get("git", {})
-        if git_cfg.get("user_name"):
-            name = git_cfg["user_name"]
-        if git_cfg.get("user_email"):
-            email = git_cfg["user_email"]
-    except Exception:
-        pass
+        mtime = meta_file.stat().st_mtime
+    except OSError:
+        mtime = 0.0
+
+    cached = _identity_cache.get(meta_file)
+    if cached is not None and cached[0] == mtime:
+        name_email = cached[1]
+    else:
+        try:
+            from app.services.yaml_store import YamlStore
+            store = YamlStore(project_root)
+            meta = store.read_meta()
+            git_cfg = meta.get("git", {})
+            if git_cfg.get("user_name"):
+                name = git_cfg["user_name"]
+            if git_cfg.get("user_email"):
+                email = git_cfg["user_email"]
+        except Exception:
+            pass
+        name_email = [name, email]
+        _identity_cache[meta_file] = (mtime, name_email)
+    name, email = name_email
 
     if username and name == _FALLBACK_NAME:
         name = username

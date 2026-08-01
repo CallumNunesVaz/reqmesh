@@ -138,14 +138,7 @@ class Settings(BaseSettings):
     # Per-account progressive lockout (exponential backoff on repeated locks).
     lockout_progressive: bool = True
 
-    # ── CSRF protection ───────────────────────────────────────────────────
-    # The value used to sign CSRF tokens (auto-generated at startup if empty).
-    csrf_secret: str = ""
-
     # ── Rate limiting ─────────────────────────────────────────────────────
-    rate_limit_auth: str = "5/minute"
-    rate_limit_analysis: str = "20/minute"
-    rate_limit_publish: str = "5/minute"
     # Maximum concurrent SSE connections per user.
     max_sse_conns_per_user: int = 5
     max_sse_conns_global: int = 100

@@ -16,6 +16,7 @@ from app.core.ids import safe_id
 from app.core.tree_utils import build_flat_tree
 from app.models.requirement import RequirementCreate, RequirementUpdate
 from app.services.load_guard import is_safe_id, validate_on_load
+from app.api._utils import paginate
 from app.models.specification import SpecificationCreate, SpecificationUpdate
 from app.models.definition import DefinitionCreate, DefinitionUpdate
 from app.models.analysis import AnalysisCaseCreate, AnalysisCaseUpdate
@@ -632,12 +633,7 @@ def list_specifications(
 ):
     store = get_store(project_id)
     items = store.list_specifications()
-    if offset is None and limit is None:
-        return items[:2000]
-    off = offset or 0
-    lim = limit or 500
-    total = len(items)
-    return {"items": items[off:off + lim], "total": total, "offset": off, "limit": lim}
+    return paginate(items, offset, limit)
 
 
 @router.get("/projects/{project_id}/specifications/{spec_id}")
@@ -838,12 +834,7 @@ def list_definitions(
 ):
     store = get_store(project_id)
     items = store.list_items("definitions")
-    if offset is None and limit is None:
-        return items[:2000]
-    off = offset or 0
-    lim = limit or 500
-    total = len(items)
-    return {"items": items[off:off + lim], "total": total, "offset": off, "limit": lim}
+    return paginate(items, offset, limit)
 
 
 @router.post("/projects/{project_id}/definitions", status_code=201)
@@ -885,12 +876,7 @@ def list_analysis_cases(
 ):
     store = get_store(project_id)
     items = store.list_items("analysis_cases")
-    if offset is None and limit is None:
-        return items[:2000]
-    off = offset or 0
-    lim = limit or 500
-    total = len(items)
-    return {"items": items[off:off + lim], "total": total, "offset": off, "limit": lim}
+    return paginate(items, offset, limit)
 
 
 @router.post("/projects/{project_id}/analysis", status_code=201)
@@ -942,12 +928,7 @@ def list_verification_cases(
 ):
     store = get_store(project_id)
     items = store.list_verification_cases()
-    if offset is None and limit is None:
-        return items[:2000]
-    off = offset or 0
-    lim = limit or 500
-    total = len(items)
-    return {"items": items[off:off + lim], "total": total, "offset": off, "limit": lim}
+    return paginate(items, offset, limit)
 
 
 @router.get("/projects/{project_id}/verification/{vc_id}")
