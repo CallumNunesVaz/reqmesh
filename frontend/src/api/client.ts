@@ -3,7 +3,7 @@ const BASE = '/api';
 /** An error carrying the server's structured `detail`, when it sent one. */
 export class ApiError extends Error {
   status: number;
-  data?: any;
+  data?: unknown;
   constructor(message: string, status: number) {
     super(message);
     this.name = 'ApiError';
@@ -38,6 +38,7 @@ export interface Backlinks {
 interface RequestOptions {
   method?: string;
   body?: unknown;
+  raw?: boolean;
 }
 
 function getCsrfToken(): string {
@@ -745,8 +746,8 @@ export const api = {
   createProject: (data: { id: string; name: string }) => request<Project>('/projects', { method: 'POST', body: data }),
   getProject: (id: string) => request<Project>(`/projects/${id}`),
   deleteProject: (id: string) => request<void>(`/projects/${id}`, { method: 'DELETE' }),
-  updateProject: (id: string, data: { name?: string; naming?: Record<string, any>; quality?: Record<string, any>; workflow?: Record<string, any>; git?: Record<string, any>; baselines?: (string | BaselineDef)[]; stakeholders?: StakeholderDef[]; risk_matrix?: RiskMatrix }) =>
-    request<any>(`/projects/${id}`, { method: 'PATCH', body: data }),
+  updateProject: (id: string, data: { name?: string; naming?: Record<string, unknown>; quality?: Record<string, unknown>; workflow?: Record<string, unknown>; git?: Record<string, unknown>; baselines?: (string | BaselineDef)[]; stakeholders?: StakeholderDef[]; risk_matrix?: RiskMatrix }) =>
+    request<Project>(`/projects/${id}`, { method: 'PATCH', body: data }),
   getWorkflow: (projectId: string) =>
     request<{ states: string[]; transitions: Record<string, string[]>; default: string }>(`/projects/${projectId}/workflow`),
 
@@ -788,7 +789,7 @@ export const api = {
   updateComponent: (projectId: string, componentId: string, data: Partial<Component>) =>
     request<Component>(`/projects/${projectId}/components/${componentId}`, { method: 'PUT', body: data }),
   deleteComponent: (projectId: string, componentId: string, force = false) =>
-    request<any>(`/projects/${projectId}/components/${componentId}${force ? '?force=true' : ''}`, { method: 'DELETE' }),
+    request<{ok?: true} | undefined>(`/projects/${projectId}/components/${componentId}${force ? '?force=true' : ''}`, { method: 'DELETE' }),
   getComponentsForRequirement: (projectId: string, reqId: string) =>
     request<Component[]>(`/projects/${projectId}/requirements/${reqId}/components`),
   getComponentsForVerificationCase: (projectId: string, vcId: string) =>
@@ -800,7 +801,7 @@ export const api = {
   updateRequirement: (projectId: string, reqId: string, data: Partial<Requirement>) =>
     request<Requirement>(`/projects/${projectId}/requirements/${reqId}`, { method: 'PUT', body: data }),
   deleteRequirement: (projectId: string, reqId: string, force = false) =>
-    request<any>(`/projects/${projectId}/requirements/${reqId}${force ? '?force=true' : ''}`, { method: 'DELETE' }),
+    request<{ok?: true} | undefined>(`/projects/${projectId}/requirements/${reqId}${force ? '?force=true' : ''}`, { method: 'DELETE' }),
   cascadeRequirement: (projectId: string, reqId: string) =>
     request<{ cascaded: boolean; created: string[]; source: string }>(`/projects/${projectId}/requirements/${reqId}/cascade`, { method: 'POST' }),
   breakCascade: (projectId: string, reqId: string, breakChildren?: boolean) =>
@@ -833,7 +834,7 @@ export const api = {
   updateSpecification: (projectId: string, specId: string, data: Partial<Specification>) =>
     request<Specification>(`/projects/${projectId}/specifications/${specId}`, { method: 'PUT', body: data }),
   deleteSpecification: (projectId: string, specId: string, force = false) =>
-    request<any>(`/projects/${projectId}/specifications/${specId}${force ? '?force=true' : ''}`, { method: 'DELETE' }),
+    request<{ok?: true} | undefined>(`/projects/${projectId}/specifications/${specId}${force ? '?force=true' : ''}`, { method: 'DELETE' }),
 
   // Verification Cases
   listVerificationCases: (projectId: string) => request<VerificationCase[]>(`/projects/${projectId}/verification`),
@@ -842,7 +843,7 @@ export const api = {
   updateVerificationCase: (projectId: string, vcId: string, data: Partial<VerificationCase>) =>
     request<VerificationCase>(`/projects/${projectId}/verification/${vcId}`, { method: 'PUT', body: data }),
   deleteVerificationCase: (projectId: string, vcId: string, force = false) =>
-    request<any>(`/projects/${projectId}/verification/${vcId}${force ? '?force=true' : ''}`, { method: 'DELETE' }),
+    request<{ok?: true} | undefined>(`/projects/${projectId}/verification/${vcId}${force ? '?force=true' : ''}`, { method: 'DELETE' }),
   runVerification: (projectId: string, vcId: string, data: { status: string; notes?: string; step_results?: Record<string, string> }) =>
     request<VerificationCase>(`/projects/${projectId}/verification/${vcId}/run`, { method: 'POST', body: data }),
 
@@ -858,7 +859,7 @@ export const api = {
   updateChangeRequest: (projectId: string, crId: string, data: Partial<ChangeRequest>) =>
     request<ChangeRequest>(`/projects/${projectId}/change-requests/${crId}`, { method: 'PUT', body: data }),
   deleteChangeRequest: (projectId: string, crId: string, force = false) =>
-    request<any>(`/projects/${projectId}/change-requests/${crId}${force ? '?force=true' : ''}`, { method: 'DELETE' }),
+    request<{ok?: true} | undefined>(`/projects/${projectId}/change-requests/${crId}${force ? '?force=true' : ''}`, { method: 'DELETE' }),
 
   // Risks
   getBacklinks: (projectId: string, entityId: string) =>
@@ -870,7 +871,7 @@ export const api = {
   updateRisk: (projectId: string, riskId: string, data: Partial<Risk>) =>
     request<Risk>(`/projects/${projectId}/risks/${riskId}`, { method: 'PUT', body: data }),
   deleteRisk: (projectId: string, riskId: string, force = false) =>
-    request<any>(`/projects/${projectId}/risks/${riskId}${force ? '?force=true' : ''}`, { method: 'DELETE' }),
+    request<{ok?: true} | undefined>(`/projects/${projectId}/risks/${riskId}${force ? '?force=true' : ''}`, { method: 'DELETE' }),
 
   // Comments
   listComments: (projectId: string, requirementId?: string) => {
@@ -889,7 +890,7 @@ export const api = {
   updateDecision: (projectId: string, decId: string, data: Partial<DecisionRecord>) =>
     request<DecisionRecord>(`/projects/${projectId}/decisions/${decId}`, { method: 'PUT', body: data }),
   deleteDecision: (projectId: string, decId: string, force = false) =>
-    request<any>(`/projects/${projectId}/decisions/${decId}${force ? '?force=true' : ''}`, { method: 'DELETE' }),
+    request<{ok?: true} | undefined>(`/projects/${projectId}/decisions/${decId}${force ? '?force=true' : ''}`, { method: 'DELETE' }),
 
   // Analysis
   getImpact: (projectId: string, reqId: string) =>
@@ -940,7 +941,7 @@ export const api = {
     request<{ standards: { name: string; count: number }[]; tracked_count: number; total_requirements: number }>(`/projects/${projectId}/compliance`),
 
   // Bulk — Requirements
-  bulkUpdateRequirements: (projectId: string, ids: string[], updates: Record<string, any>) =>
+  bulkUpdateRequirements: (projectId: string, ids: string[], updates: Record<string, unknown>) =>
     request<{ updated: number; ids: string[] }>(`/projects/${projectId}/requirements/bulk`, { method: 'POST', body: { ids, updates } }),
   bulkDeleteRequirements: (projectId: string, ids: string[]) =>
     request<{ deleted: number }>(`/projects/${projectId}/requirements/bulk-delete`, { method: 'POST', body: { ids } }),
@@ -948,7 +949,7 @@ export const api = {
     request<{ updated: number; ids: string[] }>(`/projects/${projectId}/requirements/bulk-reparent`, { method: 'POST', body: { ids, parent, re_prefix: rePrefix } }),
 
   // Bulk — Components
-  bulkUpdateComponents: (projectId: string, ids: string[], updates: Record<string, any>) =>
+  bulkUpdateComponents: (projectId: string, ids: string[], updates: Record<string, unknown>) =>
     request<{ updated: number }>(`/projects/${projectId}/components/bulk`, { method: 'POST', body: { ids, updates } }),
   bulkDeleteComponents: (projectId: string, ids: string[]) =>
     request<{ deleted: number }>(`/projects/${projectId}/components/bulk-delete`, { method: 'POST', body: { ids } }),
@@ -956,32 +957,32 @@ export const api = {
     request<{ updated: number }>(`/projects/${projectId}/components/bulk-reparent`, { method: 'POST', body: { ids, parent } }),
 
   // Bulk — Verification Cases
-  bulkUpdateVerificationCases: (projectId: string, ids: string[], updates: Record<string, any>) =>
+  bulkUpdateVerificationCases: (projectId: string, ids: string[], updates: Record<string, unknown>) =>
     request<{ updated: number }>(`/projects/${projectId}/verification/bulk`, { method: 'POST', body: { ids, updates } }),
   bulkDeleteVerificationCases: (projectId: string, ids: string[]) =>
     request<{ deleted: number }>(`/projects/${projectId}/verification/bulk-delete`, { method: 'POST', body: { ids } }),
 
   // Bulk — Specifications
-  bulkUpdateSpecifications: (projectId: string, ids: string[], updates: Record<string, any>) =>
+  bulkUpdateSpecifications: (projectId: string, ids: string[], updates: Record<string, unknown>) =>
     request<{ updated: number }>(`/projects/${projectId}/specifications/bulk`, { method: 'POST', body: { ids, updates } }),
   bulkDeleteSpecifications: (projectId: string, ids: string[]) =>
     request<{ deleted: number }>(`/projects/${projectId}/specifications/bulk-delete`, { method: 'POST', body: { ids } }),
 
   // Bulk — Risks
-  bulkUpdateRisks: (projectId: string, ids: string[], updates: Record<string, any>) =>
+  bulkUpdateRisks: (projectId: string, ids: string[], updates: Record<string, unknown>) =>
     request<{ updated: number }>(`/projects/${projectId}/risks/bulk`, { method: 'POST', body: { ids, updates } }),
   bulkDeleteRisks: (projectId: string, ids: string[]) =>
     request<{ deleted: number }>(`/projects/${projectId}/risks/bulk-delete`, { method: 'POST', body: { ids } }),
 
   // Bulk — Change Requests
-  bulkUpdateChangeRequests: (projectId: string, ids: string[], updates: Record<string, any>) =>
+  bulkUpdateChangeRequests: (projectId: string, ids: string[], updates: Record<string, unknown>) =>
     request<{ updated: number }>(`/projects/${projectId}/change-requests/bulk`, { method: 'POST', body: { ids, updates } }),
   bulkDeleteChangeRequests: (projectId: string, ids: string[]) =>
     request<{ deleted: number }>(`/projects/${projectId}/change-requests/bulk-delete`, { method: 'POST', body: { ids } }),
 
   // History
   getRequirementHistory: (projectId: string, reqId: string) =>
-    request<any[]>(`/projects/${projectId}/requirements/${reqId}/history`),
+    request<unknown[]>(`/projects/${projectId}/requirements/${reqId}/history`),
 
   // Git
   gitLog: (projectId: string, limit: number = 50) =>
@@ -1068,5 +1069,5 @@ export const api = {
     return request<TestResultImportSummary>(`/projects/${projectId}/test-results/import`, { method: 'POST', body: fd });
   },
   getTestResultSample: (projectId: string) =>
-    request<string>(`/projects/${projectId}/test-results/sample`, { raw: true } as any),
+    request<string>(`/projects/${projectId}/test-results/sample`, { raw: true }),
 };

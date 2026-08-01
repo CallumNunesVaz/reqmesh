@@ -51,6 +51,43 @@ def guest_client(workspace):
 
 
 @pytest.fixture()
+def _real_role_client(workspace):
+    """Factory for a client that carries a real token for *role*.
+
+    Deliberately installs **no** dependency overrides. The admin `client`
+    fixture can override every guard because an admin genuinely passes them
+    all; doing the same for a contributor produces a fixture that satisfies
+    `require_admin`, so a test asserting "a contributor cannot do X" would pass
+    no matter what the guards actually do. These go through the real
+    dependency chain so the tiers mean something.
+    """
+    from app.core import auth
+
+    def _make(role: str, username: str | None = None):
+        name = username or role
+        auth.register_user(name, "Password123!long", role)
+        c = TestClient(app)
+        c.headers.update({"Authorization": f"Bearer {auth.create_token(name, role)}"})
+        return c
+
+    return _make
+
+
+@pytest.fixture()
+def contributor_client(_real_role_client):
+    """Contributor: may propose (change requests, risks, comments), not edit."""
+    with _real_role_client("contributor") as c:
+        yield c
+
+
+@pytest.fixture()
+def maintainer_client(_real_role_client):
+    """Maintainer: may edit project data, but is not an admin."""
+    with _real_role_client("maintainer") as c:
+        yield c
+
+
+@pytest.fixture()
 def project(client):
     client.post("/api/projects", json={"id": "demo", "name": "Demo Project"})
     return "demo"

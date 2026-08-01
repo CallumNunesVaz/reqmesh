@@ -252,8 +252,7 @@ export default function RequirementDetailPage() {
       setDirty(false);
       setAllReqs(all.filter((r) => r.id !== reqId));
       setAllVcs(vcs);
-      setLoading(false);
-    }).catch((err) => { if (alive) console.error(err); });
+    }).catch((err) => { if (alive) console.error(err); }).finally(() => { if (alive) setLoading(false); });
     api.getComponentsForRequirement(projectId, reqId).then((v) => { if (alive) setSatisfiedBy(v); }).catch(() => { if (alive) setSatisfiedBy([]); });
     api.listComponents(projectId).then((v) => { if (alive) setAllComponents(v); }).catch(() => { if (alive) setAllComponents([]); });
     api.getCoverageNeeds().then((v) => { if (alive) setCoverageNeedOptions(v.items); }).catch(() => { if (alive) setCoverageNeedOptions([]); });
