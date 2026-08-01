@@ -162,21 +162,32 @@ export interface RequirementValue {
   unknown_stakeholders: string[];
 }
 
+/** Which relationship a matrix shows. Each is a link declared in the backend's
+ *  link registry whose target is `requirements`. */
+export type MatrixAxis = 'components' | 'verification' | 'risks';
+
 export interface AllocationMatrixData {
+  axis: MatrixAxis;
+  /** Reads as "<requirement> <verb> <column>", e.g. "is verified by". */
+  verb: string;
+  column_label: string;
   rows: Array<{
     req_id: string;
     req_name: string;
     req_status: string;
+    req_type: string;
     allocated_to: string;
     cells: Record<string, boolean>;
   }>;
   columns: Array<{
-    comp_id: string;
-    comp_name: string;
-    comp_type: string;
+    id: string;
+    name: string;
+    /** The column entity's secondary label: component type, verification
+     *  method, or risk severity. */
+    kind: string;
   }>;
   total_requirements: number;
-  total_components: number;
+  total_columns: number;
   allocated: number;
   unallocated: number;
   allocation_pct: number;
@@ -1085,16 +1096,20 @@ export const api = {
     ),
 
   // Allocation matrix
-  getAllocationMatrix: (projectId: string, search?: string, filterType?: string) => {
+  getAllocationMatrix: (projectId: string, axis: MatrixAxis = 'components',
+                        search?: string, filterType?: string) => {
     const qs = new URLSearchParams();
+    if (axis) qs.set('axis', axis);
     if (search) qs.set('search', search);
     if (filterType) qs.set('filter_type', filterType);
     const qsStr = qs.toString();
     return request<AllocationMatrixData>(`/projects/${projectId}/allocation-matrix${qsStr ? '?' + qsStr : ''}`);
   },
-  setAllocation: (projectId: string, reqId: string, componentId: string, allocated: boolean) =>
-    request<{ req_id: string; component_id: string; allocated: boolean; allocated_to: string }>(
-      `/projects/${projectId}/allocation`, { method: 'POST', body: { req_id: reqId, component_id: componentId, allocated } }),
+  setAllocation: (projectId: string, reqId: string, targetId: string, allocated: boolean,
+                  axis: MatrixAxis = 'components') =>
+    request<{ req_id: string; axis: MatrixAxis; target_id: string; allocated: boolean; allocated_to: string }>(
+      `/projects/${projectId}/allocation`,
+      { method: 'POST', body: { req_id: reqId, target_id: targetId, axis, allocated } }),
 
   // CI test-result import
   importTestResults: (projectId: string, file: File, format: string, dryRun: boolean) => {

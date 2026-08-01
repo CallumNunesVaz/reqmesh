@@ -23,23 +23,11 @@ import { LinkEditor } from '../components/LinkEditor';
 import { useKeyboardShortcuts } from '../components/useKeyboardShortcuts';
 import LoadingSplash from '../components/LoadingSplash';
 import { statusColors } from '../components/RequirementNode';
+import { REQUIREMENT_TYPE_META, formatReqType, reqTypeColor, typeOptionsFor } from '../lib/requirementTypes';
 
-const typeOptions = ['functional', 'non_functional_performance', 'non_functional_security', 'non_functional_usability', 'non_functional_maintainability', 'non_functional_reliability', 'non_functional_scalability', 'non_functional_portability', 'interface', 'user', 'system', 'business', 'regulatory_compliance', 'safety', 'environmental', 'verification'];
 const priorityOptions = ['low', 'medium', 'high', 'critical'];
 const methodOptions = ['test', 'analysis', 'demonstration', 'inspection'];
 
-const typeColorMap: Record<string, string> = {
-  functional: 'hsl(207,90%,64%)',
-  interface: 'hsl(260,100%,78%)',
-  user: '#ec4899',
-  system: '#0ea5e9',
-  business: '#f59e0b',
-  regulatory_compliance: '#ef4444',
-  safety: '#f43f5e',
-  environmental: '#22c55e',
-  verification: '#8b5cf6',
-};
-const typeColorOf = (t: string) => t.startsWith('non_functional') ? 'hsl(179,100%,38%)' : typeColorMap[t];
 
 const priorityColorMap: Record<string, string> = {
   low: 'hsl(195,6%,62%)',
@@ -1053,16 +1041,14 @@ export default function RequirementDetailPage() {
             <div className="space-y-3 mt-2">
               <div>
                 <label className="label">Type</label>
-                <select className="select" value={req.type} onChange={(e) => save({ type: e.target.value })} disabled={!editable} style={{ color: typeColorOf(req.type) }}>
-                  {typeOptions.map((t) => {
-                    let label = t.replace(/_/g, ' ');
-                    if (t.startsWith('non_functional_')) {
-                      label = 'Non-Functional – ' + t.slice('non_functional_'.length).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-                    } else {
-                      label = label.replace(/\b\w/g, c => c.toUpperCase());
-                    }
-                    return (<option key={t} value={t} style={{ color: typeColorOf(t) }}>{label}</option>);
-                  })}
+                <select className="select" value={req.type} onChange={(e) => save({ type: e.target.value })} disabled={!editable} style={{ color: reqTypeColor(req.type) }}>
+                  {typeOptionsFor(req.type).map((t) => (
+                    <option key={t} value={t} style={{ color: reqTypeColor(t) }}>
+                      {REQUIREMENT_TYPE_META[t]
+                        ? REQUIREMENT_TYPE_META[t].label
+                        : `${formatReqType(t)} (unrecognised)`}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div>

@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { BarChart3, ClipboardList, FileText, CheckCircle2, AlertTriangle, Zap, Gauge, Plug, PenTool, Lock, Boxes, Settings } from 'lucide-react';
+import { BarChart3, ClipboardList, FileText, CheckCircle2, AlertTriangle, Zap, Boxes, Settings } from 'lucide-react';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LabelList } from 'recharts';
 import LoadingSplash from '../components/LoadingSplash';
 import { api, type Requirement, type VerificationCase } from '../api/client';
 import { useAuthStore } from '../store/auth';
+import { formatReqType, reqTypeColor, reqTypeIcon } from '../lib/requirementTypes';
 
 const statusColors: Record<string, string> = {
   proposed: 'border-blue-500/50 bg-blue-500/10 text-blue-400',
@@ -24,35 +25,8 @@ const priorityColors: Record<string, string> = {
   critical: '#ef4444',
 };
 
-const typeColors: Record<string, string> = {
-  functional: '#539fe6',
-  interface: '#b291ff',
-  user: '#ec4899',
-  system: '#0ea5e9',
-  business: '#f59e0b',
-  regulatory_compliance: '#ef4444',
-  safety: '#f43f5e',
-  environmental: '#22c55e',
-  verification: '#8b5cf6',
-};
 
-// Every non-functional variant keeps the cyan colouration (req 3a).
-const typeColorFor = (k: string): string =>
-  k.startsWith('non_functional') ? '#009d96' : typeColors[k] || '#64748b';
 
-const typeIcons: Record<string, React.ComponentType<any>> = {
-  functional: Zap,
-  interface: Plug,
-  user: PenTool,
-  system: Lock,
-  business: Lock,
-  regulatory_compliance: Lock,
-  safety: Lock,
-  environmental: Lock,
-  verification: Lock,
-};
-const typeIconFor = (k: string): React.ComponentType<any> =>
-  k.startsWith('non_functional') ? Gauge : typeIcons[k] || Zap;
 
 const qualityColors: Record<string, string> = {
   description: '#539fe6',
@@ -182,7 +156,7 @@ export default function ProjectOverview() {
     .map(([k, v]) => ({ name: k, count: v, fill: priorityColors[k] || '#64748b' }));
 
   const typeData = Object.entries(stats.typeCounts)
-    .map(([k, v]) => ({ key: k, name: k.replace(/_/g, ' '), count: v, fill: typeColorFor(k) }));
+    .map(([k, v]) => ({ key: k, name: formatReqType(k), count: v, fill: reqTypeColor(k) }));
 
   const methodData = Object.entries(stats.methodCounts)
     .sort(([, a], [, b]) => b - a)
@@ -353,7 +327,7 @@ export default function ProjectOverview() {
               </ResponsiveContainer>
               <div className="flex-1 space-y-1.5">
                 {typeData.map((t) => {
-                  const Icon = typeIconFor(t.key);
+                  const Icon = reqTypeIcon(t.key);
                   return (
                     <div key={t.name} className="flex items-center justify-between gap-3 text-xs">
                       <div className="flex items-center gap-1.5 min-w-0">

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { REQUIREMENT_TYPES, REQUIREMENT_TYPE_META, reqTypeClass } from '../lib/requirementTypes';
 import { X, BookOpen, Boxes, FileText, CheckCircle2, GitBranch, Sigma, Sparkles, ShieldCheck, TrendingUp, Keyboard, Terminal, Globe, Search, Info, AlertTriangle, Lightbulb, ArrowUpCircle } from 'lucide-react';
 
 type DocSection = { id: string; icon: typeof BookOpen; title: string; keywords: string; render: () => ReactNode };
@@ -223,7 +224,18 @@ const DOCS: DocSection[] = [
         <H3>Properties</H3>
         <UL>
           <LI><strong className="text-card-foreground">ID</strong> — unique identifier (validated as filename-safe)</LI>
-          <LI><strong className="text-card-foreground">Type</strong> — <span className="text-blue-400">functional</span>, <span className="text-teal-400">non-functional</span>, <span className="text-purple-400">interface</span>, <span className="text-pink-400">design</span>, or <span className="text-orange-400">constraint</span></LI>
+          {/* Listed from the shared table rather than written out, so this stops
+              describing a vocabulary the app no longer has — it still named
+              "design" and "constraint" long after both were removed. */}
+          <LI>
+            <strong className="text-card-foreground">Type</strong> —{' '}
+            {REQUIREMENT_TYPES.map((t, i) => (
+              <span key={t}>
+                {i > 0 && ', '}
+                <span className={reqTypeClass(t)}>{REQUIREMENT_TYPE_META[t].label}</span>
+              </span>
+            ))}
+          </LI>
           <LI><strong className="text-card-foreground">Status</strong> — proposed → approved → implemented → verified → rejected → deprecated</LI>
           <LI><strong className="text-card-foreground">Priority</strong> — low, medium, high, or critical</LI>
           <LI><strong className="text-card-foreground">Verification method</strong> — test, analysis, demonstration, or inspection</LI>
