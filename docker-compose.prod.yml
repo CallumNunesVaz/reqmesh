@@ -32,6 +32,12 @@ services:
       - RT_GITHUB_TOKEN=${RT_GITHUB_TOKEN:-}
       - RT_SELF_UPDATE_ENABLED=${RT_SELF_UPDATE_ENABLED:-true}
       - RT_DATA_ROOT=/data/projects
+      # Accounts and the signing secret belong on the durable volume, beside the
+      # project data. Left at its default this resolved to $HOME/.reqmesh =
+      # /app/.reqmesh, which the tmpfs below made root-owned and unwritable —
+      # login returned 500, and any account that had been written would have
+      # been discarded on the next restart.
+      - RT_STATE_DIR=/data/.reqmesh
       - TECTONIC_CACHE_DIR=/data/.tectonic-cache
       - RT_HOST=0.0.0.0
       - RT_PORT=8000
@@ -71,8 +77,12 @@ services:
       - ALL
     read_only: true
     tmpfs:
+      # /app/.reqmesh used to be listed here so the read-only rootfs had a
+      # writable spot for auth state. It was the wrong fix twice over: docker
+      # mounts it root-owned, so uid 999 could not write it anyway, and tmpfs
+      # would have thrown the accounts away on restart. State now lives in the
+      # shared data root via RT_STATE_DIR.
       - /tmp
-      - /app/.reqmesh
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/health"]
