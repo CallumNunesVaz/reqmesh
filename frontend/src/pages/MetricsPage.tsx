@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Trash2, CheckCircle2, AlertTriangle, Search, TrendingUp, Shield, GitBranch, FileWarning, Sparkles, Sigma } from 'lucide-react';
+import { Plus, Trash2, CheckCircle2, AlertTriangle, Search, TrendingUp, Shield, GitBranch, FileWarning, Sparkles, Sigma, Flame, ShieldCheck } from 'lucide-react';
 import { api, type MetricsData, type ImpactResult, type GapItem, type QualityItem, type EvaluationData } from '../api/client';
 import { EntityLink } from '../components/entities';
 import { VerdictBadge } from '../components/parametrics';
@@ -49,7 +49,10 @@ export default function MetricsPage() {
 
   if (!metrics) return <div className="relative h-[70vh]"><LoadingSplash label="Analysing project…" /></div>;
 
-  const q = metrics.quality_pct;
+  // A project with no requirements returns the short form of the payload, so
+  // neither of these is guaranteed to be present.
+  const q = metrics.quality_pct ?? {};
+  const risks = metrics.risks;
 
   return (
     <div className="max-w-6xl mx-auto p-8">
@@ -63,6 +66,10 @@ export default function MetricsPage() {
           { label: 'Conflicts', value: conflicts.count, icon: AlertTriangle, color: conflicts.count > 0 ? 'text-red-400 bg-red-400/10' : 'text-green-400 bg-green-400/10' },
           { label: 'Gaps', value: gaps.length, icon: Search, color: gaps.length > 0 ? 'text-amber-400 bg-amber-400/10' : 'text-green-400 bg-green-400/10' },
           { label: 'Unreviewed', value: unreviewedCount, icon: Shield, color: unreviewedCount > 0 ? 'text-amber-400 bg-amber-400/10' : 'text-emerald-400 bg-emerald-400/10' },
+          // The headline risk number is the one that needs action: open risks
+          // in the top two bands. Total risks would only grow, and a register
+          // that is large but well-mitigated is a healthy one.
+          { label: 'Severe Open Risks', value: risks?.severe_open ?? 0, icon: Flame, color: (risks?.severe_open ?? 0) > 0 ? 'text-red-400 bg-red-400/10' : 'text-emerald-400 bg-emerald-400/10' },
         ].map((card, i) => {
           const Icon = card.icon;
           return (
@@ -110,6 +117,127 @@ export default function MetricsPage() {
           </div>
         </motion.div>
       </div>
+
+      {risks && risks.total > 0 && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.31 }} className="card p-5 mt-6">
+          <h2 className="font-semibold text-sm text-card-foreground mb-1 flex items-center gap-2">
+            <Flame size={16} className="text-cs-red" /> Risk Profile
+            <span className="text-xs font-normal text-muted-foreground">
+              {risks.open} open of {risks.total}
+            </span>
+          </h2>
+          <HelpTip>
+            Bands come from this project's risk matrix (Settings → Risk Matrix), and are derived from each
+            risk's severity and likelihood rather than stored — retune the matrix and these move with it.
+            Only open, mitigating and monitoring risks count towards the profile; closed and accepted ones
+            stay in the register as a record.
+          </HelpTip>
+
+          <div className="grid grid-cols-1 @3xl:grid-cols-2 gap-6 mt-4">
+            <div>
+              <div className="text-xs text-muted-foreground mb-2">Open risks by band</div>
+              {risks.open > 0 ? (
+                <>
+                  <div className="flex w-full h-3 rounded-full overflow-hidden bg-muted">
+                    {risks.bands.map((b) => {
+                      const n = risks.open_by_band[b.key] ?? 0;
+                      if (!n) return null;
+                      return (
+                        <motion.div
+                          key={b.key}
+                          initial={{ width: 0 }}
+                          animate={{ width: `${(n / risks.open) * 100}%` }}
+                          transition={{ duration: 0.5 }}
+                          style={{ backgroundColor: b.color }}
+                          title={`${b.label}: ${n}`}
+                        />
+                      );
+                    })}
+                  </div>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3">
+                    {risks.bands.map((b) => (
+                      <span key={b.key} className="inline-flex items-center gap-1.5 text-xs">
+                        <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: b.color }} />
+                        <span className="text-muted-foreground">{b.label}</span>
+                        <span className="text-foreground font-medium tabular-nums">{risks.open_by_band[b.key] ?? 0}</span>
+                        {(risks.by_band[b.key] ?? 0) !== (risks.open_by_band[b.key] ?? 0) && (
+                          <span className="text-muted-foreground text-[10px] tabular-nums">
+                            / {risks.by_band[b.key] ?? 0} total
+                          </span>
+                        )}
+                      </span>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div className="text-xs text-muted-foreground py-2">
+                  No open risks — every entry in the register is closed or accepted.
+                </div>
+              )}
+
+              {risks.unrated > 0 && (
+                <div className="mt-3 text-xs flex items-start gap-1.5 text-amber-400">
+                  <AlertTriangle size={13} className="shrink-0 mt-0.5" />
+                  <span>
+                    {risks.unrated} {risks.unrated === 1 ? 'risk cannot be rated' : 'risks cannot be rated'} — severity or
+                    likelihood is unset, or names a level this matrix does not define.
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-3">
+              <div className="text-xs text-muted-foreground">Register coverage</div>
+              {[
+                { label: 'With a mitigation', pct: risks.mitigation_pct, n: risks.with_mitigation },
+                { label: 'Linked to requirements', pct: risks.linked_pct, n: risks.with_requirements },
+              ].map((row) => (
+                <div key={row.label}>
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="text-muted-foreground">{row.label}</span>
+                    <span className="text-foreground font-medium tabular-nums">{row.n} · {row.pct}%</span>
+                  </div>
+                  <div className="w-full bg-muted rounded-full h-2">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${row.pct}%` }}
+                      transition={{ duration: 0.5 }}
+                      className={`h-full rounded-full ${row.pct >= 80 ? 'bg-emerald-500' : row.pct >= 50 ? 'bg-amber-500' : 'bg-red-500'}`}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {risks.top_open.length > 0 && (
+            <div className="mt-5">
+              <div className="text-xs text-muted-foreground mb-2">Most serious open risks</div>
+              <div className="space-y-1.5">
+                {risks.top_open.map((r) => (
+                  <div key={r.id} className="flex items-center gap-2 text-xs py-1.5 px-2 rounded hover:bg-accent">
+                    <span
+                      className="badge text-[10px] shrink-0"
+                      style={{ backgroundColor: `${r.color}1a`, color: r.color }}
+                    >
+                      {r.label}
+                    </span>
+                    <EntityLink kind="risk" id={r.id} name={r.title} className="flex-1 min-w-0 hover:text-primary" />
+                    <span className="text-muted-foreground text-[10px] whitespace-nowrap">
+                      {r.severity} · {r.likelihood.replace(/_/g, ' ')}
+                    </span>
+                    {r.mitigated ? (
+                      <ShieldCheck size={13} className="text-emerald-400 shrink-0" aria-label="Has a mitigation" />
+                    ) : (
+                      <span className="badge bg-amber-500/10 text-amber-400 text-[9px] shrink-0">unmitigated</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </motion.div>
+      )}
 
       {evaluation && evaluation.requirements.length > 0 && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.32 }} className="card p-5 mt-6">

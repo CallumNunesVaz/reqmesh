@@ -162,14 +162,111 @@ def compliance_status(project_id: str):
 
 # ── Metrics ───────────────────────────────────────────────────────────────────
 
+# A risk is only "live" in these statuses. Closed and accepted risks stay in the
+# register as a record of the decision, so counting them would make a project
+# look riskier the longer it has been managed well.
+OPEN_RISK_STATUSES = {"open", "mitigating", "monitoring"}
+
+
+def _risk_metrics(store) -> dict:
+    """Risk-register health, rated through the project's own matrix.
+
+    Ratings are derived here rather than read off the risk, for the same reason
+    the register derives them on read (see ``services/risk_matrix``): a stored
+    rating and a re-tuned matrix drift apart, and metrics that disagree with the
+    page they summarise are worse than no metrics.
+    """
+    from app.services.risk_matrix import apply_rating, normalize_matrix
+
+    matrix = normalize_matrix(store.read_meta().get("risk_matrix"))
+    risks = apply_rating(store.list_items("risks"), matrix)
+    total = len(risks)
+
+    # Seed every band at zero so the chart keeps a stable set of columns —
+    # otherwise a band nobody has hit vanishes and the axis silently rescales.
+    by_band: dict[str, int] = {b["key"]: 0 for b in matrix["bands"]}
+    open_by_band: dict[str, int] = dict.fromkeys(by_band, 0)
+    by_status: dict[str, int] = {}
+    unrated = with_mitigation = with_requirements = open_count = 0
+
+    for r in risks:
+        status = str(r.get("status") or "open").strip().lower()
+        by_status[status] = by_status.get(status, 0) + 1
+        is_open = status in OPEN_RISK_STATUSES
+        open_count += is_open
+
+        band = (r.get("rating") or {}).get("band")
+        if band is None:
+            unrated += 1
+        elif band in by_band:
+            by_band[band] += 1
+            if is_open:
+                open_by_band[band] += 1
+
+        if str(r.get("mitigation") or "").strip():
+            with_mitigation += 1
+        if r.get("linked_requirements"):
+            with_requirements += 1
+
+    # Bands run least- to most-serious, so the tail is what needs attention.
+    # "Severe" is the top two bands rather than a hardcoded name: the matrix is
+    # project-configurable and a project may not have a band called "extreme".
+    severe_keys = [b["key"] for b in matrix["bands"]][-2:]
+    severe_open = sum(open_by_band.get(k, 0) for k in severe_keys)
+
+    def pct(n: int) -> int:
+        return round(n / total * 100) if total else 0
+
+    return {
+        "total": total,
+        "open": open_count,
+        "unrated": unrated,
+        "severe_open": severe_open,
+        "severe_bands": severe_keys,
+        # Carried so the client colours bands from the project's matrix instead
+        # of keeping its own copy of the palette, which would go stale the
+        # moment someone edits the matrix.
+        "bands": [dict(b) for b in matrix["bands"]],
+        "by_band": by_band,
+        "open_by_band": open_by_band,
+        "by_status": by_status,
+        "with_mitigation": with_mitigation,
+        "with_requirements": with_requirements,
+        "mitigation_pct": pct(with_mitigation),
+        "linked_pct": pct(with_requirements),
+        "top_open": [
+            {
+                "id": r.get("id"),
+                "title": r.get("title") or r.get("name") or "",
+                "band": r["rating"]["band"],
+                "label": r["rating"]["label"],
+                "color": r["rating"]["color"],
+                "severity": r["rating"]["severity"],
+                "likelihood": r["rating"]["likelihood"],
+                "mitigated": bool(str(r.get("mitigation") or "").strip()),
+            }
+            for r in sorted(
+                (r for r in risks
+                 if (r.get("rating") or {}).get("band")
+                 and str(r.get("status") or "open").strip().lower() in OPEN_RISK_STATUSES),
+                key=lambda r: [b["key"] for b in matrix["bands"]].index(r["rating"]["band"]),
+                reverse=True,
+            )[:10]
+        ],
+    }
+
+
 @router.get("/projects/{project_id}/metrics")
 def project_metrics(project_id: str, _rate: None = Depends(rate_limit(20, 60))):
     store = get_store(project_id)
     reqs = store.list_requirements()
     vcs = store.list_verification_cases()
     total = len(reqs)
+    risks = _risk_metrics(store)
     if total == 0:
-        return {"total": 0}
+        # A project can hold risks before it holds requirements, so the risk
+        # block ships even on the empty-project path.
+        return {"total": 0, "risks": risks}
     statuses: dict[str, int] = {}
     baselines = set()
     with_desc = with_rationale = with_source = with_alloc = with_trace = with_cascade = 0
@@ -189,6 +286,7 @@ def project_metrics(project_id: str, _rate: None = Depends(rate_limit(20, 60))):
         "verification_cases": len(vcs),
         "baselines": len(baselines),
         "status_distribution": statuses,
+        "risks": risks,
         "quality": {
             "with_description": with_desc,
             "with_rationale": with_rationale,
