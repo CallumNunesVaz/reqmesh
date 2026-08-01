@@ -1,10 +1,22 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Search, Grid3X3, Check, X, Loader, ArrowUpDown } from 'lucide-react';
-import { api, type AllocationMatrixData } from '../api/client';
+import { Search, Grid3X3, Check, Loader, ArrowUpDown } from 'lucide-react';
+import { api, type AllocationMatrixData, type MatrixAxis } from '../api/client';
 import { EntityLink } from '../components/entities';
+import { REQUIREMENT_TYPES, REQUIREMENT_TYPE_META } from '../lib/requirementTypes';
 import { useAuthStore } from '../store/auth';
+
+/** The three matrices, and the entity kind each column links to.
+ *
+ *  All three are views of a link the backend's registry already declares with
+ *  `requirements` as its target, so the page switches axis rather than there
+ *  being three near-identical pages. */
+const AXES: { key: MatrixAxis; label: string; colKind: 'component' | 'verification' | 'risk' }[] = [
+  { key: 'components', label: 'Components', colKind: 'component' },
+  { key: 'verification', label: 'Verification', colKind: 'verification' },
+  { key: 'risks', label: 'Risks', colKind: 'risk' },
+];
 
 const STATUS_CLASSES: Record<string, string> = {
   proposed: 'border-blue-500/30 bg-blue-500/5',
@@ -20,6 +32,7 @@ export default function AllocationMatrixPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const [data, setData] = useState<AllocationMatrixData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [axis, setAxis] = useState<MatrixAxis>('components');
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('');
   const [toggling, setToggling] = useState<Set<string>>(new Set());
@@ -31,29 +44,30 @@ export default function AllocationMatrixPage() {
     if (!projectId) return;
     setLoading(true);
     try {
-      const d = await api.getAllocationMatrix(projectId, search, filterType);
+      const d = await api.getAllocationMatrix(projectId, axis, search, filterType);
       setData(d);
+      setError('');
     } catch (err: any) {
       setError(err.message || 'Failed to load');
     } finally {
       setLoading(false);
     }
-  }, [projectId, search, filterType]);
+  }, [projectId, axis, search, filterType]);
 
   useEffect(() => { load(); }, [load]);
 
-  const toggleAllocation = async (reqId: string, compId: string, current: boolean) => {
+  const toggleAllocation = async (reqId: string, colId: string, current: boolean) => {
     if (!projectId || !editable) return;
-    const key = `${reqId}:${compId}`;
+    const key = `${reqId}:${colId}`;
     setToggling((prev) => new Set(prev).add(key));
     try {
-      await api.setAllocation(projectId, reqId, compId, !current);
+      await api.setAllocation(projectId, reqId, colId, !current, axis);
       setData((prev) => {
         if (!prev) return prev;
         const newRows = prev.rows.map((r) => {
           if (r.req_id !== reqId) return r;
-          return { ...r, cells: { ...r.cells, [compId]: !current },
-                   allocated_to: !current ? (prev.columns.find(c => c.comp_id === compId)?.comp_name ?? compId) : '' };
+          return { ...r, cells: { ...r.cells, [colId]: !current },
+                   allocated_to: !current ? (prev.columns.find(c => c.id === colId)?.name ?? colId) : '' };
         });
         const allocated = newRows.filter((r) => Object.values(r.cells).some(Boolean)).length;
         return { ...prev, rows: newRows, allocated, unallocated: prev.total_requirements - allocated,
@@ -81,17 +95,18 @@ export default function AllocationMatrixPage() {
   const rows = transpose ? data.columns : data.rows;
   const cols = transpose ? data.rows : data.columns;
 
+  const colKind = AXES.find((a) => a.key === axis)!.colKind;
+
   const isAllocated = (row: any, col: any): boolean => {
-    if (!transpose) return row.cells?.[col.comp_id] ?? false;
+    if (!transpose) return row.cells?.[col.id] ?? false;
     const origRow = data.rows.find((r) => r.req_id === col.req_id);
-    return origRow?.cells?.[row.comp_id] ?? false;
+    return origRow?.cells?.[row.id] ?? false;
   };
 
   const handleToggle = (row: any, col: any) => {
     const reqId = transpose ? col.req_id : row.req_id;
-    const compId = transpose ? row.comp_id : col.comp_id;
-    const current = isAllocated(row, col);
-    toggleAllocation(reqId, compId, current);
+    const colId = transpose ? row.id : col.id;
+    toggleAllocation(reqId, colId, isAllocated(row, col));
   };
 
   return (
@@ -102,7 +117,8 @@ export default function AllocationMatrixPage() {
           <div>
             <h1 className="text-xl font-bold text-card-foreground">Allocation Matrix</h1>
             <p className="text-sm text-muted-foreground mt-0.5">
-              Requirements × Components — click a cell to allocate or deallocate.
+              Requirements × {data.column_label} — each requirement {data.verb} the
+              {' '}{data.column_label.toLowerCase()} it is ticked against. Click a cell to change it.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -124,13 +140,32 @@ export default function AllocationMatrixPage() {
           </div>
         </div>
 
+        {/* Which relationship to show. */}
+        <div className="flex gap-1 mt-3" role="tablist" aria-label="Matrix axis">
+          {AXES.map((a) => (
+            <button
+              key={a.key}
+              role="tab"
+              aria-selected={axis === a.key}
+              onClick={() => setAxis(a.key)}
+              className={`px-3 py-1.5 rounded-lg text-xs transition-colors ${
+                axis === a.key
+                  ? 'bg-primary/10 text-primary font-medium'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+              }`}
+            >
+              {a.label}
+            </button>
+          ))}
+        </div>
+
         {/* Filters */}
         <div className="flex gap-2 mt-3">
           <div className="flex items-center gap-1.5 bg-muted rounded-lg px-2.5 py-1.5 flex-1 max-w-sm">
             <Search size={13} className="text-muted-foreground shrink-0" />
             <input
               className="bg-transparent text-xs outline-none flex-1"
-              placeholder="Filter requirements and components…"
+              placeholder={`Filter requirements and ${data.column_label.toLowerCase()}…`}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -141,11 +176,9 @@ export default function AllocationMatrixPage() {
             onChange={(e) => setFilterType(e.target.value)}
           >
             <option value="">All types</option>
-            <option value="functional">Functional</option>
-            <option value="non_functional_performance">Non-Functional</option>
-            <option value="interface">Interface</option>
-            <option value="safety">Safety</option>
-            <option value="regulatory_compliance">Regulatory</option>
+            {REQUIREMENT_TYPES.map((t) => (
+              <option key={t} value={t}>{REQUIREMENT_TYPE_META[t].label}</option>
+            ))}
           </select>
         </div>
 
@@ -168,17 +201,17 @@ export default function AllocationMatrixPage() {
             <thead>
               <tr>
                 <th className="sticky top-0 left-0 z-20 bg-card border-b border-r px-3 py-2 text-left font-semibold text-muted-foreground min-w-[140px]">
-                  {transpose ? 'Component' : 'Requirement'}
+                  {transpose ? data.column_label.replace(/s$/, '') : 'Requirement'}
                 </th>
                 {cols.map((col: any) => (
                   <th
-                    key={transpose ? col.req_id : col.comp_id}
+                    key={transpose ? col.req_id : col.id}
                     className="sticky top-0 z-10 bg-card border-b px-2 py-2 font-semibold text-muted-foreground whitespace-nowrap"
                     style={{ writingMode: 'vertical-rl', textOrientation: 'mixed', maxHeight: 160, minWidth: 32 }}
                   >
                     <EntityLink
-                      kind={transpose ? 'requirement' : 'component'}
-                      id={transpose ? col.req_id : col.comp_id}
+                      kind={transpose ? 'requirement' : colKind}
+                      id={transpose ? col.req_id : col.id}
                       className="text-[10px]"
                     />
                   </th>
@@ -187,27 +220,27 @@ export default function AllocationMatrixPage() {
             </thead>
             <tbody>
               {rows.map((row: any) => (
-                <tr key={transpose ? row.comp_id : row.req_id}>
+                <tr key={transpose ? row.id : row.req_id}>
                   <td className={`sticky left-0 z-10 bg-card border-r border-b px-3 py-2 ${transpose ? '' : (STATUS_CLASSES[row.req_status] || '')}`}>
                     <div className="flex flex-col">
-                      <EntityLink kind={transpose ? 'component' : 'requirement'} id={transpose ? row.comp_id : row.req_id} className="font-mono" />
+                      <EntityLink kind={transpose ? colKind : 'requirement'} id={transpose ? row.id : row.req_id} className="font-mono" />
                       <span className="text-[10px] text-muted-foreground truncate max-w-[130px]">
-                        {transpose ? row.comp_name : row.req_name}
+                        {transpose ? row.name : row.req_name}
                       </span>
                     </div>
                   </td>
                   {cols.map((col: any) => {
                     const allocated = isAllocated(row, col);
-                    const cellKey = `${transpose ? row.comp_id : row.req_id}:${transpose ? col.req_id : col.comp_id}`;
+                    const cellKey = `${transpose ? row.id : row.req_id}:${transpose ? col.req_id : col.id}`;
                     const isToggling = toggling.has(cellKey);
                     return (
                       <td
-                        key={transpose ? col.req_id : col.comp_id}
+                        key={transpose ? col.req_id : col.id}
                         className={`border-b text-center p-0 cursor-pointer transition-colors ${
                           allocated ? 'bg-cs-green/15 hover:bg-cs-green/20' : 'hover:bg-accent/30'
                         }`}
                         onClick={() => handleToggle(row, col)}
-                        title={`${row.req_name || row.comp_name} → ${col.comp_name || col.req_name}`}
+                        title={`${row.req_name || row.name} ${data.verb} ${col.name || col.req_name}`}
                       >
                         {isToggling ? (
                           <Loader size={12} className="animate-spin mx-auto text-muted-foreground" />
