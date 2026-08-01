@@ -92,7 +92,7 @@ def _requirements() -> list[dict]:
         " flight and ground loads per FAR 23.301 through 23.575,"
         " with a semi-monocoque aluminum construction and corrosion-resistant"
         " alclad skin.</p>",
-        "design", "approved", "critical",
+        "system", "approved", "critical",
         "Structural integrity is the fundamental safety foundation"
         " of the aircraft. The Cessna 172S uses proven aluminum"
         " semi-monocoque construction for optimal strength-to-weight.",
@@ -110,7 +110,7 @@ def _requirements() -> list[dict]:
         " structure with four ergonomic seats, two forward-hinged"
         " cabin doors, and a cargo area rated for 120 lb behind"
         " the rear seats.</p>",
-        "design", "approved", "high",
+        "system", "approved", "high",
         "Primary occupant enclosure must withstand crash loads"
         " per FAR 23.561 while remaining lightweight.",
         "Cessna DS-110",
@@ -126,7 +126,7 @@ def _requirements() -> list[dict]:
         " inertial-reel restraint harnesses for forward seats and"
         " fixed 3-point harnesses for rear seats. Cargo tie-down"
         " points shall withstand 9g forward loading.</p>",
-        "design", "approved", "high",
+        "safety", "approved", "high",
         "Occupant safety during emergency landing is paramount."
         " 3-point harnesses reduce HIC (Head Injury Criterion)"
         " vs lap belts alone.",
@@ -144,7 +144,7 @@ def _requirements() -> list[dict]:
         " (within 30 degrees of the forward sight line). All"
         " secondary controls (flaps, trim, fuel selector, mixture)"
         " shall be reachable without releasing the yoke.</p>",
-        "design", "approved", "high",
+        "non_functional_usability", "approved", "high",
         "Training aircraft cockpits must minimize pilot workload."
         " The Cessna 172 tradition places flap switch and trim"
         " wheel within reach of the right hand while the left"
@@ -163,7 +163,7 @@ def _requirements() -> list[dict]:
         " area. The high-wing placement shall provide excellent"
         " downward visibility for the crew and inherent lateral"
         " stability through dihedral effect.</p>",
-        "design", "approved", "critical",
+        "system", "approved", "critical",
         "The high-wing configuration is a defining Cessna 172"
         " characteristic. It provides natural roll stability"
         " (pendulum effect), protects the cabin from sun/rain,"
@@ -181,7 +181,7 @@ def _requirements() -> list[dict]:
         " +3.8g and -1.52g with no permanent deformation, per"
         " FAR 23.337 limit maneuvering loads. Safety factor of 1.5"
         " shall be applied to limit loads for ultimate design.</p>",
-        "design", "approved", "critical",
+        "non_functional_performance", "approved", "critical",
         "The main spar is the single most critical structural"
         " element. Failure is catastrophic. The 3.8g limit"
         " corresponds to the Normal Category envelope.",
@@ -198,7 +198,7 @@ def _requirements() -> list[dict]:
         " with total usable capacity of 53 US gallons (200 L)"
         " and 3 gallons unusable. Fuel quantity transmitters"
         " shall be resistive float-type per FAR 23.1337.</p>",
-        "design", "approved", "high",
+        "system", "approved", "high",
         "Integral (wet-wing) tanks eliminate separate bladder"
         " weight. 53 usable gallons provide ~5 hours endurance"
         " at 75% power with VFR reserves.",
@@ -215,7 +215,7 @@ def _requirements() -> list[dict]:
         " with a fixed horizontal stabilizer plus movable elevator"
         " for pitch control, and a fixed vertical fin plus movable"
         " rudder for directional (yaw) control.</p>",
-        "design", "approved", "high",
+        "system", "approved", "high",
         baselines=["PDR"],
         needs=["design"],
         priorities={"development": 3, "safety": 4, "customers": 2},
@@ -229,7 +229,7 @@ def _requirements() -> list[dict]:
         " aerodynamically balanced with a ground-adjustable trim"
         " tab for stick-force reduction. Control forces shall"
         " not exceed 10 lb at V_A.</p>",
-        "design", "approved", "medium",
+        "system", "approved", "medium",
         needs=["design", "verification_case"],
         priorities={"development": 2, "safety": 3},
     ))
@@ -241,7 +241,7 @@ def _requirements() -> list[dict]:
         " stability (positive Cnβ). The rudder shall be"
         " aerodynamically balanced with a ground-adjustable"
         " trim tab. Pedal forces shall not exceed 50 lb at V_A.</p>",
-        "design", "approved", "medium",
+        "system", "approved", "medium",
         needs=["design"],
         priorities={"development": 2, "safety": 3},
     ))
@@ -276,7 +276,7 @@ def _requirements() -> list[dict]:
         " fuel-injected engine with 360 cubic inch displacement,"
         " 8.5:1 compression ratio, and dual magneto ignition."
         " TBO shall be 2000 hours.</p>",
-        "design", "approved", "critical",
+        "system", "approved", "critical",
         "The IO-360 series has over 55,000 units in service."
         " Horizontally opposed configuration minimizes frontal"
         " area and provides natural primary balance.",
@@ -312,7 +312,7 @@ def _requirements() -> list[dict]:
         " cylinder, shall provide redundant ignition circuits."
         " The left magneto shall fire the bottom plugs; the right"
         " magneto shall fire the top plugs.</p>",
-        "design", "approved", "critical",
+        "non_functional_reliability", "approved", "critical",
         "Dual ignition provides both safety redundancy (engine"
         " continues running if one magneto fails) and combustion"
         " efficiency (twin-flame-front propagation reduces burn"
@@ -354,7 +354,7 @@ def _requirements() -> list[dict]:
         " 76-inch diameter, with a pitch of 60 inches (climb"
         " optimised).  The propeller shall produce a static thrust"
         " of at least 550 lbf at sea level, ISA conditions.</p>",
-        "design", "approved", "high",
+        "system", "approved", "high",
         "Fixed-pitch propeller is simpler, lighter, and cheaper"
         " than constant-speed, suiting the training/rental market."
         "  The 76-inch diameter is the maximum for ground clearance"
@@ -464,7 +464,7 @@ def _requirements() -> list[dict]:
         "<p>The Garmin G1000 NXi was selected as the integrated"
         " avionics platform.  This decision was recorded per the"
         " system engineering decision process.</p>",
-        "design", "approved", "medium",
+        "system", "approved", "medium",
         "Decision record: G1000 NXi vs G1000 vs G500 TXi trade"
         " study concluded the NXi provides the best balance of"
         " capability (WAAS/SBAS LPV), installed cost, and"
@@ -645,7 +645,7 @@ def _requirements() -> list[dict]:
         " 100% static balance about the hinge line.  Frise nose"
         " profile shall protrude into the airstream on the up-"
         " going aileron to provide adverse-yaw compensation.</p>",
-        "design", "approved", "high",
+        "system", "approved", "high",
         "Differential aileron throw is the primary adverse-yaw"
         " mitigation technique on the Cessna 172.  More up-travel"
         " than down-travel increases drag on the up-going wing,"
@@ -665,7 +665,7 @@ def _requirements() -> list[dict]:
         "  An anti-servo trim tab on the right elevator shall"
         " provide pitch trim forces of ±30 lb at the yoke across"
         " the CG range at all speeds.</p>",
-        "design", "approved", "high",
+        "system", "approved", "high",
         "Push-pull tubes provide precise elevator control without"
         " cable stretch or temperature effects.  The anti-servo"
         " tab moves in the same direction as the elevator,"
@@ -683,7 +683,7 @@ def _requirements() -> list[dict]:
         " ±24° ±2°.  A ground-adjustable trim tab shall provide"
         " cruise rudder trim for hands-off coordinated flight"
         " at typical cruise power settings (2400 RPM, leaned).</p>",
-        "design", "approved", "medium",
+        "system", "approved", "medium",
         needs=["design"],
         priorities={"development": 2, "safety": 3, "customers": 4},
     ))
@@ -718,7 +718,7 @@ def _requirements() -> list[dict]:
         " potentiometer shall provide analog position feedback"
         " to the GEA 71B for PFD indication.  Motor current shall"
         " be limited to 5 A by a panel-mounted circuit breaker.</p>",
-        "design", "approved", "high",
+        "system", "approved", "high",
         "Electric flaps reduce pilot workload versus manual (Johnson"
         " bar) flaps, freeing the right hand for throttle and"
         " mixture adjustment during the approach.  The detent"
@@ -741,7 +741,7 @@ def _requirements() -> list[dict]:
         " trim for fine adjustment in cruise.  Trim position shall"
         " be indicated by a mechanical pointer on the console and"
         " on the PFD.</p>",
-        "design", "approved", "medium",
+        "system", "approved", "medium",
         "The split trim switch (both halves must be pressed together)"
         " prevents inadvertent activation from accidental contact."
         "  Electric trim reduces pilot fatigue on longer flights"
@@ -762,7 +762,7 @@ def _requirements() -> list[dict]:
         " wheels.  The gear shall absorb landing loads per"
         " FAR 23.471 through 23.511 with a design sink rate of"
         " 10 fps at maximum landing weight of 2550 lb.</p>",
-        "design", "approved", "critical",
+        "system", "approved", "critical",
         "Fixed gear is chosen for simplicity, lower weight, and"
         " elimination of the retraction mechanism failure modes."
         "  Spring steel legs provide excellent energy absorption"
@@ -782,7 +782,7 @@ def _requirements() -> list[dict]:
         " fuselage at forged aluminium bulkhead fittings.  Wheels"
         " shall be Cleveland 40-77B 6.00-6 with 6-ply tyres rated"
         " to 100 mph.  The track shall be 8 ft 4.5 in.</p>",
-        "design", "approved", "high",
+        "system", "approved", "high",
         needs=["design"],
         priorities={"development": 2, "safety": 4},
     ))
@@ -796,7 +796,7 @@ def _requirements() -> list[dict]:
         " piston type) shall prevent nosewheel oscillation up to"
         " 40 knots ground speed.  A bungee centering system shall"
         " return the nosewheel to centre when unloaded.</p>",
-        "design", "approved", "high",
+        "system", "approved", "high",
         "The steerable nosewheel tied to rudder pedals gives the"
         " pilot intuitive ground steering — the same foot motion"
         " used for yaw control in flight.  The shimmy damper is"
@@ -863,7 +863,7 @@ def _requirements() -> list[dict]:
         " 26V at all engine speeds above 1200 RPM with full"
         " electrical load, and shall provide a minimum of 10 A"
         " of charging current to the battery at 1000 RPM.</p>",
-        "design", "approved", "high",
+        "system", "approved", "high",
         needs=["design"],
         priorities={"development": 3, "safety": 4},
     ))
@@ -880,7 +880,7 @@ def _requirements() -> list[dict]:
         " normal alternator operation.  The battery shall be a"
         " Gill G-243 or Concorde RG-243 sealed unit requiring"
         " no electrolyte maintenance.</p>",
-        "design", "approved", "critical",
+        "safety", "approved", "critical",
         "SLA batteries eliminate acid spill risk and maintenance"
         " requirements.  30 minutes of essential bus power at a"
         " 15 A load provides sufficient endurance to reach an"
@@ -902,7 +902,7 @@ def _requirements() -> list[dict]:
         " operation and isolate the Essential Bus during emergency."
         "  All circuits shall be protected by pull-type circuit"
         " breakers rated at 125% of maximum continuous load.</p>",
-        "design", "approved", "high",
+        "non_functional_reliability", "approved", "high",
         needs=["design"],
         priorities={"development": 3, "safety": 6},
     ))
@@ -1111,7 +1111,7 @@ def _requirements() -> list[dict]:
         " shall be connected to aircraft power with a battery"
         " backup.  Compliance shall be completed within 12"
         " calendar months of the AD effective date.</p>",
-        "constraint", "approved", "critical",
+        "regulatory_compliance", "approved", "critical",
         "This AD was prompted by NTSB Safety Recommendation A-22-3"
         " following multiple CO-related incidents in general"
         " aviation.  Mandatory compliance is required for"
@@ -1133,7 +1133,7 @@ def _requirements() -> list[dict]:
         " system architecture and describes the relationships"
         " between the major aircraft subsystems.  The requirements"
         " that follow in this document are normative.</p>",
-        "design", "approved", "low",
+        "system", "approved", "low",
         normative=False,
         needs=[],
         priorities={},
@@ -1643,46 +1643,58 @@ CHANGE_REQUESTS = [
 # ── risks ─────────────────────────────────────────────────────────────────────
 
 RISKS = [
+    # Rated through the project risk matrix: severity x likelihood -> band, derived
+    # on read (see services/risk_matrix.py). `likelihood` is the five-band scale the
+    # matrix indexes; the free-text `probability` these carried predates it and only
+    # survives through a compatibility mapping, so it is not what a demo should show.
     {"id": "RSK00001", "title": "Engine Failure on Takeoff",
      "description": "Loss of engine power during takeoff below 500 ft AGL.  Consequences:"
                     " forced landing straight ahead or within 30° of heading.  Cessna 172's"
                     " low stall speed (48 KIAS clean) and benign stall characteristics"
                     " make survivable outcomes highly probable if the pilot maintains"
                     " airspeed.",
-     "severity": "critical", "probability": "low",
-     "status": "open", "mitigation": "Pre-takeoff run-up check; engine trend monitoring"},
+     "severity": "critical", "likelihood": "rare",
+     "status": "open", "mitigation": "Pre-takeoff run-up check; engine trend monitoring",
+     "linked_requirements": ["PROP0001", "PROP0003"]},
     {"id": "RSK00002", "title": "Fuel Exhaustion in Flight",
      "description": "Fuel mismanagement or undetected leak leading to fuel exhaustion"
                     " before destination.  Leading cause of general aviation accidents"
                     " (approximately 8% of all GA accidents per AOPA Nall Report).",
-     "severity": "high", "probability": "medium",
-     "status": "open", "mitigation": "Fuel totalizer on G1000 MFD; pre-flight dipstick check"},
+     "severity": "high", "likelihood": "possible",
+     "status": "mitigating", "mitigation": "Fuel totalizer on G1000 MFD; pre-flight dipstick check",
+     "linked_requirements": ["PROP0006", "AFRM0006"]},
     {"id": "RSK00003", "title": "G1000 Display Overheat",
      "description": "PFD or MFD display failure due to excessive cockpit temperatures"
                     " (direct sunlight on ramp, >50°C / 122°F).  The G1000 operating"
                     " temperature specification is −20°C to +55°C.",
-     "severity": "medium", "probability": "low",
-     "status": "open", "mitigation": "Sunshades; cabin ventilation; reversionary mode"},
+     "severity": "medium", "likelihood": "unlikely",
+     "status": "monitoring", "mitigation": "Sunshades; cabin ventilation; reversionary mode",
+     "linked_requirements": ["AVNC0001", "AVNC0002"]},
     {"id": "RSK00004", "title": "Carbon Monoxide Incapacitation",
      "description": "CO leaking into cabin via exhaust muff cracks, causing progressive"
                     " crew incapacitation (headache → confusion → unconsciousness)."
                     "  CO binds to haemoglobin with 200× the affinity of oxygen.",
-     "severity": "critical", "probability": "low",
-     "status": "open", "mitigation": "Active CO detector per AD 2024-01-05; muff inspection"},
+     "severity": "critical", "likelihood": "rare",
+     # Closed rather than open: the AD retrofit is the mitigation, and a register
+     # where nothing ever closes says nothing about how the project is managed.
+     "status": "closed", "mitigation": "Active CO detector per AD 2024-01-05; muff inspection",
+     "linked_requirements": ["AD2024001", "ENVR0001"]},
     {"id": "RSK00005", "title": "Alternator Failure in IMC",
      "description": "Alternator failure while in instrument meteorological conditions (IMC)."
                     "  The essential bus provides 30 min of power — sufficient for an"
                     " approach at a nearby airport but requiring prompt action.",
-     "severity": "high", "probability": "low",
-     "status": "open", "mitigation": "Essential bus isolation; battery endurance ≥ 30 min"},
+     "severity": "high", "likelihood": "unlikely",
+     "status": "mitigating", "mitigation": "Essential bus isolation; battery endurance ≥ 30 min",
+     "linked_requirements": ["ELEC0001", "ELEC0002", "ELEC0003"]},
     {"id": "RSK00006", "title": "Icing Encounter",
      "description": "Inadvertent encounter with structural icing conditions (visible"
                     " moisture + OAT below freezing).  The Cessna 172S is NOT certified"
                     " for flight into known icing (FIKI).  Ice accumulation on wings"
                     " and tail can increase stall speed by 15-30% and reduce control"
                     " effectiveness.",
-     "severity": "high", "probability": "medium",
-     "status": "open", "mitigation": "Pitot heat; immediate 180° turn or descent"},
+     "severity": "high", "likelihood": "possible",
+     "status": "open", "mitigation": "Pitot heat; immediate 180° turn or descent",
+     "linked_requirements": ["AFRM0004", "ENVR0003", "SAFE0001"]},
 ]
 
 # ── comments ──────────────────────────────────────────────────────────────────
@@ -1782,6 +1794,18 @@ def seed_demo_project(data_root: Path, force: bool = False) -> bool:
     store.write_meta({
         "name": PROJECT_NAME,
         "created": "",
+        # The four stakeholder groups the requirements already score against.
+        # Without these the weighted-value and backlog ranking had nothing to
+        # weight: 55 requirements carried priority scores and every one of them
+        # came back unranked. Weights are relative, not a distribution — safety
+        # outranks the rest on a certified aircraft, and maintenance is a real
+        # but secondary voice.
+        "stakeholders": [
+            {"name": "safety", "weight": 3.0},
+            {"name": "customers", "weight": 2.0},
+            {"name": "development", "weight": 1.5},
+            {"name": "maintenance", "weight": 1.0},
+        ],
         "workflow": {
             "states": ["proposed", "in_review", "approved", "implemented",
                        "verified", "rejected", "deprecated"],
@@ -2152,11 +2176,14 @@ def seed_demo_project(data_root: Path, force: bool = False) -> bool:
 
     for risk in RISKS:
         store.create_item("risks", {
-            **{k: v for k, v in risk.items() if k not in ("status", "mitigation")},
+            **{k: v for k, v in risk.items()
+               if k not in ("status", "mitigation", "linked_requirements")},
             "impact": "",
             "status": risk.get("status", "open"),
             "mitigation": risk.get("mitigation", ""),
-            "linked_requirements": [],
+            # Was hardcoded to [], which silently discarded whatever the register
+            # declared — so every risk in the demo looked untraced.
+            "linked_requirements": list(risk.get("linked_requirements", [])),
         })
 
     for c in COMMENTS:
