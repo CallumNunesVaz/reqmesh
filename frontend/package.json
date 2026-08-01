@@ -6,13 +6,16 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && npm run check:selfcontained",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "check:selfcontained": "node scripts/check-selfcontained.mjs"
   },
   "dependencies": {
+    "@fontsource/inter": "^5.3.0",
+    "@fontsource/jetbrains-mono": "^5.3.0",
     "@tiptap/extension-character-count": "^2.27.2",
     "@tiptap/extension-image": "^2.27.2",
     "@tiptap/extension-placeholder": "^2.9.0",

@@ -1339,7 +1339,19 @@ summary_box() {
         # Upgrade of an existing install: the accounts were already seeded, so
         # whatever password is in use now is still the password.
         box_line "Password:    unchanged - existing accounts were kept."
-        box_line "If it is lost, reset it from the container/host shell." "$YELLOW"
+        # Naming the command matters: the seed password in .env does not apply
+        # to an existing install, so "reset it from the shell" left the operator
+        # with no way to act on the one thing standing between them and the app.
+        if [ "${CFG[DEPLOY_MODE]:-}" = "docker" ]; then
+            box_line "Lost it? Reset with:" "$YELLOW"
+            box_line "  cd ${CFG[INSTALL_DIR]:-/opt/reqmesh}" "$YELLOW"
+            box_line "  sudo docker compose -f ${CFG[COMPOSE_FILE]:-docker-compose.prod.yml} \\" "$YELLOW"
+            box_line "       exec reqmesh python -m app.cli reset-admin" "$YELLOW"
+        else
+            box_line "Lost it? Reset with:" "$YELLOW"
+            box_line "  sudo -u reqmesh ${CFG[INSTALL_DIR]:-/opt/reqmesh}/venv/bin/python \\" "$YELLOW"
+            box_line "       -m app.cli reset-admin" "$YELLOW"
+        fi
     else
         box_line "Password:    $cred_file (mode 0600)"
         box_line "Log in, change the password, then delete that file." "$YELLOW"
@@ -1351,6 +1363,78 @@ summary_box() {
         box_line "$line"
     done
     box_bottom
+}
+
+# JSON-encode a string (quotes included). Passwords routinely contain
+# characters that would otherwise break out of the literal — the generated ones
+# use base64, which includes '/' and '+', and operators pick anything.
+json_string() {
+    if command -v python3 >/dev/null 2>&1; then
+        python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$1"
+    else
+        # Escape backslash and double-quote; enough for a password field.
+        printf '"%s"' "$(printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g')"
+    fi
+}
+
+# ── Login check ────────────────────────────────────────────────────────────────
+# A passing /health only proves the process is up. It says nothing about whether
+# anyone can get in, and the two failure modes that actually stranded an install
+# were both invisible to it:
+#
+#   * RT_ADMIN_PASSWORD is only applied when users.yaml is absent, so on every
+#     later deploy the configured password silently does not work.
+#   * Auth state landing somewhere unwritable or ephemeral, so the account is
+#     never created (or is thrown away on restart).
+#
+# Both end with an operator holding a password the server has never heard of and
+# an installer that reported success. So: actually log in.
+login_check() {
+    local url="${1:-http://localhost:8000}"
+    local password="${2:-}"
+    [ -z "$password" ] && return 0          # nothing configured to test with
+
+    local body code
+    body="$(curl -sk -m 15 -o /tmp/.reqmesh-login.$$ -w '%{http_code}' \
+        -X POST "$url/api/auth/login" \
+        -H 'Content-Type: application/json' \
+        -d "{\"username\":\"admin\",\"password\":$(json_string "$password")}" 2>/dev/null)" || body=""
+    code="$body"
+    rm -f "/tmp/.reqmesh-login.$$"
+
+    if [ "$code" = "200" ]; then
+        success "Admin login verified"
+        return 0
+    fi
+
+    if [ "$code" = "401" ]; then
+        warn "The admin password in .env does NOT work on this instance."
+        echo ""
+        echo "  This is expected when the deployment already had accounts: the"
+        echo "  seed password only applies when the accounts file is absent, so"
+        echo "  a value set later is ignored."
+        echo ""
+        echo "  Reset it:"
+        if [ "${CFG[DEPLOY_MODE]:-}" = "docker" ]; then
+            echo "    cd ${CFG[INSTALL_DIR]:-/opt/reqmesh}"
+            echo "    sudo ${DOCKER[*]:-docker} compose -f ${CFG[COMPOSE_FILE]:-docker-compose.prod.yml} \\"
+            echo "         exec reqmesh python -m app.cli reset-admin"
+        else
+            echo "    sudo -u reqmesh ${CFG[INSTALL_DIR]:-/opt/reqmesh}/venv/bin/python \\"
+            echo "         -m app.cli reset-admin"
+        fi
+        echo ""
+        return 1
+    fi
+
+    if [ "$code" = "429" ]; then
+        warn "Login rate-limited (429) — cannot verify the password right now."
+        warn "Five failed attempts also lock an account for 15 minutes."
+        return 0
+    fi
+
+    warn "Could not verify admin login (HTTP ${code:-no response} from $url)."
+    return 1
 }
 
 # ── Health check ───────────────────────────────────────────────────────────────

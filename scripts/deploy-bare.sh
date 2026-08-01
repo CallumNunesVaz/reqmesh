@@ -329,6 +329,9 @@ start_service() {
     header "Starting reqmesh"
     sudo systemctl restart reqmesh
     healthcheck "http://localhost:${CFG[PORT]:-8000}/health" 90
+    # /health only proves the process answers. Prove someone can actually get
+    # in, which is the failure this installer used to report as success.
+    login_check "http://localhost:${CFG[PORT]:-8000}" "${CFG[ADMIN_PASSWORD]:-}" || true
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════

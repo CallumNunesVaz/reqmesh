@@ -6,9 +6,10 @@
     <link rel="icon" type="image/svg+xml" href="/reqmesh-logo.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>reqmesh</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <!-- Fonts are bundled, not fetched. Loading them from Google's CDN meant an
+         air-gapped or CSP-restricted deployment silently fell back to system
+         faces, and every page paid a third-party round trip on first load.
+         See src/styles/fonts.css. -->
   </head>
   <body>
     <div id="root"></div>
