@@ -18,7 +18,9 @@ def cli():
 @cli.command()
 @click.argument("project_path", default=".")
 @click.option("--port", "-p", default=8000, help="Port to run on")
-@click.option("--host", "-h", default="0.0.0.0", help="Host to bind to")
+# Binding all interfaces is the intended behaviour for the serve command; the
+# operator overrides it with --host when needed.
+@click.option("--host", "-h", default="0.0.0.0", help="Host to bind to")  # nosec B104
 def serve(project_path, port, host):
     """Start the web UI for a project directory (or a directory of projects)."""
     import os

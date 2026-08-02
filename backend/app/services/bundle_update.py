@@ -161,11 +161,12 @@ def _safe_extract(tar: tarfile.TarFile, dest: Path) -> None:
         if member.issym() or member.islnk():
             raise RuntimeError(f"archive contains a link, refused: {member.name}")
     # Python 3.12+ gained a data filter; pass it when available, else the checks
-    # above already vetted every member.
+    # above already vetted every member (path-traversal, symlinks and hard links
+    # are all rejected before extraction).
     try:
         tar.extractall(dest, filter="data")  # type: ignore[arg-type]
     except TypeError:
-        tar.extractall(dest)
+        tar.extractall(dest)  # nosec B202
 
 
 def stage_from_archive(archive: Path, requested_by: str) -> dict:
