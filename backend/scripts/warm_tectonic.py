@@ -65,16 +65,49 @@ def main() -> int:
         print(f"warm-tectonic: generated {len(latex):,} chars of LaTeX")
 
         out = Path(tmp) / "warm.pdf"
-        started = time.time()
         # Imported late so the module-level import cost is not paid when this
         # script is only being asked for its docstring.
         from app.services.publisher import compile_latex_to_pdf
 
-        ok = compile_latex_to_pdf(latex, str(out))
+        # tectonic downloads its TeX packages during this compile, so the step
+        # depends on a third-party package server at image-build time. A single
+        # failed fetch used to fail the whole build — observed once, then
+        # succeeding unchanged on the next run. Retrying is cheap next to
+        # rebuilding the image, and each attempt leaves the cache warmer than
+        # it found it, so a later attempt has less to fetch.
+        #
+        # It still exits non-zero once the attempts are spent: the point of
+        # warming is that a broken image cannot ship, and a retry loop that
+        # gives up quietly would defeat it.
+        attempts = max(1, int(os.environ.get("WARM_TECTONIC_ATTEMPTS", "3")))
+        # Generous per attempt: warming *is* the cold-cache case, and a cold
+        # fetch on a slow link has been seen to take ~120s.
+        timeout = int(os.environ.get("WARM_TECTONIC_TIMEOUT", "600"))
+
+        ok = False
+        started = time.time()
+        for attempt in range(1, attempts + 1):
+            began = time.time()
+            ok = compile_latex_to_pdf(latex, str(out), timeout=timeout)
+            took = time.time() - began
+            if ok and out.exists() and out.stat().st_size > 0:
+                if attempt > 1:
+                    print(f"warm-tectonic: attempt {attempt} succeeded after "
+                          f"{attempt - 1} failure(s)")
+                break
+            ok = False
+            print(f"warm-tectonic: attempt {attempt}/{attempts} failed after "
+                  f"{took:.1f}s", file=sys.stderr)
+            if attempt < attempts:
+                backoff = 5 * attempt
+                print(f"warm-tectonic: retrying in {backoff}s", file=sys.stderr)
+                time.sleep(backoff)
+
         elapsed = time.time() - started
 
-        if not ok or not out.exists() or out.stat().st_size == 0:
-            print(f"warm-tectonic: compile FAILED after {elapsed:.1f}s", file=sys.stderr)
+        if not ok:
+            print(f"warm-tectonic: compile FAILED after {attempts} attempt(s), "
+                  f"{elapsed:.1f}s total", file=sys.stderr)
             return 1
 
         size = out.stat().st_size

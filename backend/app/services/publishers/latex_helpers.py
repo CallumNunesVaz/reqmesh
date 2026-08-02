@@ -28,12 +28,20 @@ def latex_engine_available() -> str | None:
     return None
 
 
-def compile_latex_to_pdf(latex: str, out_path: str) -> bool:
+def compile_latex_to_pdf(latex: str, out_path: str, timeout: int = 300) -> bool:
     """Compile a LaTeX document to ``out_path``.
 
     Returns True on success. Returns False (and logs a warning) if no engine is
     installed or the compile fails, so callers can fall back to another renderer
     rather than surface a hard error to the user.
+
+    ``timeout`` is per engine pass. The default suits a warm cache; cache
+    *warming* itself is the cold case by definition and passes a larger one
+    (see ``backend/scripts/warm_tectonic.py``).
+
+    Deliberately does not retry. A user waiting on a PDF export should fail
+    fast and fall back to the HTML renderer; retrying is the caller's decision,
+    and only the build-time warmer wants it.
     """
     engine = latex_engine_available()
     if engine is None:
@@ -60,7 +68,7 @@ def compile_latex_to_pdf(latex: str, out_path: str) -> bool:
                 # cache (see backend/scripts/warm_tectonic.py), which makes a
                 # typical compile ~12s; the wider budget is for the case where
                 # that warming did not happen.
-                subprocess.run(cmd, cwd=tmp_dir, capture_output=True, timeout=300,
+                subprocess.run(cmd, cwd=tmp_dir, capture_output=True, timeout=timeout,
                                check=True)
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
             # Both streams, always. This read only stdout, and tectonic reports

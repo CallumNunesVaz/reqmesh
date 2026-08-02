@@ -73,6 +73,25 @@ class TestFailureIsDiagnosable:
         log = "\n".join(r.getMessage() for r in caplog.records)
         assert "no output" in log
 
+    def test_timeout_is_passed_through_and_defaults(self, monkeypatch, tmp_path):
+        # Cache *warming* is the cold-fetch case and asks for a longer budget
+        # than a normal export; a silently ignored argument would leave the
+        # build failing on slow links exactly as before.
+        seen = {}
+        monkeypatch.setattr(latex_helpers, "latex_engine_available", lambda: "tectonic")
+
+        def fake_run(cmd, **kwargs):
+            seen["timeout"] = kwargs.get("timeout")
+            raise subprocess.CalledProcessError(1, cmd)
+
+        monkeypatch.setattr(latex_helpers.subprocess, "run", fake_run)
+
+        compile_latex_to_pdf("x", str(tmp_path / "o.pdf"))
+        assert seen["timeout"] == 300, "default budget"
+
+        compile_latex_to_pdf("x", str(tmp_path / "o.pdf"), timeout=600)
+        assert seen["timeout"] == 600, "caller's budget must reach subprocess.run"
+
     def test_no_engine_is_still_a_clean_false(self, monkeypatch, caplog, tmp_path):
         monkeypatch.setattr(latex_helpers, "latex_engine_available", lambda: None)
         with caplog.at_level("WARNING"):
