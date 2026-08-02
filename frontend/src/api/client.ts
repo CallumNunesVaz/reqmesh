@@ -282,12 +282,19 @@ export interface Requirement {
   description: string;
   priority: string;
   status: string;
+  /** Derived from the verifying cases — read-only. Sending it on create or
+   *  update is ignored by the API; link a verification case instead. */
   verification_method: string;
+  /** Every distinct method among the verifying cases; `verification_method` is
+   *  the first of these. Empty when nothing verifies this requirement. */
+  verification_methods: string[];
   attributes: { key: string; value: string }[];
   parameters: Parameter[];
   constraints: Constraint[];
   relations: { type: string; target: string; reviewed_fingerprint?: string | null }[];
+  /** Derived from `verification_case.verified_requirements` — read-only. */
   verification_cases: string[];
+  /** Derived: the worst status among the verifying cases. Read-only. */
   verification_status: string;
   parent: string | null;
   cascade_from: string | null;

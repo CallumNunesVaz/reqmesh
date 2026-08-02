@@ -516,7 +516,11 @@ def update_requirement(project_id: str, req_id: str, data: RequirementUpdate, us
     attach_verification_cases(store, [result])
     record_change(store, req_id, "update", before, result, user.get("username", ""))
 
-    propagated_fields = {"name", "description", "priority", "status", "type", "verification_method", "rationale", "source", "allocated_to"}
+    # verification_method is not propagated: it is derived from the cases that
+    # verify each requirement, and a cascaded child has its own cases (usually
+    # none yet). Copying the parent's would assert a verification the child has
+    # not had.
+    propagated_fields = {"name", "description", "priority", "status", "type", "rationale", "source", "allocated_to"}
     has_propagation = any(k in update_dict for k in propagated_fields)
     if has_propagation and result.get("cascade_from") is None:
         # Only the fields that actually changed. Writing back the whole `r`
@@ -575,7 +579,8 @@ def cascade_requirement(project_id: str, req_id: str, user: dict = Depends(requi
         raise HTTPException(status_code=404, detail="Requirement not found")
 
     all_reqs = store.list_requirements()
-    cascade_fields = ["name", "description", "priority", "status", "type", "verification_method"]
+    # See the note on propagated_fields: verification is derived per requirement.
+    cascade_fields = ["name", "description", "priority", "status", "type"]
 
     created = []
     for child in all_reqs:
