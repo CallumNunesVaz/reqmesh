@@ -338,6 +338,13 @@
       "$ref": "#/$defs/VerificationMethod",
       "default": "test"
     },
+    "verification_methods": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Verification Methods",
+      "type": "array"
+    },
     "attributes": {
       "items": {
         "$ref": "#/$defs/AttributeValue"

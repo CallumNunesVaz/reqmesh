@@ -30,10 +30,70 @@ def cases_for(requirement_id: str, vcs: list[dict]) -> list[str]:
     )
 
 
-def attach(store, requirements: list[dict], vcs: list[dict] | None = None) -> list[dict]:
-    """Set ``verification_cases`` on each requirement from the owning side.
+# Verification status, worst first. A requirement is only as verified as its
+# weakest case: one failing case means the requirement is not met, however many
+# others passed, and one case still pending means the answer is not yet in.
+# Reporting the most advanced status instead would let a requirement read as
+# verified while a case proving otherwise sat next to it.
+_STATUS_PRECEDENCE = ("failed", "pending", "in_progress", "passed")
 
-    Mutates in place and returns the list, matching ``apply_rating``.
+#: What a requirement's status is when nothing verifies it at all.
+UNVERIFIED_STATUS = "pending"
+
+#: What a requirement's method is when nothing verifies it at all. Matches the
+#: previous stored default, so a requirement with no cases looks unchanged.
+UNVERIFIED_METHOD = "test"
+
+
+def derive_verification(requirement_id: str, vcs: list[dict]) -> dict:
+    """The verification status and method implied by the cases that verify this.
+
+    Returns ``{"verification_status": str, "verification_method": str,
+    "verification_methods": list[str]}``.
+
+    ``verification_status`` is the worst status among the verifying cases, by
+    :data:`_STATUS_PRECEDENCE`. An unrecognised status counts as ``pending``:
+    the vocabulary is open on disk and an unknown value is not evidence of
+    success.
+
+    ``verification_methods`` is every distinct method, sorted — a requirement
+    verified by both a test and an analysis genuinely has two.
+    ``verification_method`` is the singular form kept for the many existing
+    readers, and is the first of those; it is the *only* lossy part of this and
+    is why the list is exposed alongside it.
+    """
+    mine = [vc for vc in vcs if requirement_id in (vc.get("verified_requirements") or [])]
+    if not mine:
+        return {
+            "verification_status": UNVERIFIED_STATUS,
+            "verification_method": UNVERIFIED_METHOD,
+            "verification_methods": [],
+        }
+
+    statuses = {(vc.get("status") or "").strip().lower() for vc in mine}
+    status = next(
+        (s for s in _STATUS_PRECEDENCE if s in statuses),
+        UNVERIFIED_STATUS,
+    )
+    methods = sorted({(vc.get("method") or "").strip().lower() for vc in mine if vc.get("method")})
+    return {
+        "verification_status": status,
+        "verification_method": methods[0] if methods else UNVERIFIED_METHOD,
+        "verification_methods": methods,
+    }
+
+
+def attach(store, requirements: list[dict], vcs: list[dict] | None = None) -> list[dict]:
+    """Set the case-derived fields on each requirement from the owning side.
+
+    Sets ``verification_cases``, ``verification_status``, ``verification_method``
+    and ``verification_methods``. Mutates in place and returns the list,
+    matching ``apply_rating``.
+
+    The stored values for these keys are overwritten rather than merged. They
+    were previously hand-set on the requirement and drifted from the cases that
+    actually determine them — a requirement could read ``verified`` with every
+    case pending.
     """
     if vcs is None:
         vcs = store.list_verification_cases()
@@ -43,6 +103,7 @@ def attach(store, requirements: list[dict], vcs: list[dict] | None = None) -> li
             owned.setdefault(req_id, []).append(vc["id"])
     for r in requirements:
         r["verification_cases"] = sorted(owned.get(r["id"], []))
+        r.update(derive_verification(r["id"], vcs))
     return requirements
 
 

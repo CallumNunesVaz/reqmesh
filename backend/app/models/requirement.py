@@ -138,7 +138,18 @@ class Requirement(BaseModel):
     description: str = ""
     priority: Priority = Priority.MEDIUM
     status: RequirementStatus = RequirementStatus.PROPOSED
+    # ── Derived from the verifying cases, not writable ──────────────────────
+    # These were hand-set on the requirement and drifted from the cases that
+    # actually determine them: a requirement could read `verified` with every
+    # case still pending. They are now computed on read by
+    # `services/verification_links.attach`, the same way `verification_cases`
+    # already was, and are absent from Create/Update. The stored keys are left
+    # on disk so older exports and hand-written YAML stay loadable.
     verification_method: VerificationMethod = VerificationMethod.TEST
+    #: Every distinct method among the verifying cases. A requirement covered by
+    #: both a test and an analysis genuinely has two; `verification_method` is
+    #: the first of these and is kept only for existing readers.
+    verification_methods: list[str] = Field(default_factory=list)
     attributes: list[AttributeValue] = Field(default_factory=list)
     parameters: list[Parameter] = Field(default_factory=list)
     constraints: list[Constraint] = Field(default_factory=list)
@@ -180,7 +191,8 @@ class RequirementCreate(BaseModel):
         return sanitize_html(v)
     priority: Priority = Priority.MEDIUM
     status: RequirementStatus = RequirementStatus.PROPOSED
-    verification_method: VerificationMethod = VerificationMethod.TEST
+    # No verification_method/-_status: both are derived from the verifying
+    # cases (services/verification_links). Link a case to set them.
     attributes: list[AttributeValue] = Field(default_factory=list)
     parameters: list[Parameter] = Field(default_factory=list)
     constraints: list[Constraint] = Field(default_factory=list)
@@ -213,13 +225,12 @@ class RequirementUpdate(BaseModel):
         return None if v is None else sanitize_html(v)
     priority: Optional[Priority] = None
     status: Optional[RequirementStatus] = None
-    verification_method: Optional[VerificationMethod] = None
+    # No verification_method here either — see RequirementCreate.
     attributes: Optional[list[AttributeValue]] = None
     parameters: Optional[list[Parameter]] = None
     constraints: Optional[list[Constraint]] = None
     relations: Optional[list[Relation]] = None
     verification_cases: Optional[list[str]] = None
-    verification_status: Optional[str] = None
     parent: Optional[str] = None
     cascade_from: Optional[str] = None
     rationale: Optional[str] = None
