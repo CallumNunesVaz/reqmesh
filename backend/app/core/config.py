@@ -112,7 +112,9 @@ class Settings(BaseSettings):
     profile: str = "team"
 
     data_root: str = str(Path.home() / ".reqmesh" / "projects")
-    host: str = "0.0.0.0"
+    # Default bind for a containerised server; the container's own network
+    # namespace is the boundary, and it is settable via RT_HOST.
+    host: str = "0.0.0.0"  # nosec B104
     port: int = 8000
     cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
     # If set, reject requests whose Host header doesn't match.

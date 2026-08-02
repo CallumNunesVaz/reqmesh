@@ -474,7 +474,9 @@ def _cookie_domain() -> str | None:
     else:
         host = authority.split(":", 1)[0]
 
-    if host in ("localhost", "0.0.0.0", ""):
+    # This is a string comparison to decide whether to return a host-only
+    # cookie, not a bind address — bandit matches the literal "0.0.0.0".
+    if host in ("localhost", "0.0.0.0", ""):  # nosec B104
         return None
     try:
         ipaddress.ip_address(host)

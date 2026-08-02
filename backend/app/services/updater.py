@@ -84,7 +84,7 @@ def _github_latest_release() -> dict:
     # path segment comes from operator config, so this cannot be redirected to
     # file:// or to another host.
     # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
-    with urllib.request.urlopen(req, timeout=10) as resp:
+    with urllib.request.urlopen(req, timeout=10) as resp:  # nosec B310
         return json.loads(resp.read().decode())
 
 

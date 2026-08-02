@@ -61,7 +61,9 @@ def parse_junit_xml(content: bytes) -> list[ParsedTestResult]:
             "accepted (entity expansion risk). Remove the DTD and retry."
         )
 
-    root = ET.fromstring(content)
+    # A DOCTYPE is rejected above, so internal entity expansion cannot reach
+    # the parser; ElementTree already ignores external entities.
+    root = ET.fromstring(content)  # nosec B314
     results: list[ParsedTestResult] = []
 
     for suite in root.iter("testsuite"):

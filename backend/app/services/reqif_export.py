@@ -79,7 +79,9 @@ def export_reqif(store) -> str:
             index += 1
 
     # -- Pretty-print
-    dom = minidom.parseString(tostring(root, "utf-8"))
+    # The input to parseString is this module's own tostring(root) output — it
+    # was serialised three lines up, so it is not untrusted XML.
+    dom = minidom.parseString(tostring(root, "utf-8"))  # nosec B318
     return dom.toprettyxml(indent="  ")
 
 

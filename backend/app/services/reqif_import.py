@@ -187,7 +187,9 @@ def parse_reqif(content: str | bytes) -> dict:
         )
 
     try:
-        root = fromstring(content)
+        # A DOCTYPE is rejected above, so internal entity expansion cannot reach
+        # the parser; ElementTree already ignores external entities.
+        root = fromstring(content)  # nosec B314
     except _XMLParseError as exc:
         raise ReqIFParseError(f"Not valid XML: {exc}") from exc
 
