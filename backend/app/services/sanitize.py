@@ -121,6 +121,39 @@ class _Sanitiser(HTMLParser):
         return "".join(self._out)
 
 
+# Schemes a stored link may carry. Deliberately a short allowlist rather than a
+# denylist of `javascript:` and friends: a denylist loses to `jAvAsCrIpT:`,
+# leading control characters, and whatever the next browser decides to parse
+# leniently. `mailto:` earns its place because a specification's authoritative
+# contact is a legitimate thing to record.
+SAFE_URL_SCHEMES = frozenset({"http", "https", "mailto"})
+
+# Matches a leading `scheme:` per RFC 3986. Anything without one is a relative
+# reference, which cannot execute.
+_SCHEME_RE = re.compile(r"^\s*([A-Za-z][A-Za-z0-9+.\-]*)\s*:")
+
+
+def is_safe_external_url(url: str | None) -> bool:
+    """True if *url* is safe to place in an ``href``.
+
+    A stored link is rendered as an anchor, so a ``javascript:`` value is stored
+    XSS against every viewer. Control characters are stripped before the scheme
+    is read because browsers ignore them when resolving a URL — ``java\\tscript:``
+    navigates — so a check that did not strip them would disagree with the
+    parser that matters.
+    """
+    if not url or not url.strip():
+        return False
+    # NUL, tab, newline and carriage return are dropped by URL parsers.
+    cleaned = "".join(c for c in url if c not in "\x00\t\n\r")
+    match = _SCHEME_RE.match(cleaned)
+    if match is None:
+        # No scheme — a relative reference. Reject protocol-relative `//host`
+        # too, which inherits the page's scheme and leaves the deployment.
+        return not cleaned.strip().startswith("//")
+    return match.group(1).lower() in SAFE_URL_SCHEMES
+
+
 def safe_url_fetcher(extra_allowed: "set[str] | None" = None):
     """A WeasyPrint ``url_fetcher`` that refuses to reach off-box.
 

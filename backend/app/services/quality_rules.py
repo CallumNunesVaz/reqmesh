@@ -309,13 +309,45 @@ PATTERN_RULES: tuple[Rule, ...] = (
         title="No obligation verb",
         severity="warning",
         incose="R01 Structured Statements",
-        pattern=r"\b(is required to|shall|must|will)\b",
+        # The full modal set, not only the binding ones: a statement using
+        # "may" is weakly worded (which `weak_words` says) but it is not
+        # *missing* a modal verb, and reporting both would be telling the author
+        # two different things about the same word.
+        pattern=r"\b(is required to|shall|must|will|should|may)\b",
         message='No obligation verb found — add "shall", "must", "will", or "is required to"{match}',
         weight=6,
         enabled=False,
     ),
 )
 """The pattern rules, in the order findings are reported."""
+
+
+# ── Modal keywords ───────────────────────────────────────────────────────────
+#
+# Rendered uppercase and colour-coded wherever a description is displayed, so
+# the obligation level of a statement is legible at a glance. Declared here, and
+# generated into the frontend pack, for the same reason the lint patterns are:
+# the alternative is a second hand-maintained copy in TypeScript.
+#
+# Display only. The stored text is never rewritten — an author writes "shall"
+# and reads "SHALL"; git diffs and exports keep what was typed.
+
+#: Binding obligations. RFC 2119's MUST/SHALL level.
+BINDING_MODALS = ("shall not", "shall", "must not", "must", "will not", "will")
+
+#: Advisory. Recognised as keywords and highlighted, but `weak_words` still
+#: warns on them — INCOSE's position is that only a binding modal states a
+#: requirement, and colour-coding them differently is how both things are said
+#: at once.
+ADVISORY_MODALS = ("should not", "should", "may not", "may")
+
+
+def modal_keywords() -> dict[str, list[str]]:
+    """The modal keyword sets, longest-first so "shall not" wins over "shall"."""
+    return {
+        "binding": sorted(BINDING_MODALS, key=len, reverse=True),
+        "advisory": sorted(ADVISORY_MODALS, key=len, reverse=True),
+    }
 
 
 def rule_ids() -> tuple[str, ...]:

@@ -40,6 +40,32 @@ export interface RuleFinding {
 
 export const QUALITY_RULES: QualityRule[] = (pack.rules as QualityRule[]).filter((r) => r.enabled);
 
+/** How strongly a modal keyword obliges. Drives its colour. */
+export type ModalStrength = 'binding' | 'advisory';
+
+/** Modal keyword sets, longest phrase first so "shall not" wins over "shall". */
+export const MODALS: Record<ModalStrength, string[]> = pack.modals;
+
+/**
+ * One regex matching every modal keyword, longest-first.
+ *
+ * Alternation order is what makes "shall not" match as a unit rather than
+ * "shall" followed by a stray "not" — the arrays are pre-sorted by length in
+ * the backend, and flattening must preserve that.
+ */
+export function modalRegex(): RegExp {
+  const all = [...MODALS.binding, ...MODALS.advisory].sort((a, b) => b.length - a.length);
+  return new RegExp(`\\b(${all.map((w) => w.replace(/ /g, '\\s+')).join('|')})\\b`, 'gi');
+}
+
+/** The strength of a matched keyword, for colouring. */
+export function modalStrength(word: string): ModalStrength | null {
+  const norm = word.toLowerCase().replace(/\s+/g, ' ');
+  if (MODALS.binding.includes(norm)) return 'binding';
+  if (MODALS.advisory.includes(norm)) return 'advisory';
+  return null;
+}
+
 /**
  * A fresh RegExp per call.
  *

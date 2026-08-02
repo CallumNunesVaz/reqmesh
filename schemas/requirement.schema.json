@@ -261,18 +261,10 @@
       "title": "Relation",
       "type": "object"
     },
-    "RequirementKind": {
-      "description": "OOSEM / ISO 15288 distinction: stakeholder need vs system requirement.",
-      "enum": [
-        "stakeholder_need",
-        "system_requirement"
-      ],
-      "title": "RequirementKind",
-      "type": "string"
-    },
     "RequirementStatus": {
       "enum": [
         "proposed",
+        "in_review",
         "approved",
         "implemented",
         "verified",
@@ -474,10 +466,6 @@
       },
       "title": "References",
       "type": "array"
-    },
-    "requirement_kind": {
-      "$ref": "#/$defs/RequirementKind",
-      "default": "system_requirement"
     },
     "system_states": {
       "items": {
