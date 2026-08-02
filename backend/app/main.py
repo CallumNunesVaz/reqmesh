@@ -54,6 +54,10 @@ async def lifespan(app: FastAPI):
         security_log.warning("Self-registration enabled on non-personal profile '%s'", settings.profile)
     if settings.profile == "hardened" and not settings.cookie_secure:
         security_log.warning("Hardened profile with insecure cookies (cookie_secure=False)")
+    if not settings.rate_limit_enabled:
+        security_log.warning(
+            "Rate limiting is DISABLED — login brute-force and export flooding are unthrottled. "
+            "This is intended only for the end-to-end test suite.")
     root = Path(settings.data_root)
     root.mkdir(parents=True, exist_ok=True)
     # Bring existing data forward to the current schema before serving — this is

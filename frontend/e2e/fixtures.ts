@@ -1,6 +1,6 @@
 import { test as base, expect, type Page } from '@playwright/test';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -41,6 +41,10 @@ async function waitForHealth(port: number, timeoutMs = 60_000) {
 export interface Server {
   port: number;
   baseURL: string;
+  /** Live project data root — restored from `pristine` before every test. */
+  projects: string;
+  /** Copy of the seeded state taken once, immediately after boot. */
+  pristine: string;
 }
 
 /**
@@ -86,13 +90,23 @@ export const test = base.extend<{ app: Page }, { requireAuth: boolean; server: S
           RT_REQUIRE_AUTH: requireAuth ? 'true' : 'false',
           RT_PROFILE: 'team',
           RT_COOKIE_SECURE: 'false',      // tests speak plain HTTP
+          // Buckets are keyed `ip:path` and every request here comes from
+          // 127.0.0.1, so specs sharing a worker exhaust an endpoint's
+          // allowance between them and start seeing 429s unrelated to what
+          // they assert. The server logs a warning when this is off.
+          RT_RATE_LIMIT_ENABLED: 'false',
         },
       },
     );
 
     try {
       await waitForHealth(port);
-      await use({ port, baseURL: `http://127.0.0.1:${port}` });
+      // Snapshot the freshly seeded projects so each test can start from them.
+      // The server seeds on first boot, so this must happen after health.
+      const projects = join(dataRoot, 'projects');
+      const pristine = join(dataRoot, '__pristine');
+      cpSync(projects, pristine, { recursive: true });
+      await use({ port, baseURL: `http://127.0.0.1:${port}`, projects, pristine });
     } finally {
       proc.kill('SIGKILL');
       rmSync(dataRoot, { recursive: true, force: true });
@@ -101,6 +115,19 @@ export const test = base.extend<{ app: Page }, { requireAuth: boolean; server: S
   }, { scope: 'worker' }],
 
   app: async ({ page, server }, use) => {
+    // Restore the seeded projects before each test.
+    //
+    // The backend is worker-scoped, so without this every spec inherits
+    // whatever the previous one left behind: a re-banded risk matrix, a
+    // deleted requirement, an extra baseline. That is why the suite's failures
+    // moved around between runs and with worker count — the failing test was
+    // whichever one happened to run after a mutating neighbour.
+    //
+    // The store caches parses by mtime, and a fresh copy has new mtimes, so
+    // the restore invalidates it without needing a server restart.
+    rmSync(server.projects, { recursive: true, force: true });
+    cpSync(server.pristine, server.projects, { recursive: true });
+
     // Every destructive action is a window.confirm, and Playwright auto-
     // *dismisses* dialogs unless something listens — which silently turns a
     // delete into a no-op that still reports success.

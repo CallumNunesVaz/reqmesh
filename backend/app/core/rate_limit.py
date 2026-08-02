@@ -112,6 +112,12 @@ def check_account_lockout(username: str, max_attempts: int, window_minutes: int)
 
 def rate_limit(max_attempts: int = 5, window_seconds: int = 60):
     def limiter(request: Request):
+        # Read through `settings` on each call rather than capturing at import
+        # time, so a test that flips it does not depend on import order.
+        from app.core.config import settings
+
+        if not getattr(settings, "rate_limit_enabled", True):
+            return
         ip = _client_ip(request)
         key = f"{ip}:{request.url.path}"
         now = time.time()

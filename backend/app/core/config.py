@@ -154,6 +154,14 @@ class Settings(BaseSettings):
     max_upload_size_mb: int = 50
     max_json_body_mb: int = 10
 
+    # Per-IP rate limiting. Off only for the end-to-end suite, where every
+    # request comes from 127.0.0.1 and the buckets are keyed by `ip:path`, so
+    # a dozen specs sharing one backend exhaust an endpoint's allowance and
+    # start getting 429s that have nothing to do with what they are testing.
+    # A deployment that turns this off is warned about at startup, the same as
+    # anonymous access.
+    rate_limit_enabled: bool = True
+
     # ── Content-Security-Policy ───────────────────────────────────────────
     # CSP directive overrides (empty = use profile-appropriate defaults).
     csp_default: str = ""

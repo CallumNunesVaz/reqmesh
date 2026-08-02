@@ -18,6 +18,7 @@ for (const viewport of [
       await signIn(app);
       await app.goto(`${server.baseURL}/project/${DEMO_PROJECT}/requirements`);
       await app.waitForSelector('header');
+      await app.evaluate(() => document.fonts.ready);
 
       const header = app.locator('header');
       const scrollWidth = await header.evaluate((el) => el.scrollWidth);
@@ -29,6 +30,11 @@ for (const viewport of [
       await signIn(app);
       await app.goto(`${server.baseURL}/project/${DEMO_PROJECT}/requirements`);
       await app.waitForSelector('header');
+      // Measurement depends on the web fonts being applied: with the fallback
+      // face still in use the glyph metrics differ and a label can measure as
+      // wrapped when it is not. Under parallel workers the fonts sometimes had
+      // not settled, which is why this failed only when the machine was busy.
+      await app.evaluate(() => document.fonts.ready);
 
       const violations = await app.evaluate(() => {
         const header = document.querySelector('header');
@@ -46,22 +52,25 @@ for (const viewport of [
         };
         walk(header);
 
+        // Wrapping is read off the layout directly rather than inferred from
+        // height. An inline box gets one client rect per line, so >1 rect *is*
+        // wrapping — exact, and independent of font metrics, zoom and line
+        // height. The previous `height > lineHeight * 1.6` heuristic was a
+        // proxy for the same thing and drifted over that threshold under load,
+        // failing on a header that was laid out perfectly well.
         const result: string[] = [];
         for (const el of leaves) {
           const text = el.textContent?.trim() || '';
           if (!text) continue;
 
           const style = window.getComputedStyle(el);
-          let lineHeight = parseFloat(style.lineHeight);
-          if (isNaN(lineHeight) || style.lineHeight === 'normal') {
-            lineHeight = parseFloat(style.fontSize) * 1.2;
-          }
+          // Only inline-level boxes produce a rect per line; a block element
+          // always has exactly one regardless of how its text flows.
+          if (!style.display.startsWith('inline')) continue;
 
-          const rect = el.getBoundingClientRect();
-          if (rect.height > lineHeight * 1.6) {
-            result.push(
-              `"${text}" wraps (height ${rect.height.toFixed(1)} > ${(lineHeight * 1.6).toFixed(1)})`,
-            );
+          const lines = el.getClientRects().length;
+          if (lines > 1) {
+            result.push(`"${text}" wraps onto ${lines} lines`);
           }
         }
         return result;
