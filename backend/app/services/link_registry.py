@@ -81,6 +81,7 @@ LINKS: tuple[Link, ...] = (
     Link("analysis_cases", "scope", "requirements", "scope"),
     Link("decisions", "linked_requirements", "requirements", "decides on"),
     Link("risks", "linked_requirements", "requirements", "threatens"),
+    Link("risks", "mitigating_requirements", "requirements", "mitigated by"),
     Link("comments", "requirement_id", "requirements", "comments on", many=False),
 )
 
