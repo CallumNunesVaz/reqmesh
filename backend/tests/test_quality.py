@@ -1,6 +1,9 @@
 import textwrap
+from pathlib import Path
 
-from app.services.quality import score_requirement, project_quality, strip_html
+from app.services.quality import score_requirement, project_quality, strip_html, _load_config
+from app.services.yaml_store import YamlStore
+from app.core.config import settings
 
 
 def test_strip_html():
@@ -145,3 +148,92 @@ def test_quality_api_endpoint(client, project):
     assert "average" in data
     assert "per_requirement" in data
     assert data["total"] == 1
+
+
+def test_no_obligation_detected():
+    """A statement with no obligation verb reports no_obligation."""
+    result = score_requirement({
+        "name": "Overview",
+        "description": "This describes the authentication module",
+        "verification_method": "analysis",
+    })
+    assert any(f["rule"] == "no_obligation" for f in result["findings"])
+
+
+def test_no_obligation_not_flagged_when_verb_present():
+    """A statement with 'shall' does not report no_obligation."""
+    result = score_requirement({
+        "name": "Auth",
+        "description": "The system shall authenticate users",
+        "verification_method": "analysis",
+    })
+    assert not any(f["rule"] == "no_obligation" for f in result["findings"])
+
+
+def test_config_disables_rule_via_legacy_key(workspace, client, project):
+    """A project that disables a rule via _meta.yaml still suppresses it.
+
+    Uses the legacy plural key ``placeholders`` to prove config compatibility.
+    """
+    store = YamlStore(Path(settings.data_root) / project)
+    meta = store.read_meta()
+    meta.setdefault("quality", {})["rules"] = {"placeholders": False}
+    store.write_meta(meta)
+
+    config = _load_config(store)
+    result = score_requirement({
+        "name": "Login",
+        "description": "TODO: implement authentication",
+        "verification_method": "analysis",
+    }, config=config)
+
+    assert not any(f["rule"] == "placeholder" for f in result["findings"])
+
+
+def test_weak_words_offsets_index_original_text():
+    """weak_words offsets index the original text, not a lowercased copy."""
+    # "Should" with capital S — the match offset must point into the original
+    result = score_requirement({
+        "name": "Login",
+        "description": "The system Should authenticate users",
+        "verification_method": "analysis",
+    })
+    findings = [f for f in result["findings"] if f["rule"] == "weak_words"]
+    assert len(findings) >= 1
+    # Reconstruct the plain text the same way score_requirement does
+    from app.services.quality import strip_html
+    import html as _html
+    text = strip_html("The system Should authenticate users")
+    name = _html.unescape("Login")
+    plain = f"{name}\n{text}".strip()
+    for f in findings:
+        matched = plain[f["start"]:f["end"]]
+        # The offset must index the original so we get "Should" not "should"
+        assert matched == "Should", f"expected 'Should' at offsets, got {matched!r}"
+
+
+def test_non_atomic_reports_match_span():
+    """non_atomic now reports the actual match span, not start=0, end=len(plain)."""
+    from app.services.quality import strip_html
+    import html as _html
+    desc = "The system must do X and the system must do Y and also Z"
+    result = score_requirement({
+        "name": "Login",
+        "description": desc,
+        "verification_method": "analysis",
+    })
+    findings = [f for f in result["findings"] if f["rule"] == "non_atomic"]
+    assert len(findings) >= 1
+    # Reconstruct plain the same way score_requirement does
+    text = strip_html(desc)
+    name = _html.unescape("Login")
+    plain = f"{name}\n{text}".strip()
+    for f in findings:
+        matched = plain[f["start"]:f["end"]]
+        # The match should be a substring containing two "and" words, not the
+        # whole statement.
+        assert "and" in matched.lower(), f"match span should contain 'and': {matched!r}"
+        assert f["start"] > 0 or f["end"] < len(plain), (
+            f"non_atomic should report the regex match span, not the whole string "
+            f"(got [{f['start']}:{f['end']}] on string of length {len(plain)})"
+        )

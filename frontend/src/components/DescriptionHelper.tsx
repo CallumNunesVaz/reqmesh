@@ -2,18 +2,15 @@ import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { BookOpen, ChevronDown, ChevronRight, CheckCircle2, AlertTriangle, XCircle, Info } from 'lucide-react';
 import { useStore } from '../store';
+import { runPatternRules } from '../lib/qualityRules';
 
 interface Finding {
   rule: string;
   severity: 'error' | 'warning' | 'info';
   message: string;
+  start?: number;
+  end?: number;
 }
-
-const WEAK_WORDS = /\b(should|may|might|could|would|appropriate|adequate|sufficient|as needed|if needed|if required|and\/or|user-friendly|user friendly|fast|robust|flexible|scalable|easy|simple|simply|easily|normally|typically|generally|usually|reasonable|reasonably)\b/gi;
-
-const VAGUE_QUANTIFIERS = /\b(some|several|many|few|minimal|maximal|enough|sufficient|a lot of|a number of|a few|a couple of)\b/gi;
-
-const PLACEHOLDER_RE = /\b(TODO|FIXME|TBD|XXX|HACK)\b|\?\?\?|\?\?/gi;
 
 const MEASURABLE_TERMS = /\b\d+(?:\.\d+)?\s*(?:%|percent|ms|s|sec|seconds?|minutes?|hours?|days?|weeks?|months?|years?|bytes?|KB|MB|GB|TB|Hz|kHz|MHz|GHz|bps|fps|px|mm|cm|m|km|g|kg|lb|°C|°F)\b/i;
 
@@ -25,21 +22,8 @@ function clientCheck(text: string, verificationMethod: string): Finding[] {
   const plain = stripHtml(text);
   const findings: Finding[] = [];
 
-  let m: RegExpExecArray | null;
-  WEAK_WORDS.lastIndex = 0;
-  while ((m = WEAK_WORDS.exec(plain)) !== null) {
-    findings.push({ rule: 'weak_words', severity: 'warning', message: `"${m[0]}" is imprecise — use "must" or "shall" for normative requirements` });
-  }
-
-  VAGUE_QUANTIFIERS.lastIndex = 0;
-  while ((m = VAGUE_QUANTIFIERS.exec(plain)) !== null) {
-    findings.push({ rule: 'vague_quantifier', severity: 'warning', message: `"${m[0]}" is vague — use a specific number or bound` });
-  }
-
-  PLACEHOLDER_RE.lastIndex = 0;
-  while ((m = PLACEHOLDER_RE.exec(plain)) !== null) {
-    findings.push({ rule: 'placeholder', severity: 'error', message: `"${m[0]}" is a placeholder — replace with concrete content before review` });
-  }
+  // Pattern rules from the single source of truth
+  findings.push(...runPatternRules(plain));
 
   const wordCount = plain.split(/\s+/).filter(Boolean).length;
   if (wordCount < 5) {
@@ -50,10 +34,6 @@ function clientCheck(text: string, verificationMethod: string): Finding[] {
 
   if (verificationMethod === 'test' && !MEASURABLE_TERMS.test(plain)) {
     findings.push({ rule: 'untestable', severity: 'warning', message: 'Marked for test verification but contains no measurable criteria (numbers with units like "500 ms", "10 kg")' });
-  }
-
-  if (/and\b.*\band\b/i.test(plain)) {
-    findings.push({ rule: 'non_atomic', severity: 'info', message: 'Multiple conjunctions — may describe more than one requirement' });
   }
 
   return findings;

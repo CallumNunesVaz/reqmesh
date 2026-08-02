@@ -4,6 +4,8 @@ import html
 import re
 from html.parser import HTMLParser
 
+from app.services.quality_rules import PATTERN_RULES
+
 _BLOCK_TAGS = {"p", "div", "br", "li", "h1", "h2", "h3", "h4", "h5", "h6", "td", "th", "tr", "section", "article", "header", "footer", "blockquote"}
 
 
@@ -38,33 +40,6 @@ def strip_html(text: str) -> str:
     return s.get_text()
 
 
-WEAK_WORDS = {
-    "should", "may", "might", "could", "would",
-    "appropriate", "adequate", "sufficient",
-    "as needed", "if needed", "if required",
-    "and/or", "user-friendly", "user friendly",
-    "fast", "robust", "flexible", "scalable",
-    "easy", "simple", "simply", "easily",
-    "normally", "typically", "generally", "usually",
-    "reasonable", "reasonably",
-}
-
-VAGUE_QUANTIFIERS = re.compile(
-    r"\b(some|several|many|few|minimal|maximal|enough|sufficient|"
-    r"a lot of|a number of|a few|a couple of)\b",
-    re.IGNORECASE,
-)
-
-PASSIVE_RE = re.compile(
-    r"\b(am|is|are|was|were|be|been|being)\s+(\w+(?:ed|en|t)|"
-    r"given|taken|made|set|built|known|shown|found|seen|done|sent|held|left)\b",
-    re.IGNORECASE,
-)
-
-PLACEHOLDER_RE = re.compile(r"\b(TODO|FIXME|TBD|XXX|HACK)\b|\?\?\?|\?\?")
-
-NON_ATOMIC_RE = re.compile(r"\band\b.*\band\b", re.IGNORECASE)
-
 MEASURABLE_TERMS = re.compile(
     r"\b\d+(?:\.\d+)?\s*(?:%|percent|ms|s|sec|seconds?|minutes?|hours?|"
     r"days?|weeks?|months?|years?|bytes?|KB|MB|GB|TB|"
@@ -72,32 +47,34 @@ MEASURABLE_TERMS = re.compile(
     re.IGNORECASE,
 )
 
-_WEAK_WORD_PATTERNS: dict[str, re.Pattern] = {
-    word: re.compile(r"\b" + re.escape(word) + r"\b", re.IGNORECASE)
-    for word in WEAK_WORDS
+# Bespoke (non-pattern) rule config entries, added to the defaults derived
+# from PATTERN_RULES.
+_BESPOKE_RULES: dict[str, bool] = {
+    "untestable": True,
+    "word_count": True,
+    "no_obligation": True,
+}
+_BESPOKE_WEIGHTS: dict[str, int] = {
+    "untestable": 5,
+    "word_count": 10,
+    "no_obligation": 6,
 }
 
-DEFAULT_CONFIG = {
+# Derive the default config from PATTERN_RULES plus bespoke entries, so a
+# rule added to the table does not need a second edit here.
+_DERIVED_RULES: dict[str, bool] = {}
+_DERIVED_WEIGHTS: dict[str, int] = {}
+for _rule in PATTERN_RULES:
+    _DERIVED_RULES[_rule.config] = _rule.enabled
+    _DERIVED_WEIGHTS[_rule.config] = _rule.weight
+_DERIVED_RULES.update(_BESPOKE_RULES)
+_DERIVED_WEIGHTS.update(_BESPOKE_WEIGHTS)
+
+DEFAULT_CONFIG: dict = {
     "min_words": 5,
     "max_words": 200,
-    "rules": {
-        "weak_words": True,
-        "vague_quantifiers": True,
-        "passive_voice": True,
-        "placeholders": True,
-        "non_atomic": True,
-        "untestable": True,
-        "word_count": True,
-    },
-    "weights": {
-        "weak_words": 5,
-        "vague_quantifiers": 3,
-        "passive_voice": 2,
-        "placeholders": 10,
-        "non_atomic": 5,
-        "untestable": 5,
-        "word_count": 10,
-    },
+    "rules": _DERIVED_RULES,
+    "weights": _DERIVED_WEIGHTS,
 }
 
 
@@ -130,63 +107,39 @@ def score_requirement(req: dict, config: dict | None = None) -> dict:
     rules = config.get("rules", DEFAULT_CONFIG["rules"])
     max_penalty = sum(weights.values())
 
-    if rules.get("weak_words", True):
-        lower = plain.lower()
-        for word, pattern in _WEAK_WORD_PATTERNS.items():
-            for m in pattern.finditer(lower):
-                findings.append({
-                    "rule": "weak_words",
-                    "severity": "warning",
-                    "message": f'Weak/ambiguous word: "{word}"',
-                    "start": m.start(),
-                    "end": m.end(),
-                })
-                penalty += weights.get("weak_words", 5)
-
-    if rules.get("vague_quantifiers", True):
-        for m in VAGUE_QUANTIFIERS.finditer(plain):
+    # --- Pattern rules (one loop over the single source of truth) ---
+    for rule in PATTERN_RULES:
+        if not rule.enabled or not rules.get(rule.config, True):
+            continue
+        for m in re.finditer(rule.pattern, plain, re.IGNORECASE):
             findings.append({
-                "rule": "vague_quantifier",
-                "severity": "warning",
-                "message": f'Vague quantifier: "{m.group()}"',
+                "rule": rule.id,
+                "severity": rule.severity,
+                "message": rule.message.format(match=m.group(0)),
                 "start": m.start(),
                 "end": m.end(),
             })
-            penalty += weights.get("vague_quantifiers", 3)
+            penalty += weights.get(rule.config, rule.weight)
 
-    if rules.get("passive_voice", True):
-        for m in PASSIVE_RE.finditer(plain):
-            findings.append({
-                "rule": "passive_voice",
-                "severity": "info",
-                "message": f'Possible passive voice: "{m.group()}"',
-                "start": m.start(),
-                "end": m.end(),
-            })
-            penalty += weights.get("passive_voice", 2)
+    # --- Bespoke checks ---
 
-    if rules.get("placeholders", True):
-        for m in PLACEHOLDER_RE.finditer(plain):
-            findings.append({
-                "rule": "placeholder",
-                "severity": "error",
-                "message": f'Placeholder found: "{m.group()}"',
-                "start": m.start(),
-                "end": m.end(),
-            })
-            penalty += weights.get("placeholders", 10)
-
-    if rules.get("non_atomic", True):
-        match = NON_ATOMIC_RE.search(plain)
-        if match:
-            findings.append({
-                "rule": "non_atomic",
-                "severity": "info",
-                "message": "Multiple conjunctions — consider splitting into separate requirements",
-                "start": 0,
-                "end": len(plain),
-            })
-            penalty += weights.get("non_atomic", 5)
+    # no_obligation: a statement with none of the standard obligation verbs.
+    # The Rule entry (enabled=False) lives in PATTERN_RULES so the pattern,
+    # weight and INCOSE citation are defined in one place — this check
+    # inverts it.
+    if rules.get("no_obligation", True):
+        for rule in PATTERN_RULES:
+            if rule.id == "no_obligation":
+                if not re.search(rule.pattern, plain, re.IGNORECASE):
+                    findings.append({
+                        "rule": rule.id,
+                        "severity": rule.severity,
+                        "message": rule.message.format(match=""),
+                        "start": 0,
+                        "end": len(plain),
+                    })
+                    penalty += weights.get(rule.config, rule.weight)
+                break
 
     if rules.get("untestable", True):
         vm = req.get("verification_method", "")
