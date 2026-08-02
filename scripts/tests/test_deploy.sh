@@ -892,8 +892,14 @@ check "the bare-metal install warms the cache" \
 check "the service is told where the warmed cache is" \
       "$(grep -c 'TECTONIC_CACHE_DIR=' "$REPO/scripts/deploy-bare.sh")" "1"
 # The timeout has to exceed a cold-cache compile, or the fallback is guaranteed
-# on any install whose warming did not happen.
+# on any install whose warming did not happen. It is a parameter now, so the
+# assertion is on the *default* — that is what an ordinary export gets.
 check "the compile timeout allows for a cold cache" \
-      "$(grep -c 'timeout=300' "$REPO/backend/app/services/publishers/latex_helpers.py")" "1"
+      "$(grep -cE 'timeout: int = (3[0-9]{2}|[4-9][0-9]{2}|[0-9]{4,})' \
+         "$REPO/backend/app/services/publishers/latex_helpers.py")" "1"
+# Warming is the cold-cache case by definition, so it asks for more than the
+# default rather than relying on it.
+check "cache warming gets its own, larger budget" \
+      "$(grep -c 'WARM_TECTONIC_TIMEOUT' "$REPO/backend/scripts/warm_tectonic.py")" "1"
 
 finish
