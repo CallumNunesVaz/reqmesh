@@ -332,7 +332,7 @@ export default function RisksPage() {
                   </select>
                 </div>
                 {r.description && (
-                  <div className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
+                  <div className="text-xs text-muted-foreground mt-0.5">
                     <AutoLinkHtml html={r.description} kinds={entityKinds} />
                   </div>
                 )}

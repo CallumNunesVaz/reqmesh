@@ -37,17 +37,22 @@ interface AutoLinkTextProps {
   /** Every known id in the project, mapped to its kind — see useEntityKinds. */
   kinds: Map<string, EntityKind>;
   className?: string;
+  /** Optional decoration for the non-link segments — used to highlight modal
+   *  keywords. Applied only to plain text, so an entity id is never re-styled
+   *  as prose. Without this hook a caller has to re-implement this whole
+   *  renderer to decorate text nodes. */
+  renderPlain?: (text: string) => ReactNode;
 }
 
 /** Plain text with every mention of a known entity id turned into a link. */
-export function AutoLinkText({ text, kinds, className }: AutoLinkTextProps) {
+export function AutoLinkText({ text, kinds, className, renderPlain }: AutoLinkTextProps) {
   const parts = autoLinkParts(text, kinds.keys());
   return (
     <span className={className}>
       {parts.map((p, i) =>
         'id' in p
           ? <EntityLink key={i} kind={kinds.get(p.id)!} id={p.id} className="text-inherit" />
-          : <Fragment key={i}>{p.text}</Fragment>,
+          : <Fragment key={i}>{renderPlain ? renderPlain(p.text) : p.text}</Fragment>,
       )}
     </span>
   );
@@ -60,16 +65,17 @@ const ALLOWED_TAGS = new Set([
   'h1', 'h2', 'h3', 'code', 'pre', 'blockquote',
 ]);
 
-function nodeToReact(node: ChildNode, kinds: Map<string, EntityKind>, key: number): ReactNode {
+function nodeToReact(node: ChildNode, kinds: Map<string, EntityKind>, key: number,
+                     renderPlain?: (text: string) => ReactNode): ReactNode {
   if (node.nodeType === Node.TEXT_NODE) {
     const text = node.textContent || '';
     if (!text) return null;
-    return <AutoLinkText key={key} text={text} kinds={kinds} />;
+    return <AutoLinkText key={key} text={text} kinds={kinds} renderPlain={renderPlain} />;
   }
   if (node.nodeType !== Node.ELEMENT_NODE) return null;
   const tag = (node as Element).tagName.toLowerCase();
   if (tag === 'br') return <br key={key} />;
-  const children = Array.from(node.childNodes).map((c, i) => nodeToReact(c, kinds, i));
+  const children = Array.from(node.childNodes).map((c, i) => nodeToReact(c, kinds, i, renderPlain));
   if (!ALLOWED_TAGS.has(tag)) return <Fragment key={key}>{children}</Fragment>;
   return createElement(tag, { key }, children.length > 0 ? children : undefined);
 }
@@ -78,14 +84,16 @@ interface AutoLinkHtmlProps {
   html: string;
   kinds: Map<string, EntityKind>;
   className?: string;
+  /** See AutoLinkTextProps.renderPlain — threaded down to every text node. */
+  renderPlain?: (text: string) => ReactNode;
 }
 
 /**
  * Read-only rendering of rich-text (TipTap) HTML with entity ids linked.
  * Used where the editor would otherwise render a disabled copy of itself.
  */
-export function AutoLinkHtml({ html, kinds, className }: AutoLinkHtmlProps) {
+export function AutoLinkHtml({ html, kinds, className, renderPlain }: AutoLinkHtmlProps) {
   const doc = new DOMParser().parseFromString(html || '', 'text/html');
-  const nodes = Array.from(doc.body.childNodes).map((n, i) => nodeToReact(n, kinds, i));
+  const nodes = Array.from(doc.body.childNodes).map((n, i) => nodeToReact(n, kinds, i, renderPlain));
   return <div className={className}>{nodes}</div>;
 }

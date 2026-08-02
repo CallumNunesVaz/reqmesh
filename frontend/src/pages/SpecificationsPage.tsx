@@ -2,14 +2,15 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { usePersistedState, setCodec } from '../hooks/usePersistedState';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, FileText, Trash2, ChevronDown, Square, CheckSquare, X, Search } from 'lucide-react';
-import { api, type Requirement } from '../api/client';
+import { Plus, FileText, Trash2, ChevronDown, Square, CheckSquare, X, Search, ExternalLink, Edit3 } from 'lucide-react';
+import { api, type Requirement, type Specification } from '../api/client';
 import { useStore } from '../store';
 import { useAuthStore } from '../store/auth';
 import { CopyLinkButton, EntityLink } from '../components/entities';
 import { useFocusedEntity } from '../components/useFocusedEntity';
 import { AutoLinkText } from '../components/autoLink';
 import { useEntityKinds } from '../components/entityIndex';
+import { isSafeExternalUrl } from '../lib/safeUrl';
 
 export default function SpecificationsPage() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -18,7 +19,8 @@ export default function SpecificationsPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const dataVersion = useStore((s) => s.dataVersion);
   const [showCreate, setShowCreate] = useState(false);
-  const [newSpec, setNewSpec] = useState({ id: '', name: '', description: '' });
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [newSpec, setNewSpec] = useState({ id: '', name: '', description: '', url: '' });
   const [requirements, setRequirements] = useState<Requirement[]>([]);
   // Persisted per project — see RequirementsPage/ComponentsPage for why.
   const pk = (field: string) => (projectId ? `rt-specs-${field}-${projectId}` : null);
@@ -62,15 +64,35 @@ export default function SpecificationsPage() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!projectId || !newSpec.id.trim() || !editable) return;
+    if (!projectId || !editable) return;
     try {
-      await api.createSpecification(projectId, newSpec);
+      if (editingId) {
+        if (!newSpec.id.trim()) return;
+        await api.updateSpecification(projectId, editingId, {
+          name: newSpec.name, description: newSpec.description, url: newSpec.url,
+        });
+      } else {
+        if (!newSpec.id.trim()) return;
+        await api.createSpecification(projectId, newSpec);
+      }
       setShowCreate(false);
-      setNewSpec({ id: '', name: '', description: '' });
+      setEditingId(null);
+      setNewSpec({ id: '', name: '', description: '', url: '' });
       load();
     } catch {
       // silently no-op when permissions insufficient
     }
+  };
+
+  const openEdit = (spec: Specification) => {
+    setNewSpec({
+      id: spec.id,
+      name: spec.name || '',
+      description: spec.description || '',
+      url: spec.url || '',
+    });
+    setEditingId(spec.id);
+    setShowCreate(true);
   };
 
   const handleDelete = async (specId: string) => {
@@ -102,7 +124,7 @@ export default function SpecificationsPage() {
           </p>
         </div>
         {editable && (
-        <button onClick={() => setShowCreate(!showCreate)} className="btn-primary">
+        <button onClick={() => { setEditingId(null); setNewSpec({ id: '', name: '', description: '', url: '' }); setShowCreate(!showCreate); }} className="btn-primary">
           <Plus size={16} /> New Specification
         </button>
         )}
@@ -141,14 +163,18 @@ export default function SpecificationsPage() {
             <div className="flex items-end gap-3">
               <div className="w-40">
                 <label className="label">ID</label>
-                <input className="input font-mono" placeholder="SRS-001" value={newSpec.id} onChange={(e) => setNewSpec({ ...newSpec, id: e.target.value })} autoFocus />
+                <input className="input font-mono" placeholder="SRS-001" value={newSpec.id} onChange={(e) => setNewSpec({ ...newSpec, id: e.target.value })} autoFocus disabled={!!editingId} />
               </div>
               <div className="flex-1">
                 <label className="label">Name</label>
                 <input className="input" placeholder="Specification name" value={newSpec.name} onChange={(e) => setNewSpec({ ...newSpec, name: e.target.value })} />
               </div>
-              <button type="submit" className="btn-primary">Create</button>
-              <button type="button" onClick={() => setShowCreate(false)} className="btn-secondary">Cancel</button>
+              <div className="w-60">
+                <label className="label">Source URL</label>
+                <input className="input" placeholder="https://…" value={newSpec.url} onChange={(e) => setNewSpec({ ...newSpec, url: e.target.value })} />
+              </div>
+              <button type="submit" className="btn-primary">{editingId ? 'Save' : 'Create'}</button>
+              <button type="button" onClick={() => { setShowCreate(false); setEditingId(null); setNewSpec({ id: '', name: '', description: '', url: '' }); }} className="btn-secondary">Cancel</button>
             </div>
           </motion.form>
         )}
@@ -208,9 +234,27 @@ export default function SpecificationsPage() {
                   <div className="flex gap-4 mt-2 text-xs text-muted-foreground">
                     <span>{spec.requirements.length} requirements</span>
                     <span>{spec.children.length} sub-specs</span>
+                    {spec.url && isSafeExternalUrl(spec.url) && (
+                      <a
+                        href={spec.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary hover:underline inline-flex items-center gap-1"
+                      >
+                        <ExternalLink size={12} /> Source
+                      </a>
+                    )}
                   </div>
                 </div>
                 {editable && (
+                  <>
+                <button
+                  onClick={(e) => { e.stopPropagation(); openEdit(spec); }}
+                  className="p-1.5 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-all"
+                  title="Edit"
+                >
+                  <Edit3 size={14} />
+                </button>
                 <button
                   onClick={(e) => { e.stopPropagation(); handleDelete(spec.id); }}
                   className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
@@ -218,6 +262,7 @@ export default function SpecificationsPage() {
                 >
                   <Trash2 size={14} />
                 </button>
+                  </>
                 )}
                 <ChevronDown
                   size={15}

@@ -9,6 +9,7 @@ import RichTextEditor from '../components/RichTextEditor';
 import AutocompleteInput from '../components/AutocompleteInput';
 import { CopyLinkButton, EntityLink, type EntityKind } from '../components/entities';
 import { AutoLinkHtml } from '../components/autoLink';
+import { ModalText } from '../components/ModalText';
 import { useEntityKinds } from '../components/entityIndex';
 import { useAuthStore } from '../store/auth';
 import { useStore } from '../store';
@@ -24,25 +25,20 @@ import { useKeyboardShortcuts } from '../components/useKeyboardShortcuts';
 import LoadingSplash from '../components/LoadingSplash';
 import { statusColors } from '../components/RequirementNode';
 import { REQUIREMENT_TYPE_META, formatReqType, reqTypeColor, typeOptionsFor } from '../lib/requirementTypes';
-
 const priorityOptions = ['low', 'medium', 'high', 'critical'];
 const methodOptions = ['test', 'analysis', 'demonstration', 'inspection'];
-
-
 const priorityColorMap: Record<string, string> = {
   low: 'hsl(195,6%,62%)',
   medium: 'hsl(207,90%,64%)',
   high: 'hsl(28,100%,53%)',
   critical: 'hsl(0,84%,68%)',
 };
-
 const verifStatusColorMap: Record<string, string> = {
   pending: 'hsl(195,6%,62%)',
   in_progress: 'hsl(207,90%,64%)',
   passed: 'hsl(145,55%,42%)',
   failed: 'hsl(0,84%,68%)',
 };
-
 /** Registry collection -> the entity kinds EntityLink knows how to render.
  *  Collections without a detail page of their own (decisions, analysis cases)
  *  fall back to a plain chip rather than linking somewhere that 404s. */
@@ -54,7 +50,11 @@ const BACKLINK_KINDS: Record<string, EntityKind> = {
   change_requests: 'change',
   risks: 'risk',
 };
-
+// Modal keywords are highlighted by decorating the *text nodes* of the shared
+// renderer, rather than by re-implementing it. AutoLinkHtml takes renderPlain
+// for exactly this: entity ids still link, and only the prose between them is
+// styled.
+const withModals = (text: string) => <ModalText>{text}</ModalText>;
 export default function RequirementDetailPage() {
   const { projectId, reqId } = useParams<{ projectId: string; reqId: string }>();
   const navigate = useNavigate();
@@ -105,23 +105,19 @@ export default function RequirementDetailPage() {
   const savedRef = useRef<Requirement | null>(null);
   const [projectBaselines, setProjectBaselines] = useState<string[]>([]);
   const statusOptions = workflow?.states || ['proposed', 'approved', 'implemented', 'verified', 'rejected', 'deprecated'];
-
   const refSuggestions = useMemo(() => {
     const reqItems = [...allReqs, req].filter(Boolean).map((r) => ({ id: r!.id, label: r!.name || r!.id }));
     const vcItems = allVcs.map((v) => ({ id: v.id, label: v.name || v.id }));
     return [...reqItems, ...vcItems];
   }, [allReqs, req, allVcs]);
-
   const vcSuggestions = useMemo(
     () => allVcs.map((v) => ({ id: v.id, label: v.name || v.id })),
     [allVcs],
   );
-
   // Relations can point at either a requirement or a verification case, so the
   // link target depends on which one actually owns the id.
   const vcIds = useMemo(() => new Set(allVcs.map((v) => v.id)), [allVcs]);
   const kindOf = (id: string): EntityKind => (vcIds.has(id) ? 'verification' : 'requirement');
-
   // Ancestor chain from the root down to (excluding) this requirement, for
   // the breadcrumb. Guards against parent cycles in hand-edited YAML.
   const ancestors = useMemo(() => {
@@ -138,19 +134,16 @@ export default function RequirementDetailPage() {
     }
     return chain;
   }, [req, allReqs]);
-
   const showInGraph = () => {
     if (!req) return;
     if (!graphOpen) toggleGraph();
     selectReq(req.id);
   };
-
   const traceDerivation = () => {
     if (!req) return;
     if (!graphOpen) toggleGraph();
     showDerivation(req.id);
   };
-
   // Allocation goes through the same endpoint the Allocation Matrix page uses
   // (component.satisfies is the real relationship; req.allocated_to is a
   // display string the backend derives from it), rather than through the
@@ -163,7 +156,6 @@ export default function RequirementDetailPage() {
     () => allRisksRaw.map((r) => ({ id: r.id, name: r.title })),
     [allRisksRaw],
   );
-
   /** Add or remove this requirement from a risk's linked_requirements. The
    *  link is owned by the risk, so this writes the risk — the same record the
    *  Risks page edits — rather than anything on the requirement. */
@@ -187,7 +179,6 @@ export default function RequirementDetailPage() {
       }).catch(() => {});
     }
   };
-
   const allocateComponent = async (componentId: string, allocated: boolean) => {
     if (!projectId || !reqId) return;
     try {
@@ -203,7 +194,6 @@ export default function RequirementDetailPage() {
       console.error(err);
     }
   };
-
   const incomingRelations = useMemo(() => {
     if (!req) return [];
     const results: { source: string; type: string; sourceName: string }[] = [];
@@ -216,7 +206,6 @@ export default function RequirementDetailPage() {
     }
     return results;
   }, [allReqs, req]);
-
   useEffect(() => {
     if (!projectId || !reqId) return;
     // Every fetch below is guarded: this page is NOT remounted per requirement
@@ -283,7 +272,6 @@ export default function RequirementDetailPage() {
     api.listDecisions(projectId).then((decs) => { if (alive) setDecisions(decs.filter((d) => d.linked_requirements?.includes(reqId))); }).catch(() => { if (alive) setDecisions([]); });
     return () => { alive = false; };
   }, [projectId, reqId]);
-
   const save = (updates: Partial<Requirement>) => {
     if (!req || !editable || !savedRef.current) return;
     const next = { ...req, ...updates } as Requirement;
@@ -294,7 +282,6 @@ export default function RequirementDetailPage() {
       if (cur !== was) { setDirty(true); return; }
     }
   };
-
   const discardChanges = () => {
     if (!savedRef.current) return;
     setReq(savedRef.current);
@@ -302,7 +289,6 @@ export default function RequirementDetailPage() {
     setSaveError('');
     setSaveSuccess(false);
   };
-
   const commitSave = useCallback(async () => {
     if (!projectId || !reqId || !req || !editable) return;
     const saved = savedRef.current;
@@ -315,7 +301,6 @@ export default function RequirementDetailPage() {
       }
     }
     if (Object.keys(diff).length === 0) { setDirty(false); return; }
-
     const beforeFields: Record<string, any> = {};
     for (const k of Object.keys(diff)) {
       beforeFields[k] = (saved as any)[k];
@@ -356,7 +341,6 @@ export default function RequirementDetailPage() {
       setSaving(false);
     }
   }, [projectId, reqId, req, editable, dirty, bumpGraphVersion]);
-
   // Unsaved-changes guard. `dirty` is read through a ref so the registered
   // guard and the beforeunload handler stay stable while always seeing the
   // current value. Returns true when it's safe to leave.
@@ -366,14 +350,12 @@ export default function RequirementDetailPage() {
     if (!dirtyRef.current) return true;
     return showConfirm('You have unsaved changes. Discard them and leave?', 'Discard changes');
   }, [showConfirm]);
-
   // Register the in-app guard so the requirement nav tree (and any other
   // navigator) prompts before discarding edits; clear it on unmount.
   useEffect(() => {
     setNavGuard(confirmLeave);
     return () => setNavGuard(null);
   }, [confirmLeave, setNavGuard]);
-
   // Browser-level guard for reload / tab close / external navigation.
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
@@ -382,7 +364,6 @@ export default function RequirementDetailPage() {
     window.addEventListener('beforeunload', handler);
     return () => window.removeEventListener('beforeunload', handler);
   }, []);
-
   const handleDelete = async () => {
     if (!projectId || !reqId || !req) return;
     const ok = await showConfirm('Delete this requirement?', 'Delete Requirement');
@@ -407,7 +388,6 @@ export default function RequirementDetailPage() {
     bumpDataVersion();
     navigate(`/project/${projectId}/requirements`);
   };
-
   useKeyboardShortcuts(projectId, {
     onDetailSave: () => req && commitSave(),
     onDetailDelete: handleDelete,
@@ -416,11 +396,9 @@ export default function RequirementDetailPage() {
       if (window.history.length > 1) navigate(-1); else navigate(`/project/${projectId}/requirements`);
     },
   });
-
   if (loading) {
     return <div className="relative h-[60vh]"><LoadingSplash label="Loading requirement…" /></div>;
   }
-
   if (!req) {
     return (
       <div className="p-8 text-center">
@@ -431,18 +409,15 @@ export default function RequirementDetailPage() {
       </div>
     );
   }
-
   const addAttribute = () => {
     if (!newAttrKey.trim() || !newAttrVal.trim()) return;
     save({ attributes: [...req.attributes, { key: newAttrKey.trim(), value: newAttrVal.trim() }] });
     setNewAttrKey('');
     setNewAttrVal('');
   };
-
   const removeAttribute = (index: number) => {
     save({ attributes: req.attributes.filter((_, i) => i !== index) });
   };
-
   const addRelation = async () => {
     if (!newRelTarget.trim() || !projectId || !reqId) return;
     if (reverseAdd) {
@@ -467,11 +442,9 @@ export default function RequirementDetailPage() {
     setReverseAdd(false);
     bumpGraphVersion();
   };
-
   const removeRelation = (index: number) => {
     save({ relations: req.relations.filter((_, i) => i !== index) });
   };
-
   const flipRelation = async (index: number, targetId: string, relType: string) => {
     if (!projectId || !reqId || !req) return;
     const updatedRelations = req.relations.filter((_, i) => i !== index);
@@ -479,7 +452,6 @@ export default function RequirementDetailPage() {
     const updated = { ...req, relations: updatedRelations };
     setReq(updated);
     savedRef.current = updated;
-
     try {
       const targetReq = await api.getRequirement(projectId, targetId);
       const targetRelations = [...(targetReq.relations || []), { type: relType, target: reqId }];
@@ -494,17 +466,14 @@ export default function RequirementDetailPage() {
     }
     bumpGraphVersion();
   };
-
   const addVerificationCase = () => {
     if (!newVC.trim()) return;
     save({ verification_cases: [...req.verification_cases, newVC.trim()] });
     setNewVC('');
   };
-
   const removeVerificationCase = (index: number) => {
     save({ verification_cases: req.verification_cases.filter((_, i) => i !== index) });
   };
-
   return (
     <div className="max-w-4xl mx-auto p-8">
       {saveError && (
@@ -614,7 +583,6 @@ export default function RequirementDetailPage() {
         </button>
         )}
       </div>
-
       <div className="grid grid-cols-1 @4xl:grid-cols-3 gap-6">
         <div className="@4xl:col-span-2 space-y-6">
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="card p-5">
@@ -638,20 +606,19 @@ export default function RequirementDetailPage() {
                 disabled={false}
               />
             ) : (
-              // Read mode: render the rich text with entity ids linked, which
-              // the editor (even disabled) can't do.
+              // Read mode: render the rich text with entity ids linked and
+              // modal keywords highlighted.
               <AutoLinkHtml
+                renderPlain={withModals}
                 html={req.description}
                 kinds={entityKinds}
                 className="prose prose-sm dark:prose-invert max-w-none border rounded-lg p-3 min-h-[80px] opacity-90"
               />
             )}
           </motion.div>
-
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="card p-5">
             <h2 className="font-semibold text-sm text-card-foreground mb-1">Relations</h2>
             <HelpTip>Link this requirement to others using relationship types like refines, satisfies, derives, or conflicts. Relations form the traceability graph — they show which requirements depend on or are detailed by others.</HelpTip>
-
             {/* Add outgoing relation */}
             {editable && (
             <div className="flex items-end gap-1.5 mb-4">
@@ -689,7 +656,6 @@ export default function RequirementDetailPage() {
               </button>
             </div>
             )}
-
             {/* Outgoing: THIS → ... */}
             <div className="mb-3">
               <h3 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
@@ -737,7 +703,6 @@ export default function RequirementDetailPage() {
                 </div>
               )}
             </div>
-
             {/* Incoming: ... → THIS */}
             <div>
               <h3 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
@@ -768,9 +733,7 @@ export default function RequirementDetailPage() {
               )}
             </div>
           </motion.div>
-
           <ParametricsGuide />
-
           <ParametricsCard
             reqId={req.id}
             parameters={req.parameters || []}
@@ -780,7 +743,6 @@ export default function RequirementDetailPage() {
             onSave={save}
             definitions={definitions}
           />
-
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="card p-5">
             <h2 className="font-semibold text-sm text-card-foreground mb-1">Verification Cases</h2>
             <HelpTip>Verification cases prove that this requirement is met. They can be tests, analyses, demonstrations, or inspections. Link existing VCs or create new ones from the Verification page.</HelpTip>
@@ -817,7 +779,6 @@ export default function RequirementDetailPage() {
               </div>
             )}
           </motion.div>
-
           {/* The design side of the house: which components satisfy this
               requirement — allocation, in ISO 29148 terms. Used to be
               read-only here with a comment pointing at the Components page,
@@ -841,7 +802,6 @@ export default function RequirementDetailPage() {
               />
             </motion.div>
           )}
-
           {qualityResult && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }} className="card p-5">
               <h2 className="font-semibold text-sm text-card-foreground mb-3 flex items-center gap-2"><Sparkles size={14} className="text-violet-400" /> Quality</h2>
@@ -867,7 +827,6 @@ export default function RequirementDetailPage() {
               )}
             </motion.div>
           )}
-
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="card p-5">
             <h2 className="font-semibold text-sm text-card-foreground mb-3">Attributes</h2>
             <div className="flex gap-1 mb-3">
@@ -893,7 +852,6 @@ export default function RequirementDetailPage() {
               </div>
             )}
           </motion.div>
-
           {/* Everything that points at this requirement, computed server-side
               from the link registry rather than assembled from a handful of
               per-entity fetches. Read-only: each link is owned by the record
@@ -932,7 +890,6 @@ export default function RequirementDetailPage() {
               </div>
             </motion.div>
           )}
-
           {inSpecs.length > 0 && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.23 }} className="card p-5">
               <h2 className="font-semibold text-sm text-card-foreground mb-3">In Specifications</h2>
@@ -945,7 +902,6 @@ export default function RequirementDetailPage() {
               </div>
             </motion.div>
           )}
-
           {(affectingCrs.length > 0 || linkedRisks.length > 0 || editable) && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.24 }} className="card p-5">
               <h2 className="font-semibold text-sm text-card-foreground mb-3">Change Requests &amp; Risks</h2>
@@ -975,7 +931,6 @@ export default function RequirementDetailPage() {
               </div>
             </motion.div>
           )}
-
           {req.references && req.references.length > 0 && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="card p-5">
               <h2 className="font-semibold text-sm text-card-foreground mb-3">References</h2>
@@ -990,7 +945,6 @@ export default function RequirementDetailPage() {
               </div>
             </motion.div>
           )}
-
           {(comments.length > 0 || canPropose) && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.26 }} className="card p-5">
               <h2 className="font-semibold text-sm text-card-foreground mb-3 flex items-center justify-between">
@@ -1014,7 +968,6 @@ export default function RequirementDetailPage() {
               </div>
             </motion.div>
           )}
-
           {decisions.length > 0 && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.27 }} className="card p-5">
               <h2 className="font-semibold text-sm text-card-foreground mb-3">Related Decisions ({decisions.length})</h2>
@@ -1033,7 +986,6 @@ export default function RequirementDetailPage() {
             </motion.div>
           )}
         </div>
-
         <div className="space-y-6">
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="card p-5">
             <h2 className="font-semibold text-sm text-card-foreground mb-1">Properties</h2>
@@ -1345,7 +1297,6 @@ export default function RequirementDetailPage() {
               </div>
             </div>
           </motion.div>
-
           <div className="text-xs text-muted-foreground space-y-1">
             <div>Created: {new Date(req.created).toLocaleString()}</div>
             <div>Modified: {new Date(req.modified).toLocaleString()}</div>
@@ -1355,19 +1306,16 @@ export default function RequirementDetailPage() {
     </div>
   );
 }
-
 function AddCommentForm({ projectId, reqId, onAdded, disabled }: { projectId: string; reqId: string; onAdded: () => void; disabled: boolean }) {
   const [show, setShow] = useState(false);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const user = useAuthStore((s) => s.user);
-
   if (!show) {
     return disabled ? null : (
       <button onClick={() => setShow(true)} className="text-xs text-muted-foreground hover:text-foreground">+ Add comment</button>
     );
   }
-
   const submit = async () => {
     if (!text.trim()) return;
     setBusy(true);
@@ -1381,7 +1329,6 @@ function AddCommentForm({ projectId, reqId, onAdded, disabled }: { projectId: st
     }
     finally { setBusy(false); }
   };
-
   return (
     <div className="flex gap-1.5 mt-1">
       <input className="input text-xs flex-1" placeholder="Write a comment..." value={text}
