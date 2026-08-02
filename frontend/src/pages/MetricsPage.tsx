@@ -239,7 +239,7 @@ export default function MetricsPage() {
         </motion.div>
       )}
 
-      {evaluation && evaluation.requirements.length > 0 && (
+      {evaluation && (evaluation.requirements.length > 0 || evaluation.data_issues.length > 0) && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.32 }} className="card p-5 mt-6">
           <h2 className="font-semibold text-sm text-card-foreground mb-3 flex items-center gap-2">
             <Sigma size={16} className="text-cs-teal" /> Parametric Constraints
@@ -261,6 +261,28 @@ export default function MetricsPage() {
               </span>
             )}
           </div>
+          {evaluation.data_issues.length > 0 && (
+            <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5">
+              <div className="flex items-center gap-1.5 text-xs font-medium text-amber-400">
+                <AlertTriangle size={13} />
+                {evaluation.data_issues.length} value{evaluation.data_issues.length === 1 ? '' : 's'} ignored
+              </div>
+              <div className="mt-1.5 space-y-0.5">
+                {evaluation.data_issues.slice(0, 5).map((issue, i) => (
+                  <div key={i} className="text-[11px] text-muted-foreground">
+                    <span className="font-mono">{issue.ref}</span>
+                    {issue.source && <span> (from {issue.source})</span>}
+                    : <span className="font-mono">{issue.value}</span> is not a number
+                  </div>
+                ))}
+                {evaluation.data_issues.length > 5 && (
+                  <div className="text-[11px] text-muted-foreground">
+                    …and {evaluation.data_issues.length - 5} more
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
           <div className="space-y-1.5">
             {evaluation.requirements
               .filter((r) => r.verdict !== 'none')

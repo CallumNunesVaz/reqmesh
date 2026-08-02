@@ -407,6 +407,52 @@ def _constraint_verdict(evaluator: Evaluator, constraint: dict, owner: str) -> d
     return out
 
 
+def coerce_number(value, *, kind: str, ref: str, source: str,
+                  issues: list[dict]) -> Optional[float]:
+    """Return ``value`` as a float, or None after appending a data issue.
+
+    Requirement data is hand-editable YAML, so a measurement of ``n/a`` is
+    something a user can legitimately write. It must degrade to a reported
+    issue, never a 500.
+
+    ``None`` input is not an issue — an absent value is absence, not corruption;
+    it returns None without recording anything.
+    """
+    if value is None:
+        return None
+    # bool is a subclass of int, so float(True) == 1.0 would slip through.
+    # A YAML `yes`/`no` is not a measurement.
+    if isinstance(value, bool):
+        usable = None
+    else:
+        try:
+            f = float(value)
+        except (ValueError, TypeError):
+            usable = None
+        else:
+            usable = f if math.isfinite(f) else None
+    if usable is not None:
+        return usable
+
+    text = str(value)[:120]
+    issues.append({
+        "kind": kind, "ref": ref, "source": source, "value": text,
+        "message": f"{ref}: {text!r} is not a number; the value was ignored",
+    })
+    return None
+
+
+def _same_value(a: Optional[float], b: Optional[float]) -> bool:
+    """True when two resolved values are indistinguishable once displayed.
+
+    Values are rendered rounded to 6 dp, so a 1e-16 solver drift must not
+    read as an impact.
+    """
+    if a is None or b is None:
+        return a is None and b is None
+    return math.isclose(a, b, rel_tol=1e-9, abs_tol=5e-7)
+
+
 def _aggregate(statuses: list[str]) -> str:
     if not statuses:
         return "none"
@@ -441,12 +487,19 @@ def evaluate_project(store, scope: Optional[set[str]] = None,
     # remembers which case supplied the evidence.
     measured: dict[str, float] = {}
     measured_by: dict[str, str] = {}
+    data_issues: list[dict] = []
     for vc in vcs:
         for m in vc.get("measurements", []) or []:
             ref = m.get("parameter")
             if ref and m.get("value") is not None:
-                measured[ref] = float(m["value"])
-                measured_by[ref] = vc["id"]
+                coerced = coerce_number(m["value"],
+                                         kind="non_numeric_measurement",
+                                         ref=ref,
+                                         source=vc.get("id") or "",
+                                         issues=data_issues)
+                if coerced is not None:
+                    measured[ref] = coerced
+                    measured_by[ref] = vc["id"]
 
     design = Evaluator(requirements, components, overrides=extra_overrides, definitions=definitions)
     as_measured = Evaluator(requirements, components, overrides=measured, definitions=definitions)
@@ -522,14 +575,27 @@ def evaluate_project(store, scope: Optional[set[str]] = None,
         "measured_summary": measured_summary,
         "parameter_count": len(design.params),
         "measurement_count": len(measured),
+        "data_issues": sorted(data_issues,
+                              key=lambda i: (i["kind"], i["ref"], i["source"])),
     }
 
 
 def run_analysis_case(store, case: dict) -> dict:
     """Evaluate one analysis case: its scope + hypothetical overrides."""
     scope = set(case.get("scope") or []) or None
-    overrides = {k: float(v) for k, v in (case.get("overrides") or {}).items()}
+    case_issues: list[dict] = []
+    overrides: dict[str, float] = {}
+    for k, v in (case.get("overrides") or {}).items():
+        coerced = coerce_number(v,
+                                 kind="non_numeric_override",
+                                 ref=k,
+                                 source=case.get("id") or "",
+                                 issues=case_issues)
+        if coerced is not None:
+            overrides[k] = coerced
     result = evaluate_project(store, scope=scope, extra_overrides=overrides)
+    result["data_issues"] = sorted(result["data_issues"] + case_issues,
+                                   key=lambda i: (i["kind"], i["ref"], i["source"]))
     result["case"] = {"id": case.get("id"), "name": case.get("name", ""),
                       "scope": case.get("scope") or [], "overrides": case.get("overrides") or {}}
     return result
@@ -612,7 +678,7 @@ def build_impact(store, overrides: dict[str, float]) -> dict:
     for ref in all_refs:
         b = _resolve_safe(base, ref)
         o = _resolve_safe(over, ref)
-        if b != o or ref in roots:
+        if not _same_value(b, o) or ref in roots:
             affected_refs.add(ref)
 
     deps: dict[str, set[str]] = {}
@@ -690,7 +756,7 @@ def build_impact(store, overrides: dict[str, float]) -> dict:
             continue
         b_val = _resolve_safe(base, ref)
         o_val = _resolve_safe(over, ref)
-        if b_val == o_val:
+        if _same_value(b_val, o_val):
             continue
         owner = ref.rsplit(".", 1)[0]
         inputs = sorted(deps.get(ref, set()))
