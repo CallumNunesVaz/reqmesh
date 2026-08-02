@@ -2,16 +2,17 @@ import { useEffect, useMemo, useState } from 'react';
 import { usePersistedState } from '../hooks/usePersistedState';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Trash2, AlertTriangle, Square, CheckSquare, X, Search } from 'lucide-react';
+import { Plus, Trash2, Edit3, AlertTriangle, Square, CheckSquare, X, Search } from 'lucide-react';
 import { api, type Risk, type Requirement, type RiskMatrix, type RiskRating } from '../api/client';
 import { useAuthStore } from '../store/auth';
 import { useStore } from '../store';
 import { CopyLinkButton, EntityLink } from '../components/entities';
 import { useFocusedEntity } from '../components/useFocusedEntity';
-import { AutoLinkText } from '../components/autoLink';
+import { AutoLinkHtml } from '../components/autoLink';
 import { useEntityKinds } from '../components/entityIndex';
 import { LinkEditor } from '../components/LinkEditor';
 import { deleteWithReferenceCheck } from '../lib/forceDelete';
+import RichTextEditor from '../components/RichTextEditor';
 
 const formatLevel = (s: string) => s.replace(/_/g, ' ');
 
@@ -42,6 +43,7 @@ export default function RisksPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const [risks, setRisks] = useState<Risk[]>([]);
   const [showCreate, setShowCreate] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [form, setForm] = useState({ id: '', title: '', description: '', severity: '', likelihood: '' });
   const editable = useAuthStore((s) => s.canPropose());
@@ -144,12 +146,38 @@ export default function RisksPage() {
   // Arriving from a link elsewhere (?focus=RSK-001).
   const focusId = useFocusedEntity(risks.length > 0);
 
+  const openCreate = () => {
+    setForm({ id: '', title: '', description: '', severity: '', likelihood: '' });
+    setEditingId(null);
+    setShowCreate(true);
+  };
+
+  const openEdit = (r: Risk) => {
+    setForm({
+      id: r.id,
+      title: r.title || '',
+      description: r.description || '',
+      severity: r.severity || '',
+      likelihood: r.rating?.likelihood ?? r.likelihood ?? '',
+    });
+    setEditingId(r.id);
+    setShowCreate(true);
+  };
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!projectId || !form.id.trim()) return;
     try {
-      await api.createRisk(projectId, form);
+      if (editingId) {
+        await api.updateRisk(projectId, editingId, {
+          title: form.title, description: form.description,
+          severity: form.severity, likelihood: form.likelihood,
+        });
+      } else {
+        await api.createRisk(projectId, form);
+      }
       setShowCreate(false); setForm({ id: '', title: '', description: '', severity: '', likelihood: '' });
+      setEditingId(null);
       load();
     } catch (err: any) { setError(err.message || 'Failed to create'); }
   };
@@ -190,7 +218,7 @@ export default function RisksPage() {
       <div className="flex items-center justify-between mb-6">
         <div><h1 className="text-2xl font-bold text-foreground">Risks</h1><p className="text-sm text-muted-foreground mt-1">{filtering ? `${filteredRisks.length} of ${risks.length} risks` : `${risks.length} risks`}</p></div>
         {editable && (
-        <button onClick={() => setShowCreate(!showCreate)} className="btn-primary"><Plus size={16} /> New Risk</button>
+        <button onClick={openCreate} className="btn-primary"><Plus size={16} /> New Risk</button>
         )}
       </div>
       <div className="sticky top-0 z-10 -mx-2 px-2 py-2 bg-background/95 backdrop-blur-sm mb-4">
@@ -231,17 +259,25 @@ export default function RisksPage() {
         {showCreate && (
           <motion.form initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
             onSubmit={handleCreate} className="card p-4 mb-4 overflow-hidden">
-            <div className="flex items-end gap-3">
-              <div className="w-32"><label className="label">ID</label><input className="input font-mono" placeholder="RSK-001" value={form.id} onChange={e => setForm({...form, id: e.target.value})} autoFocus /></div>
-              <div className="flex-1"><label className="label">Title</label><input className="input" placeholder="Risk title" value={form.title} onChange={e => setForm({...form, title: e.target.value})} /></div>
-              <div><label className="label">Severity</label><select className="select" value={form.severity} onChange={e => setForm({...form, severity: e.target.value})}>
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="w-32"><label className="label">ID</label><input className="input font-mono" placeholder="RSK-001" value={form.id} onChange={e => setForm({...form, id: e.target.value})} autoFocus disabled={!!editingId} /></div>
+              <div className="flex-1 min-w-[12rem]"><label className="label">Title</label><input className="input" placeholder="Risk title" value={form.title} onChange={e => setForm({...form, title: e.target.value})} /></div>
+              <div className="w-36"><label className="label">Severity</label><select className="select" value={form.severity} onChange={e => setForm({...form, severity: e.target.value})}>
                 {(matrix?.severities ?? []).map((sv) => <option key={sv} value={sv}>{formatLevel(sv)}</option>)}
               </select></div>
-              <div><label className="label">Likelihood</label><select className="select" value={form.likelihood} onChange={e => setForm({...form, likelihood: e.target.value})}>
+              <div className="w-40"><label className="label">Likelihood</label><select className="select" value={form.likelihood} onChange={e => setForm({...form, likelihood: e.target.value})}>
                 {(matrix?.likelihoods ?? []).map((l) => <option key={l} value={l}>{formatLevel(l)}</option>)}
               </select></div>
-              <button type="submit" className="btn-primary">Create</button>
+              <button type="submit" className="btn-primary">{editingId ? 'Save' : 'Create'}</button>
               <button type="button" onClick={() => setShowCreate(false)} className="btn-secondary">Cancel</button>
+            </div>
+            <div className="mt-3">
+              <label className="label">Description</label>
+              <RichTextEditor
+                content={form.description}
+                onChange={(html) => setForm({ ...form, description: html })}
+                onBlur={() => {}}
+              />
             </div>
           </motion.form>
         )}
@@ -295,7 +331,11 @@ export default function RisksPage() {
                     {(matrix?.likelihoods ?? []).map((l) => <option key={l} value={l}>{formatLevel(l)}</option>)}
                   </select>
                 </div>
-                {r.description && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1"><AutoLinkText text={r.description} kinds={entityKinds} /></p>}
+                {r.description && (
+                  <div className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
+                    <AutoLinkHtml html={r.description} kinds={entityKinds} />
+                  </div>
+                )}
                 {(r.linked_requirements.length > 0 || editable) && (
                   <div className="mt-2">
                     <LinkEditor
@@ -311,7 +351,10 @@ export default function RisksPage() {
                 )}
               </div>
               {editable && (
+              <div className="flex items-center gap-0.5 shrink-0">
+              <button onClick={() => openEdit(r)} className="p-1.5 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-all" title="Edit risk"><Edit3 size={14} /></button>
               <button onClick={() => handleDelete(r.id)} className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all" title="Delete"><Trash2 size={14} /></button>
+              </div>
               )}
             </div>
           </motion.div>

@@ -5,7 +5,7 @@ import { Trash2, ArrowLeft, Save, X, ChevronRight, CheckCircle2 } from 'lucide-r
 import { api, COMPONENT_TYPES, type Component, type Requirement, type VerificationCase } from '../api/client';
 import { CopyLinkButton, EntityLink, COMPONENT_TYPE_META, type EntityKind } from '../components/entities';
 import { useEntityKinds } from '../components/entityIndex';
-import { AutoLinkText } from '../components/autoLink';
+import { AutoLinkHtml } from '../components/autoLink';
 import { ParameterEditor } from '../components/parametrics';
 import ParametricsGuide from '../components/ParametricsGuide';
 import { useAuthStore } from '../store/auth';
@@ -13,6 +13,7 @@ import { useStore } from '../store';
 import { useKeyboardShortcuts } from '../components/useKeyboardShortcuts';
 import LoadingSplash from '../components/LoadingSplash';
 import { LinkEditor } from '../components/LinkEditor';
+import RichTextEditor from '../components/RichTextEditor';
 
 /** Ids of a component and everything beneath it — a component may not be
  *  reparented into its own branch, so those options must be excluded. */
@@ -214,15 +215,17 @@ export default function ComponentDetailPage() {
             />
             <label className="label mt-4">Description</label>
             {editable ? (
-              <textarea
-                className="input min-h-[80px]"
-                value={form.description}
-                onChange={(e) => setForm({ ...form, description: e.target.value })}
-                onBlur={(e) => save({ description: e.target.value })}
+              <RichTextEditor
+                content={form.description || ''}
+                onChange={(html) => setForm({ ...form, description: html })}
+                // Saves on blur like every other field on this page (name,
+                // quantity, part_number, supplier). Leaving this a no-op made
+                // description the one field that needed "Save all changes".
+                onBlur={(html) => save({ description: html })}
               />
             ) : (
               <div className="border rounded-lg p-3 min-h-[80px] opacity-90">
-                {component.description ? <AutoLinkText text={component.description} kinds={entityKinds} /> : <span className="text-muted-foreground text-sm italic">No description</span>}
+                {component.description ? <AutoLinkHtml html={component.description} kinds={entityKinds} /> : <span className="text-muted-foreground text-sm italic">No description</span>}
               </div>
             )}
           </motion.div>
