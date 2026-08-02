@@ -300,7 +300,7 @@ export default function ComponentDetailPage() {
               <div className="space-y-1">
                 {allComponents.filter((c) => c.parent === componentId).map((c) => (
                   <div key={c.id} className="flex items-center gap-2 text-xs py-1 px-2 rounded hover:bg-accent">
-                    <EntityLink kind="component" id={c.id} name={c.name} className="hover:text-primary" />
+                    <EntityLink kind="component" id={c.id} name={c.name} subtype={c.type} className="hover:text-primary" />
                     <span className="text-muted-foreground">{c.type}{c.quantity > 1 ? ` ×${c.quantity}` : ''}</span>
                   </div>
                 ))}

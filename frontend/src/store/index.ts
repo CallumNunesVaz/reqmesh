@@ -13,10 +13,10 @@ interface AppState {
   dataVersion: number;
   refocusGraph: number;
   helpersEnabled: boolean;
-  /** Baselines currently selected in the graph filter — empty = show all. */
-  baselineFilters: string[];
-  /** Components currently selected in the graph filter — empty = show all. */
-  componentFilters: string[];
+  /** Baselines explicitly hidden in the graph filter — empty = nothing hidden. */
+  hiddenBaselines: string[];
+  /** Components explicitly hidden in the graph filter — empty = nothing hidden. */
+  hiddenComponents: string[];
   /** A page with unsaved edits registers a guard here; navigators await it and
    *  abort when it resolves false (user chose to keep editing). Null = free. */
   navGuard: (() => boolean | Promise<boolean>) | null;
@@ -32,10 +32,10 @@ interface AppState {
   bumpDataVersion: () => void;
   toggleHelpers: () => void;
   setNavGuard: (fn: (() => boolean | Promise<boolean>) | null) => void;
-  setBaselineFilters: (filters: string[]) => void;
-  toggleBaselineFilter: (name: string) => void;
-  setComponentFilters: (filters: string[]) => void;
-  toggleComponentFilter: (id: string) => void;
+  setHiddenBaselines: (filters: string[]) => void;
+  toggleHiddenBaseline: (name: string) => void;
+  setHiddenComponents: (filters: string[]) => void;
+  toggleHiddenComponent: (id: string) => void;
 }
 
 export const useStore = create<AppState>((set) => ({
@@ -50,8 +50,8 @@ export const useStore = create<AppState>((set) => ({
   dataVersion: 0,
   refocusGraph: 0,
   helpersEnabled: false,
-  baselineFilters: [],
-  componentFilters: [],
+  hiddenBaselines: [],
+  hiddenComponents: [],
   navGuard: null,
 
   setProjects: (projects) => set({ projects }),
@@ -65,24 +65,24 @@ export const useStore = create<AppState>((set) => ({
   bumpDataVersion: () => set((s) => ({ dataVersion: s.dataVersion + 1 })),
   toggleHelpers: () => set((s) => ({ helpersEnabled: !s.helpersEnabled })),
   setNavGuard: (navGuard) => set({ navGuard }),
-  setBaselineFilters: (filters) => set({ baselineFilters: filters }),
-  toggleBaselineFilter: (name) => set((s) => {
-    const idx = s.baselineFilters.indexOf(name);
+  setHiddenBaselines: (hiddenBaselines) => set({ hiddenBaselines }),
+  toggleHiddenBaseline: (name) => set((s) => {
+    const idx = s.hiddenBaselines.indexOf(name);
     if (idx >= 0) {
-      const next = [...s.baselineFilters];
+      const next = [...s.hiddenBaselines];
       next.splice(idx, 1);
-      return { baselineFilters: next };
+      return { hiddenBaselines: next };
     }
-    return { baselineFilters: [...s.baselineFilters, name] };
+    return { hiddenBaselines: [...s.hiddenBaselines, name] };
   }),
-  setComponentFilters: (filters) => set({ componentFilters: filters }),
-  toggleComponentFilter: (id) => set((s) => {
-    const idx = s.componentFilters.indexOf(id);
+  setHiddenComponents: (hiddenComponents) => set({ hiddenComponents }),
+  toggleHiddenComponent: (id) => set((s) => {
+    const idx = s.hiddenComponents.indexOf(id);
     if (idx >= 0) {
-      const next = [...s.componentFilters];
+      const next = [...s.hiddenComponents];
       next.splice(idx, 1);
-      return { componentFilters: next };
+      return { hiddenComponents: next };
     }
-    return { componentFilters: [...s.componentFilters, id] };
+    return { hiddenComponents: [...s.hiddenComponents, id] };
   }),
 }));

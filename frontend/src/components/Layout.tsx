@@ -60,7 +60,7 @@ function VersionBadge() {
   if (!version) return null;
   return (
     <span
-      className="hidden md:inline text-[10px] font-mono text-muted-foreground/70 border rounded px-1 py-px"
+      className="hidden 2xl:inline text-[10px] font-mono text-muted-foreground/70 border rounded px-1 py-px"
       title="reqmesh version"
     >
       v{version}
@@ -272,7 +272,7 @@ export default function Layout() {
       <div className="h-screen flex flex-col bg-background">
         {/* overflow-x-auto: at very narrow windows the icon row degrades to a
             horizontal scroll instead of buttons overlapping each other. */}
-        <header className="h-14 border-b bg-card flex items-center px-3 gap-2 shrink-0 z-40 overflow-x-auto overflow-y-hidden">
+        <header className="h-14 border-b bg-card flex items-center px-3 gap-2 shrink-0 z-40 overflow-x-auto overflow-y-hidden whitespace-nowrap">
           <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity shrink-0">
             <img src="/reqmesh-mark.png" alt="reqmesh" className="w-7 h-7" />
             <InstanceName />
@@ -295,7 +295,7 @@ export default function Layout() {
               title="Jump to anything (Ctrl+K)" aria-label="Open command palette"
             >
               <Search size={15} />
-              <kbd className="hidden sm:inline text-[9px] border rounded px-1 py-px">Ctrl K</kbd>
+              <kbd className="hidden 2xl:inline text-[9px] border rounded px-1 py-px">Ctrl K</kbd>
             </button>
           )}
 
@@ -306,7 +306,7 @@ export default function Layout() {
               title="Documentation (F1)"
             >
               <BookOpen size={15} />
-              <span className="hidden sm:inline text-[10px]">Docs</span>
+              <span className="hidden 2xl:inline text-[10px]">Docs</span>
             </button>
           )}
 
@@ -317,7 +317,7 @@ export default function Layout() {
               title={helpersEnabled ? 'Helpers ON — click to hide guidance' : 'Helpers OFF — click to show guidance'}
             >
               <HelpCircle size={15} />
-              <span className="hidden sm:inline text-[10px]">{helpersEnabled ? 'GUIDED ON' : 'GUIDED OFF'}</span>
+              <span className="hidden 2xl:inline text-[10px]">{helpersEnabled ? 'GUIDED ON' : 'GUIDED OFF'}</span>
             </button>
           )}
 
@@ -342,7 +342,7 @@ export default function Layout() {
               title="Export document"
             >
               <FileDown size={15} />
-              <span className="hidden sm:inline">Export</span>
+              <span className="hidden 2xl:inline">Export</span>
             </button>
           )}
 
@@ -353,7 +353,7 @@ export default function Layout() {
               title="Import ReqIF / SysML"
             >
               <FileUp size={15} />
-              <span className="hidden sm:inline">Import</span>
+              <span className="hidden 2xl:inline">Import</span>
             </button>
           )}
 
@@ -400,7 +400,7 @@ export default function Layout() {
               title="Manage users"
             >
               <Users size={15} />
-              <span className="hidden sm:inline">Users</span>
+              <span className="hidden 2xl:inline">Users</span>
             </Link>
           )}
 
@@ -411,7 +411,7 @@ export default function Layout() {
               title="Application settings"
             >
               <SlidersHorizontal size={15} />
-              <span className="hidden sm:inline">Settings</span>
+              <span className="hidden 2xl:inline">Settings</span>
             </Link>
           )}
 
@@ -422,7 +422,7 @@ export default function Layout() {
               title="System & updates"
             >
               <Server size={15} />
-              <span className="hidden sm:inline">System</span>
+              <span className="hidden 2xl:inline">System</span>
             </Link>
           )}
 
@@ -430,7 +430,7 @@ export default function Layout() {
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground hidden sm:inline">
                 <User size={12} className="inline mr-1" />
-                {user.username}
+                <span className="hidden 2xl:inline">{user.username}</span>
                 {editMode && <span className="ml-1 text-amber-400 text-[10px]">edit</span>}
               </span>
               <button onClick={signOut} className="btn-ghost p-2 rounded-lg text-muted-foreground hover:text-destructive" title="Sign out">

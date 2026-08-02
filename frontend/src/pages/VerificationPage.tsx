@@ -591,7 +591,7 @@ export default function VerificationPage() {
                             ))}
                             {refComps.map((c) => (
                               <span key={c.id} className="inline-flex items-center px-2 py-1 rounded-md bg-muted text-xs">
-                                <EntityLink kind="component" id={c.id} name={c.name} className="max-w-[220px] hover:text-primary" />
+                                <EntityLink kind="component" id={c.id} name={c.name} subtype={c.type} className="max-w-[220px] hover:text-primary" />
                               </span>
                             ))}
                           </div>

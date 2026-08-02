@@ -74,6 +74,31 @@ export const COMPONENT_TYPE_META: Record<string, { icon: typeof Box; cls: string
   interface: { icon: Plug, cls: 'text-cs-pink', label: 'Interface' },
 };
 
+/**
+ * Resolves icon, colour class and label for an entity kind, with optional
+ * per-type override for components (e.g. a Part vs an Assembly).
+ *
+ * - `kind === 'component'` with a known `subtype` → {@link COMPONENT_TYPE_META}
+ * - otherwise → {@link ENTITY_META}[kind]
+ *
+ * Never throws; an unknown subtype is silently ignored.
+ */
+export function entityIconMeta(
+  kind: EntityKind,
+  subtype?: string,
+): { icon: typeof Box; cls: string; label: string } {
+  if (kind === 'component' && subtype) {
+    const key = subtype.trim().toLowerCase();
+    // hasOwnProperty, not `in`: the YAML is hand-editable, so a component typed
+    // `constructor` or `toString` would otherwise resolve up the prototype
+    // chain to a function with no `.icon`, and rendering it throws.
+    if (Object.prototype.hasOwnProperty.call(COMPONENT_TYPE_META, key)) {
+      return COMPONENT_TYPE_META[key];
+    }
+  }
+  return ENTITY_META[kind];
+}
+
 const PREVIEW_W = 288;
 const PREVIEW_DELAY_MS = 350;
 
@@ -98,7 +123,7 @@ function HoverPreview({ entity, anchor }: { entity: IndexedEntity | 'missing'; a
     );
   }
 
-  const meta = ENTITY_META[entity.kind];
+  const meta = entityIconMeta(entity.kind, entity.subtype);
   const Icon = meta.icon;
   return createPortal(
     <div style={{ ...style, width: PREVIEW_W }} className="fixed z-[100] pointer-events-none card p-3 shadow-xl">
@@ -126,6 +151,8 @@ interface EntityLinkProps {
   projectId?: string;
   showIcon?: boolean;
   className?: string;
+  /** Secondary type for kinds with per-type iconography (component `type`). */
+  subtype?: string;
 }
 
 /**
@@ -135,11 +162,12 @@ interface EntityLinkProps {
  * that have their own onClick (expand, select), and without this a reference
  * would both navigate and fire the row's handler.
  */
-export function EntityLink({ kind, id, name, projectId, showIcon = true, className = '' }: EntityLinkProps) {
+export function EntityLink({ kind, id, name, projectId, showIcon = true, className = '', subtype }: EntityLinkProps) {
   const { projectId: routeProjectId } = useParams<{ projectId: string }>();
   const pid = projectId ?? routeProjectId;
-  const meta = ENTITY_META[kind];
-  const Icon = meta.icon;
+  const displayMeta = entityIconMeta(kind, subtype);
+  const pathMeta = ENTITY_META[kind];
+  const Icon = displayMeta.icon;
 
   const [preview, setPreview] = useState<IndexedEntity | 'missing' | null>(null);
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
@@ -167,14 +195,14 @@ export function EntityLink({ kind, id, name, projectId, showIcon = true, classNa
 
   return (
     <GuardedLink
-      to={meta.path(pid, id)}
+      to={pathMeta.path(pid, id)}
       onClick={(e) => { e.stopPropagation(); endPreview(); }}
       onMouseEnter={startPreview}
       onMouseLeave={endPreview}
-      title={`${meta.label} ${id}${name ? ` — ${name}` : ''}`}
+      title={`${displayMeta.label} ${id}${name ? ` — ${name}` : ''}`}
       className={`inline-flex items-center gap-1 rounded hover:underline underline-offset-2 transition-colors ${className}`}
     >
-      {showIcon && <Icon size={12} className={`${meta.cls} shrink-0`} />}
+      {showIcon && <Icon size={12} className={`${displayMeta.cls} shrink-0`} />}
       <span className="font-mono whitespace-nowrap">{id}</span>
       {name && <span className="truncate">{name}</span>}
       {preview && anchor && <HoverPreview entity={preview} anchor={anchor} />}

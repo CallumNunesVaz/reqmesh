@@ -212,6 +212,7 @@ export default function AllocationMatrixPage() {
                     <EntityLink
                       kind={transpose ? 'requirement' : colKind}
                       id={transpose ? col.req_id : col.id}
+                      subtype={transpose ? undefined : col.kind}
                       className="text-[10px]"
                     />
                   </th>
@@ -223,7 +224,7 @@ export default function AllocationMatrixPage() {
                 <tr key={transpose ? row.id : row.req_id}>
                   <td className={`sticky left-0 z-10 bg-card border-r border-b px-3 py-2 ${transpose ? '' : (STATUS_CLASSES[row.req_status] || '')}`}>
                     <div className="flex flex-col">
-                      <EntityLink kind={transpose ? colKind : 'requirement'} id={transpose ? row.id : row.req_id} className="font-mono" />
+                      <EntityLink kind={transpose ? colKind : 'requirement'} id={transpose ? row.id : row.req_id} subtype={transpose ? row.kind : undefined} className="font-mono" />
                       <span className="text-[10px] text-muted-foreground truncate max-w-[130px]">
                         {transpose ? row.name : row.req_name}
                       </span>

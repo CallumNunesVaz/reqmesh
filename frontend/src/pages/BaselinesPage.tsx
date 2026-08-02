@@ -17,8 +17,8 @@ export default function BaselinesPage() {
   const [error, setError] = useState('');
   const editable = useAuthStore((s) => s.canEdit());
   const bumpGraph = useStore((s) => s.bumpGraphVersion);
-  const baselineFilters = useStore((s) => s.baselineFilters);
-  const toggleBaselineFilter = useStore((s) => s.toggleBaselineFilter);
+  const hiddenBaselines = useStore((s) => s.hiddenBaselines);
+  const toggleHiddenBaseline = useStore((s) => s.toggleHiddenBaseline);
 
   // Create / edit form state
   const [showForm, setShowForm] = useState(false);
@@ -306,11 +306,11 @@ export default function BaselinesPage() {
                   {/* Actions */}
                   <div className="flex items-center gap-1 shrink-0">
                     <button
-                      onClick={() => { toggleBaselineFilter(b.name); bumpGraph(); }}
+                      onClick={() => { toggleHiddenBaseline(b.name); bumpGraph(); }}
                       className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                      title={baselineFilters.includes(b.name) ? 'Show in graph (enabled)' : 'Show in graph (disabled)'}
+                      title={hiddenBaselines.includes(b.name) ? 'Hidden in graph' : 'Shown in graph'}
                     >
-                      {baselineFilters.includes(b.name) ? <Eye size={14} /> : <EyeOff size={14} />}
+                      {hiddenBaselines.includes(b.name) ? <EyeOff size={14} /> : <Eye size={14} />}
                     </button>
                     {editable && (
                       <>

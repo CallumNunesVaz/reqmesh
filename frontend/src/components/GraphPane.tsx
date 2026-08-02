@@ -34,6 +34,7 @@ import { useSelectedReq, useContextPane } from './Layout';
 import { useStore } from '../store';
 import { useWhatIf } from './WhatIfContext';
 import { formatReqType, reqTypeColor } from '../lib/requirementTypes';
+import { effectiveHiddenComponents, filterableComponentIds, isReqHiddenByComponents, isReqHiddenByBaselines, migrateLegacyFilterList } from '../lib/graphFilters';
 
 const edgeColors: Record<string, string> = {
   refines: 'hsl(207,90%,64%)',
@@ -412,8 +413,12 @@ interface SavedView {
   showAllLinks: boolean;
   linkDir?: LinkDir;
   filters: {
-    search: string; status: string; priority: string; baselines: string[]; type: string;
-    verStatus: string; verMethod: string; allocated: string; components: string[];
+    search: string; status: string; priority: string; type: string;
+    verStatus: string; verMethod: string; allocated: string;
+    hiddenBaselines?: string[]; hiddenComponents?: string[];
+    /** Legacy include-lists from before visibility was inverted; still read so
+     *  saved views written earlier restore with their original meaning. */
+    baselines?: string[]; components?: string[];
     /** Removed with requirement_kind; still read so saved views written before
      *  that stay loadable instead of failing to restore. */
     kind?: string;
@@ -474,12 +479,12 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
   const [filterVerMethod, setFilterVerMethod] = useState('');
   const [filterAllocated, setFilterAllocated] = useState('');
 
-  const baselineFilters = useStore((s) => s.baselineFilters);
-  const setBaselineFilters = useStore((s) => s.setBaselineFilters);
-  const toggleBaselineFilter = useStore((s) => s.toggleBaselineFilter);
-  const componentFilters = useStore((s) => s.componentFilters);
-  const toggleComponentFilter = useStore((s) => s.toggleComponentFilter);
-  const setComponentFilters = useStore((s) => s.setComponentFilters);
+  const hiddenBaselines = useStore((s) => s.hiddenBaselines);
+  const setHiddenBaselines = useStore((s) => s.setHiddenBaselines);
+  const toggleHiddenBaseline = useStore((s) => s.toggleHiddenBaseline);
+  const hiddenComponents = useStore((s) => s.hiddenComponents);
+  const toggleHiddenComponent = useStore((s) => s.toggleHiddenComponent);
+  const setHiddenComponents = useStore((s) => s.setHiddenComponents);
   const [showFilters, setShowFilters] = useState(false);
   const [hideRoots, setHideRoots] = useState(false);
   const { selectedReqId, selectReq, derivationReq } = useSelectedReq();
@@ -657,18 +662,10 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
     }
   }, [refocusGraph]);
 
-  // The set of requirement ids satisfied by the currently-selected components,
-  // for O(1) membership tests in the filter below.
-  const componentReqIds = useMemo(() => {
-    if (componentFilters.length === 0) return new Set<string>();
-    const ids = new Set<string>();
-    for (const c of components) {
-      if (componentFilters.includes(c.id)) {
-        for (const rid of c.satisfies || []) ids.add(rid);
-      }
-    }
-    return ids;
-  }, [components, componentFilters]);
+  const effectiveHidden = useMemo(
+    () => effectiveHiddenComponents(components, hiddenComponents),
+    [components, hiddenComponents],
+  );
 
   const filteredReqs = useMemo(() => {
     let out = reqs;
@@ -678,16 +675,16 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
     }
     if (filterStatus) out = out.filter(r => r.status === filterStatus);
     if (filterPriority) out = out.filter(r => r.priority === filterPriority);
-    if (baselineFilters.length > 0) out = out.filter(r => baselineFilters.some(b => r.baselines?.includes(b)));
+    if (hiddenBaselines.length > 0) out = out.filter(r => !isReqHiddenByBaselines(r.baselines, hiddenBaselines));
     if (filterType) out = out.filter(r => r.type === filterType);
     if (filterVerStatus) out = out.filter(r => r.verification_status === filterVerStatus);
     if (filterVerMethod) out = out.filter(r => r.verification_method === filterVerMethod);
     if (filterAllocated) out = out.filter(r => r.allocated_to === filterAllocated);
-    if (componentFilters.length > 0) out = out.filter(r => componentReqIds.has(r.id));
+    if (hiddenComponents.length > 0) out = out.filter(r => !isReqHiddenByComponents(r.id, components, effectiveHidden));
     if (hideRoots) out = out.filter(r => r.parent);
     return out;
-  }, [reqs, search, filterStatus, filterPriority, baselineFilters, filterType,
-      filterVerStatus, filterVerMethod, filterAllocated, componentFilters, componentReqIds, hideRoots]);
+  }, [reqs, search, filterStatus, filterPriority, hiddenBaselines, filterType,
+      filterVerStatus, filterVerMethod, filterAllocated, hiddenComponents, components, effectiveHidden, hideRoots]);
 
   const distinct = (pick: (r: typeof reqs[number]) => string) =>
     [...new Set(reqs.map(pick).filter(Boolean))].sort();
@@ -707,8 +704,8 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
     return [...set].sort();
   }, [reqs]);
   const availableComponents = useMemo(
-    () => components.filter(c => c.satisfies?.length).map(c => c.id).sort(),
-    [components],
+    () => filterableComponentIds(components, hiddenComponents),
+    [components, hiddenComponents],
   );
   const componentLabels = useMemo(
     () => new Map(components.map(c => [c.id, `${c.id}${c.name ? ` — ${c.name}` : ''}`])),
@@ -719,17 +716,17 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
     setSearch('');
     setFilterStatus('');
     setFilterPriority('');
-    setBaselineFilters([]);
+    setHiddenBaselines([]);
     setFilterType('');
     setFilterVerStatus('');
     setFilterVerMethod('');
     setFilterAllocated('');
-    setComponentFilters([]);
+    setHiddenComponents([]);
   };
   const activeFilterCount = [
     search, filterStatus, filterPriority, filterType,
     filterVerStatus, filterVerMethod, filterAllocated,
-  ].filter(Boolean).length + (baselineFilters.length > 0 ? 1 : 0) + (componentFilters.length > 0 ? 1 : 0);
+  ].filter(Boolean).length + (hiddenBaselines.length > 0 ? 1 : 0) + (hiddenComponents.length > 0 ? 1 : 0);
   const hasActiveFilters = activeFilterCount > 0;
 
   const childrenByParent = useMemo(() => {
@@ -1073,9 +1070,11 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
       showAllLinks,
       linkDir,
       filters: {
-        search, status: filterStatus, priority: filterPriority, baselines: [...baselineFilters],
+        search, status: filterStatus, priority: filterPriority,
         type: filterType, verStatus: filterVerStatus, verMethod: filterVerMethod,
-        allocated: filterAllocated, components: [...componentFilters],
+        allocated: filterAllocated,
+        hiddenBaselines: [...hiddenBaselines],
+        hiddenComponents: [...hiddenComponents],
       },
       viewport: rfRef.current?.getViewport() ?? null,
     };
@@ -1086,8 +1085,8 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
       return next;
     });
   }, [collapsed, groupsOnly, selectedReqId, layoutMode, graphSettings, hopDepth, showAllLinks, linkDir, search,
-      filterStatus, filterPriority, baselineFilters, filterType, filterVerStatus, filterVerMethod,
-      filterAllocated, componentFilters, persistViews]);
+      filterStatus, filterPriority, hiddenBaselines, filterType, filterVerStatus, filterVerMethod,
+      filterAllocated, hiddenComponents, persistViews]);
 
   const clearView = useCallback((slot: number) => {
     setViews((prev) => {
@@ -1119,16 +1118,16 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
     setSearch(f.search ?? '');
     setFilterStatus(f.status ?? '');
     setFilterPriority(f.priority ?? '');
-    setBaselineFilters(f.baselines ?? []);
+    setHiddenBaselines(f.hiddenBaselines ?? migrateLegacyFilterList(f.baselines, availableBaselines));
     setFilterType(f.type ?? '');
     setFilterVerStatus(f.verStatus ?? '');
     setFilterVerMethod(f.verMethod ?? '');
     setFilterAllocated(f.allocated ?? '');
-    setComponentFilters(f.components ?? []);
+    setHiddenComponents(f.hiddenComponents ?? migrateLegacyFilterList(f.components, components.map(c => c.id)));
     // Guarantee the layout effect runs (and thus consumes restoreRef) even if
     // the restored config is identical to the current one.
     setLayoutNonce((n) => n + 1);
-  }, [views, layoutMode, projectId, setHopDepthPersist]);
+  }, [views, layoutMode, projectId, setHopDepthPersist, components, availableBaselines]);
 
   useEffect(() => {
     const layoutSig = `${layoutMode}|${gs.nodesep}|${gs.ranksep}|${gs.rankdir}|${gs.margin}|${gs.maxZoom}`;
@@ -1823,13 +1822,13 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
                       <div className="text-[9px] text-graph-muted mb-1">Baselines</div>
                       <div className="space-y-0.5 max-h-32 overflow-y-auto">
                         {availableBaselines.map((b) => {
-                          const checked = baselineFilters.includes(b);
+                          const checked = !hiddenBaselines.includes(b);
                           return (
                             <label key={b} className="flex items-center gap-1.5 py-0.5 cursor-pointer hover:bg-graph-control-hover rounded px-1 transition-colors">
                               <input
                                 type="checkbox"
                                 checked={checked}
-                                onChange={() => toggleBaselineFilter(b)}
+                                onChange={() => toggleHiddenBaseline(b)}
                                 className="w-3 h-3 rounded border-graph-border accent-graph-text cursor-pointer"
                               />
                               <span className="text-[11px] text-graph-text">{b}</span>
@@ -1852,16 +1851,18 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
                       <div className="text-[9px] text-graph-muted mb-1">Components</div>
                       <div className="space-y-0.5 max-h-32 overflow-y-auto">
                         {availableComponents.map((cid) => {
-                          const checked = componentFilters.includes(cid);
+                          const checked = !effectiveHidden.has(cid);
                           const label = componentLabels.get(cid) || cid;
                           const reqCount = components.find(c => c.id === cid)?.satisfies?.length ?? 0;
+                          const inherited = effectiveHidden.has(cid) && !hiddenComponents.includes(cid);
                           return (
                             <label key={cid} className="flex items-center gap-1.5 py-0.5 cursor-pointer hover:bg-graph-control-hover rounded px-1 transition-colors">
                               <input
                                 type="checkbox"
                                 checked={checked}
-                                onChange={() => toggleComponentFilter(cid)}
-                                className="w-3 h-3 rounded border-graph-border accent-graph-text cursor-pointer"
+                                onChange={() => toggleHiddenComponent(cid)}
+                                className="w-3 h-3 rounded border-graph-border accent-graph-text cursor-pointer disabled:opacity-50 disabled:cursor-default"
+                                disabled={inherited}
                               />
                               <span className="text-[11px] text-graph-text truncate max-w-[140px]">{label}</span>
                               <span className="text-[9px] text-graph-muted ml-auto shrink-0">{reqCount}</span>
