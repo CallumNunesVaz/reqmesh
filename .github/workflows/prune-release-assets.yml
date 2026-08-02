@@ -1,0 +1,45 @@
+name: Prune release image archives
+
+# Removes the `reqmesh-vX.Y.Z-image.tar.gz` asset from older releases. The
+# release workflow attaches one to every release (~150 MB and growing) but only
+# the newest are ever used, so they accumulate for nothing. Install tarballs,
+# .sha256 files, release notes and tags are never touched.
+#
+# Run from the Actions tab. `dry_run` defaults to true, so a stray click reports
+# what it would remove and stops.
+
+on:
+  workflow_dispatch:
+    inputs:
+      keep:
+        description: "Keep the archive on this many of the most recent releases"
+        required: false
+        default: "2"
+      dry_run:
+        description: "List what would be deleted without deleting it"
+        type: boolean
+        required: false
+        default: true
+
+permissions:
+  contents: write   # deleting release assets
+
+jobs:
+  prune:
+    name: Prune old image archives
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      # Inputs go through env, never interpolated into the script body: a `run:`
+      # containing ${{ inputs.keep }} would execute whatever the trigger typed.
+      # The script validates KEEP is an integer before using it.
+      - name: Prune
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KEEP: ${{ inputs.keep }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          args=( "--keep=$KEEP" )
+          [ "$DRY_RUN" = "true" ] && args+=( --dry-run )
+          bash scripts/prune_release_images.sh "${args[@]}"

@@ -97,3 +97,14 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           gh release upload "$GITHUB_REF_NAME" "reqmesh-v${VERSION}-image.tar.gz" --clobber
+
+      # Each archive is ~150 MB and only the newest are ever used, so without
+      # this the release assets grow by that much every patch. Keeps the current
+      # release plus one rollback target. Never fails the release: the artifacts
+      # are already published by this point, and a cleanup problem is not a
+      # broken release.
+      - name: Prune image archives from older releases
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/prune_release_images.sh --keep=2
