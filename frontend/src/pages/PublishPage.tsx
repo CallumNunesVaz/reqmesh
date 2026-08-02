@@ -53,10 +53,18 @@ export default function PublishPage() {
   const [downloading, setDownloading] = useState(false);
   const [downloadStatus, setDownloadStatus] = useState('');
   const [fallbackMessage, setFallbackMessage] = useState('');
-  const [latexAvail, setLatexAvail] = useState(false);
+  // Tri-state on purpose: null = not yet known. This started as `false`, with
+  // the failure swallowed, so an unanswered probe rendered as a confident
+  // "LaTeX engine not detected" — on every page load before the request
+  // resolved, and permanently if it ever failed. The endpoint needs auth, so
+  // an expired session was enough to tell a working deployment that its PDFs
+  // were being downgraded. Claim nothing until the server has actually said.
+  const [latexAvail, setLatexAvail] = useState<boolean | null>(null);
 
   useEffect(() => {
-    api.getLatexStatus().then(s => setLatexAvail(s.available)).catch(() => {});
+    api.getLatexStatus()
+      .then(s => setLatexAvail(s.available))
+      .catch(() => setLatexAvail(null));
   }, []);
 
   const handleDownload = async () => {
@@ -193,7 +201,7 @@ export default function PublishPage() {
         })}
       </div>
 
-      {!latexAvail && selectedFormat === 'pdf' && (
+      {latexAvail === false && selectedFormat === 'pdf' && (
         <div className="card p-4 mb-6 border-amber-500/30 bg-amber-500/5">
           <p className="text-sm font-medium text-amber-400">LaTeX engine not detected</p>
           <p className="text-xs text-muted-foreground mt-1">
