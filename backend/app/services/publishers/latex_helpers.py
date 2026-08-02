@@ -63,13 +63,26 @@ def compile_latex_to_pdf(latex: str, out_path: str) -> bool:
                 subprocess.run(cmd, cwd=tmp_dir, capture_output=True, timeout=300,
                                check=True)
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
-            log = ""
-            if isinstance(exc, subprocess.CalledProcessError) and exc.stdout:
-                log = exc.stdout.decode("utf-8", "replace")[-2000:]
-            elif isinstance(exc, subprocess.TimeoutExpired):
-                log = ("compile exceeded the timeout — if this deployment has a cold "
-                       "TeX cache, run backend/scripts/warm_tectonic.py")
-            logger.warning("LaTeX compile with %s failed: %s\n%s", engine, exc, log)
+            # Both streams, always. This read only stdout, and tectonic reports
+            # on *stderr* — so a tectonic failure logged "exit status 1" and an
+            # empty line, which is undiagnosable. It is the engine that runs
+            # during `docker build`, where that log is the only evidence there
+            # is. The classic engines do report on stdout, hence both.
+            parts = []
+            for name in ("stderr", "stdout"):
+                stream = getattr(exc, name, None)
+                if not stream:
+                    continue
+                if isinstance(stream, bytes):
+                    stream = stream.decode("utf-8", "replace")
+                text = stream.strip()
+                if text:
+                    parts.append(f"--- {engine} {name} (last 2000 chars) ---\n{text[-2000:]}")
+            if isinstance(exc, subprocess.TimeoutExpired):
+                parts.append("compile exceeded the timeout — if this deployment has a cold "
+                             "TeX cache, run backend/scripts/warm_tectonic.py")
+            logger.warning("LaTeX compile with %s failed: %s\n%s", engine, exc,
+                           "\n".join(parts) or "(the engine produced no output)")
             return False
         pdf = tmp_dir / "report.pdf"
         if not pdf.exists():
