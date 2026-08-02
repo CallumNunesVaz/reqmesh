@@ -75,6 +75,15 @@ def export_sysml_v2(store) -> str:
     meta = store.read_meta()
     reqs = store.list_requirements()
     vcs = store.list_verification_cases()
+    components = store.list_components()
+
+    # Build a requirement-id → list-of-component-ids map from component.satisfies,
+    # so the subject clause can be derived from the allocating component(s) when
+    # no explicit subject is stored.  One pass before the recursion, not per req.
+    req_to_components: dict[str, list[str]] = {}
+    for c in components:
+        for req_id in c.get("satisfies") or []:
+            req_to_components.setdefault(req_id, []).append(c["id"])
     attach_verification_cases(store, reqs, vcs)
     try:
         defs = {d["id"]: d for d in store.list_items("definitions")}
@@ -145,9 +154,17 @@ def export_sysml_v2(store) -> str:
         # pointing the wrong way to an entity of the wrong type.
 
         # Parametrics: typed attributes and assume/require constraints.
-        if r.get("subject"):
-            subj = r["subject"].replace("-", "_").replace(".", "_")
+        # Subject — an explicit stored subject wins; otherwise derive from the
+        # single allocating component when there is exactly one.
+        explicit = r.get("subject")
+        if explicit:
+            subj = explicit.replace("-", "_").replace(".", "_")
             body.append(f"{prefix}  subject {subj};")
+        else:
+            allocs = req_to_components.get(r["id"], [])
+            if len(allocs) == 1:
+                subj = allocs[0].replace("-", "_").replace(".", "_")
+                body.append(f"{prefix}  subject {subj};")
         for p in r.get("parameters") or []:
             body.append(_param_line(_effective(p, "calc_def", defs), f"{prefix}  "))
         for c in r.get("constraints") or []:
@@ -168,7 +185,6 @@ def export_sysml_v2(store) -> str:
         lines.extend(render_req(r))
 
     # --- Components as part defs (so rollup targets round-trip) ---
-    components = store.list_components()
     if components:
         comp_by_parent: dict[str | None, list[dict]] = {}
         for c in components:

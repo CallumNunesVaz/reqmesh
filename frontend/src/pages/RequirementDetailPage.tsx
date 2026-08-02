@@ -1084,26 +1084,6 @@ export default function RequirementDetailPage() {
                 <div className="text-[10px] text-muted-foreground mt-1">Artifacts that must exist to cover this requirement</div>
               </div>
               <div>
-                <label className="label">Subject</label>
-                {/* Free text let this drift from any real component id, so the
-                    round-trip to SysML v2 (`subject X;`) exported a name
-                    nothing else in the project recognised. A dropdown of
-                    actual components keeps it referring to something real —
-                    same reasoning as Coverage Needs below. */}
-                <select
-                  className="select font-mono text-xs"
-                  value={req.subject || ''}
-                  onChange={(e) => save({ subject: e.target.value || null } as Partial<Requirement>)}
-                  disabled={!editable}
-                >
-                  <option value="">None</option>
-                  {allComponents.map((c) => (
-                    <option key={c.id} value={c.id}>{c.id} — {c.name}</option>
-                  ))}
-                </select>
-                <div className="text-[10px] text-muted-foreground mt-0.5">SysML v2 subject — the component this requirement is about</div>
-              </div>
-              <div>
                 <label className="label flex items-center justify-between">
                   <span>Stakeholder Priorities</span>
                   {reqValue?.value != null && (

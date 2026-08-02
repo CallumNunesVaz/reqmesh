@@ -127,6 +127,17 @@ export default function RisksPage() {
     }
   };
 
+  const setRiskMitigations = async (riskId: string, linked: string[]) => {
+    if (!projectId) return;
+    setRisks((prev) => prev.map((r) => (r.id === riskId ? { ...r, mitigating_requirements: linked } : r)));
+    try {
+      await api.updateRisk(projectId, riskId, { mitigating_requirements: linked });
+    } catch (err) {
+      console.error(err);
+      load();
+    }
+  };
+
   const filteredRisks = useMemo(() => {
     if (!search && !filterStatus && !filterSeverity && !filterProbability) return risks;
     const q = search.toLowerCase();
@@ -336,7 +347,7 @@ export default function RisksPage() {
                     <AutoLinkHtml html={r.description} kinds={entityKinds} />
                   </div>
                 )}
-                {(r.linked_requirements.length > 0 || editable) && (
+                {(r.linked_requirements.length > 0 || (r.mitigating_requirements || []).length > 0 || editable) && (
                   <div className="mt-2">
                     <LinkEditor
                       label="Threatens" hint="Requirements this risk endangers" kind="requirement"
@@ -347,6 +358,17 @@ export default function RisksPage() {
                       onRemove={(id) => setRiskRequirements(r.id, r.linked_requirements.filter((x) => x !== id))}
                       nameOf={(id) => requirements.find((q) => q.id === id)?.name ?? ''}
                     />
+                    <div className="mt-2">
+                      <LinkEditor
+                        label="Mitigated By" hint="Requirements that reduce this risk" kind="requirement"
+                        linked={(r.mitigating_requirements || [])}
+                        options={requirements}
+                        editable={editable}
+                        onAdd={(id) => setRiskMitigations(r.id, [...(r.mitigating_requirements || []), id])}
+                        onRemove={(id) => setRiskMitigations(r.id, (r.mitigating_requirements || []).filter((x) => x !== id))}
+                        nameOf={(id) => requirements.find((q) => q.id === id)?.name ?? ''}
+                      />
+                    </div>
                   </div>
                 )}
               </div>

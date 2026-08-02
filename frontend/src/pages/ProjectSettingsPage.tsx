@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Save, CheckCircle2, Settings, Trash2, Pencil, X, Check, Plus, RotateCw, GitBranch, Clock, User } from 'lucide-react';
+import { ArrowLeft, Save, CheckCircle2, Settings, X, Plus, RotateCw, GitBranch, Clock, User } from 'lucide-react';
 import { api, type StakeholderDef, type RiskMatrix } from '../api/client';
 import { useAuthStore } from '../store/auth';
 
@@ -33,15 +33,6 @@ const ENTITY_LABELS: Record<string, string> = {
   specifications: 'Specifications',
 };
 
-/** A baseline definition as stored in project meta. The Baselines page edits
- *  `symbol` and `description`; this page edits only the set of names, but must
- *  round-trip the other fields untouched. */
-interface BaselineDef {
-  name: string;
-  symbol: string;
-  description: string;
-}
-
 export default function ProjectSettingsPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
@@ -64,24 +55,6 @@ export default function ProjectSettingsPage() {
   const [gitCommitSchedule, setGitCommitSchedule] = useState('every_change');
   const [gitCommitIntervalHours, setGitCommitIntervalHours] = useState(0);
   const [gitCommitChangesThreshold, setGitCommitChangesThreshold] = useState(0);
-
-  // Baselines
-  const [baselines, setBaselines] = useState<{ name: string; count: number }[]>([]);
-  // Full definition objects, not just names. This page only edits the name
-  // list, but it saves the whole array back — so holding bare strings here
-  // silently wiped the symbol and description that the Baselines page sets,
-  // on every unrelated settings save.
-  const [baselineDefs, setBaselineDefs] = useState<BaselineDef[]>([]);
-  const [newBaselineDef, setNewBaselineDef] = useState('');
-  const [editingBaseline, setEditingBaseline] = useState<string | null>(null);
-  const [editBaselineName, setEditBaselineName] = useState('');
-
-  const addBaselineDef = () => {
-    const name = newBaselineDef.trim();
-    setNewBaselineDef('');
-    if (!name || baselineDefs.some((d) => d.name === name)) return;
-    setBaselineDefs((prev) => [...prev, { name, symbol: '', description: '' }]);
-  };
 
   // Stakeholders whose views a requirement is scored against. Defined per
   // project so the scores are comparable between requirements — they used to
@@ -193,11 +166,6 @@ export default function ProjectSettingsPage() {
     return `${Math.floor(months / 12)}y ago`;
   };
 
-  const loadBaselines = () => {
-    if (!projectId) return;
-    api.listBaselines(projectId).then((b: any[]) => setBaselines(b.map(x => ({ name: x.name, count: x.count })))).catch(() => {});
-  };
-
   useEffect(() => {
     if (!projectId) return;
     api.getProject(projectId).then((p: any) => {
@@ -221,13 +189,7 @@ export default function ProjectSettingsPage() {
       setGitCommitChangesThreshold(git.commit_changes_threshold || 0);
       setStakeholders(p.stakeholders || []);
       setRiskMatrix(p.risk_matrix || null);
-      setBaselineDefs((p.baselines || []).map((b: any) => (
-        typeof b === 'string'
-          ? { name: b, symbol: '', description: '' }
-          : { name: b.name, symbol: b.symbol || '', description: b.description || '' }
-      )));
     }).catch((err: any) => setError(err.message));
-    loadBaselines();
     loadGitHistory();
   }, [projectId]);
 
@@ -251,7 +213,6 @@ export default function ProjectSettingsPage() {
     try {
       await api.updateProject(projectId, {
         name: projectName, naming,
-        baselines: baselineDefs,
         stakeholders,
         ...(riskMatrix ? { risk_matrix: riskMatrix } : {}),
         git: {
@@ -533,95 +494,6 @@ export default function ProjectSettingsPage() {
           </div>
         </motion.div>
       )}
-
-      {/* Baseline definitions */}
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="card p-5 mb-6">
-        <h2 className="font-semibold text-sm text-card-foreground mb-1">Baseline Definitions</h2>
-        <p className="text-xs text-muted-foreground mb-3">Define the available baseline names for this project (e.g. PDR, CDR, TRR). These appear as selectable options on requirement forms.</p>
-        <div className="flex flex-wrap gap-1 mb-2">
-          {baselineDefs.map((def) => (
-            <span key={def.name} className="inline-flex items-center gap-1 rounded-full bg-accent px-2.5 py-0.5 text-xs">
-              {def.symbol ? `${def.symbol} · ${def.name}` : def.name}
-              {editable && (
-                <button onClick={() => setBaselineDefs((prev) => prev.filter((d) => d.name !== def.name))} className="text-muted-foreground hover:text-destructive"><X size={11} /></button>
-              )}
-            </span>
-          ))}
-          {baselineDefs.length === 0 && (
-            <span className="text-xs text-muted-foreground italic">No baselines defined. Add names like PDR, CDR below.</span>
-          )}
-        </div>
-        {editable && (
-          <div className="flex gap-2">
-            <input className="input text-sm flex-1" placeholder="PDR" value={newBaselineDef}
-              onChange={(e) => setNewBaselineDef(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addBaselineDef(); } }} />
-            <button className="btn-secondary text-xs" onClick={addBaselineDef}>
-              <Plus size={14} /> Add
-            </button>
-          </div>
-        )}
-      </motion.div>
-
-      {/* Baselines */}
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="card p-5 mb-6">
-        <h2 className="font-semibold text-sm text-card-foreground mb-1">Baselines</h2>
-        <p className="text-xs text-muted-foreground mb-4">Manage configuration baselines. Renaming updates all linked requirements. Deleting clears the baseline from all requirements.</p>
-        {baselines.length === 0 ? (
-          <p className="text-xs text-muted-foreground italic">No baselines defined. Freeze a baseline from the Baselines page or use <code className="bg-muted px-1 rounded">POST /api/projects/{'{id}'}/baselines/NAME/freeze</code>.</p>
-        ) : (
-          <div className="space-y-1">
-            {baselines.map((b) => (
-              <div key={b.name} className="flex items-center gap-2 text-xs py-1.5 px-2 rounded hover:bg-accent">
-                {editingBaseline === b.name ? (
-                  <>
-                    <input className="input text-xs flex-1 font-mono" value={editBaselineName} onChange={(e) => setEditBaselineName(e.target.value)} autoFocus
-                      onKeyDown={async (e) => {
-                        if (e.key === 'Enter') {
-                          if (!editBaselineName.trim()) return;
-                          await api.renameBaseline(projectId!, b.name, editBaselineName.trim());
-                          setEditingBaseline(null);
-                          loadBaselines();
-                        }
-                        if (e.key === 'Escape') setEditingBaseline(null);
-                      }} />
-                    <button onClick={async () => {
-                      if (!editBaselineName.trim()) return;
-                      await api.renameBaseline(projectId!, b.name, editBaselineName.trim());
-                      setEditingBaseline(null);
-                      loadBaselines();
-                    }} className="p-1 rounded text-emerald-400 hover:bg-emerald-500/10" title="Save">
-                      <Check size={12} />
-                    </button>
-                    <button onClick={() => setEditingBaseline(null)} className="p-1 rounded text-muted-foreground hover:text-foreground" title="Cancel">
-                      <X size={12} />
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <span className="font-mono text-card-foreground flex-1">{b.name}</span>
-                    <span className="text-muted-foreground">{b.count} req{b.count !== 1 ? 's' : ''}</span>
-                    {editable && (
-                      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity">
-                        <button onClick={() => { setEditingBaseline(b.name); setEditBaselineName(b.name); }} className="p-1 rounded text-muted-foreground hover:text-foreground" title="Rename">
-                          <Pencil size={12} />
-                        </button>
-                        <button onClick={async () => {
-                          if (!confirm(`Delete baseline "${b.name}"? This will clear it from ${b.count} requirement(s).`)) return;
-                          await api.deleteBaseline(projectId!, b.name);
-                          loadBaselines();
-                        }} className="p-1 rounded text-muted-foreground hover:text-destructive" title="Delete">
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </motion.div>
 
       {/* Git Integration */}
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="card p-5 mb-6">

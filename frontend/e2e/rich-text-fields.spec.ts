@@ -98,11 +98,16 @@ test('bold text in a risk description survives save and reload', async ({ app, s
   const riskCard = app.locator('.card').filter({ hasText: 'RSK00001' }).first();
   await expect(riskCard).toBeVisible({ timeout: 10_000 });
 
-  // The description should be rendered as HTML — the <strong> element must exist
-  const descArea = riskCard.locator('.text-xs.text-muted-foreground.line-clamp-1');
-  await expect(descArea.locator('strong')).toBeVisible();
+  // The description is rendered as HTML, so the <strong> must be a real element.
+  //
+  // Located by content rather than by class: this used to select
+  // `.line-clamp-1`, which was the truncation bug itself, so removing the clamp
+  // broke the test that was meant to be checking the bold round-trip. A test
+  // pinned to a utility class fails when the styling is fixed.
+  await expect(riskCard.locator('strong', { hasText: 'bold' })).toBeVisible();
 
-  // And the literal string "<strong>" should not appear as visible text
+  // And the literal string "<strong>" must not appear as visible text — that is
+  // what an escaping renderer would produce.
   await expect(riskCard).not.toContainText('<strong>');
 });
 
