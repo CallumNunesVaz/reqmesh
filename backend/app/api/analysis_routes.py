@@ -376,17 +376,23 @@ def evaluation_impact(project_id: str, data: ImpactRequest, _rate: None = Depend
     """Returns the evaluation with hypothetical overrides plus a
     dependency-ordered trace of every parameter and constraint that
     changes — so the frontend can animate the what-if cascade."""
-    from app.services.evaluation import evaluate_project, build_impact
+    from app.services.evaluation import evaluate_project, build_impact, coerce_number
 
     store = get_store(project_id)
-    overrides = {}
+    overrides: dict[str, float] = {}
+    override_issues: list[dict] = []
     for ref, val in (data.overrides or {}).items():
-        try:
-            overrides[ref] = float(val)
-        except (ValueError, TypeError):
-            pass
+        coerced = coerce_number(val,
+                                 kind="non_numeric_override",
+                                 ref=ref,
+                                 source="",
+                                 issues=override_issues)
+        if coerced is not None:
+            overrides[ref] = coerced
 
     evaluation = evaluate_project(store, extra_overrides=overrides)
+    evaluation["data_issues"] = sorted(evaluation["data_issues"] + override_issues,
+                                       key=lambda i: (i["kind"], i["ref"], i["source"]))
     impact = build_impact(store, overrides)
     return {
         "evaluation": evaluation,

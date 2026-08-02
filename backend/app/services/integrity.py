@@ -194,35 +194,54 @@ class IntegrityChecker:
         lowlink: dict[str, int] = {}
         sccs: list[list[str]] = []
 
-        def strongconnect(v: str):
-            nonlocal index
-            indices[v] = index
-            lowlink[v] = index
-            index += 1
-            stack.append(v)
-            on_stack.add(v)
-
-            for w in edges.get(v, set()):
-                if w not in indices:
-                    strongconnect(w)
-                    lowlink[v] = min(lowlink[v], lowlink[w])
-                elif w in on_stack:
-                    lowlink[v] = min(lowlink[v], indices[w])
-
-            if lowlink[v] == indices[v]:
-                scc: list[str] = []
-                while True:
-                    w = stack.pop()
-                    on_stack.discard(w)
-                    scc.append(w)
-                    if w == v:
-                        break
-                if len(scc) > 1:
-                    sccs.append(scc)
+        # Iterative Tarjan to avoid RecursionError on deep ``derives`` chains.
+        # Each call-stack frame is (node, next_edge_position).
+        call_stack: list[tuple[str, int]] = []
 
         for node in list(edges.keys()):
-            if node not in indices:
-                strongconnect(node)
+            if node in indices:
+                continue
+            call_stack.append((node, 0))
+            while call_stack:
+                v, ei = call_stack[-1]
+                if ei == 0:
+                    indices[v] = index
+                    lowlink[v] = index
+                    index += 1
+                    stack.append(v)
+                    on_stack.add(v)
+
+                edges_v = list(edges.get(v, set()))
+                advanced = False
+                while ei < len(edges_v):
+                    w = edges_v[ei]
+                    ei += 1
+                    call_stack[-1] = (v, ei)
+                    if w not in indices:
+                        call_stack.append((w, 0))
+                        advanced = True
+                        break
+                    elif w in on_stack:
+                        lowlink[v] = min(lowlink[v], indices[w])
+                if advanced:
+                    continue
+
+                # All outgoing edges processed.
+                call_stack.pop()
+                if call_stack:
+                    parent = call_stack[-1][0]
+                    lowlink[parent] = min(lowlink[parent], lowlink[v])
+
+                if lowlink[v] == indices[v]:
+                    scc: list[str] = []
+                    while True:
+                        w = stack.pop()
+                        on_stack.discard(w)
+                        scc.append(w)
+                        if w == v:
+                            break
+                    if len(scc) > 1:
+                        sccs.append(scc)
 
         for scc in sccs:
             self.issues.append({
