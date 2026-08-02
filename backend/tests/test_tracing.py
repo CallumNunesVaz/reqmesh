@@ -123,13 +123,14 @@ def test_verification_need_satisfied_by_a_case(client, project):
 
 
 def test_verification_need_satisfied_from_the_requirement_side(client, project):
-    """The UI writes the link on both entities, so either direction must count."""
+    """The VC owns the link.  Writing on the requirement side still counts
+    because the VC records it on the owning side (verified_requirements)."""
     from app.services.yaml_store import YamlStore
     from app.core.config import settings
     from pathlib import Path
 
     store = YamlStore(Path(settings.data_root) / project)
-    store.create_verification_case({"id": "VC2", "name": "VC2"})
+    store.create_verification_case({"id": "VC2", "name": "VC2", "verified_requirements": ["V2"]})
     store.create_requirement({"id": "V2", "name": "V2", "description": "X",
                               "needs": ["verification_case"],
                               "verification_cases": ["VC2"]})

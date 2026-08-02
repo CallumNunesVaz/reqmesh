@@ -303,6 +303,8 @@ def get_workflow_config(project_id: str):
 def get_requirement_tree(project_id: str):
     store = get_store(project_id)
     reqs = store.list_requirements()
+    vcs = store.list_verification_cases()
+    attach_verification_cases(store, reqs, vcs)
     return build_flat_tree(reqs, project=lambda r: {
         "id": r["id"],
         "name": r.get("name", ""),

@@ -14,6 +14,8 @@ try:
 except ImportError:
     HAS_OPENPYXL = False
 
+from app.services.verification_links import attach as attach_verification_cases
+
 
 _HTML_TAG = re.compile(r"<[^>]*>")
 
@@ -143,7 +145,6 @@ def _row_to_req(row: dict) -> dict:
         "description": get("description", ""),
         "status": get("status", "proposed"),
         "priority": get("priority", "medium"),
-        "verification_method": get("verification_method", "test"),
         "parent": get("parent", "") or None,
         "relations": relations,
         "verification_cases": vcs,
@@ -161,6 +162,8 @@ def export_table(store, fmt: str) -> str:
         raise ValueError(f"Unknown table format: {fmt}")
     meta = store.read_meta()
     reqs = store.list_requirements()
+    vcs = store.list_verification_cases()
+    attach_verification_cases(store, reqs, vcs)
     columns = _flat_columns(meta)
 
     out = io.StringIO()
@@ -266,6 +269,8 @@ def export_xlsx(store, path: str) -> None:
     meta = store.read_meta()
     columns = _flat_columns(meta)
     reqs = store.list_requirements()
+    vcs = store.list_verification_cases()
+    attach_verification_cases(store, reqs, vcs)
 
     for col_idx, col_name in enumerate(columns, start=1):
         cell = ws.cell(row=1, column=col_idx, value=col_name)
