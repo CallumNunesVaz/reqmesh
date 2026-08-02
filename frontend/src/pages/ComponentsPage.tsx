@@ -8,6 +8,7 @@ import { useStore } from '../store';
 import { useAuthStore } from '../store/auth';
 import { COMPONENT_TYPE_META } from '../components/entities';
 import { HelpTip } from '../components/HelpTip';
+import { effectiveHiddenComponents } from '../lib/graphFilters';
 
 const EMPTY_DRAFT = { id: '', name: '', type: 'assembly', parent: '' };
 
@@ -18,8 +19,8 @@ export default function ComponentsPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkParent, setBulkParent] = useState('');
   const dataVersion = useStore((s) => s.dataVersion);
-  const componentFilters = useStore((s) => s.componentFilters);
-  const toggleComponentFilter = useStore((s) => s.toggleComponentFilter);
+  const hiddenComponents = useStore((s) => s.hiddenComponents);
+  const toggleHiddenComponent = useStore((s) => s.toggleHiddenComponent);
   const bumpGraph = useStore((s) => s.bumpGraphVersion);
 
   const [components, setComponents] = useState<Component[]>([]);
@@ -73,6 +74,11 @@ export default function ComponentsPage() {
     }
     return ids;
   }, [components, search, filterType]);
+
+  const effectiveHidden = useMemo(
+    () => effectiveHiddenComponents(components, hiddenComponents),
+    [components, hiddenComponents],
+  );
 
   const filtering = !!(search || filterType);
   const filteredCount = filterMatchIds ? filterMatchIds.size : components.length;
@@ -202,6 +208,7 @@ export default function ComponentsPage() {
     const isCollapsed = collapsed.has(node.id);
     const typeMeta = COMPONENT_TYPE_META[node.type] || COMPONENT_TYPE_META.assembly;
     const TypeIcon = typeMeta.icon;
+    const inherited = effectiveHidden.has(node.id) && !hiddenComponents.includes(node.id);
 
     const subtreeMatches = (n: ComponentTreeNode): boolean => {
       if (!filterMatchIds) return true;
@@ -248,11 +255,12 @@ export default function ComponentsPage() {
             </span>
           )}
           <button
-            onClick={(e) => { e.stopPropagation(); toggleComponentFilter(node.id); bumpGraph(); }}
-            className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0"
-            title={componentFilters.includes(node.id) ? 'Show in graph (enabled)' : 'Show in graph (disabled)'}
+            onClick={(e) => { e.stopPropagation(); toggleHiddenComponent(node.id); bumpGraph(); }}
+            className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0 disabled:opacity-50 disabled:cursor-default disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+            disabled={inherited}
+            title={inherited ? 'Hidden by a parent component' : effectiveHidden.has(node.id) ? 'Hidden in graph' : 'Shown in graph'}
           >
-            {componentFilters.includes(node.id) ? <Eye size={13} /> : <EyeOff size={13} />}
+            {effectiveHidden.has(node.id) ? <EyeOff size={13} /> : <Eye size={13} />}
           </button>
         </div>
         {hasKids && !isCollapsed && node.children.map((child) => renderNode(child, depth + 1))}

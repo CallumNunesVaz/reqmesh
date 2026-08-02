@@ -11,6 +11,8 @@ export interface IndexedEntity {
   /** Plain-text detail line — description with any markup stripped. */
   detail: string;
   status?: string;
+  /** Secondary type for kinds with per-type iconography — a component's `type`. */
+  subtype?: string;
 }
 
 const stripMarkup = (s: string) => s.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
@@ -159,7 +161,7 @@ export function loadEntityIndex(projectId: string): Promise<IndexedEntity[]> {
   ]).then(([reqs, vcs, comps, specs, crs, risks]) => [
     ...reqs.map((r): IndexedEntity => ({ kind: 'requirement', id: r.id, name: r.name, detail: stripMarkup(r.description || ''), status: r.status })),
     ...vcs.map((v): IndexedEntity => ({ kind: 'verification', id: v.id, name: v.name, detail: stripMarkup(v.description || ''), status: v.status })),
-    ...comps.map((c): IndexedEntity => ({ kind: 'component', id: c.id, name: c.name, detail: stripMarkup(c.description || ''), status: c.type })),
+    ...comps.map((c): IndexedEntity => ({ kind: 'component', id: c.id, name: c.name, detail: stripMarkup(c.description || ''), subtype: c.type })),
     ...specs.map((s): IndexedEntity => ({ kind: 'specification', id: s.id, name: s.name, detail: stripMarkup(s.description || '') })),
     ...crs.map((c): IndexedEntity => ({ kind: 'change', id: c.id, name: c.title, detail: stripMarkup(c.description || ''), status: c.status })),
     ...risks.map((r): IndexedEntity => ({ kind: 'risk', id: r.id, name: r.title, detail: stripMarkup(r.description || ''), status: r.severity })),
