@@ -6,6 +6,8 @@ import { Plus, Trash2, Edit3, Check, X, Snowflake, History, GitBranch, Clock, La
 import { api, type BaselineInfo, type BaselineDiff } from '../api/client';
 import { EntityLink } from '../components/entities';
 import RichTextEditor from '../components/RichTextEditor';
+import { AutoLinkHtml } from '../components/autoLink';
+import { useEntityKinds } from '../components/entityIndex';
 import { HelpTip } from '../components/HelpTip';
 import { useAuthStore } from '../store/auth';
 import { useStore } from '../store';
@@ -16,6 +18,7 @@ export default function BaselinesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const editable = useAuthStore((s) => s.canEdit());
+  const entityKinds = useEntityKinds(projectId);
   const bumpGraph = useStore((s) => s.bumpGraphVersion);
   const hiddenBaselines = useStore((s) => s.hiddenBaselines);
   const toggleHiddenBaseline = useStore((s) => s.toggleHiddenBaseline);
@@ -219,10 +222,10 @@ export default function BaselinesPage() {
                       disabled={formSaving}
                     />
                   ) : (
-                    <div
-                      className="min-h-[80px] border rounded-lg p-3 text-sm text-muted-foreground"
-                      dangerouslySetInnerHTML={{ __html: formDesc || 'No description' }}
-                    />
+                    <div className="min-h-[80px] border rounded-lg p-3 text-sm text-muted-foreground">
+                      {formDesc ? <AutoLinkHtml html={formDesc} kinds={entityKinds} />
+                                : <span className="italic">No description</span>}
+                    </div>
                   )}
                 </div>
                 <div className="flex gap-2 justify-end">
