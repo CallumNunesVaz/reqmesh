@@ -23,7 +23,7 @@
     "@tiptap/extension-placeholder": "^2.9.0",
     "@tiptap/pm": "^2.9.0",
     "@tiptap/react": "^2.9.0",
-    "@tiptap/starter-kit": "^2.9.0",
+    "@tiptap/starter-kit": "^3.29.0",
     "@xyflow/react": "^12.11.2",
     "d3-force": "^3.0.0",
     "elkjs": "^0.12.0",
