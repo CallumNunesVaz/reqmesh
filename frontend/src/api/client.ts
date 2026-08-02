@@ -449,7 +449,11 @@ export interface Risk {
   rating?: RiskRating;
   impact: string;
   mitigation: string;
+  /** Requirements this risk endangers — "Threatens". */
   linked_requirements: string[];
+  /** Requirements that control this risk — "Mitigated By". The opposite
+   *  direction to `linked_requirements`; a requirement may appear in both. */
+  mitigating_requirements: string[];
   status: string;
   created: string;
   modified: string;

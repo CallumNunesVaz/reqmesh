@@ -46,6 +46,13 @@
       "title": "Linked Requirements",
       "type": "array"
     },
+    "mitigating_requirements": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Mitigating Requirements",
+      "type": "array"
+    },
     "status": {
       "default": "open",
       "title": "Status",

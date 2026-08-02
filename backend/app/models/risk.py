@@ -41,7 +41,14 @@ class Risk(BaseModel):
     probability: str = ""
     impact: str = ""
     mitigation: str = ""
+    #: Requirements this risk endangers — "threatens".
     linked_requirements: list[str] = Field(default_factory=list)
+    #: Requirements that exist to control this risk — "mitigated by". The
+    #: opposite direction to `linked_requirements`: those are what the risk puts
+    #: at stake, these are what reduces it. Kept as a separate list rather than a
+    #: typed relation because the two are asked and answered independently, and
+    #: a requirement can legitimately appear in both.
+    mitigating_requirements: list[str] = Field(default_factory=list)
     status: str = "open"
     created: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     modified: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
@@ -65,3 +72,4 @@ class RiskUpdate(BaseModel):
     mitigation: Optional[str] = None
     status: Optional[str] = None
     linked_requirements: Optional[list[str]] = None
+    mitigating_requirements: Optional[list[str]] = None
