@@ -5,10 +5,18 @@ name: Prune release image archives
 # the newest are ever used, so they accumulate for nothing. Install tarballs,
 # .sha256 files, release notes and tags are never touched.
 #
-# Run from the Actions tab. `dry_run` defaults to true, so a stray click reports
-# what it would remove and stops.
+# Runs weekly, and on demand from the Actions tab. A manual run defaults to
+# `dry_run: true`, so a stray click reports what it would remove and stops; the
+# scheduled run is a real one, which is the point — a cleanup that only happens
+# when somebody remembers to click it does not happen.
+#
+# The same script runs after every release (see release.yml), so in steady state
+# the schedule has nothing to do. It exists to clear a backlog and to self-heal
+# if a release-time prune is ever skipped.
 
 on:
+  schedule:
+    - cron: '0 4 * * 1'   # Mondays, 04:00 UTC
   workflow_dispatch:
     inputs:
       keep:
@@ -37,7 +45,10 @@ jobs:
       - name: Prune
         env:
           GH_TOKEN: ${{ github.token }}
-          KEEP: ${{ inputs.keep }}
+          # `inputs.*` are empty on a scheduled run, so both need a default here
+          # — an empty KEEP fails the script's integer check. An empty DRY_RUN
+          # is deliberately a real run: that is what the schedule is for.
+          KEEP: ${{ inputs.keep || '2' }}
           DRY_RUN: ${{ inputs.dry_run }}
         run: |
           args=( "--keep=$KEEP" )

@@ -47,11 +47,21 @@ jobs:
       # this reported red for a missing formatter while pip-audit was green
       # and bandit had never actually run.
       - run: pip install 'bandit[toml,sarif]' pip-audit
-      - run: bandit -r backend/app -ll -f sarif -o bandit.sarif
-        continue-on-error: true   # findings must not fail the job; the SARIF is the report
+      # `continue-on-error: true` here hid a *tool* failure as well as findings,
+      # which is how the missing formatter went unnoticed. bandit exits 1 for
+      # findings — reported via SARIF, not a build failure — and 2+ when bandit
+      # itself could not run, which must never pass silently.
+      - run: |
+          set +e
+          bandit -r backend/app -ll -f sarif -o bandit.sarif
+          code=$?
+          if [ "$code" -gt 1 ]; then
+            echo "::error::bandit exited $code — it failed to run, rather than finding issues"
+            exit "$code"
+          fi
       - run: pip-audit -r backend/requirements.txt
       - uses: github/codeql-action/upload-sarif@a2983b8bed1923f44751c5c43237f479442827b3 # v3
-        if: always()
+        if: always() && hashFiles('bandit.sarif') != ''
         with:
           sarif_file: bandit.sarif
 
@@ -87,32 +97,49 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - run: docker build -f Dockerfile.prod -t reqmesh:ci .
-      # Pinned to a release, not to a `master` commit as it was: an unversioned
-      # pin cannot be reasoned about or upgraded deliberately.
-      - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+
+      # Trivy is run directly rather than through aquasecurity/trivy-action.
+      # The action failed on every run for days, always in ~15s — too fast to
+      # have downloaded the 100MB vulnerability DB, let alone scanned with it —
+      # and reported only "exit code 1", which is indistinguishable from a real
+      # CVE. It read as "a HIGH/CRITICAL is blocking the release" while the
+      # image in fact scans completely clean. This exact command, against this
+      # exact image, does work: 0 findings across 138 Debian and 49 Python
+      # packages.
+      #
+      # Two passes on purpose. The first always prints a table and never fails,
+      # so the log says what trivy saw whatever happens; the second produces
+      # the SARIF and is the gate. A scanner whose failure mode is a bare exit
+      # code is a gate nobody can act on.
+      #
+      # ignore-unfixed: a Debian base image always carries some HIGH CVEs that
+      # upstream has not patched. Failing on those makes the gate unsatisfiable
+      # — there is no action that clears it — so it stops being read. Fail only
+      # on CVEs a rebuild or version bump can actually fix; the Dockerfile runs
+      # apt-get upgrade so those get picked up. Unfixed CVEs are still reported
+      # in the SARIF upload below, they just don't block.
+      - name: Scan the image for fixable HIGH/CRITICAL CVEs
         env:
-          # Pull the vulnerability DB from the public GCR mirror rather than
-          # ghcr.io. Anonymous ghcr pulls from Actions runners are rate-limited,
-          # and this step was dying in ~15s — far too fast to have scanned
-          # anything, on an image that scans clean with 0 findings. It read as
-          # "a CVE is blocking the release" for days when nothing was.
-          TRIVY_DB_REPOSITORY: mirror.gcr.io/aquasec/trivy-db:2
-          TRIVY_JAVA_DB_REPOSITORY: mirror.gcr.io/aquasec/trivy-java-db:1
-        with:
-          image-ref: reqmesh:ci
-          severity: HIGH,CRITICAL
-          # ignore-unfixed: a Debian base image always carries some HIGH CVEs
-          # that upstream has not patched. Failing on those makes the gate
-          # unsatisfiable — there is no action that clears it — so it stops
-          # being read. Fail only on CVEs that a rebuild or a version bump can
-          # actually fix; the Dockerfile now runs apt-get upgrade so those get
-          # picked up. Unfixed CVEs are still reported in the SARIF upload
-          # below, they just don't block.
-          ignore-unfixed: true
-          exit-code: '1'
-          format: sarif
-          output: trivy.sarif
+          # Digest-pinned, matching the convention used for actions here. This
+          # is trivy 0.72, the version verified against this image by hand.
+          TRIVY: aquasec/trivy@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f
+        run: |
+          set -euo pipefail
+          run_trivy() {
+            docker run --rm \
+              -v /var/run/docker.sock:/var/run/docker.sock \
+              -v "${{ github.workspace }}:/work" -w /work \
+              -v "$HOME/.cache/trivy:/root/.cache" \
+              "$TRIVY" image --scanners vuln \
+              --severity HIGH,CRITICAL --ignore-unfixed "$@" reqmesh:ci
+          }
+          echo "::group::trivy report"
+          run_trivy --exit-code 0 --format table
+          echo "::endgroup::"
+          run_trivy --exit-code 1 --format sarif --output trivy.sarif
+      # Only upload a report that exists. `if: always()` alone made a missing
+      # file fail the job a second time, for a reason unrelated to the scan.
       - uses: github/codeql-action/upload-sarif@a2983b8bed1923f44751c5c43237f479442827b3 # v3
-        if: always()
+        if: always() && hashFiles('trivy.sarif') != ''
         with:
           sarif_file: trivy.sarif
