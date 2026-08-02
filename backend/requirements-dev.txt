@@ -4,3 +4,8 @@ httpx==0.28.1
 # Property-based coverage of every documented API operation
 # (tests/test_openapi_contract.py).
 schemathesis==4.24.3
+# The `sarif` extra is not optional: the security workflow runs bandit with
+# `-f sarif`, and without it bandit exits 2 with "invalid choice: 'sarif'".
+# Installed here as well as in CI so the gate can be reproduced locally —
+# it going unnoticed is why it stayed broken.
+bandit[toml,sarif]==1.9.4
