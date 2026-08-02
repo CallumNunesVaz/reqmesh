@@ -18,6 +18,9 @@ router = APIRouter()
 
 
 class ImpactRequest(BaseModel):
+    # Deliberately untyped: a what-if payload with an unparseable value is
+    # ignored and reported, not rejected. Tightening this to dict[str, float]
+    # turns that into a 422 (test_impact_preview.py::test_malformed_value_ignored).
     overrides: dict = {}
 
 

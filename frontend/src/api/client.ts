@@ -529,12 +529,27 @@ export interface EvaluatedRequirement {
   measured_constraints?: EvaluatedConstraint[];
   measured_verdict?: EvalVerdict;
 }
+/** A value on disk the evaluator could not use, reported instead of crashing.
+ *  Requirement data is hand-editable YAML, so a measurement of `n/a` is a
+ *  thing a user can legitimately write — it must degrade, not 500. */
+export type DataIssueKind = 'non_numeric_measurement' | 'non_numeric_override';
+export interface EvaluationDataIssue {
+  kind: DataIssueKind;
+  /** Parameter ref the bad value was written against, e.g. `R-001.mass`. */
+  ref: string;
+  /** Entity that supplied it — a verification case or analysis case id. */
+  source: string;
+  /** The offending value, stringified. */
+  value: string;
+  message: string;
+}
 export interface EvaluationData {
   requirements: EvaluatedRequirement[];
   summary: Record<string, number>;
   measured_summary: { pass: number; fail: number; unmeasured: number };
   parameter_count: number;
   measurement_count: number;
+  data_issues: EvaluationDataIssue[];
 }
 export interface RiskBand {
   key: string;
