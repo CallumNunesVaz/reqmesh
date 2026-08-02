@@ -26,7 +26,6 @@ import LoadingSplash from '../components/LoadingSplash';
 import { statusColors } from '../components/RequirementNode';
 import { REQUIREMENT_TYPE_META, formatReqType, reqTypeColor, typeOptionsFor } from '../lib/requirementTypes';
 const priorityOptions = ['low', 'medium', 'high', 'critical'];
-const methodOptions = ['test', 'analysis', 'demonstration', 'inspection'];
 const priorityColorMap: Record<string, string> = {
   low: 'hsl(195,6%,62%)',
   medium: 'hsl(207,90%,64%)',
@@ -296,6 +295,7 @@ export default function RequirementDetailPage() {
     const diff: Record<string, any> = {};
     for (const key of Object.keys(req)) {
       if (key === 'modified' || key === 'created') continue;
+      if (key === 'verification_method' || key === 'verification_status' || key === 'verification_methods') continue;
       if (JSON.stringify((req as any)[key]) !== JSON.stringify((saved as any)[key])) {
         diff[key] = (req as any)[key];
       }
@@ -1185,19 +1185,37 @@ export default function RequirementDetailPage() {
                 </div>
               </div>
               <div>
-                <label className="label">Verification Method</label>
-                <select className="select" value={req.verification_method} onChange={(e) => save({ verification_method: e.target.value })} disabled={!editable}>
-                  {methodOptions.map((m) => (<option key={m} value={m}>{m}</option>))}
-                </select>
-              </div>
-              <div>
-                <label className="label">Verification Status</label>
-                <select className="select" value={req.verification_status || 'pending'} onChange={(e) => save({ verification_status: e.target.value })} disabled={!editable} style={{ color: verifStatusColorMap[req.verification_status || 'pending'] }}>
-                  <option value="pending" style={{ color: verifStatusColorMap.pending }}>Pending</option>
-                  <option value="in_progress" style={{ color: verifStatusColorMap.in_progress }}>In Progress</option>
-                  <option value="passed" style={{ color: verifStatusColorMap.passed }}>Passed</option>
-                  <option value="failed" style={{ color: verifStatusColorMap.failed }}>Failed</option>
-                </select>
+                <label className="label">Verification</label>
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-foreground">
+                    {req.verification_methods.length > 1
+                      ? req.verification_methods.join(', ')
+                      : req.verification_methods.length === 1
+                        ? req.verification_method
+                        : <span title="No verification case covers this requirement">—</span>
+                    }
+                  </span>
+                  <span
+                    className="badge text-xs"
+                    style={{ color: verifStatusColorMap[req.verification_status || 'pending'] }}
+                  >
+                    {(req.verification_status || 'pending').replace(/_/g, ' ')}
+                  </span>
+                </div>
+                {req.verification_cases.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1.5">
+                    {req.verification_cases.map((vc) => (
+                      <span key={vc} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-muted text-xs text-foreground">
+                        <EntityLink
+                          kind="verification"
+                          id={vc}
+                          name={allVcs.find((v) => v.id === vc)?.name}
+                          className="hover:text-primary"
+                        />
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
               <div>
                 <label className="label">Parent</label>

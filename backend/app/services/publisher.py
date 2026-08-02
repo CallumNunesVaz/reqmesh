@@ -11,6 +11,7 @@ from pathlib import Path
 
 from app.core.config import settings as global_settings
 from app.services.sanitize import sanitize_html
+from app.services.verification_links import attach as attach_verification_cases
 from app.services.publishers.css import CSS
 from app.services.publishers.latex_helpers import (
     latex_engine_available,
@@ -47,6 +48,7 @@ class Publisher:
         self.meta = store.read_meta()
         all_reqs = store.list_requirements()
         self.vcs = store.list_verification_cases()
+        attach_verification_cases(store, all_reqs, self.vcs)
         self.specs = store.list_specifications()
         self.components = store.list_components()
         self.traces = store.read_traces()

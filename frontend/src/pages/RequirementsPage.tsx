@@ -778,8 +778,6 @@ function BulkEditModal({
     type: '',
     priority: '',
     status: '',
-    verification_method: '',
-    verification_status: '',
     rationale: '',
     source: '',
     allocated_to: '',
@@ -814,8 +812,6 @@ function BulkEditModal({
     if (form.type) updates.type = form.type;
     if (form.priority) updates.priority = form.priority;
     if (form.status) updates.status = form.status;
-    if (form.verification_method) updates.verification_method = form.verification_method;
-    if (form.verification_status) updates.verification_status = form.verification_status;
     if (form.rationale) updates.rationale = form.rationale;
     if (form.source) updates.source = form.source;
     if (form.allocated_to) updates.allocated_to = form.allocated_to;
@@ -943,31 +939,7 @@ function BulkEditModal({
                 </div>
               </div>
 
-              {/* Row 2: Ver Method / Ver Status */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="label">Verification Method</label>
-                  <select className="select" value={form.verification_method} onChange={(e) => setForm({ ...form, verification_method: e.target.value })}>
-                    <option value="">No change</option>
-                    <option value="test">Test</option>
-                    <option value="analysis">Analysis</option>
-                    <option value="demonstration">Demonstration</option>
-                    <option value="inspection">Inspection</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="label">Verification Status</label>
-                  <select className="select" value={form.verification_status} onChange={(e) => setForm({ ...form, verification_status: e.target.value })}>
-                    <option value="">No change</option>
-                    <option value="pending">Pending</option>
-                    <option value="in_progress">In Progress</option>
-                    <option value="passed">Passed</option>
-                    <option value="failed">Failed</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Row 3: Rationale / Source / Allocated To */}
+              {/* Row 2: Rationale / Source / Allocated To */}
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="label">Rationale</label>

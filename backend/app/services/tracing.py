@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from collections import defaultdict
 
+from app.services.verification_links import attach as attach_verification_cases
+
 
 # The coverage obligations a requirement can declare in ``needs``.
 #
@@ -30,6 +32,7 @@ NEEDS_VOCABULARY = {
 def _build_coverage_graph(store) -> dict:
     reqs = store.list_requirements()
     vcs = store.list_verification_cases()
+    attach_verification_cases(store, reqs, vcs)
     components = store.list_components()
     try:
         analyses = store.list_items("analysis_cases")
@@ -169,7 +172,10 @@ def trace_all(store) -> list[dict]:
     graph = _build_coverage_graph(store)
     memo: dict = {}
     results = []
-    for r in store.list_requirements():
+    reqs = store.list_requirements()
+    vcs = store.list_verification_cases()
+    attach_verification_cases(store, reqs, vcs)
+    for r in reqs:
         if r.get("normative", True) is False:
             continue
         shallow = shallow_status(r, graph)

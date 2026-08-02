@@ -16,6 +16,8 @@ from __future__ import annotations
 import re
 from html import unescape as html_unescape
 
+from app.services.verification_links import attach as attach_verification_cases
+
 FILTERABLE_FIELDS = ("type", "priority", "status", "verification_status")
 
 _HTML_TAG = re.compile(r"<[^>]*>")
@@ -124,7 +126,9 @@ def search_project(store, query: str, kind: str | None = None, limit: int = 50) 
 
     # Requirements
     if not kind or kind == "requirement":
-        for r in store.list_requirements():
+        reqs = store.list_requirements()
+        attach_verification_cases(store, reqs)
+        for r in reqs:
             score, name, snippet = _score_text(
                 r.get("id", ""), r.get("name", ""),
                 r.get("description", ""),

@@ -10,6 +10,8 @@ from __future__ import annotations
 import re
 from textwrap import indent as text_indent
 
+from app.services.verification_links import attach as attach_verification_cases
+
 
 def _subst_bindings(expr: str, bindings: dict) -> str:
     """Substitute a definition's formal names with their bound actual refs, so a
@@ -72,6 +74,8 @@ def export_sysml_v2(store) -> str:
     """Return a SysML v2 textual notation string for the project."""
     meta = store.read_meta()
     reqs = store.list_requirements()
+    vcs = store.list_verification_cases()
+    attach_verification_cases(store, reqs, vcs)
     try:
         defs = {d["id"]: d for d in store.list_items("definitions")}
     except Exception:
