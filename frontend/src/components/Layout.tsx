@@ -1,5 +1,7 @@
+import { Suspense } from 'react';
 import { Outlet, useParams } from 'react-router-dom';
 import { GuardedLink as Link } from './navGuard';
+import LoadingSplash from './LoadingSplash';
 import { PanelRight, PanelRightClose, PanelRightOpen, LogIn, LogOut, User, Pencil, Eye, FileDown, FileUp, Users, Search, HelpCircle, BookOpen, Server, SlidersHorizontal, Undo2, Redo2 } from 'lucide-react';
 import { useState, useEffect, useCallback, useMemo, createContext, useContext, useRef } from 'react';
 import { ThemeToggle } from './ThemeToggle';
@@ -86,6 +88,23 @@ const CONTEXT_MIN = 300;  // px floor for the inspector column (form-heavy, size
 const NAV_MIN = 200;
 const NAV_MAX = 480;
 const NAV_RAIL = 40;
+
+/**
+ * The route chunks are lazy, so a first visit to any page suspends. This
+ * boundary sits *inside* the layout, around the page area only.
+ *
+ * It used to live in App.tsx wrapping the whole <Routes> tree, including
+ * <Layout /> — so the first click on each nav item unmounted the nav pane,
+ * header and graph canvas, drew a fullscreen splash, then remounted all of it.
+ * That was the "whole screen flashes once per page, and a refresh brings it
+ * back" report: the second visit found the chunk already in the module
+ * registry and never suspended.
+ *
+ * LoadingSplash fades in after a beat, so a cached chunk shows nothing at all.
+ */
+function PageArea({ children }: { children: React.ReactNode }) {
+  return <Suspense fallback={<LoadingSplash label="Loading page…" />}>{children}</Suspense>;
+}
 
 export default function Layout() {
   const { projectId } = useParams();
@@ -518,7 +537,7 @@ export default function Layout() {
                     transition: resizing ? 'none' : 'flex-grow 0.3s ease',
                   }}
                 >
-                  <Outlet />
+                  <PageArea><Outlet /></PageArea>
                   {isInProject && <WhatIfPanel />}
                 </main>
               )}
@@ -528,10 +547,10 @@ export default function Layout() {
           <div className="flex flex-1 min-h-0 overflow-hidden">
             {(!isInProject || contextOpen) && (
               <main
-                className="overflow-auto @container"
+                className="overflow-auto @container relative"
                 style={{ flex: '1 1 0%', minWidth: 0 }}
               >
-                <Outlet />
+                <PageArea><Outlet /></PageArea>
               </main>
             )}
           </div>

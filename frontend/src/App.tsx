@@ -24,8 +24,19 @@ const UsersPage = lazy(() => import('./pages/UsersPage'));
 const SystemPage = lazy(() => import('./pages/SystemPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 
+/**
+ * Outer boundary — a safety net only.
+ *
+ * Route chunks now suspend against the boundary *inside* Layout (see
+ * `PageArea` there), which is the nearest one, so this fires only on the very
+ * first paint before Layout itself exists. Wrapping the route tree with it was
+ * what made every first navigation unmount and remount the whole chrome.
+ *
+ * Left in place rather than removed: a suspension with no boundary above it is
+ * an uncaught error, and this costs nothing.
+ */
 function PageFallback() {
-  return <LoadingSplash label="Loading..." />;
+  return <LoadingSplash label="Loading..." fullscreen />;
 }
 
 export default function App() {
