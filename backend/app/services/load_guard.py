@@ -96,6 +96,19 @@ def _validate_requirement(item: dict) -> None:
     normalise_requirement_on_load(item)
 
 
+def _validate_specification(item: dict) -> None:
+    # `url` is rendered as an anchor, so a `javascript:` value stored by any
+    # route other than the API is stored XSS. Blanked rather than withheld: the
+    # specification is still perfectly usable without its link, whereas dropping
+    # the item would break every requirement tracing to it.
+    from app.services.sanitize import is_safe_external_url
+
+    url = item.get("url")
+    if url is not None and not (isinstance(url, str) and is_safe_external_url(url)):
+        item["url"] = ""
+
+
 _SPECIFIC = {
     "requirements": _validate_requirement,
+    "specifications": _validate_specification,
 }

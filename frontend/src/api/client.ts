@@ -358,6 +358,11 @@ export interface Specification {
   id: string;
   name: string;
   description: string;
+  /** Link to the authoritative source document. May be empty. Rendered as an
+   *  anchor, so pass it through `isSafeExternalUrl` before building an href —
+   *  the backend blanks unsafe values on load, but the check is cheap and a
+   *  `javascript:` href is stored XSS against every viewer. */
+  url: string;
   requirements: string[];
   children: string[];
   created: string;

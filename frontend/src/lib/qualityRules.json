@@ -192,12 +192,28 @@
       "id": "no_obligation",
       "title": "No obligation verb",
       "severity": "warning",
-      "pattern": "\\b(is required to|shall|must|will)\\b",
+      "pattern": "\\b(is required to|shall|must|will|should|may)\\b",
       "message": "No obligation verb found — add \"shall\", \"must\", \"will\", or \"is required to\"{match}",
       "weight": 6,
       "incose": "R01 Structured Statements",
       "enabled": false,
       "config_key": ""
     }
-  ]
+  ],
+  "modals": {
+    "binding": [
+      "shall not",
+      "must not",
+      "will not",
+      "shall",
+      "must",
+      "will"
+    ],
+    "advisory": [
+      "should not",
+      "may not",
+      "should",
+      "may"
+    ]
+  }
 }

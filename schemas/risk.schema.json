@@ -1,16 +1,4 @@
 {
-  "$defs": {
-    "RiskSeverity": {
-      "enum": [
-        "low",
-        "medium",
-        "high",
-        "critical"
-      ],
-      "title": "RiskSeverity",
-      "type": "string"
-    }
-  },
   "properties": {
     "id": {
       "title": "Id",
@@ -27,11 +15,17 @@
       "type": "string"
     },
     "severity": {
-      "$ref": "#/$defs/RiskSeverity",
-      "default": "medium"
+      "default": "medium",
+      "title": "Severity",
+      "type": "string"
+    },
+    "likelihood": {
+      "default": "possible",
+      "title": "Likelihood",
+      "type": "string"
     },
     "probability": {
-      "default": "medium",
+      "default": "",
       "title": "Probability",
       "type": "string"
     },
