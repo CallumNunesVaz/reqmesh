@@ -13,6 +13,28 @@
       "config_key": ""
     },
     {
+      "id": "negation",
+      "title": "Negation",
+      "severity": "warning",
+      "pattern": "\\b(shall not|must not|will not|never|not)\\b",
+      "message": "\"{match}\" is a negative — state what the system shall do, not what it shall not do",
+      "weight": 4,
+      "incose": "R16 Avoid Not",
+      "enabled": true,
+      "config_key": ""
+    },
+    {
+      "id": "superfluous_infinitive",
+      "title": "Superfluous infinitive",
+      "severity": "warning",
+      "pattern": "\\b(have the ability to|be capable of|be designed to|be able to|be used to)\\b",
+      "message": "\"{match}\" is unnecessary — state the requirement directly with \"shall\"",
+      "weight": 4,
+      "incose": "R11 Superfluous Infinitives",
+      "enabled": true,
+      "config_key": ""
+    },
+    {
       "id": "escape_clauses",
       "title": "Escape clause",
       "severity": "warning",
@@ -20,6 +42,94 @@
       "message": "\"{match}\" lets the supplier decide whether to comply — state the condition explicitly or drop it",
       "weight": 6,
       "incose": "R08 No Escape Clauses",
+      "enabled": true,
+      "config_key": ""
+    },
+    {
+      "id": "oblique",
+      "title": "Oblique requirement",
+      "severity": "warning",
+      "pattern": "\\band/or\\b|[A-Za-z]{3,}/[A-Za-z]{3,}",
+      "message": "\"{match}\" is oblique — use \"and\" or \"or\", not both; spell out alternatives separated by \"and\" or \"or\"",
+      "weight": 3,
+      "incose": "R17 Oblique",
+      "enabled": true,
+      "config_key": ""
+    },
+    {
+      "id": "purpose_clause",
+      "title": "Purpose clause",
+      "severity": "info",
+      "pattern": "\\b(with the intent of|in order to|so as to|so that)\\b",
+      "message": "\"{match}\" states why — state what behaviour shall be satisfied instead",
+      "weight": 2,
+      "incose": "R20 Avoid Purpose",
+      "enabled": true,
+      "config_key": ""
+    },
+    {
+      "id": "passive_voice",
+      "title": "Passive voice",
+      "severity": "info",
+      "pattern": "\\b(am|is|are|was|were|be|been|being)\\s+(\\w+(?:ed|en|t)|given|taken|made|set|built|known|shown|found|seen|done|sent|held|left)\\b",
+      "message": "Possible passive voice \"{match}\" — use active voice (e.g. \"The system shall…\")",
+      "weight": 2,
+      "incose": "",
+      "enabled": true,
+      "config_key": ""
+    },
+    {
+      "id": "vague_quantifier",
+      "title": "Vague quantifier",
+      "severity": "warning",
+      "pattern": "\\b(some|several|many|few|minimal|maximal|enough|sufficient|a lot of|a number of|a few|a couple of)\\b",
+      "message": "Vague quantifier \"{match}\" — use a specific number or value",
+      "weight": 3,
+      "incose": "",
+      "enabled": true,
+      "config_key": "vague_quantifiers"
+    },
+    {
+      "id": "pronoun",
+      "title": "Pronoun",
+      "severity": "warning",
+      "pattern": "\\b(these|those|their|them|they|this|its|she|he|it)\\b",
+      "message": "Pronoun \"{match}\" — name the specific entity (e.g. \"the system\" rather than \"it\")",
+      "weight": 4,
+      "incose": "R24 Avoid Pronouns",
+      "enabled": true,
+      "config_key": ""
+    },
+    {
+      "id": "absolute",
+      "title": "Absolute term",
+      "severity": "warning",
+      "pattern": "\\b(completely|totally|always|every|never|none|any|all)\\b|\\b100%",
+      "message": "Absolute term \"{match}\" — qualify with conditions or tolerances (e.g. \"under normal load\" rather than \"always\")",
+      "weight": 4,
+      "incose": "R26 Avoid Absolutes",
+      "enabled": true,
+      "config_key": ""
+    },
+    {
+      "id": "combinator",
+      "title": "Combinator",
+      "severity": "info",
+      "pattern": "\\b(in addition to|as well as|otherwise|meanwhile|however|whether|unless|but)\\b",
+      "message": "Combinator \"{match}\" — split into separate, independently verifiable requirements",
+      "weight": 3,
+      "incose": "R19 Avoid Combinators",
+      "enabled": true,
+      "config_key": ""
+    },
+    {
+      "id": "temporal_indefinite",
+      "title": "Temporal indefinite",
+      "severity": "warning",
+      "pattern": "\\b(in a timely manner|in due course|when convenient|as soon as|eventually|promptly|at last)\\b",
+      "message": "Temporal indefinite \"{match}\" — specify a concrete deadline or interval (e.g. \"within 500 ms\")",
+      "weight": 4,
+      "incose": "R35 Temporal Indefinite",
       "enabled": true,
       "config_key": ""
     },
@@ -32,6 +142,61 @@
       "weight": 6,
       "incose": "R10 Avoid Open-Ended Clauses",
       "enabled": true,
+      "config_key": ""
+    },
+    {
+      "id": "placeholder",
+      "title": "Placeholder",
+      "severity": "error",
+      "pattern": "\\b(TODO|FIXME|TBD|XXX|HACK)\\b|\\?\\?\\?|\\?\\?",
+      "message": "Placeholder \"{match}\" — replace with concrete content before review",
+      "weight": 10,
+      "incose": "",
+      "enabled": true,
+      "config_key": "placeholders"
+    },
+    {
+      "id": "abbreviation",
+      "title": "Abbreviation",
+      "severity": "info",
+      "pattern": "\\b(e\\.g\\.|i\\.e\\.|vs\\.|approx\\.|misc\\.|min\\.|max\\.)",
+      "message": "Abbreviation \"{match}\" — spell out in full (e.g. \"for example\" rather than \"e.g.\")",
+      "weight": 2,
+      "incose": "R38 Avoid Abbreviations",
+      "enabled": true,
+      "config_key": ""
+    },
+    {
+      "id": "non_atomic",
+      "title": "Non-atomic requirement",
+      "severity": "info",
+      "pattern": "\\band\\b.*\\band\\b",
+      "message": "Multiple conjunctions around \"{match}\" — consider splitting into separate requirements",
+      "weight": 5,
+      "incose": "",
+      "enabled": true,
+      "config_key": ""
+    },
+    {
+      "id": "parentheses",
+      "title": "Parentheses",
+      "severity": "info",
+      "pattern": "\\([^)]+\\)|\\[[^\\]]+\\]",
+      "message": "Parenthetical \"{match}\" — integrate the content into the main sentence or create a separate requirement",
+      "weight": 2,
+      "incose": "R21 Avoid Parentheses",
+      "enabled": true,
+      "config_key": ""
+    },
+    {
+      "id": "no_obligation",
+      "title": "No obligation verb",
+      "severity": "warning",
+      "pattern": "\\b(is required to|shall|must|will)\\b",
+      "message": "No obligation verb found — add \"shall\", \"must\", \"will\", or \"is required to\"{match}",
+      "weight": 6,
+      "incose": "R01 Structured Statements",
+      "enabled": false,
       "config_key": ""
     }
   ]

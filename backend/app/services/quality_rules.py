@@ -123,6 +123,7 @@ def assert_portable(rule_id: str, pattern: str) -> None:
 # score badly for containing a bracket.
 
 PATTERN_RULES: tuple[Rule, ...] = (
+    # ── Obligation & phrasing ──
     Rule(
         id="weak_words",
         title="Weak or ambiguous wording",
@@ -136,6 +137,24 @@ PATTERN_RULES: tuple[Rule, ...] = (
         ),
         message='"{match}" is imprecise — use "shall" for an obligation, or state the measurable property',
         weight=5,
+    ),
+    Rule(
+        id="negation",
+        title="Negation",
+        severity="warning",
+        incose="R16 Avoid Not",
+        pattern=r"\b(shall not|must not|will not|never|not)\b",
+        message='"{match}" is a negative — state what the system shall do, not what it shall not do',
+        weight=4,
+    ),
+    Rule(
+        id="superfluous_infinitive",
+        title="Superfluous infinitive",
+        severity="warning",
+        incose="R11 Superfluous Infinitives",
+        pattern=r"\b(have the ability to|be capable of|be designed to|be able to|be used to)\b",
+        message='"{match}" is unnecessary — state the requirement directly with "shall"',
+        weight=4,
     ),
     Rule(
         id="escape_clauses",
@@ -153,6 +172,91 @@ PATTERN_RULES: tuple[Rule, ...] = (
         weight=6,
     ),
     Rule(
+        id="oblique",
+        title="Oblique requirement",
+        severity="warning",
+        incose="R17 Oblique",
+        # Both sides must be 3+ letters. `\w/\w` also matched every unit an
+        # engineering requirement contains — km/h, m/s, kg/m3, L/min — which
+        # made the rule fire constantly on exactly the well-formed, quantified
+        # statements it should have left alone.
+        pattern=r"\band/or\b|[A-Za-z]{3,}/[A-Za-z]{3,}",
+        message='"{match}" is oblique — use "and" or "or", not both; spell out alternatives separated by "and" or "or"',
+        weight=3,
+    ),
+    Rule(
+        id="purpose_clause",
+        title="Purpose clause",
+        severity="info",
+        incose="R20 Avoid Purpose",
+        pattern=r"\b(with the intent of|in order to|so as to|so that)\b",
+        message='"{match}" states why — state what behaviour shall be satisfied instead',
+        weight=2,
+    ),
+    Rule(
+        id="passive_voice",
+        title="Passive voice",
+        severity="info",
+        incose="",
+        pattern=(
+            r"\b(am|is|are|was|were|be|been|being)\s+(\w+(?:ed|en|t)|"
+            r"given|taken|made|set|built|known|shown|found|seen|done|sent|held|left)\b"
+        ),
+        message='Possible passive voice "{match}" — use active voice (e.g. "The system shall…")',
+        weight=2,
+    ),
+    # ── Precision & specificity ──
+    Rule(
+        id="vague_quantifier",
+        title="Vague quantifier",
+        severity="warning",
+        incose="",
+        pattern=(
+            r"\b(some|several|many|few|minimal|maximal|enough|sufficient|"
+            r"a lot of|a number of|a few|a couple of)\b"
+        ),
+        message='Vague quantifier "{match}" — use a specific number or value',
+        weight=3,
+        config_key="vague_quantifiers",
+    ),
+    Rule(
+        id="pronoun",
+        title="Pronoun",
+        severity="warning",
+        incose="R24 Avoid Pronouns",
+        pattern=r"\b(these|those|their|them|they|this|its|she|he|it)\b",
+        message='Pronoun "{match}" — name the specific entity (e.g. "the system" rather than "it")',
+        weight=4,
+    ),
+    Rule(
+        id="absolute",
+        title="Absolute term",
+        severity="warning",
+        incose="R26 Avoid Absolutes",
+        pattern=r"\b(completely|totally|always|every|never|none|any|all)\b|\b100%",
+        message='Absolute term "{match}" — qualify with conditions or tolerances (e.g. "under normal load" rather than "always")',
+        weight=4,
+    ),
+    # ── Structure & cohesion ──
+    Rule(
+        id="combinator",
+        title="Combinator",
+        severity="info",
+        incose="R19 Avoid Combinators",
+        pattern=r"\b(in addition to|as well as|otherwise|meanwhile|however|whether|unless|but)\b",
+        message='Combinator "{match}" — split into separate, independently verifiable requirements',
+        weight=3,
+    ),
+    Rule(
+        id="temporal_indefinite",
+        title="Temporal indefinite",
+        severity="warning",
+        incose="R35 Temporal Indefinite",
+        pattern=r"\b(in a timely manner|in due course|when convenient|as soon as|eventually|promptly|at last)\b",
+        message='Temporal indefinite "{match}" — specify a concrete deadline or interval (e.g. "within 500 ms")',
+        weight=4,
+    ),
+    Rule(
         id="open_ended",
         title="Open-ended clause",
         severity="warning",
@@ -160,6 +264,55 @@ PATTERN_RULES: tuple[Rule, ...] = (
         pattern=r"(\b(including but not limited to|such as|and so on|and so forth|among others)\b|\betc\.?)",
         message='"{match}" leaves the set undefined — enumerate every item that must be satisfied',
         weight=6,
+    ),
+    # ── Format & presentation ──
+    Rule(
+        id="placeholder",
+        title="Placeholder",
+        severity="error",
+        incose="",
+        pattern=r"\b(TODO|FIXME|TBD|XXX|HACK)\b|\?\?\?|\?\?",
+        message='Placeholder "{match}" — replace with concrete content before review',
+        weight=10,
+        config_key="placeholders",
+    ),
+    Rule(
+        id="abbreviation",
+        title="Abbreviation",
+        severity="info",
+        incose="R38 Avoid Abbreviations",
+        pattern=r"\b(e\.g\.|i\.e\.|vs\.|approx\.|misc\.|min\.|max\.)",
+        message='Abbreviation "{match}" — spell out in full (e.g. "for example" rather than "e.g.")',
+        weight=2,
+    ),
+    Rule(
+        id="non_atomic",
+        title="Non-atomic requirement",
+        severity="info",
+        incose="",
+        pattern=r"\band\b.*\band\b",
+        message='Multiple conjunctions around "{match}" — consider splitting into separate requirements',
+        weight=5,
+    ),
+    Rule(
+        id="parentheses",
+        title="Parentheses",
+        severity="info",
+        incose="R21 Avoid Parentheses",
+        pattern=r"\([^)]+\)|\[[^\]]+\]",
+        message='Parenthetical "{match}" — integrate the content into the main sentence or create a separate requirement',
+        weight=2,
+    ),
+    # ── Disabled — checked by bespoke code ──
+    Rule(
+        id="no_obligation",
+        title="No obligation verb",
+        severity="warning",
+        incose="R01 Structured Statements",
+        pattern=r"\b(is required to|shall|must|will)\b",
+        message='No obligation verb found — add "shall", "must", "will", or "is required to"{match}',
+        weight=6,
+        enabled=False,
     ),
 )
 """The pattern rules, in the order findings are reported."""
