@@ -910,14 +910,22 @@ export const api = {
   // Baselines
   listBaselines: (projectId: string) =>
     request<BaselineInfo[]>(`/projects/${projectId}/baselines`),
-  createBaseline: (projectId: string, name: string, symbol?: string, description?: string, requirements?: string[]) =>
-    request<{ name: string; symbol: string; description: string; requirements_assigned: number }>(
+  createBaseline: (projectId: string, name: string, symbol?: string, description?: string, requirements?: string[], dueDate?: string) =>
+    request<{ name: string; symbol: string; description: string; due_date: string; requirements_assigned: number }>(
       `/projects/${projectId}/baselines`,
-      { method: 'POST', body: { name, symbol: symbol ?? '', description: description ?? '', requirements: requirements ?? [] } }),
-  renameBaseline: (projectId: string, oldName: string, newName: string, symbol?: string, description?: string) =>
+      { method: 'POST', body: { name, symbol: symbol ?? '', description: description ?? '', requirements: requirements ?? [], due_date: dueDate ?? '' } }),
+  /** `dueDate` follows `symbol`/`description`: omit to leave alone, `''` to clear. */
+  renameBaseline: (projectId: string, oldName: string, newName: string, symbol?: string, description?: string, dueDate?: string) =>
     request<{ old_name: string; new_name: string; requirements_updated: number }>(
       `/projects/${projectId}/baselines/${encodeURIComponent(oldName)}`,
-      { method: 'PATCH', body: { name: newName, symbol, description } }),
+      { method: 'PATCH', body: { name: newName, symbol, description, due_date: dueDate } }),
+  /** Rewrite the whole sequence. `names` must be a permutation of every defined
+   *  baseline — a partial list is rejected rather than appended to, so a stale
+   *  client cannot silently reorder around baselines it does not know about. */
+  reorderBaselines: (projectId: string, names: string[]) =>
+    request<{ baselines: BaselineDef[] }>(
+      `/projects/${projectId}/baselines/order`,
+      { method: 'PUT', body: { names } }),
   deleteBaseline: (projectId: string, name: string) =>
     request<{ name: string; requirements_cleared: number }>(`/projects/${projectId}/baselines/${encodeURIComponent(name)}`, { method: 'DELETE' }),
   freezeBaseline: (projectId: string, name: string) =>
