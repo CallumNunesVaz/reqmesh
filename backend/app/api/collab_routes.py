@@ -18,6 +18,7 @@ from app.core.dependencies import get_store, require_maintain, get_current_user
 from app.core.rate_limit import rate_limit
 from app.api._utils import read_upload_capped
 from app.services.link_registry import COLLECTION_LABELS, LINKS
+from app.api.router import normalize_baseline_defs
 
 router = APIRouter()
 
@@ -176,16 +177,40 @@ def _link_for(holder: str, field: str):
 
 @dataclass(frozen=True)
 class MatrixAxis:
-    """One matrix: which link it shows, and what to call it."""
+    """One matrix: which link it shows, and what to call it.
+
+    Two shapes of axis exist, and they differ in every direction:
+
+    * **Link axes** (components, verification, risks) read a link declared in
+      ``link_registry``. The link is held by the *column* entity, which is a
+      record in the ``holder`` collection, and points at requirement **ids**.
+      A cell write goes to the holder.
+
+    * **The baselines axis** inverts all three. Its columns are definitions in
+      project metadata rather than records in a collection, the membership is
+      held by the *requirement* in ``req_field``, and it stores baseline
+      **names** rather than ids. ``link_registry`` deliberately excludes it —
+      "a baseline is a label rather than a record that can dangle" — so there
+      is no ``Link`` to read and ``link`` is None.
+
+    ``req_field`` is what distinguishes them. Anything branching on axis shape
+    tests that, not the key.
+    """
     key: str
     holder: str
     field: str
     #: Reads as "<requirement> <verb> <column>", for the UI's own wording.
     verb: str
     column_label: str
+    #: Set only on requirement-held axes. Names the field on the *requirement*
+    #: holding the membership, whose entries are column **names**, not ids.
+    req_field: str | None = None
 
     @property
     def link(self):
+        """The registry link this axis shows, or None on a requirement-held axis."""
+        if self.req_field is not None:
+            return None
         return _link_for(self.holder, self.field)
 
 
@@ -196,6 +221,8 @@ AXES: dict[str, MatrixAxis] = {
                                "is verified by", "Verification Cases"),
     "risks": MatrixAxis("risks", "risks", "linked_requirements",
                         "is threatened by", "Risks"),
+    "baselines": MatrixAxis("baselines", "baselines", "", "is baselined in",
+                            "Baselines", req_field="baselines"),
 }
 
 
@@ -237,11 +264,19 @@ def _column_name(item: dict) -> str:
 def allocation_matrix(project_id: str, axis: str = Query("components"),
                       search: str = Query(""), filter_type: str = Query(""),
                       _rate: None = Depends(rate_limit(20, 60))):
-    """Requirements against components, verification cases, or risks."""
+    """Requirements against components, verification cases, risks, or baselines."""
     ax = _axis_or_404(axis)
     store = get_store(project_id)
     reqs = store.list_requirements()
-    cols = _column_items(store, ax)
+
+    if ax.req_field is not None:
+        # Baselines axis: columns from metadata definitions, not frozen snapshots.
+        meta = store.read_meta()
+        defs = normalize_baseline_defs(meta.get("baselines", []))
+        cols = [{"id": d["name"], "name": d["name"], "kind": d["symbol"],
+                 "due_date": d["due_date"], "order": d["order"]} for d in defs]
+    else:
+        cols = _column_items(store, ax)
 
     if filter_type:
         reqs = [r for r in reqs if r.get("type") == filter_type]
@@ -251,10 +286,17 @@ def allocation_matrix(project_id: str, axis: str = Query("components"),
         cols = [c for c in cols if q in c["id"].lower() or q in _column_name(c).lower()]
 
     linked: dict[str, set[str]] = {}
-    for c in cols:
-        for rid in (c.get(ax.field) or []):
-            if rid:
-                linked.setdefault(rid, set()).add(c["id"])
+    if ax.req_field is not None:
+        # Membership is held by the requirement, not the column.
+        for r in reqs:
+            for bl in (r.get(ax.req_field) or []):
+                if bl:
+                    linked.setdefault(r["id"], set()).add(bl)
+    else:
+        for c in cols:
+            for rid in (c.get(ax.field) or []):
+                if rid:
+                    linked.setdefault(rid, set()).add(c["id"])
 
     rows = []
     for r in reqs:
@@ -272,8 +314,12 @@ def allocation_matrix(project_id: str, axis: str = Query("components"),
         "id": c["id"],
         "name": _column_name(c),
         # Whatever secondary label the column entity has: a component's type, a
-        # verification case's method, a risk's severity.
-        "kind": c.get("type") or c.get("method") or c.get("severity") or "",
+        # verification case's method, a risk's severity, a baseline's symbol.
+        "kind": c.get("type") or c.get("method") or c.get("severity") or c.get("kind") or "",
+        # The sequence is what makes the baselines matrix readable left to right,
+        # so the columns carry their position and deadline.
+        **({"due_date": c.get("due_date", ""), "order": c.get("order", 0)}
+           if ax.req_field is not None else {}),
         # Kept so the components matrix's original response shape still parses
         # for anyone reading comp_id/comp_name.
         **({"comp_id": c["id"], "comp_name": _column_name(c), "comp_type": c.get("type", "")}
@@ -298,21 +344,49 @@ def allocation_matrix(project_id: str, axis: str = Query("components"),
 
 @router.post("/projects/{project_id}/allocation")
 def set_allocation(project_id: str, data: AllocationRequest, user: dict = Depends(require_maintain)):
-    """Toggle one cell of any of the three matrices.
+    """Toggle one cell of any of the allocation matrices.
 
-    The write always goes to the *holder* of the link — the component, the
+    The write goes to the *holder* of the link — the component, the
     verification case, the risk — because that is the side the model stores.
     Only ``component.satisfies`` has a persisted mirror to keep in step
     (``requirement.allocated_to``); the others are recomputed on read, so
     writing anything back to the requirement would create a second copy that
     could disagree with the first.
+
+    The baselines axis is the exception: its membership is held by the
+    requirement in ``req_field``, and it stores baseline **names**, not ids.
     """
     ax = _axis_or_404(data.axis)
     target_id = data.resolved_target()
     store = get_store(project_id)
 
-    if not store.get_requirement(data.req_id):
+    req = store.get_requirement(data.req_id)
+    if not req:
         raise HTTPException(status_code=404, detail="Requirement not found")
+
+    if ax.req_field is not None:
+        # Baselines axis: write to requirement.baselines. The column is checked
+        # against the metadata definitions rather than the `baselines`
+        # collection, which holds only the snapshots of baselines that have
+        # been frozen — an unfrozen baseline is still a legitimate column.
+        defs = normalize_baseline_defs(store.read_meta().get("baselines", []))
+        if target_id not in {d["name"] for d in defs}:
+            raise HTTPException(status_code=404, detail="Baseline not found")
+
+        blist = list(req.get(ax.req_field) or [])
+
+        if data.allocated:
+            if target_id not in blist:
+                blist.append(target_id)
+        else:
+            blist = [b for b in blist if b != target_id]
+
+        store.update_requirement(data.req_id, {ax.req_field: blist})
+
+        return {"req_id": data.req_id, "axis": ax.key, "target_id": target_id,
+                "component_id": target_id,
+                "allocated": data.allocated, "allocated_to": ""}
+
     holder = store.get_item(ax.holder, target_id)
     if not holder:
         raise HTTPException(
