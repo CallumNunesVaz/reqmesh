@@ -105,6 +105,12 @@ export interface BaselineDef {
   name: string;
   symbol: string;
   description: string;
+  /** `YYYY-MM-DD`, or "" when the baseline has no deadline. */
+  due_date: string;
+  /** 1-based position in the sequence. Derived server-side from the order the
+   *  definitions are stored in — never sent back on a write. Reorder with
+   *  `reorderBaselines`. */
+  order: number;
 }
 
 /** Baseline *names* from either storage shape.
@@ -162,9 +168,16 @@ export interface RequirementValue {
   unknown_stakeholders: string[];
 }
 
-/** Which relationship a matrix shows. Each is a link declared in the backend's
- *  link registry whose target is `requirements`. */
-export type MatrixAxis = 'components' | 'verification' | 'risks';
+/** Which relationship a matrix shows.
+ *
+ *  `components`, `verification` and `risks` are links declared in the backend's
+ *  link registry whose target is `requirements` — the column entity holds the
+ *  link, keyed by requirement id.
+ *
+ *  `baselines` is the exception: its columns are project-metadata definitions
+ *  rather than records, and membership lives on `requirement.baselines` as
+ *  baseline *names*. Column `id` is therefore the baseline name. */
+export type MatrixAxis = 'components' | 'verification' | 'risks' | 'baselines';
 
 export interface AllocationMatrixData {
   axis: MatrixAxis;
@@ -180,11 +193,20 @@ export interface AllocationMatrixData {
     cells: Record<string, boolean>;
   }>;
   columns: Array<{
+    /** The column entity's id — except on the `baselines` axis, where it is
+     *  the baseline *name*, because that is what `requirement.baselines`
+     *  stores. */
     id: string;
     name: string;
     /** The column entity's secondary label: component type, verification
-     *  method, or risk severity. */
+     *  method, risk severity, or a baseline's symbol. */
     kind: string;
+    /** `baselines` axis only: `YYYY-MM-DD` or "". */
+    due_date?: string;
+    /** `baselines` axis only: 1-based position in the sequence. Columns are
+     *  returned in this order, so a requirement's progress reads left to
+     *  right. */
+    order?: number;
   }>;
   total_requirements: number;
   total_columns: number;
