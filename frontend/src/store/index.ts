@@ -36,6 +36,16 @@ interface AppState {
   toggleHiddenBaseline: (name: string) => void;
   setHiddenComponents: (filters: string[]) => void;
   toggleHiddenComponent: (id: string) => void;
+  /** Drop all visibility state. Call when the open project changes.
+   *
+   *  Both hidden lists key on values that are only unique *within* a project:
+   *  component ids are per-project sequences, so `COMP0001` exists in every
+   *  project, and baselines are matched by name, so `PDR` collides across all
+   *  of them. Without this, hiding a component in one project silently hid an
+   *  unrelated one in the next, with the eye showing off in a project where
+   *  nobody had touched it. Saved views are already scoped per project
+   *  (`rt-graph-views-<id>`); this brings the live state in line. */
+  resetVisibility: () => void;
 }
 
 export const useStore = create<AppState>((set) => ({
@@ -85,4 +95,5 @@ export const useStore = create<AppState>((set) => ({
     }
     return { hiddenComponents: [...s.hiddenComponents, id] };
   }),
+  resetVisibility: () => set({ hiddenBaselines: [], hiddenComponents: [] }),
 }));
