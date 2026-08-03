@@ -211,6 +211,16 @@ export default function Layout() {
   const clearUndo = useUndoStore((s) => s.clear);
   useEffect(() => { clearUndo(); }, [projectId]);
 
+  // Reset component/baseline visibility when the open project changes.
+  const resetVisibility = useStore((s) => s.resetVisibility);
+  const prevProjectRef = useRef(projectId);
+  useEffect(() => {
+    if (prevProjectRef.current !== projectId) {
+      resetVisibility();
+      prevProjectRef.current = projectId;
+    }
+  }, [projectId, resetVisibility]);
+
   // Session restoration lives in <AuthInit>, which resolves whoami() from the
   // HttpOnly cookie before the app renders. The old effect here keyed off a
   // localStorage token that no longer exists.
