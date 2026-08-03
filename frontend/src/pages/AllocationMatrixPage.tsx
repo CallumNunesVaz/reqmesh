@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Search, Grid3X3, Check, Loader, ArrowUpDown } from 'lucide-react';
 import { api, type AllocationMatrixData, type MatrixAxis } from '../api/client';
-import { EntityLink } from '../components/entities';
+import { EntityLink, type EntityKind } from '../components/entities';
 import { REQUIREMENT_TYPES, REQUIREMENT_TYPE_META } from '../lib/requirementTypes';
 import { useAuthStore } from '../store/auth';
 
@@ -12,10 +12,11 @@ import { useAuthStore } from '../store/auth';
  *  All three are views of a link the backend's registry already declares with
  *  `requirements` as its target, so the page switches axis rather than there
  *  being three near-identical pages. */
-const AXES: { key: MatrixAxis; label: string; colKind: 'component' | 'verification' | 'risk' }[] = [
+const AXES: { key: MatrixAxis; label: string; colKind: 'component' | 'verification' | 'risk' | 'baseline' }[] = [
   { key: 'components', label: 'Components', colKind: 'component' },
   { key: 'verification', label: 'Verification', colKind: 'verification' },
   { key: 'risks', label: 'Risks', colKind: 'risk' },
+  { key: 'baselines', label: 'Baselines', colKind: 'baseline' },
 ];
 
 const STATUS_CLASSES: Record<string, string> = {
@@ -203,20 +204,43 @@ export default function AllocationMatrixPage() {
                 <th className="sticky top-0 left-0 z-20 bg-card border-b border-r px-3 py-2 text-left font-semibold text-muted-foreground min-w-[140px]">
                   {transpose ? data.column_label.replace(/s$/, '') : 'Requirement'}
                 </th>
-                {cols.map((col: any) => (
-                  <th
-                    key={transpose ? col.req_id : col.id}
-                    className="sticky top-0 z-10 bg-card border-b px-2 py-2 font-semibold text-muted-foreground whitespace-nowrap"
-                    style={{ writingMode: 'vertical-rl', textOrientation: 'mixed', maxHeight: 160, minWidth: 32 }}
-                  >
-                    <EntityLink
-                      kind={transpose ? 'requirement' : colKind}
-                      id={transpose ? col.req_id : col.id}
-                      subtype={transpose ? undefined : col.kind}
-                      className="text-[10px]"
-                    />
-                  </th>
-                ))}
+                {cols.map((col: any) => {
+                  const isBaselineColumn = !transpose && axis === 'baselines';
+                  if (isBaselineColumn) {
+                    const dueDate: string | undefined = col.due_date;
+                    const orphan = (col.order ?? 0) === 0;
+                    return (
+                      <th
+                        key={col.id}
+                        className={`sticky top-0 z-10 bg-card border-b px-2 py-2 whitespace-nowrap ${orphan ? 'opacity-50' : ''}`}
+                        style={{ minWidth: 32 }}
+                      >
+                        <div className="flex flex-col items-start">
+                          <span className={`text-[10px] font-semibold text-muted-foreground ${orphan ? 'italic' : ''}`}>
+                            {col.name}
+                          </span>
+                          {dueDate && (
+                            <span className="text-[9px] text-muted-foreground">{dueDate}</span>
+                          )}
+                        </div>
+                      </th>
+                    );
+                  }
+                  return (
+                    <th
+                      key={transpose ? col.req_id : col.id}
+                      className="sticky top-0 z-10 bg-card border-b px-2 py-2 font-semibold text-muted-foreground whitespace-nowrap"
+                      style={{ writingMode: 'vertical-rl', textOrientation: 'mixed', maxHeight: 160, minWidth: 32 }}
+                    >
+                      <EntityLink
+                        kind={transpose ? 'requirement' : colKind as EntityKind}
+                        id={transpose ? col.req_id : col.id}
+                        subtype={transpose ? undefined : col.kind}
+                        className="text-[10px]"
+                      />
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody>
@@ -224,10 +248,21 @@ export default function AllocationMatrixPage() {
                 <tr key={transpose ? row.id : row.req_id}>
                   <td className={`sticky left-0 z-10 bg-card border-r border-b px-3 py-2 ${transpose ? '' : (STATUS_CLASSES[row.req_status] || '')}`}>
                     <div className="flex flex-col">
-                      <EntityLink kind={transpose ? colKind : 'requirement'} id={transpose ? row.id : row.req_id} subtype={transpose ? row.kind : undefined} className="font-mono" />
-                      <span className="text-[10px] text-muted-foreground truncate max-w-[130px]">
-                        {transpose ? row.name : row.req_name}
-                      </span>
+                      {transpose && axis === 'baselines' ? (
+                        <>
+                          <span className="font-mono text-[10px] font-semibold text-muted-foreground">{row.name}</span>
+                          <span className="text-[10px] text-muted-foreground truncate max-w-[130px]">
+                            {row.kind}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <EntityLink kind={transpose ? colKind as EntityKind : 'requirement'} id={transpose ? row.id : row.req_id} subtype={transpose ? row.kind : undefined} className="font-mono" />
+                          <span className="text-[10px] text-muted-foreground truncate max-w-[130px]">
+                            {transpose ? row.name : row.req_name}
+                          </span>
+                        </>
+                      )}
                     </div>
                   </td>
                   {cols.map((col: any) => {

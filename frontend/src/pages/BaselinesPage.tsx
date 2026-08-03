@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { usePersistedState, setCodec } from '../hooks/usePersistedState';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Trash2, Edit3, Check, X, Snowflake, History, GitBranch, Clock, Layers, ArrowRight, ChevronDown, ChevronRight, Loader, Eye, EyeOff } from 'lucide-react';
+import { Plus, Trash2, Edit3, Check, X, Snowflake, History, GitBranch, Clock, Layers, ArrowRight, ChevronDown, ChevronUp, ChevronRight, Loader, Eye, EyeOff, Calendar } from 'lucide-react';
 import { api, type BaselineInfo, type BaselineDiff } from '../api/client';
 import { EntityLink } from '../components/entities';
 import RichTextEditor from '../components/RichTextEditor';
@@ -28,6 +28,7 @@ export default function BaselinesPage() {
   const [formName, setFormName] = useState('');
   const [formSymbol, setFormSymbol] = useState('');
   const [formDesc, setFormDesc] = useState('');
+  const [formDueDate, setFormDueDate] = useState('');
   const [editingName, setEditingName] = useState<string | null>(null);
   const [formSaving, setFormSaving] = useState(false);
 
@@ -60,6 +61,7 @@ export default function BaselinesPage() {
     setFormName('');
     setFormSymbol('');
     setFormDesc('');
+    setFormDueDate('');
     setEditingName(null);
     setShowForm(true);
   };
@@ -68,6 +70,7 @@ export default function BaselinesPage() {
     setFormName(b.name);
     setFormSymbol(b.symbol);
     setFormDesc(b.description);
+    setFormDueDate(b.due_date);
     setEditingName(b.name);
     setShowForm(true);
   };
@@ -79,9 +82,9 @@ export default function BaselinesPage() {
     try {
       if (editingName) {
         const newName = formName.trim() !== editingName ? formName.trim() : editingName;
-        await api.renameBaseline(projectId, editingName, newName, formSymbol, formDesc);
+        await api.renameBaseline(projectId, editingName, newName, formSymbol, formDesc, formDueDate);
       } else {
-        await api.createBaseline(projectId, formName.trim(), formSymbol, formDesc);
+        await api.createBaseline(projectId, formName.trim(), formSymbol, formDesc, undefined, formDueDate);
       }
       setShowForm(false);
       await load();
@@ -129,6 +132,36 @@ export default function BaselinesPage() {
       setError(err.message || 'Diff failed');
     } finally {
       setDiffing(null);
+    }
+  };
+
+  const handleReorder = async (name: string, direction: 'up' | 'down') => {
+    if (!projectId || !editable) return;
+    setError('');
+    const inSequence = baselines
+      .filter((b) => b.order > 0)
+      .sort((a, b) => a.order - b.order)
+      .map((b) => b.name);
+    const idx = inSequence.indexOf(name);
+    if (idx === -1) return;
+    const newOrder = [...inSequence];
+    if (direction === 'up' && idx > 0) {
+      [newOrder[idx - 1], newOrder[idx]] = [newOrder[idx], newOrder[idx - 1]];
+    } else if (direction === 'down' && idx < newOrder.length - 1) {
+      [newOrder[idx], newOrder[idx + 1]] = [newOrder[idx + 1], newOrder[idx]];
+    } else {
+      return;
+    }
+    try {
+      const result = await api.reorderBaselines(projectId, newOrder);
+      setBaselines((prev) =>
+        prev.map((b) => {
+          const updated = result.baselines.find((def) => def.name === b.name);
+          return updated ? { ...b, order: updated.order } : b;
+        }),
+      );
+    } catch (err: any) {
+      setError(err.message || 'Reorder failed');
     }
   };
 
@@ -213,6 +246,16 @@ export default function BaselinesPage() {
                   </div>
                 </div>
                 <div>
+                  <label className="label">Due Date</label>
+                  <input
+                    className="input"
+                    type="date"
+                    value={formDueDate}
+                    onChange={(e) => setFormDueDate(e.target.value)}
+                    disabled={formSaving}
+                  />
+                </div>
+                <div>
                   <label className="label">Description</label>
                   {editable ? (
                     <RichTextEditor
@@ -263,7 +306,11 @@ export default function BaselinesPage() {
           </div>
         ) : (
           <div className="space-y-3">
-            {baselines.map((b) => (
+            {(() => {
+              const seq = baselines.filter((b) => b.order > 0).sort((a, b) => a.order - b.order);
+              const firstSeqName = seq.length > 0 ? seq[0].name : null;
+              const lastSeqName = seq.length > 0 ? seq[seq.length - 1].name : null;
+              return baselines.map((b) => (
               <motion.div
                 key={b.name}
                 initial={{ opacity: 0, y: 10 }}
@@ -303,6 +350,12 @@ export default function BaselinesPage() {
                           {new Date(b.frozen_at).toLocaleDateString()}
                         </span>
                       )}
+                      {b.due_date && (
+                        <span className="flex items-center gap-1">
+                          <Calendar size={12} />
+                          {b.due_date}
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -317,6 +370,26 @@ export default function BaselinesPage() {
                     </button>
                     {editable && (
                       <>
+                        {b.order > 0 && (
+                          <>
+                            <button
+                              onClick={() => handleReorder(b.name, 'up')}
+                              className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                              title="Move up"
+                              disabled={b.name === firstSeqName}
+                            >
+                              <ChevronUp size={14} />
+                            </button>
+                            <button
+                              onClick={() => handleReorder(b.name, 'down')}
+                              className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                              title="Move down"
+                              disabled={b.name === lastSeqName}
+                            >
+                              <ChevronDown size={14} />
+                            </button>
+                          </>
+                        )}
                         <button
                           onClick={() => openEdit(b)}
                           className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
@@ -389,7 +462,8 @@ export default function BaselinesPage() {
                   </div>
                 )}
               </motion.div>
-            ))}
+              ));
+            })()}
           </div>
         )}
 
