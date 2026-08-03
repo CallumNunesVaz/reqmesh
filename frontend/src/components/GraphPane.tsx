@@ -34,7 +34,7 @@ import { useSelectedReq, useContextPane } from './Layout';
 import { useStore } from '../store';
 import { useWhatIf } from './WhatIfContext';
 import { formatReqType, reqTypeColor } from '../lib/requirementTypes';
-import { effectiveHiddenComponents, filterableComponentIds, isReqHiddenByComponents, isReqHiddenByBaselines, migrateLegacyFilterList } from '../lib/graphFilters';
+import { effectiveHiddenComponents, filterableComponentIds, isReqHiddenByComponents, isReqHiddenByBaselines, migrateLegacyFilterList, requirementsRevealed, pruneUnknownIds } from '../lib/graphFilters';
 
 const edgeColors: Record<string, string> = {
   refines: 'hsl(207,90%,64%)',
@@ -547,7 +547,30 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
   // to re-frame, '*' to fit everything, or null. Set by a layout-mode switch or
   // a collapse (single node / all) so the selection stays in view — mirroring
   // how expanding re-frames the node it opened.
-  const refocusRef = useRef<string | null>(null);
+  //: A pending camera intent, applied by `applyRefocus` once the relayout has
+  //: put every node at its final position. A node id frames that node and its
+  //: neighbours; `'*'` fits everything; `{ expand }` widens the current view to
+  //: also take in the listed nodes.
+  //:
+  //: Everything that wants the camera goes through here rather than calling
+  //: `fitView` directly. A component reveal that ran its own fit did work — and
+  //: was then overridden three times by the fits already scheduled in this
+  //: pipeline, leaving the requirements it had just framed off screen.
+  const refocusRef = useRef<string | { expand: string[] } | null>(null);
+  //: Set when an `{ expand }` refocus has just framed something deliberately.
+  //: A reveal provokes a *second* relayout pass, and that pass finds `refocus`
+  //: already consumed, falls through to its blanket "fit everything", and
+  //: throws away the framing — measured, the requirements were correctly in
+  //: shot and then gone again about a second later. The reveal keeps the camera
+  //: until the user asks for something else.
+  const suppressRefitRef = useRef(false);
+  //: Claim the camera for the framing just applied, mirroring how a derivation
+  //: trace claims it via `derivingRef`. Self-limiting: a reveal owns the camera
+  //: for the relayouts it provokes, never indefinitely.
+  const claimCamera = () => {
+    suppressRefitRef.current = true;
+    window.setTimeout(() => { suppressRefitRef.current = false; }, 1500);
+  };
   // True while a layout-mode switch is being laid out, so the layout effect
   // releases the splash on completion (ELK can outlast any fixed timer) rather
   // than on a fixed delay.
@@ -711,6 +734,28 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
     () => new Map(components.map(c => [c.id, `${c.id}${c.name ? ` — ${c.name}` : ''}`])),
     [components],
   );
+
+  // ── F5: prune unknown ids from hidden lists ──────────────────────────────
+
+  // Prune hiddenComponents once components have loaded.  Don't prune while
+  // components is still empty (loading state), because that would clear
+  // everything.
+  useEffect(() => {
+    if (components.length === 0) return;
+    const pruned = pruneUnknownIds(hiddenComponents, components.map((c) => c.id));
+    if (pruned !== hiddenComponents) setHiddenComponents([...pruned]);
+  }, [components, hiddenComponents, setHiddenComponents]);
+
+  // Prune hiddenBaselines against the set of baselines that actually exist in
+  // this project's requirements.  Same guard: don't prune while reqs haven't
+  // loaded yet.
+  useEffect(() => {
+    if (availableBaselines.length === 0) return;
+    const pruned = pruneUnknownIds(hiddenBaselines, availableBaselines);
+    if (pruned !== hiddenBaselines) setHiddenBaselines([...pruned]);
+  }, [availableBaselines, hiddenBaselines, setHiddenBaselines]);
+
+
 
   const clearFilters = () => {
     setSearch('');
@@ -1039,6 +1084,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const rfRef = useRef<ReactFlowInstance | null>(null);
+  const graphBoxRef = useRef<HTMLDivElement>(null);
   // The "Reset view" action: frame all currently-visible nodes.
   const resetView = useCallback(() => {
     rfRef.current?.fitView({ padding: 0.12, maxZoom: gs.maxZoom, duration: 400 });
@@ -1053,6 +1099,31 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
   // Monotonic id so a stale async ELK result (from a superseded relayout or a
   // rapid filter change) is discarded instead of clobbering the current one.
   const layoutReqIdRef = useRef(0);
+
+  // ── F1: expand the view when revealing a component brings requirements back ──
+
+  const prevHiddenComponentsRef = useRef(hiddenComponents);
+
+  // This only records the *intent*. The camera is moved by `applyRefocus`,
+  // which the layout effect calls once the relayout has placed every node.
+  //
+  // Doing the fit here instead does not work, and fails in a way that looks
+  // like success: revealing grows `initialNodes`, so at this point React Flow
+  // has never heard of the ids to frame and `fitView` silently drops the ones
+  // it does not know. Even once that is waited out, this pipeline already
+  // schedules its own fits on 40-250ms timers, and they simply land last —
+  // measured, the reveal framed the requirements correctly at t+700ms and was
+  // then overridden three times, ending with them off screen.
+  useEffect(() => {
+    const prev = prevHiddenComponentsRef.current;
+    if (prev === hiddenComponents) return;
+    prevHiddenComponentsRef.current = hiddenComponents;
+    if (!entranceDone) return;
+    const revealed = requirementsRevealed(
+      components, prev, hiddenComponents, reqs.map((r) => r.id));
+    if (revealed.length > 0) refocusRef.current = { expand: revealed };
+  }, [hiddenComponents, components, reqs, entranceDone]);
+
 
   // ── Saved view slots ──────────────────────────────────────────────────────
   const persistViews = useCallback((next: (SavedView | null)[]) => {
@@ -1161,6 +1232,36 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
       refocusRef.current = null;
       if (!target) return false;
       const duration = switching ? 0 : 500;
+      if (typeof target === 'object') {
+        // Expand rather than reframe: keep what the user is already looking at
+        // and widen until the newly revealed nodes are in shot too. Read the
+        // live React Flow nodes, not the `nodes` state — this runs from a
+        // scheduled callback, and the state closed over here can be a relayout
+        // behind.
+        const live = rfRef.current?.getNodes() ?? [];
+        const vp = rfRef.current?.getViewport();
+        const box = graphBoxRef.current;
+        if (!vp || !box || live.length === 0) return true;
+        const { width: paneW, height: paneH } = box.getBoundingClientRect();
+        const union = new Set(target.expand);
+        for (const n of live) {
+          const m = n.measured;
+          if (!m?.width || !m?.height) continue;
+          const x = n.position.x * vp.zoom + vp.x;
+          const y = n.position.y * vp.zoom + vp.y;
+          if (x + m.width * vp.zoom > 0 && x < paneW
+            && y + m.height * vp.zoom > 0 && y < paneH) union.add(n.id);
+        }
+        const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        rfRef.current?.fitView({
+          nodes: [...union].map((id) => ({ id })),
+          padding: 0.25,
+          maxZoom: gs.maxZoom,
+          duration: reduced ? 0 : 600,
+        });
+        claimCamera();
+        return true;
+      }
       if (target === '*') {
         rfRef.current?.fitView({ padding: 0.12, maxZoom: gs.maxZoom, duration });
         return true;
@@ -1305,7 +1406,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
                 // the selection and the camera; without this guard the usual
                 // "focus what you just expanded" behaviour would steal them
                 // and silently cancel the trace.
-                if (expandedNodeId && !derivingRef.current) {
+                if (expandedNodeId && !derivingRef.current && !suppressRefitRef.current) {
                   selectReq(expandedNodeId);
                   requestAnimationFrame(() => {
                     rfRef.current?.fitView({ nodes: initialNodes.filter(n => n.id === expandedNodeId), padding: 0.2, maxZoom: gs.maxZoom, duration: 500 });
@@ -1344,6 +1445,8 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
         if (r || refocus) {
           schedule(() => {
             if (applyRefocus()) return;
+            // A deliberate framing from the pass before still owns the camera.
+            if (suppressRefitRef.current) return;
             rfRef.current?.fitView({
               padding: 0.12,
               maxZoom: gs.maxZoom,
@@ -1408,6 +1511,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
     if (r || refocus) {
       timers.push(setTimeout(() => {
         if (applyRefocus()) return;
+        if (suppressRefitRef.current) return;
         rfRef.current?.fitView({ padding: 0.12, maxZoom: gs.maxZoom, duration: switching ? 0 : (r ? r.duration : 500) });
       }, switching ? 40 : 250));
     }
@@ -1711,6 +1815,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
 
   return (
     <div
+      ref={graphBoxRef}
       className={`w-full h-full bg-background relative @container${perfMode ? ' rt-perf' : ''}`}
       // Subtle centre glow for depth so node blooms read against some atmosphere.
       // ReactFlow is transparent, so this backdrop shows through behind the nodes.
@@ -1845,7 +1950,6 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
                   <FilterField label="Verification status" options={availableVerStatuses} value={filterVerStatus} onChange={setFilterVerStatus} colorOf={verifStatusOptionColor} />
                   <FilterField label="Verification method" options={availableVerMethods} value={filterVerMethod} onChange={setFilterVerMethod} />
                   <FilterField label="Allocated team" options={availableAllocations} value={filterAllocated} onChange={setFilterAllocated} />
-                  <FilterField label="Allocated team" options={availableAllocations} value={filterAllocated} onChange={setFilterAllocated} />
                   {availableComponents.length > 0 && (
                     <div>
                       <div className="text-[9px] text-graph-muted mb-1">Components</div>
@@ -1865,7 +1969,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
                                 disabled={inherited}
                               />
                               <span className="text-[11px] text-graph-text truncate max-w-[140px]">{label}</span>
-                              <span className="text-[9px] text-graph-muted ml-auto shrink-0">{reqCount}</span>
+                              <span className="text-[9px] text-graph-muted ml-auto shrink-0" title={`Satisfies ${reqCount} requirements`}>{reqCount}</span>
                             </label>
                           );
                         })}

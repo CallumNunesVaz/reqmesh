@@ -21,7 +21,6 @@ export default function ComponentsPage() {
   const dataVersion = useStore((s) => s.dataVersion);
   const hiddenComponents = useStore((s) => s.hiddenComponents);
   const toggleHiddenComponent = useStore((s) => s.toggleHiddenComponent);
-  const bumpGraph = useStore((s) => s.bumpGraphVersion);
 
   const [components, setComponents] = useState<Component[]>([]);
   const [tree, setTree] = useState<ComponentTreeNode[]>([]);
@@ -250,12 +249,12 @@ export default function ComponentsPage() {
           <span className="text-sm text-card-foreground truncate">{node.name || 'Untitled'}</span>
           {node.quantity > 1 && <span className="text-xs text-muted-foreground shrink-0">×{node.quantity}</span>}
           {node.satisfies.length > 0 && (
-            <span className="ml-auto text-[10px] text-muted-foreground shrink-0" title="Requirements satisfied">
-              {node.satisfies.length} requirements
+            <span className="ml-auto text-[10px] text-muted-foreground shrink-0">
+              satisfies {node.satisfies.length}
             </span>
           )}
           <button
-            onClick={(e) => { e.stopPropagation(); toggleHiddenComponent(node.id); bumpGraph(); }}
+            onClick={(e) => { e.stopPropagation(); toggleHiddenComponent(node.id); }}
             className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0 disabled:opacity-50 disabled:cursor-default disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
             disabled={inherited}
             title={inherited ? 'Hidden by a parent component' : effectiveHidden.has(node.id) ? 'Hidden in graph' : 'Shown in graph'}

@@ -5,6 +5,8 @@ import {
   isReqHiddenByComponents,
   isReqHiddenByBaselines,
   migrateLegacyFilterList,
+  requirementsRevealed,
+  pruneUnknownIds,
 } from '../src/lib/graphFilters';
 import type { ComponentNode, SatisfyingComponent } from '../src/lib/graphFilters';
 
@@ -263,6 +265,128 @@ describe('filterableComponentIds', () => {
       { id: 'C2', satisfies: undefined },
     ];
     const result = filterableComponentIds(comps, []);
+    expect(result).toEqual([]);
+  });
+});
+
+// ── requirementsRevealed ────────────────────────────────────────────────────
+
+describe('requirementsRevealed', () => {
+  type TestComp = ComponentNode & SatisfyingComponent;
+
+  it('revealing a component whose requirement is also satisfied by a still-hidden component reveals that requirement', () => {
+    // C1 (hidden) satisfies R1; C2 (also hidden) also satisfies R1.
+    // Revealing only C1: R1 is still hidden by C2, so nothing revealed.
+    // Wait — the spec says the opposite. Let me re-read.
+    // "Revealing a component whose requirement is also satisfied by a still-hidden
+    //  component reveals that requirement."
+    // Hmm, but isReqHiddenByComponents hides only when EVERY satisfying component
+    // is hidden. If C1 is revealed but C2 is still hidden, R1 is visible (one
+    // visible component is enough). So revealing C1 should reveal R1.
+    //
+    // Previously: C1 hidden, C2 hidden → R1 hidden
+    // Now: C1 visible, C2 hidden → R1 visible
+    // So R1 IS revealed. ✓
+    const comps: TestComp[] = [
+      { id: 'C1', satisfies: ['R1'] },
+      { id: 'C2', satisfies: ['R1'] },
+    ];
+    const result = requirementsRevealed(comps, ['C1', 'C2'], ['C2'], ['R1']);
+    expect(result).toEqual(['R1']);
+  });
+
+  it('revealing one of two satisfying components where the other was already visible reveals nothing', () => {
+    // C1 visible, C2 hidden → R1 is already visible (satisfied by C1).
+    // Hiding C2 changes nothing because C1 still satisfies R1.
+    // So revealing C2 (which was hidden) — wait, this is about "revealing one
+    // of two satisfying components where the other was already visible".
+    // Prev: C2 hidden, C1 visible → R1 visible
+    // Next: nothing hidden → R1 still visible
+    // No reveal. ✓
+    const comps: TestComp[] = [
+      { id: 'C1', satisfies: ['R1'] },
+      { id: 'C2', satisfies: ['R1'] },
+    ];
+    const result = requirementsRevealed(comps, ['C2'], [], ['R1']);
+    expect(result).toEqual([]);
+  });
+
+  it('revealing a parent reveals requirements satisfied only by its descendants', () => {
+    // A (assembly, hidden) → B (child of A, satisfies ['R1'])
+    // Prev: A hidden → B (descendant) is in effectiveHidden → R1 hidden
+    // Next: nothing hidden → R1 visible
+    const comps: TestComp[] = [
+      { id: 'A' },
+      { id: 'B', parent: 'A', satisfies: ['R1'] },
+    ];
+    const result = requirementsRevealed(comps, ['A'], [], ['R1']);
+    expect(result).toEqual(['R1']);
+  });
+
+  it('a hide returns an empty array', () => {
+    const comps: TestComp[] = [
+      { id: 'C1', satisfies: ['R1'] },
+    ];
+    // Hiding C1: requirements go from visible to hidden, not revealed.
+    const result = requirementsRevealed(comps, [], ['C1'], ['R1']);
+    expect(result).toEqual([]);
+  });
+
+  it('a requirement satisfied by no component is never returned', () => {
+    const comps: TestComp[] = [
+      { id: 'C1', satisfies: ['R2'] },
+    ];
+    // R1 is satisfied by no component → never hidden → revealing changes nothing.
+    const result = requirementsRevealed(comps, ['C1'], [], ['R1', 'R2']);
+    expect(result).toEqual(['R2']);
+  });
+
+  it('results are sorted, with no duplicates when several components are revealed at once', () => {
+    const comps: TestComp[] = [
+      { id: 'C1', satisfies: ['R3', 'R1'] },
+      { id: 'C2', satisfies: ['R2', 'R3'] },
+    ];
+    // Both hidden → both revealed. R3 appears in both — should only be listed once.
+    const result = requirementsRevealed(comps, ['C1', 'C2'], [], ['R1', 'R2', 'R3']);
+    expect(result).toEqual(['R1', 'R2', 'R3']);
+  });
+
+  it('empty hidden lists both before and after return empty', () => {
+    const comps: TestComp[] = [
+      { id: 'C1', satisfies: ['R1'] },
+    ];
+    expect(requirementsRevealed(comps, [], [], ['R1'])).toEqual([]);
+  });
+});
+
+// ── pruneUnknownIds ─────────────────────────────────────────────────────────
+
+describe('pruneUnknownIds', () => {
+  it('drops ids not in the known list', () => {
+    const result = pruneUnknownIds(['A', 'B', 'GHOST'], ['A', 'B']);
+    expect(result).toEqual(['A', 'B']);
+  });
+
+  it('returns the same array instance when everything is known', () => {
+    const hidden = ['A', 'B'];
+    const result = pruneUnknownIds(hidden, ['A', 'B', 'C']);
+    expect(result).toBe(hidden); // identity check — no-loop guarantee
+  });
+
+  it('an empty hidden list returns the same empty instance', () => {
+    const hidden: string[] = [];
+    const result = pruneUnknownIds(hidden, ['A', 'B']);
+    expect(result).toBe(hidden); // identity check
+  });
+
+  it('returns the same empty array instance when known list is also empty', () => {
+    const hidden: string[] = [];
+    const result = pruneUnknownIds(hidden, []);
+    expect(result).toBe(hidden);
+  });
+
+  it('all ids unknown returns an empty array', () => {
+    const result = pruneUnknownIds(['X', 'Y'], ['A', 'B']);
     expect(result).toEqual([]);
   });
 });
