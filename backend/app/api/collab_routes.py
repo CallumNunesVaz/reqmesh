@@ -176,16 +176,40 @@ def _link_for(holder: str, field: str):
 
 @dataclass(frozen=True)
 class MatrixAxis:
-    """One matrix: which link it shows, and what to call it."""
+    """One matrix: which link it shows, and what to call it.
+
+    Two shapes of axis exist, and they differ in every direction:
+
+    * **Link axes** (components, verification, risks) read a link declared in
+      ``link_registry``. The link is held by the *column* entity, which is a
+      record in the ``holder`` collection, and points at requirement **ids**.
+      A cell write goes to the holder.
+
+    * **The baselines axis** inverts all three. Its columns are definitions in
+      project metadata rather than records in a collection, the membership is
+      held by the *requirement* in ``req_field``, and it stores baseline
+      **names** rather than ids. ``link_registry`` deliberately excludes it —
+      "a baseline is a label rather than a record that can dangle" — so there
+      is no ``Link`` to read and ``link`` is None.
+
+    ``req_field`` is what distinguishes them. Anything branching on axis shape
+    tests that, not the key.
+    """
     key: str
     holder: str
     field: str
     #: Reads as "<requirement> <verb> <column>", for the UI's own wording.
     verb: str
     column_label: str
+    #: Set only on requirement-held axes. Names the field on the *requirement*
+    #: holding the membership, whose entries are column **names**, not ids.
+    req_field: str | None = None
 
     @property
     def link(self):
+        """The registry link this axis shows, or None on a requirement-held axis."""
+        if self.req_field is not None:
+            return None
         return _link_for(self.holder, self.field)
 
 
