@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from app.core.dependencies import get_store, require_maintain, require_maintain_global, require_admin
 from app.core.ids import safe_id
 from app.core.tree_utils import build_flat_tree
+from app.models.baseline import DUE_DATE_RE
 from app.models.requirement import RequirementCreate, RequirementUpdate
 from app.services.load_guard import is_safe_id, validate_on_load
 from app.api._utils import paginate
@@ -38,25 +39,46 @@ class ProjectCreate(BaseModel):
 
 
 class BaselineDefItem(BaseModel):
-    """A baseline definition — name, optional short symbol, and rich-text description."""
+    """A baseline definition — name, short symbol, description, and due date."""
     name: str
     symbol: str = ""
     description: str = ""
+    due_date: str = ""
 
 
 def normalize_baseline_defs(baselines: list) -> list[dict]:
-    """Normalize baseline definitions from either legacy string format or
-    the object format to a uniform list of {name, symbol, description}."""
+    """Normalize baseline definitions to {name, symbol, description, due_date,
+    order}.
+
+    Accepts the legacy bare-string form as well as the object form, mirroring
+    normalize_stakeholders.
+
+    **List position is the sequence.** ``order`` is derived here as a 1-based
+    index rather than read from the item, so a hand-edited `_meta.yaml` cannot
+    express a sequence that disagrees with itself. Callers that reorder rewrite
+    the list; they never write an ``order`` key back.
+
+    A ``due_date`` that is not ``YYYY-MM-DD`` degrades to "". `_meta.yaml` is
+    hand-editable and arrives by git pull, so one bad date must not take down
+    every listing that reads baselines — the same reasoning as the is_safe_id
+    guard in list_baselines.
+    """
     result: list[dict] = []
     for item in (baselines or []):
         if isinstance(item, str):
-            result.append({"name": item, "symbol": "", "description": ""})
-        elif isinstance(item, dict):
-            result.append({
-                "name": item.get("name", ""),
-                "symbol": item.get("symbol", ""),
-                "description": item.get("description", ""),
-            })
+            item = {"name": item}
+        if not isinstance(item, dict):
+            continue
+        due = str(item.get("due_date", "") or "").strip()
+        if due and not DUE_DATE_RE.match(due):
+            due = ""
+        result.append({
+            "name": item.get("name", ""),
+            "symbol": item.get("symbol", ""),
+            "description": item.get("description", ""),
+            "due_date": due,
+            "order": len(result) + 1,
+        })
     return result
 
 
@@ -82,6 +104,20 @@ def normalize_stakeholders(stakeholders: list) -> list[dict]:
                 weight = 1.0
             result.append({"name": item["name"], "weight": max(0.0, weight)})
     return result
+
+
+def serialize_baseline_defs(defs: list[dict]) -> list[dict]:
+    """The `_meta.yaml` form of normalized definitions.
+
+    Drops ``order`` — it is the list position, derived on read, and writing it
+    back would create a second copy of the sequence free to disagree with the
+    first. Empty optional fields are omitted so a project that never set a
+    symbol or a due date keeps a clean `_meta.yaml`.
+    """
+    return [
+        {k: v for k, v in d.items() if k != "order" and (k == "name" or v)}
+        for d in defs
+    ]
 
 
 def _baseline_def_by_name(baselines: list, name: str) -> dict | None:
@@ -263,9 +299,7 @@ def update_project_settings(project_id: str, data: ProjectSettings, user: dict =
         # project until someone hand-edited _meta.yaml.
         for d in defs:
             safe_id(d["name"], "baseline name")
-        updates["baselines"] = [
-            {k: v for k, v in d.items() if k == "name" or v} for d in defs
-        ]
+        updates["baselines"] = serialize_baseline_defs(defs)
     if "stakeholders" in updates and updates["stakeholders"] is not None:
         updates["stakeholders"] = normalize_stakeholders(updates["stakeholders"])
     if "risk_matrix" in updates and updates["risk_matrix"] is not None:
@@ -747,7 +781,7 @@ def create_baseline(project_id: str, data: BaselineCreate, user: dict = Depends(
         existing["description"] = data.description or existing["description"]
     else:
         defs.append({"name": name, "symbol": data.symbol, "description": data.description})
-    serialized = [{k: v for k, v in d.items() if k == "name" or v} for d in defs]
+    serialized = serialize_baseline_defs(defs)
     meta["baselines"] = serialized
     store.write_meta(meta)
     # Assign the baseline to specified requirements
@@ -785,7 +819,7 @@ def rename_baseline(project_id: str, name: str, data: RenameBaseline, user: dict
                 d["symbol"] = data.symbol
             if data.description is not None:
                 d["description"] = data.description
-    serialized = [{k: v for k, v in d.items() if k == "name" or v} for d in defs]
+    serialized = serialize_baseline_defs(defs)
     meta["baselines"] = serialized
     store.write_meta(meta)
     # Rename on all requirements
@@ -818,7 +852,7 @@ def delete_baseline(project_id: str, name: str, user: dict = Depends(require_mai
     meta = store.read_meta()
     defs = normalize_baseline_defs(meta.get("baselines", []))
     defs = [d for d in defs if d["name"] != name]
-    serialized = [{k: v for k, v in d.items() if k == "name" or v} for d in defs]
+    serialized = serialize_baseline_defs(defs)
     meta["baselines"] = serialized
     store.write_meta(meta)
     updated = 0
