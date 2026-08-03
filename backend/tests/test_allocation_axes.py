@@ -158,3 +158,128 @@ def test_the_components_axis_keeps_its_original_response_shape(client, populated
 def test_the_default_axis_is_still_components(client, populated):
     res = client.get(f"/api/projects/{populated}/allocation-matrix")
     assert res.json()["axis"] == "components"
+
+
+# ── Baselines axis ────────────────────────────────────────────────────────────
+
+def test_baselines_axis_returns_columns_in_sequence_order(client, project):
+    """Columns come from metadata definitions, in sequence order, with due_date/order."""
+    client.patch(f"/api/projects/{project}", json={"baselines": [
+        {"name": "SRR", "symbol": "S", "due_date": "2026-01-01"},
+        {"name": "PDR", "symbol": "P", "due_date": "2026-06-01"},
+    ]})
+    make_req(client, project, "SYST0001")
+    make_req(client, project, "SYST0002")
+
+    m = matrix(client, project, "baselines")
+    assert m["axis"] == "baselines"
+    assert m["verb"] == "is baselined in"
+    assert m["column_label"] == "Baselines"
+
+    cols = m["columns"]
+    assert len(cols) == 2
+    assert [c["id"] for c in cols] == ["SRR", "PDR"]
+    assert cols[0]["due_date"] == "2026-01-01"
+    assert cols[1]["due_date"] == "2026-06-01"
+    assert cols[0]["order"] == 1
+    assert cols[1]["order"] == 2
+    assert cols[0]["kind"] == "S"
+
+
+def test_baselines_axis_toggle_on_then_off(client, project):
+    """Toggling a cell on then off leaves requirement.baselines as it started."""
+    client.patch(f"/api/projects/{project}", json={"baselines": [
+        {"name": "SRR"}, {"name": "PDR"},
+    ]})
+    make_req(client, project, "SYST0001")
+
+    # Before: empty
+    req = client.get(f"/api/projects/{project}/requirements/SYST0001").json()
+    assert req.get("baselines") or [] == []
+
+    # Toggle on
+    assert toggle(client, project, "baselines", "SYST0001", "SRR").status_code == 200
+    req = client.get(f"/api/projects/{project}/requirements/SYST0001").json()
+    assert "SRR" in (req.get("baselines") or [])
+
+    # Toggle off
+    assert toggle(client, project, "baselines", "SYST0001", "SRR", allocated=False).status_code == 200
+    req = client.get(f"/api/projects/{project}/requirements/SYST0001").json()
+    assert (req.get("baselines") or []) == []
+
+
+def test_baselines_toggle_does_not_set_other_cells(client, project):
+    """Toggling one baseline must NOT set any other cell in that row
+    (the no-cascade rule)."""
+    client.patch(f"/api/projects/{project}", json={"baselines": [
+        {"name": "SRR"}, {"name": "PDR"}, {"name": "CDR"},
+    ]})
+    make_req(client, project, "SYST0001")
+
+    toggle(client, project, "baselines", "SYST0001", "SRR")
+
+    m = matrix(client, project, "baselines")
+    row = next(r for r in m["rows"] if r["req_id"] == "SYST0001")
+    assert row["cells"]["SRR"] is True
+    assert row["cells"]["PDR"] is False
+    assert row["cells"]["CDR"] is False
+
+
+def test_baselines_unknown_name_is_404(client, project):
+    """An unknown baseline name → 404, checked against metadata definitions."""
+    client.patch(f"/api/projects/{project}", json={"baselines": [{"name": "SRR"}]})
+    make_req(client, project, "SYST0001")
+
+    res = toggle(client, project, "baselines", "SYST0001", "NOPE")
+    assert res.status_code == 404
+    assert "Baseline not found" in res.json()["detail"]
+
+
+def test_baselines_toggle_leaves_allocated_to_untouched(client, project):
+    """Toggling on the baselines axis leaves allocated_to untouched."""
+    client.patch(f"/api/projects/{project}", json={"baselines": [{"name": "SRR"}]})
+    make_req(client, project, "SYST0001")
+
+    res = toggle(client, project, "baselines", "SYST0001", "SRR")
+    assert res.json()["allocated_to"] == ""
+
+    req = client.get(f"/api/projects/{project}/requirements/SYST0001").json()
+    assert "SRR" in (req.get("baselines") or [])
+    # allocated_to is unchanged from whatever it was.
+    assert req.get("allocated_to", "") == ""
+
+
+def test_baselines_columns_are_metadata_defs_not_frozen_snapshots(client, project):
+    """Columns are the metadata definitions even when no baseline has been frozen."""
+    client.patch(f"/api/projects/{project}", json={"baselines": [
+        {"name": "SRR"}, {"name": "PDR"},
+    ]})
+    make_req(client, project, "SYST0001")
+
+    # No freeze — yet the columns still appear.
+    m = matrix(client, project, "baselines")
+    assert len(m["columns"]) == 2
+    assert [c["id"] for c in m["columns"]] == ["SRR", "PDR"]
+
+
+def test_baselines_axis_search_filters(client, project):
+    """The search filter applies to columns by name."""
+    client.patch(f"/api/projects/{project}", json={"baselines": [
+        {"name": "SRR"}, {"name": "PDR"},
+    ]})
+    make_req(client, project, "SYST0001")
+    make_req(client, project, "SYST0002")
+
+    m = matrix(client, project, "baselines", search="SRR")
+    assert len(m["columns"]) == 1
+    assert m["columns"][0]["id"] == "SRR"
+
+
+def test_baselines_axis_type_filter(client, project):
+    """filter_type works on the baselines axis."""
+    client.patch(f"/api/projects/{project}", json={"baselines": [{"name": "SRR"}]})
+    make_req(client, project, "SYST0001", type="functional")
+    make_req(client, project, "SYST0002", type="non_functional_performance")
+
+    m = matrix(client, project, "baselines", filter_type="functional")
+    assert [r["req_id"] for r in m["rows"]] == ["SYST0001"]
