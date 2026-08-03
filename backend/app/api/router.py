@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 import itertools
 import logging
 import re
@@ -14,6 +15,7 @@ from pydantic import BaseModel
 from app.core.dependencies import get_store, require_maintain, require_maintain_global, require_admin
 from app.core.ids import safe_id
 from app.core.tree_utils import build_flat_tree
+from app.models.baseline import DUE_DATE_RE
 from app.models.requirement import RequirementCreate, RequirementUpdate
 from app.services.load_guard import is_safe_id, validate_on_load
 from app.api._utils import paginate
@@ -38,25 +40,46 @@ class ProjectCreate(BaseModel):
 
 
 class BaselineDefItem(BaseModel):
-    """A baseline definition — name, optional short symbol, and rich-text description."""
+    """A baseline definition — name, short symbol, description, and due date."""
     name: str
     symbol: str = ""
     description: str = ""
+    due_date: str = ""
 
 
 def normalize_baseline_defs(baselines: list) -> list[dict]:
-    """Normalize baseline definitions from either legacy string format or
-    the object format to a uniform list of {name, symbol, description}."""
+    """Normalize baseline definitions to {name, symbol, description, due_date,
+    order}.
+
+    Accepts the legacy bare-string form as well as the object form, mirroring
+    normalize_stakeholders.
+
+    **List position is the sequence.** ``order`` is derived here as a 1-based
+    index rather than read from the item, so a hand-edited `_meta.yaml` cannot
+    express a sequence that disagrees with itself. Callers that reorder rewrite
+    the list; they never write an ``order`` key back.
+
+    A ``due_date`` that is not ``YYYY-MM-DD`` degrades to "". `_meta.yaml` is
+    hand-editable and arrives by git pull, so one bad date must not take down
+    every listing that reads baselines — the same reasoning as the is_safe_id
+    guard in list_baselines.
+    """
     result: list[dict] = []
     for item in (baselines or []):
         if isinstance(item, str):
-            result.append({"name": item, "symbol": "", "description": ""})
-        elif isinstance(item, dict):
-            result.append({
-                "name": item.get("name", ""),
-                "symbol": item.get("symbol", ""),
-                "description": item.get("description", ""),
-            })
+            item = {"name": item}
+        if not isinstance(item, dict):
+            continue
+        due = str(item.get("due_date", "") or "").strip()
+        if due and not DUE_DATE_RE.match(due):
+            due = ""
+        result.append({
+            "name": item.get("name", ""),
+            "symbol": item.get("symbol", ""),
+            "description": item.get("description", ""),
+            "due_date": due,
+            "order": len(result) + 1,
+        })
     return result
 
 
@@ -84,6 +107,20 @@ def normalize_stakeholders(stakeholders: list) -> list[dict]:
     return result
 
 
+def serialize_baseline_defs(defs: list[dict]) -> list[dict]:
+    """The `_meta.yaml` form of normalized definitions.
+
+    Drops ``order`` — it is the list position, derived on read, and writing it
+    back would create a second copy of the sequence free to disagree with the
+    first. Empty optional fields are omitted so a project that never set a
+    symbol or a due date keeps a clean `_meta.yaml`.
+    """
+    return [
+        {k: v for k, v in d.items() if k != "order" and (k == "name" or v)}
+        for d in defs
+    ]
+
+
 def _baseline_def_by_name(baselines: list, name: str) -> dict | None:
     for b in normalize_baseline_defs(baselines):
         if b["name"] == name:
@@ -91,10 +128,66 @@ def _baseline_def_by_name(baselines: list, name: str) -> dict | None:
     return None
 
 
+def _validate_due_dates(baselines: list) -> None:
+    """Validate every due date is ``YYYY-MM-DD`` or ``""`` and the sequence
+    is monotonic (non-empty due dates must not go backwards).
+
+    Raises ``HTTPException(400)`` on the first violation.
+
+    The raw input is validated for individual date format/parseability, because
+    ``normalize_baseline_defs`` degrades malformed dates on the read path.
+    The monotonic check runs on the normalized form so it sees the sequence
+    order.
+    """
+    # Phase 1: validate each individual due_date on the raw input.
+    for item in (baselines or []):
+        if isinstance(item, str):
+            continue
+        if not isinstance(item, dict):
+            continue
+        due = str(item.get("due_date", "") or "").strip()
+        if not due:
+            continue
+        if not DUE_DATE_RE.match(due):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid due date: {due} (expected YYYY-MM-DD)",
+            )
+        try:
+            datetime.date.fromisoformat(due)
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid due date: {due} (expected YYYY-MM-DD)",
+            )
+
+    # Phase 2: monotonic check on the normalized form which knows the order.
+    defs = normalize_baseline_defs(baselines)
+    prev_date = None
+    prev_name = None
+    for d in defs:
+        due = d.get("due_date", "")
+        if not due:
+            continue
+        if prev_date is not None and due < prev_date:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Due dates must not go backwards: {d['name']} ({due}) "
+                       f"is due before {prev_name} ({prev_date})",
+            )
+        prev_date = due
+        prev_name = d["name"]
+
+
+class ReorderBaselines(BaseModel):
+    names: list[str]
+
+
 class BaselineCreate(BaseModel):
     name: str
     symbol: str = ""
     description: str = ""
+    due_date: str = ""
     requirements: list[str] = []
 
 
@@ -111,6 +204,7 @@ class RenameBaseline(BaseModel):
     name: str
     symbol: Optional[str] = None
     description: Optional[str] = None
+    due_date: Optional[str] = None
 
 
 router = APIRouter()
@@ -254,6 +348,10 @@ def update_project_settings(project_id: str, data: ProjectSettings, user: dict =
     if "git" in updates:
         _guard_git_settings(updates["git"], meta.get("git", {}), user)
     if "baselines" in updates and updates["baselines"] is not None:
+        # Validate due dates on the raw input before normalization, which
+        # degrades bad dates on the read path. A rejected write must leave
+        # _meta.yaml untouched.
+        _validate_due_dates(updates["baselines"])
         defs = normalize_baseline_defs(updates["baselines"])
         # Baseline names become filenames when a baseline is frozen
         # (`store.get_item("baselines", name)`), so they need the same
@@ -263,9 +361,7 @@ def update_project_settings(project_id: str, data: ProjectSettings, user: dict =
         # project until someone hand-edited _meta.yaml.
         for d in defs:
             safe_id(d["name"], "baseline name")
-        updates["baselines"] = [
-            {k: v for k, v in d.items() if k == "name" or v} for d in defs
-        ]
+        updates["baselines"] = serialize_baseline_defs(defs)
     if "stakeholders" in updates and updates["stakeholders"] is not None:
         updates["stakeholders"] = normalize_stakeholders(updates["stakeholders"])
     if "risk_matrix" in updates and updates["risk_matrix"] is not None:
@@ -717,6 +813,8 @@ def list_baselines(project_id: str):
             "name": name,
             "symbol": d["symbol"],
             "description": d["description"],
+            "due_date": d["due_date"],
+            "order": d["order"],
             "requirements": reqs,
             "count": len(reqs),
             "frozen": frozen is not None,
@@ -728,10 +826,15 @@ def list_baselines(project_id: str):
         if name not in seen:
             result.append({
                 "name": name, "symbol": "", "description": "",
+                "due_date": "", "order": 0,
                 "requirements": reqs, "count": len(reqs),
                 "frozen": False, "frozen_at": "", "frozen_count": 0,
             })
-    return sorted(result, key=lambda x: x["name"])
+    # Defined baselines first (sequence order), then undefined orphans sorted by name.
+    orphans = [r for r in result if r["order"] == 0]
+    orphans.sort(key=lambda x: x["name"])
+    defined = [r for r in result if r["order"] != 0]
+    return defined + orphans
 
 
 @router.post("/projects/{project_id}/baselines")
@@ -745,9 +848,15 @@ def create_baseline(project_id: str, data: BaselineCreate, user: dict = Depends(
     if existing:
         existing["symbol"] = data.symbol or existing["symbol"]
         existing["description"] = data.description or existing["description"]
+        if data.due_date:
+            existing["due_date"] = data.due_date
     else:
-        defs.append({"name": name, "symbol": data.symbol, "description": data.description})
-    serialized = [{k: v for k, v in d.items() if k == "name" or v} for d in defs]
+        defs.append({"name": name, "symbol": data.symbol, "description": data.description,
+                     "due_date": data.due_date})
+    serialized = serialize_baseline_defs(defs)
+    # Validate the proposed list before writing — a rejected write must
+    # leave _meta.yaml untouched.
+    _validate_due_dates(serialized)
     meta["baselines"] = serialized
     store.write_meta(meta)
     # Assign the baseline to specified requirements
@@ -762,7 +871,38 @@ def create_baseline(project_id: str, data: BaselineCreate, user: dict = Depends(
             if store.update_requirement(req_id, {"baselines": blist}):
                 updated += 1
     return {"name": name, "symbol": data.symbol, "description": data.description,
-            "requirements_assigned": updated}
+            "due_date": data.due_date, "requirements_assigned": updated}
+
+
+@router.put("/projects/{project_id}/baselines/order")
+def reorder_baselines(project_id: str, data: ReorderBaselines, user: dict = Depends(require_maintain)):
+    """Rewrite the baseline sequence."""
+    store = get_store(project_id)
+    meta = store.read_meta()
+    current_defs = normalize_baseline_defs(meta.get("baselines", []))
+    defined_names = [d["name"] for d in current_defs]
+
+    # Must be exactly the same set — a permutation, no duplicates, no missing.
+    if set(data.names) != set(defined_names) or len(data.names) != len(defined_names):
+        raise HTTPException(
+            status_code=400,
+            detail="names must list every defined baseline exactly once",
+        )
+
+    # Build the new list in the requested order, preserving other fields.
+    by_name = {d["name"]: d for d in current_defs}
+    # `order` is left alone here: serialize_baseline_defs is the one place it is
+    # dropped, and duplicating that responsibility is how the derived value and
+    # the list position start to disagree.
+    reordered = [dict(by_name[nm]) for nm in data.names]
+
+    serialized = serialize_baseline_defs(reordered)
+    # Validate due dates in the new order before writing.
+    _validate_due_dates(serialized)
+    meta["baselines"] = serialized
+    store.write_meta(meta)
+
+    return {"baselines": normalize_baseline_defs(serialized)}
 
 
 @router.patch("/projects/{project_id}/baselines/{name}")
@@ -785,7 +925,11 @@ def rename_baseline(project_id: str, name: str, data: RenameBaseline, user: dict
                 d["symbol"] = data.symbol
             if data.description is not None:
                 d["description"] = data.description
-    serialized = [{k: v for k, v in d.items() if k == "name" or v} for d in defs]
+            if data.due_date is not None:
+                d["due_date"] = data.due_date
+    serialized = serialize_baseline_defs(defs)
+    # Validate before writing — a rejected write must leave _meta.yaml untouched.
+    _validate_due_dates(serialized)
     meta["baselines"] = serialized
     store.write_meta(meta)
     # Rename on all requirements
@@ -818,7 +962,7 @@ def delete_baseline(project_id: str, name: str, user: dict = Depends(require_mai
     meta = store.read_meta()
     defs = normalize_baseline_defs(meta.get("baselines", []))
     defs = [d for d in defs if d["name"] != name]
-    serialized = [{k: v for k, v in d.items() if k == "name" or v} for d in defs]
+    serialized = serialize_baseline_defs(defs)
     meta["baselines"] = serialized
     store.write_meta(meta)
     updated = 0

@@ -374,7 +374,10 @@ def test_settings_save_preserves_baseline_symbol_and_description(client, project
         {"name": "PDR", "symbol": "P", "description": "<p>Prelim design</p>"}]})
 
     loaded = client.get(f"/api/projects/{project}").json()["baselines"]
-    assert loaded == [{"name": "PDR", "symbol": "P", "description": "<p>Prelim design</p>"}]
+    # due_date and order are part of the normalized shape: order is derived from
+    # list position, so it comes back even though it was never sent.
+    assert loaded == [{"name": "PDR", "symbol": "P", "description": "<p>Prelim design</p>",
+                       "due_date": "", "order": 1}]
 
     client.patch(f"/api/projects/{project}", json={"baselines": loaded})
     assert client.get(f"/api/projects/{project}").json()["baselines"] == loaded
