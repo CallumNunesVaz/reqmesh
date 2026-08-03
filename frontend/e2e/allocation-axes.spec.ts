@@ -83,3 +83,245 @@ test('a cell on the risks matrix writes the risk, and survives a reload', async 
   const after = await api<any>(app, `/projects/${P}/allocation-matrix?axis=risks`);
   expect(after.rows.find((r: any) => r.req_id === reqId).cells[riskId]).toBe(true);
 });
+
+// ---------------------------------------------------------------------------
+// Baselines matrix tab
+// ---------------------------------------------------------------------------
+
+/** Post a JSON body to the API, returning { status, body }. */
+async function postApi(app: any, path: string, body: any, method = 'POST') {
+  const cookies = await app.context().cookies();
+  const token = cookies.find((c: any) => c.name === 'csrftoken')?.value || '';
+  return app.evaluate(async ({ path, body, method, token }: any) => {
+    const r = await fetch(`/api${path}`, {
+      method,
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token },
+      body: JSON.stringify(body),
+      credentials: 'include',
+    });
+    const text = await r.text();
+    let json: any;
+    try { json = JSON.parse(text); } catch { json = { detail: text }; }
+    return { status: r.status, body: json };
+  }, { path, body, method, token });
+}
+
+/** Seed three baselines with due dates and symbols, in SRR → PDR → CDR order
+ *  (alphabetically CDR < PDR < SRR, so rendering in sequence order is visible). */
+async function seedBaselines(app: any) {
+  await postApi(app, `/projects/${P}/baselines`, { name: 'SRR', symbol: 'S', due_date: '2026-01-01' });
+  await postApi(app, `/projects/${P}/baselines`, { name: 'PDR', symbol: 'P', due_date: '2026-06-01' });
+  await postApi(app, `/projects/${P}/baselines`, { name: 'CDR', symbol: 'C', due_date: '2026-12-01' });
+}
+
+test('the Baselines tab appears and switches the matrix', async ({ app, server }) => {
+  await signIn(app);
+  await app.goto(`${server.baseURL}/project/${P}/allocation`);
+  await app.waitForSelector('main');
+  await expect(app.getByRole('tab', { name: 'Components' })).toBeVisible({ timeout: 20_000 });
+
+  await seedBaselines(app);
+
+  // Navigate away and back to pick up the new baseline definitions
+  await app.goto(`${server.baseURL}/project/${P}/baselines`);
+  await app.waitForSelector('main');
+  await app.goto(`${server.baseURL}/project/${P}/allocation`);
+  await app.waitForSelector('main');
+
+  // The Baselines tab must be visible
+  const tab = app.getByRole('tab', { name: 'Baselines' });
+  await expect(tab).toBeVisible({ timeout: 10_000 });
+
+  await tab.click();
+  await app.waitForTimeout(1200);
+
+  // The matrix must be for baselines
+  await expect(app.locator('main')).toContainText('Requirements × Baselines');
+});
+
+test('baseline columns render in sequence order, not alphabetically', async ({ app, server }) => {
+  await signIn(app);
+  await seedBaselines(app);
+  await app.goto(`${server.baseURL}/project/${P}/allocation`);
+  await app.waitForSelector('main');
+  await app.getByRole('tab', { name: 'Baselines' }).click();
+  await app.waitForTimeout(1200);
+
+  // Read the column header texts — they must be SRR, PDR, CDR (sequence order)
+  const headers = app.locator('thead th').filter({ hasText: /^S/ }).locator('span').first();
+  // Wait for at least one column header with text
+  await expect(app.locator('thead')).toContainText('SRR');
+  await expect(app.locator('thead')).toContainText('PDR');
+  await expect(app.locator('thead')).toContainText('CDR');
+
+  // Get the actual text order of the header th elements
+  const headerTexts = await app.locator('thead th').allTextContents();
+  // Filter out empty/irrelevant headers, keeping only the baseline name entries
+  const baselineHeaders = headerTexts.filter((t: string) =>
+    ['SRR', 'PDR', 'CDR'].some((n) => t.includes(n)),
+  );
+  // The columns must appear in sequence order: SRR, PDR, CDR
+  const srrIdx = baselineHeaders.findIndex((t: string) => t.includes('SRR'));
+  const pdrIdx = baselineHeaders.findIndex((t: string) => t.includes('PDR'));
+  const cdrIdx = baselineHeaders.findIndex((t: string) => t.includes('CDR'));
+  expect(srrIdx).toBeLessThan(pdrIdx);
+  expect(pdrIdx).toBeLessThan(cdrIdx);
+});
+
+test('a due date appears in the column header', async ({ app, server }) => {
+  await signIn(app);
+  await seedBaselines(app);
+  await app.goto(`${server.baseURL}/project/${P}/allocation`);
+  await app.waitForSelector('main');
+  await app.getByRole('tab', { name: 'Baselines' }).click();
+  await app.waitForTimeout(1200);
+
+  // SRR has due_date 2026-01-01 — it must appear in the header
+  await expect(app.locator('thead')).toContainText('2026-01-01');
+  await expect(app.locator('thead')).toContainText('2026-06-01');
+  await expect(app.locator('thead')).toContainText('2026-12-01');
+});
+
+test('toggling a baseline cell persists across a reload', async ({ app, server }) => {
+  await signIn(app);
+  await seedBaselines(app);
+  await app.goto(`${server.baseURL}/project/${P}/allocation`);
+  await app.waitForSelector('main');
+  await setEditMode(app, true);
+  await app.getByRole('tab', { name: 'Baselines' }).click();
+  await app.waitForTimeout(1200);
+
+  // Fetch the matrix data to pick a cell to toggle
+  const data = await api<any>(app, `/projects/${P}/allocation-matrix?axis=baselines`);
+  expect(data.columns.length).toBeGreaterThan(0);
+
+  const colId = data.columns[0].id; // SRR
+  // Find a requirement that is NOT currently allocated to this baseline
+  const row = data.rows.find((r: any) => !r.cells[colId]);
+  expect(row).toBeTruthy();
+  const reqId = row.req_id;
+
+  // Click the cell
+  const rowLocator = app.locator('tbody tr').filter({ hasText: reqId }).first();
+  const colIndex = data.columns.findIndex((c: any) => c.id === colId);
+  await rowLocator.locator('td').nth(colIndex + 1).click();
+  await app.waitForTimeout(1500);
+
+  // Reload and verify
+  await app.reload();
+  await app.waitForSelector('main');
+  await app.getByRole('tab', { name: 'Baselines' }).click();
+  await app.waitForTimeout(1500);
+
+  const after = await api<any>(app, `/projects/${P}/allocation-matrix?axis=baselines`);
+  const updatedRow = after.rows.find((r: any) => r.req_id === reqId);
+  expect(updatedRow.cells[colId]).toBe(true);
+});
+
+test('toggling one baseline does not tick other cells in that row', async ({ app, server }) => {
+  await signIn(app);
+  await seedBaselines(app);
+  await app.goto(`${server.baseURL}/project/${P}/allocation`);
+  await app.waitForSelector('main');
+  await setEditMode(app, true);
+  await app.getByRole('tab', { name: 'Baselines' }).click();
+  await app.waitForTimeout(1200);
+
+  const data = await api<any>(app, `/projects/${P}/allocation-matrix?axis=baselines`);
+  expect(data.columns.length).toBeGreaterThanOrEqual(2);
+
+  const colId = data.columns[0].id;
+  // Find a row with no cells ticked at all
+  const row = data.rows.find((r: any) =>
+    Object.values(r.cells).every((v) => !v),
+  );
+  expect(row).toBeTruthy();
+
+  // Toggle the first column's cell
+  const rowLocator = app.locator('tbody tr').filter({ hasText: row.req_id }).first();
+  const colIndex = data.columns.findIndex((c: any) => c.id === colId);
+  await rowLocator.locator('td').nth(colIndex + 1).click();
+  await app.waitForTimeout(1500);
+
+  // Reload and verify only the selected cell is ticked
+  await app.reload();
+  await app.waitForSelector('main');
+  await app.getByRole('tab', { name: 'Baselines' }).click();
+  await app.waitForTimeout(1500);
+
+  const after = await api<any>(app, `/projects/${P}/allocation-matrix?axis=baselines`);
+  const updatedRow = after.rows.find((r: any) => r.req_id === row.req_id);
+  expect(updatedRow.cells[colId]).toBe(true);
+  // No other column in that row should be true
+  for (const [key, val] of Object.entries(updatedRow.cells)) {
+    if (key !== colId) expect(val).toBe(false);
+  }
+});
+
+test('moving a baseline down reorders columns on the matrix', async ({ app, server }) => {
+  await signIn(app);
+  // Create baselines without due dates so the monotonic check does not fire.
+  await postApi(app, `/projects/${P}/baselines`, { name: 'SRR', symbol: 'S' });
+  await postApi(app, `/projects/${P}/baselines`, { name: 'PDR', symbol: 'P' });
+  await postApi(app, `/projects/${P}/baselines`, { name: 'CDR', symbol: 'C' });
+  await app.goto(`${server.baseURL}/project/${P}/allocation`);
+  await app.waitForSelector('main');
+  await app.getByRole('tab', { name: 'Baselines' }).click();
+  await app.waitForTimeout(1200);
+
+  // Confirm initial order: SRR, PDR, CDR
+  const beforeData = await api<any>(app, `/projects/${P}/allocation-matrix?axis=baselines`);
+  expect(beforeData.columns[0].id).toBe('SRR');
+  expect(beforeData.columns[1].id).toBe('PDR');
+  expect(beforeData.columns[2].id).toBe('CDR');
+
+  // Go to baselines page and move PDR down
+  await app.goto(`${server.baseURL}/project/${P}/baselines`);
+  await app.waitForSelector('main');
+  await setEditMode(app, true);
+  await app.waitForTimeout(1000);
+
+  // Click "Move down" on PDR — find its card and click the button inside it
+  const pdrCard = app.locator('.card').filter({ hasText: 'PDR' }).first();
+  await pdrCard.locator('button[title="Move down"]').click();
+  await app.waitForTimeout(2000);
+
+  // Go back to matrix and check the new order: SRR, CDR, PDR
+  await app.goto(`${server.baseURL}/project/${P}/allocation`);
+  await app.waitForSelector('main');
+  await app.getByRole('tab', { name: 'Baselines' }).click();
+  await app.waitForTimeout(1200);
+
+  const afterData = await api<any>(app, `/projects/${P}/allocation-matrix?axis=baselines`);
+  expect(afterData.columns[0].id).toBe('SRR');
+  expect(afterData.columns[1].id).toBe('CDR');
+  expect(afterData.columns[2].id).toBe('PDR');
+});
+
+test('a backwards due date shows the server error message', async ({ app, server }) => {
+  await signIn(app);
+  await seedBaselines(app);
+  await app.goto(`${server.baseURL}/project/${P}/baselines`);
+  await app.waitForSelector('main');
+  await setEditMode(app, true);
+  await app.waitForTimeout(1000);
+
+  // Edit PDR and set a due date before SRR's 2026-01-01
+  const editBtns = app.locator('button[title="Edit baseline"]');
+  await expect(editBtns).toHaveCount(3);
+  // PDR is the second baseline (SRR, PDR, CDR)
+  await editBtns.nth(1).click();
+  await app.waitForTimeout(500);
+
+  // Set due date before SRR's
+  const dateInput = app.locator('input[type="date"]');
+  await dateInput.fill('2025-06-01');
+  await app.waitForTimeout(300);
+
+  // Save
+  await app.getByRole('button', { name: 'Save' }).click();
+  await app.waitForTimeout(1500);
+
+  // The error must be visible
+  await expect(app.locator('main')).toContainText('Due dates must not go backwards');
+});
