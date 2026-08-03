@@ -88,6 +88,58 @@ export function isReqHiddenByBaselines(
 }
 
 /**
+ * The requirements that a change to component visibility has just revealed:
+ * hidden by components *before*, visible *after*.
+ *
+ * Not simply "the requirements this component satisfies". A requirement stays
+ * on the canvas while any one of its satisfying components is visible (see
+ * `isReqHiddenByComponents`), so revealing one component of several changes
+ * nothing, and revealing a parent can reveal requirements satisfied only by
+ * its descendants. Both directions have to go through `effectiveHiddenComponents`.
+ *
+ * Returns ids sorted ascending. An empty result means the change revealed
+ * nothing and the camera should stay where it is.
+ */
+export function requirementsRevealed(
+  components: readonly (ComponentNode & SatisfyingComponent)[],
+  prevHiddenComponents: readonly string[],
+  nextHiddenComponents: readonly string[],
+  requirementIds: readonly string[],
+): string[] {
+  const before = effectiveHiddenComponents(components, prevHiddenComponents);
+  const after = effectiveHiddenComponents(components, nextHiddenComponents);
+  const revealed: string[] = [];
+  for (const id of requirementIds) {
+    if (isReqHiddenByComponents(id, components, before)
+      && !isReqHiddenByComponents(id, components, after)) {
+      revealed.push(id);
+    }
+  }
+  return revealed.sort();
+}
+
+/**
+ * Drops ids from a hidden-list that no longer name anything real.
+ *
+ * A hidden id whose component has been deleted — or which arrived from another
+ * project — is unreachable: `filterableComponentIds` will not offer it, so no
+ * panel can un-hide it, while `activeFilterCount` still counts the list as
+ * non-empty. The result is a filter badge and a "Clear all filters" button for
+ * a filter that hides nothing.
+ *
+ * Returns the same array instance when nothing needs dropping, so callers can
+ * use it in an effect without looping.
+ */
+export function pruneUnknownIds(
+  hidden: readonly string[],
+  knownIds: readonly string[],
+): readonly string[] {
+  const known = new Set(knownIds);
+  const kept = hidden.filter((id) => known.has(id));
+  return kept.length === hidden.length ? hidden : kept;
+}
+
+/**
  * Converts a legacy include-list to a hidden-set.
  *
  * An undefined or empty include-list meant "show everything", so nothing is
