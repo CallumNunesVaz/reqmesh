@@ -499,7 +499,7 @@ export default function RequirementDetailPage() {
     save({ verification_cases: req.verification_cases.filter((_, i) => i !== index) });
   };
   return (
-    <div className="max-w-4xl mx-auto p-8">
+    <div className="max-w-6xl mx-auto p-8">
       {saveError && (
         <div className="mb-4 px-4 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm flex items-center gap-2">
           <AlertTriangle size={14} /> {saveError}

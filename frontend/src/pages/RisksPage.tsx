@@ -248,7 +248,7 @@ export default function RisksPage() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto p-8">
+    <div className="max-w-6xl mx-auto p-8">
       {error && <div className="mb-4 text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">{error}</div>}
       <div className="flex items-center justify-between mb-6">
         <div><h1 className="text-2xl font-bold text-foreground">Risks</h1><p className="text-sm text-muted-foreground mt-1">{filtering ? `${filteredRisks.length} of ${risks.length} risks` : `${risks.length} risks`}</p></div>
