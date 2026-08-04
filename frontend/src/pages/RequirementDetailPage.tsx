@@ -1118,18 +1118,21 @@ export default function RequirementDetailPage() {
                           <span className="text-xs text-foreground flex-1 min-w-0 truncate" title={s.name}>{s.name}</span>
                           <span className="text-[10px] text-muted-foreground shrink-0 w-10 text-right">×{s.weight}</span>
                           <input
-                            type="number" min={0} max={10} step={1}
-                            className="input w-16 h-7 text-xs shrink-0"
-                            placeholder="–"
-                            value={score ?? ''}
+                            type="range" min={0} max={5} step={1}
+                            className="w-16 h-7 shrink-0 cursor-pointer"
+                            value={score != null && score > 5 ? 5 : (score ?? 0)}
                             onChange={(e) => {
                               const next = { ...(req.priorities || {}) };
-                              if (e.target.value === '') delete next[s.name];
-                              else next[s.name] = Number(e.target.value);
+                              const v = Number(e.target.value);
+                              if (v === 0) delete next[s.name];
+                              else next[s.name] = v;
                               save({ priorities: next });
                             }}
                             disabled={!editable}
                           />
+                          <span className="text-[10px] text-muted-foreground w-5 text-right tabular-nums shrink-0">
+                            {score != null && score > 5 ? 5 : (score ?? '–')}
+                          </span>
                         </div>
                       );
                     })}
@@ -1159,7 +1162,7 @@ export default function RequirementDetailPage() {
                   </div>
                 )}
                 <div className="text-[10px] text-muted-foreground mt-1">
-                  0–10 per stakeholder. Value is the weighted mean of those scored
+                  0–5 per stakeholder. Value is the weighted mean of those scored
                   {reqValue && reqValue.stakeholder_count > 0 &&
                     <> ({reqValue.scored_count} of {reqValue.stakeholder_count} scored)</>}.
                 </div>

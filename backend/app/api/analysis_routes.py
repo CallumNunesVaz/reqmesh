@@ -354,6 +354,29 @@ def requirement_value(project_id: str, req_id: str):
     return {**mine, "ranked_total": sum(1 for r in ranked if r["value"] is not None)}
 
 
+# ── Pugh Matrix ───────────────────────────────────────────────────────────────
+
+@router.get("/projects/{project_id}/pugh")
+def pugh_matrix_endpoint(
+    project_id: str,
+    datum: Optional[str] = Query(None),
+    limit: int = Query(8, ge=1, le=20),
+    _rate: None = Depends(rate_limit(20, 60)),
+):
+    """A Pugh matrix comparing the best-valued requirements against each other,
+    relative to a chosen datum. Stakeholders are the criteria; their weights
+    scale the comparison so a heavier stakeholder moves the `weighted` total
+    further than a light one."""
+    from app.api.router import normalize_stakeholders
+    from app.services.stakeholder_value import pugh_matrix
+
+    store = get_store(project_id)
+    stakeholders = normalize_stakeholders(store.read_meta().get("stakeholders", []))
+    reqs = [r for r in store.list_requirements()
+            if r.get("status") not in ("rejected", "deprecated")]
+    return pugh_matrix(reqs, stakeholders, datum_id=datum or None, limit=limit)
+
+
 # ── Quality Analysis ──────────────────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/quality")
