@@ -23,6 +23,7 @@ from app.core.ids import safe_id
 from app.api.router import normalize_baseline_defs
 from app.api._utils import sorted_by_modified, read_upload_capped, paginate
 from app.models.change_request import ChangeRequestCreate, ChangeRequestUpdate
+from app.services.change_requests import redline as compute_redline
 from app.models.risk import RiskCreate, RiskUpdate, CommentCreate, DecisionRecordCreate, DecisionRecordUpdate
 from app.services.history import record_change
 from app.services.delete_guard import check_deletable
@@ -93,6 +94,103 @@ def delete_change_request(project_id: str, cr_id: str, force: bool = False, user
         raise HTTPException(status_code=404, detail="Change request not found")
     record_change(store, cr_id, "delete", before, None, user.get("username", ""))
     return {"ok": True}
+
+
+@router.get("/projects/{project_id}/change-requests/{cr_id}/redline")
+def get_cr_redline(
+    project_id: str,
+    cr_id: str,
+    _rate: None = Depends(rate_limit(20, 60)),
+):
+    store = get_store(project_id)
+    cr = store.get_item("change_requests", cr_id)
+    if cr is None:
+        raise HTTPException(status_code=404, detail="Change request not found")
+    return compute_redline(store, cr)
+
+
+@router.post("/projects/{project_id}/change-requests/{cr_id}/execute")
+def execute_change_request(
+    project_id: str,
+    cr_id: str,
+    user: dict = Depends(require_maintain),
+):
+    store = get_store(project_id)
+    cr = store.get_item("change_requests", cr_id)
+    if cr is None:
+        raise HTTPException(status_code=404, detail="Change request not found")
+
+    changes = cr.get("changes", {})
+    if not changes:
+        raise HTTPException(status_code=400, detail="Change request proposes no changes")
+
+    # 1. Compute redline; refuse if stale.
+    rl = compute_redline(store, cr)
+    if rl["blocked"]:
+        stale_ids = [t["id"] for t in rl["targets"] if t["stale"]]
+        raise HTTPException(
+            status_code=409,
+            detail=f"Change request is stale: {', '.join(stale_ids)} changed since it was raised",
+        )
+
+    # 2. Apply each target's proposal.
+    updated_count = 0
+    for target in rl["targets"]:
+        target_id = target["id"]
+        proposed = changes.get(target_id, {})
+        if not proposed:
+            continue
+        before = store.get_requirement(target_id)
+        if before is None:
+            continue
+        result = store.update_requirement(target_id, proposed)
+        if result is not None:
+            updated_count += 1
+            from app.services.history import record_change as rc
+            rc(store, target_id, "update", before, result, user.get("username", ""))
+
+    # 3. Mark the request as implemented.
+    from app.services.history import record_change as rc
+    before_cr = dict(cr)
+    updated_cr = store.update_item("change_requests", cr_id, {
+        "status": "implemented",
+        "approved_by": user.get("username", ""),
+    })
+    rc(store, cr_id, "update", before_cr, updated_cr, user.get("username", ""))
+
+    return {"id": cr_id, "status": "implemented", "updated": updated_count}
+
+
+@router.post("/projects/{project_id}/change-requests/{cr_id}/reject")
+def reject_change_request(
+    project_id: str,
+    cr_id: str,
+    user: dict = Depends(require_maintain),
+):
+    store = get_store(project_id)
+    cr = store.get_item("change_requests", cr_id)
+    if cr is None:
+        raise HTTPException(status_code=404, detail="Change request not found")
+
+    from app.services.history import record_change as rc
+    before = dict(cr)
+    result = store.update_item("change_requests", cr_id, {
+        "status": "rejected",
+        "reviewed_by": user.get("username", ""),
+    })
+    rc(store, cr_id, "update", before, result, user.get("username", ""))
+
+    return {"id": cr_id, "status": "rejected"}
+
+
+@router.get("/projects/{project_id}/requirements/{req_id}/fingerprint")
+def get_requirement_fingerprint(project_id: str, req_id: str):
+    store = get_store(project_id)
+    req = store.get_requirement(req_id)
+    if req is None:
+        raise HTTPException(status_code=404, detail="Requirement not found")
+    from app.services.fingerprint import compute_fingerprint
+    return {"id": req_id, "fingerprint": compute_fingerprint(req)}
 
 
 # ── Risks ─────────────────────────────────────────────────────────────────────

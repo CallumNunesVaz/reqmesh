@@ -2,8 +2,8 @@ import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { GuardedLink as Link } from '../components/navGuard';
 import { motion } from 'framer-motion';
-import { Trash2, ArrowLeft, Plus, X, ArrowRight, ArrowLeftRight, Sparkles, ShieldCheck, ExternalLink, ChevronRight, Waypoints, AlertTriangle, CheckCircle2, GitFork, Loader, Save, Undo2 } from 'lucide-react';
-import { api, baselineNames, type StakeholderDef, type RequirementValue, type Requirement, type VerificationCase, type QualityItem, type Component, type Specification, type ChangeRequest, type Risk, type EvaluatedRequirement, type Definition, type Comment, type DecisionRecord, type Backlinks } from '../api/client';
+import { Trash2, ArrowLeft, Plus, X, ArrowRight, ArrowLeftRight, Sparkles, ShieldCheck, ExternalLink, ChevronRight, Waypoints, AlertTriangle, CheckCircle2, GitFork, Loader, Save, Undo2, GitPullRequest, Ban } from 'lucide-react';
+import { api, baselineNames, CR_URGENCIES, type StakeholderDef, type RequirementValue, type Requirement, type VerificationCase, type QualityItem, type Component, type Specification, type ChangeRequest, type Risk, type EvaluatedRequirement, type Definition, type Comment, type DecisionRecord, type Backlinks } from '../api/client';
 import { ParametricsCard } from '../components/parametrics';
 import RichTextEditor from '../components/RichTextEditor';
 import AutocompleteInput from '../components/AutocompleteInput';
@@ -99,6 +99,10 @@ export default function RequirementDetailPage() {
   const [unreviewedIds, setUnreviewedIds] = useState<Set<string>>(new Set());
   const [saveError, setSaveError] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [showRequestChange, setShowRequestChange] = useState(false);
+  const [crForm, setCrForm] = useState({ title: '', rationale: '', urgency: 'normal' as string, name: '', description: '', reqRationale: '', priority: 'medium' as string, status: 'proposed' as string, verification_method: '' });
+  const [crError, setCrError] = useState('');
+  const [crSaving, setCrSaving] = useState(false);
   const [reviewing, setReviewing] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -388,6 +392,64 @@ export default function RequirementDetailPage() {
     window.addEventListener('beforeunload', handler);
     return () => window.removeEventListener('beforeunload', handler);
   }, []);
+  const openRequestChange = () => {
+    if (!req) return;
+    setCrForm({
+      title: `Change ${req.id}`,
+      rationale: '',
+      urgency: 'normal',
+      name: req.name || '',
+      description: req.description || '',
+      reqRationale: req.rationale || '',
+      priority: req.priority || 'medium',
+      status: req.status || 'proposed',
+      verification_method: req.verification_method || '',
+    });
+    setCrError('');
+    setShowRequestChange(true);
+  };
+  const handleRequestChange = async () => {
+    if (!projectId || !reqId || !req) return;
+    // Collect only fields that differ from current.
+    const changes: Record<string, unknown> = {};
+    if (crForm.name !== (req.name || '')) changes['name'] = crForm.name;
+    if (crForm.description !== (req.description || '')) changes['description'] = crForm.description;
+    if (crForm.reqRationale !== (req.rationale || '')) changes['rationale'] = crForm.reqRationale;
+    if (crForm.priority !== (req.priority || 'medium')) changes['priority'] = crForm.priority;
+    if (crForm.status !== (req.status || 'proposed')) changes['status'] = crForm.status;
+    if (crForm.verification_method !== (req.verification_method || '')) changes['verification_method'] = crForm.verification_method;
+    if (Object.keys(changes).length === 0) {
+      setCrError('No fields have been changed.');
+      return;
+    }
+    setCrSaving(true);
+    setCrError('');
+    try {
+      // Get the fingerprint.
+      const fp = await api.getRequirementFingerprint(projectId, reqId);
+      // Create the CR with an auto-derived id.
+      const crId = `CR-${reqId}-${Date.now().toString(36).toUpperCase()}`;
+      await api.createChangeRequest(projectId, {
+        id: crId,
+        title: crForm.title || `Change ${reqId}`,
+        rationale: crForm.rationale,
+        urgency: crForm.urgency,
+        affected_requirements: [reqId],
+        changes: { [reqId]: changes },
+        base_fingerprints: { [reqId]: fp.fingerprint },
+        submitted_by: user?.username || '',
+      });
+      setShowRequestChange(false);
+      // Refresh the affecting CRs list.
+      api.listChangeRequests(projectId)
+        .then((crs) => setAffectingCrs(crs.filter((c) => c.affected_requirements.includes(reqId))))
+        .catch(() => {});
+    } catch (err: any) {
+      setCrError(err.message || 'Failed to create change request');
+    } finally {
+      setCrSaving(false);
+    }
+  };
   const handleDelete = async () => {
     if (!projectId || !reqId || !req) return;
     const ok = await showConfirm('Delete this requirement?', 'Delete Requirement');
@@ -606,7 +668,89 @@ export default function RequirementDetailPage() {
           <Trash2 size={14} />
         </button>
         )}
+        {canPropose && (
+        <button
+          onClick={openRequestChange}
+          className="btn-secondary text-xs"
+          title="Request a change to this requirement"
+        >
+          <GitPullRequest size={14} /> Request a Change
+        </button>
+        )}
       </div>
+      {showRequestChange && (
+        <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+          className="card p-4 mb-4 overflow-hidden">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-foreground">Request a Change</h3>
+            <button onClick={() => setShowRequestChange(false)} className="text-muted-foreground hover:text-foreground"><X size={14} /></button>
+          </div>
+          {crError && <div className="mb-3 text-xs text-destructive bg-destructive/10 rounded px-2 py-1">{crError}</div>}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
+            <div>
+              <label className="label">CR Title</label>
+              <input className="input" value={crForm.title} onChange={e => setCrForm({...crForm, title: e.target.value})} />
+            </div>
+            <div>
+              <label className="label">Urgency</label>
+              <select className="select" value={crForm.urgency} onChange={e => setCrForm({...crForm, urgency: e.target.value})}>
+                {CR_URGENCIES.map(u => <option key={u} value={u}>{u}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="label">Rationale (why)</label>
+              <input className="input" placeholder="Why this change is needed" value={crForm.rationale} onChange={e => setCrForm({...crForm, rationale: e.target.value})} />
+            </div>
+          </div>
+          <p className="text-[11px] text-muted-foreground mb-2">Only fields you alter will be proposed. Leave unchanged fields as-is.</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="label">Name</label>
+              <input className="input" value={crForm.name} onChange={e => setCrForm({...crForm, name: e.target.value})} />
+            </div>
+            <div>
+              <label className="label">Priority</label>
+              <select className="select" value={crForm.priority} onChange={e => setCrForm({...crForm, priority: e.target.value})}>
+                {priorityOptions.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="label">Status</label>
+              <select className="select" value={crForm.status} onChange={e => setCrForm({...crForm, status: e.target.value})}>
+                {statusOptions.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="label">Verification Method</label>
+              <input className="input" value={crForm.verification_method} onChange={e => setCrForm({...crForm, verification_method: e.target.value})} />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="label">Description</label>
+              <RichTextEditor
+                content={crForm.description}
+                onChange={(html) => setCrForm({...crForm, description: html})}
+                onBlur={() => {}}
+                disabled={false}
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="label">Requirement Rationale</label>
+              <RichTextEditor
+                content={crForm.reqRationale}
+                onChange={(html) => setCrForm({...crForm, reqRationale: html})}
+                onBlur={() => {}}
+                disabled={false}
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 mt-4">
+            <button onClick={() => setShowRequestChange(false)} className="btn-secondary text-xs">Cancel</button>
+            <button onClick={handleRequestChange} disabled={crSaving} className="btn-primary text-xs">
+              {crSaving ? <Loader size={12} className="animate-spin" /> : null} Submit Change Request
+            </button>
+          </div>
+        </motion.div>
+      )}
       <div className="grid grid-cols-1 @4xl:grid-cols-3 gap-6">
         <div className="@4xl:col-span-2 space-y-6">
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="card p-5">
