@@ -18,6 +18,7 @@ const ChangeRequestsPage = lazy(() => import('./pages/ChangeRequestsPage'));
 const RisksPage = lazy(() => import('./pages/RisksPage'));
 const MetricsPage = lazy(() => import('./pages/MetricsPage'));
 const BaselinesPage = lazy(() => import('./pages/BaselinesPage'));
+const SystemStatesPage = lazy(() => import('./pages/SystemStatesPage'));
 const AllocationMatrixPage = lazy(() => import('./pages/AllocationMatrixPage'));
 const PublishPage = lazy(() => import('./pages/PublishPage'));
 const UsersPage = lazy(() => import('./pages/UsersPage'));
@@ -62,6 +63,7 @@ export default function App() {
           <Route path="/project/:projectId/risks" element={<RisksPage />} />
           <Route path="/project/:projectId/metrics" element={<MetricsPage />} />
           <Route path="/project/:projectId/baselines" element={<BaselinesPage />} />
+          <Route path="/project/:projectId/system-states" element={<SystemStatesPage />} />
           <Route path="/project/:projectId/allocation" element={<AllocationMatrixPage />} />
           <Route path="/project/:projectId/publish" element={<PublishPage />} />
         </Route>
