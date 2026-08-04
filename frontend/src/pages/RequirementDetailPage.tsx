@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { GuardedLink as Link } from '../components/navGuard';
 import { motion } from 'framer-motion';
 import { Trash2, ArrowLeft, Plus, X, ArrowRight, ArrowLeftRight, Sparkles, ShieldCheck, ExternalLink, ChevronRight, Waypoints, AlertTriangle, CheckCircle2, GitFork, Loader, Save, Undo2, GitPullRequest, Ban } from 'lucide-react';
-import { api, baselineNames, CR_URGENCIES, type StakeholderDef, type RequirementValue, type Requirement, type VerificationCase, type QualityItem, type Component, type Specification, type ChangeRequest, type Risk, type EvaluatedRequirement, type Definition, type Comment, type DecisionRecord, type Backlinks } from '../api/client';
+import { api, baselineNames, CR_URGENCIES, type StakeholderDef, type SystemStateDef, type RequirementValue, type Requirement, type VerificationCase, type QualityItem, type Component, type Specification, type ChangeRequest, type Risk, type EvaluatedRequirement, type Definition, type Comment, type DecisionRecord, type Backlinks } from '../api/client';
 import { ParametricsCard } from '../components/parametrics';
 import RichTextEditor from '../components/RichTextEditor';
 import AutocompleteInput from '../components/AutocompleteInput';
@@ -108,6 +108,7 @@ export default function RequirementDetailPage() {
   const [saving, setSaving] = useState(false);
   const savedRef = useRef<Requirement | null>(null);
   const [projectBaselines, setProjectBaselines] = useState<string[]>([]);
+  const [projectSystemStates, setProjectSystemStates] = useState<SystemStateDef[]>([]);
   const statusOptions = workflow?.states || ['proposed', 'approved', 'implemented', 'verified', 'rejected', 'deprecated'];
   const refSuggestions = useMemo(() => {
     const reqItems = [...allReqs, req].filter(Boolean).map((r) => ({ id: r!.id, label: r!.name || r!.id }));
@@ -293,6 +294,7 @@ export default function RequirementDetailPage() {
       if (!alive) return;
       setProjectBaselines(baselineNames(p.baselines));
       setProjectStakeholders(p.stakeholders || []);
+      setProjectSystemStates(p.system_states || []);
     }).catch(() => {});
     api.getRequirementValue(projectId, reqId).then((v) => { if (alive) setReqValue(v); }).catch(() => { if (alive) setReqValue(null); });
     api.listComments(projectId, reqId).then((v) => { if (alive) setComments(v); }).catch(() => { if (alive) setComments([]); });
@@ -1184,13 +1186,47 @@ export default function RequirementDetailPage() {
               </div>
               <div>
                 <label className="label">System States</label>
-                <input
-                  className="input font-mono text-xs"
-                  placeholder="takeoff, cruise, landing"
-                  value={(req.system_states || []).join(', ')}
-                  onBlur={(e) => save({ system_states: e.target.value ? e.target.value.split(',').map(s => s.trim()).filter(Boolean) : [] })}
-                  disabled={!editable}
-                />
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  {projectSystemStates.map((s) => {
+                    const active = (req.system_states || []).includes(s.name);
+                    return (
+                      <button
+                        key={s.name}
+                        type="button"
+                        onClick={() => {
+                          const current = req.system_states || [];
+                          const next = active ? current.filter(x => x !== s.name) : [...current, s.name];
+                          save({ system_states: next });
+                        }}
+                        disabled={!editable}
+                        className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
+                          active
+                            ? 'bg-primary/15 text-primary border-primary/30'
+                            : 'bg-muted text-muted-foreground border-transparent hover:border-primary/20'
+                        }`}
+                      >
+                        {s.name}
+                      </button>
+                    );
+                  })}
+                  {/* Undefined (orphan) values on the requirement — surfaced rather than discarded */}
+                  {(req.system_states || []).filter((name) => !projectSystemStates.some((s) => s.name === name)).map((name) => (
+                    <button
+                      key={name}
+                      type="button"
+                      onClick={() => {
+                        const current = req.system_states || [];
+                        save({ system_states: current.filter(x => x !== name) });
+                      }}
+                      disabled={!editable}
+                      className="px-2.5 py-1 rounded-full text-xs font-medium border transition-all bg-cs-orange/10 text-cs-orange border-cs-orange/20"
+                      title={`"${name}" is not a defined system state`}
+                    >
+                      {name}
+                      <X size={10} className="inline ml-1" />
+                    </button>
+                  ))}
+                </div>
                 <div className="text-[10px] text-muted-foreground mt-0.5">OOSEM: modes this requirement applies to</div>
               </div>
               <div>
