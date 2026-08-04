@@ -165,6 +165,14 @@ export interface SystemStateDef {
   order: number;
 }
 
+/** Envelope returned by GET /system-states. */
+export interface SystemStatesResponse {
+  states: SystemStateDef[];
+  /** Names used by some requirement but defined nowhere — surfaced so the
+   *  user can define them rather than wondering where they went. */
+  orphans: string[];
+}
+
 export interface StakeholderDef { name: string; weight: number }
 
 /** Scores run 0-5. Bounded server-side on write only, so a project written
@@ -1041,6 +1049,16 @@ export const api = {
       { method: 'PUT', body: { names } }),
   deleteBaseline: (projectId: string, name: string) =>
     request<{ name: string; requirements_cleared: number }>(`/projects/${projectId}/baselines/${encodeURIComponent(name)}`, { method: 'DELETE' }),
+
+  // System States
+  listSystemStates: (projectId: string) =>
+    request<SystemStatesResponse>(`/projects/${projectId}/system-states`),
+  createSystemState: (projectId: string, data: { name: string; description: string }) =>
+    request<SystemStateDef>(`/projects/${projectId}/system-states`, { method: 'POST', body: data }),
+  updateSystemState: (projectId: string, name: string, data: { name?: string; description?: string }) =>
+    request<SystemStateDef>(`/projects/${projectId}/system-states/${encodeURIComponent(name)}`, { method: 'PATCH', body: data }),
+  deleteSystemState: (projectId: string, name: string) =>
+    request<{ name: string; requirements_affected: number }>(`/projects/${projectId}/system-states/${encodeURIComponent(name)}`, { method: 'DELETE' }),
   freezeBaseline: (projectId: string, name: string) =>
     request<{ name: string; symbol: string; description: string; requirements: number }>(
       `/projects/${projectId}/baselines/${encodeURIComponent(name)}/freeze`,
