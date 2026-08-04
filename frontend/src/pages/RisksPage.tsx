@@ -2,11 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { usePersistedState } from '../hooks/usePersistedState';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Trash2, Edit3, AlertTriangle, Square, CheckSquare, X, Search } from 'lucide-react';
-import { api, RISK_STATUSES, type Risk, type Requirement, type RiskMatrix, type RiskRating } from '../api/client';
+import { Plus, Trash2, Edit3, Square, CheckSquare, X, Search } from 'lucide-react';
+import { api, RISK_STATUSES, type Risk, type Requirement, type RiskMatrix } from '../api/client';
 import { useAuthStore } from '../store/auth';
 import { useStore } from '../store';
-import { CopyLinkButton, EntityLink } from '../components/entities';
+import { CopyLinkButton } from '../components/entities';
 import { useFocusedEntity } from '../components/useFocusedEntity';
 import { AutoLinkHtml } from '../components/autoLink';
 import { useEntityKinds } from '../components/entityIndex';
@@ -15,29 +15,6 @@ import { deleteWithReferenceCheck } from '../lib/forceDelete';
 import RichTextEditor from '../components/RichTextEditor';
 
 const formatLevel = (s: string) => s.replace(/_/g, ' ');
-
-/** The rating is derived server-side from the project matrix, so its colour
- *  comes with it rather than from a table here — a project that re-bands its
- *  matrix would otherwise get badges that disagree with its own settings. */
-function RatingBadge({ rating }: { rating?: RiskRating }) {
-  if (!rating || !rating.band) {
-    return (
-      <span className="badge border border-dashed border-muted-foreground/40 text-muted-foreground"
-        title={rating?.unrated_reason || 'Not rated'}>
-        unrated
-      </span>
-    );
-  }
-  return (
-    <span
-      className="badge border text-black/80"
-      style={{ backgroundColor: rating.color!, borderColor: rating.color! }}
-      title={`severity ${formatLevel(rating.severity || '')} x likelihood ${formatLevel(rating.likelihood || '')}`}
-    >
-      {rating.label}
-    </span>
-  );
-}
 
 export default function RisksPage() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -321,9 +298,9 @@ export default function RisksPage() {
         {filteredRisks.map((r, i) => (
           <motion.div key={r.id} id={`entity-${r.id}`} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.03 }}
             className={`card p-4 hover:shadow-md transition-shadow group ${focusId === r.id ? 'ring-2 ring-primary/50' : ''}`}>
-            <div className="flex items-center gap-3">
+            <div className="flex items-start gap-3">
               {canBulk && (
-                <span className="shrink-0">
+                <span className="shrink-0 mt-0.5">
                   {selectedIds.has(r.id) ? (
                     <CheckSquare size={14} className="text-primary cursor-pointer" onClick={() => toggleRisk(r.id)} />
                   ) : (
@@ -331,69 +308,91 @@ export default function RisksPage() {
                   )}
                 </span>
               )}
-              <div className="w-9 h-9 bg-red-500/10 text-red-400 rounded-lg flex items-center justify-center"><AlertTriangle size={18} /></div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
+                  <span
+                    className="inline-flex items-center gap-1.5 shrink-0 text-[11px] font-medium"
+                    style={{ color: r.rating?.color || 'hsl(var(--muted-foreground))' }}
+                    title={r.rating?.band ? `severity ${formatLevel(r.rating.severity || '')} x likelihood ${formatLevel(r.rating.likelihood || '')}` : (r.rating?.unrated_reason || 'Not rated')}
+                  >
+                    <span className="w-2 h-2 rounded-full shrink-0"
+                          style={{ backgroundColor: r.rating?.color || 'hsl(var(--muted-foreground))' }} />
+                    {/* The band as text, not only as colour: it is the matrix's
+                        output, and a reader who cannot distinguish the dot's
+                        hue would otherwise have no way to read it. */}
+                    {r.rating?.label || 'Unrated'}
+                  </span>
                   <span className="font-mono text-xs text-muted-foreground">{r.id}</span>
                   <h3 className="font-medium text-card-foreground">{r.title}</h3>
-                  <RatingBadge rating={r.rating} />
                   <CopyLinkButton kind="risk" id={r.id} className="opacity-0 group-hover:opacity-100" />
                 </div>
-                {/* The two inputs the rating is derived from. Editable here
-                    because there is no risk detail page — before the matrix
-                    they could only be set at creation time. */}
-                <div className="flex items-center gap-2 mt-1.5">
-                  <label className="text-[10px] text-muted-foreground">severity</label>
-                  <select
-                    className="select h-8 py-0 text-[11px] w-32" disabled={!editable}
+                {/* The four risk controls: severity & likelihood are the rating
+                    inputs; status & detection are stored metadata. The severity
+                    select is tinted by the rating band so the band is visible
+                    without a second badge. */}
+                <div className="flex flex-wrap gap-2 mt-1.5">
+                  <label className="flex flex-col gap-0.5 flex-1 min-w-[7rem]">
+                    <span className="text-[9px] uppercase tracking-wide text-muted-foreground/70">severity</span>
+                    <select
+                    className="select h-8 py-0 text-[11px] w-full" disabled={!editable}
+                    style={r.rating?.color ? { borderColor: r.rating.color, backgroundColor: r.rating.color + '12' } : undefined}
                     value={r.severity || ''}
                     onChange={(e) => setRiskLevel(r.id, { severity: e.target.value })}
-                  >
+                    aria-label="Severity"
+                    title="Severity"
+                    >
                     {!(matrix?.severities ?? []).includes(r.severity) && (
-                      <option value={r.severity}>{r.severity || '—'}</option>
+                    <option value={r.severity}>{r.severity || '—'}</option>
                     )}
                     {(matrix?.severities ?? []).map((sv) => <option key={sv} value={sv}>{formatLevel(sv)}</option>)}
-                  </select>
-                  <label className="text-[10px] text-muted-foreground">likelihood</label>
-                  <select
-                    className="select h-8 py-0 text-[11px] w-36" disabled={!editable}
+                    </select>
+                  </label>
+                  <label className="flex flex-col gap-0.5 flex-1 min-w-[7rem]">
+                    <span className="text-[9px] uppercase tracking-wide text-muted-foreground/70">likelihood</span>
+                    <select
+                    className="select h-8 py-0 text-[11px] w-full" disabled={!editable}
                     value={r.rating?.likelihood ?? r.likelihood ?? ''}
                     onChange={(e) => setRiskLevel(r.id, { likelihood: e.target.value })}
-                  >
+                    aria-label="Likelihood"
+                    title="Likelihood"
+                    >
                     {!(matrix?.likelihoods ?? []).includes(r.rating?.likelihood ?? r.likelihood ?? '') && (
-                      <option value={r.rating?.likelihood ?? r.likelihood ?? ''}>{r.rating?.likelihood ?? r.likelihood ?? '—'}</option>
+                    <option value={r.rating?.likelihood ?? r.likelihood ?? ''}>{r.rating?.likelihood ?? r.likelihood ?? '—'}</option>
                     )}
                     {(matrix?.likelihoods ?? []).map((l) => <option key={l} value={l}>{formatLevel(l)}</option>)}
-                  </select>
-                </div>
-                {/* Status and detection: stored fields the risk page did not
-                    previously show. Status uses the standard vocabulary but a
-                    renamed one must stay selectable; detection draws its options
-                    from the project matrix and renders "not assessed" when unset. */}
-                <div className="flex items-center gap-2 mt-1.5">
-                  <label className="text-[10px] text-muted-foreground">status</label>
-                  <select
-                    className="select h-8 py-0 text-[11px] w-28" disabled={!editable}
+                    </select>
+                  </label>
+                  <label className="flex flex-col gap-0.5 flex-1 min-w-[7rem]">
+                    <span className="text-[9px] uppercase tracking-wide text-muted-foreground/70">status</span>
+                    <select
+                    className="select h-8 py-0 text-[11px] min-w-[5.5rem] flex-1" disabled={!editable}
                     value={r.status || ''}
                     onChange={(e) => setRiskStatus(r.id, e.target.value)}
-                  >
+                    aria-label="Status"
+                    title="Status"
+                    >
                     {!RISK_STATUSES.includes(r.status as any) && r.status && (
-                      <option value={r.status}>{r.status}</option>
+                    <option value={r.status}>{r.status}</option>
                     )}
                     {RISK_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                  <label className="text-[10px] text-muted-foreground">detection</label>
-                  <select
-                    className="select h-8 py-0 text-[11px] w-32" disabled={!editable}
+                    </select>
+                  </label>
+                  <label className="flex flex-col gap-0.5 flex-1 min-w-[7rem]">
+                    <span className="text-[9px] uppercase tracking-wide text-muted-foreground/70">detection</span>
+                    <select
+                    className="select h-8 py-0 text-[11px] min-w-[5.5rem] flex-1" disabled={!editable}
                     value={r.detection || ''}
                     onChange={(e) => setRiskDetection(r.id, e.target.value)}
-                  >
+                    aria-label="Detection"
+                    title="Detection"
+                    >
                     {!r.detection && <option value="">not assessed</option>}
                     {r.detection && !(matrix?.detections ?? []).includes(r.detection) && (
-                      <option value={r.detection}>{r.detection}</option>
+                    <option value={r.detection}>{r.detection}</option>
                     )}
                     {(matrix?.detections ?? []).map((d) => <option key={d} value={d}>{formatLevel(d)}</option>)}
-                  </select>
+                    </select>
+                  </label>
                 </div>
                 {r.description && (
                   <div className="text-xs text-muted-foreground mt-0.5">
@@ -403,7 +402,7 @@ export default function RisksPage() {
                 {(r.linked_requirements.length > 0 || (r.mitigating_requirements || []).length > 0 || editable) && (
                   <div className="mt-2">
                     <LinkEditor
-                      label="Threatens" hint="Requirements this risk endangers" kind="requirement"
+                      label="Threatens" hint="" kind="requirement"
                       linked={r.linked_requirements}
                       options={requirements}
                       editable={editable}
@@ -413,7 +412,7 @@ export default function RisksPage() {
                     />
                     <div className="mt-2">
                       <LinkEditor
-                        label="Mitigated By" hint="Requirements that reduce this risk" kind="requirement"
+                        label="Mitigated By" hint="" kind="requirement"
                         linked={(r.mitigating_requirements || [])}
                         options={requirements}
                         editable={editable}
