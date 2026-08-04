@@ -21,9 +21,6 @@ from __future__ import annotations
 DEFAULT_SEVERITIES = ["low", "medium", "high", "critical"]
 DEFAULT_LIKELIHOODS = ["rare", "unlikely", "possible", "likely", "almost_certain"]
 
-# Rating bands, least to most serious. The colours are the matrix's whole
-# point — a band without one cannot be drawn — so they live with the band
-# rather than in the frontend, and travel with the project when it is exported.
 #: How likely a risk is to be spotted before it bites, best detection first.
 #: Configurable per project like the other axes, and — unlike them — it does not
 #: address a cell: the matrix stays two-dimensional, so adding detection cannot
@@ -35,6 +32,9 @@ DEFAULT_DETECTIONS = ["obvious", "likely", "possible", "unlikely", "undetectable
 #: every stored risk invalid. The UI offers these; it does not enforce them.
 DEFAULT_RISK_STATUSES = ["open", "mitigating", "monitoring", "accepted", "closed"]
 
+# Rating bands, least to most serious. The colours are the matrix's whole
+# point — a band without one cannot be drawn — so they live with the band
+# rather than in the frontend, and travel with the project when it is exported.
 DEFAULT_BANDS = [
     {"key": "low", "label": "Low", "color": "#22c55e"},
     {"key": "medium", "label": "Medium", "color": "#eab308"},
@@ -127,6 +127,7 @@ def normalize_matrix(matrix) -> dict:
         cells.append(row)
 
     return {"severities": severities, "likelihoods": likelihoods,
+            "detections": _names("detections"),
             "bands": bands, "cells": cells}
 
 
@@ -189,3 +190,44 @@ def apply_rating(risks: list[dict], matrix: dict) -> list[dict]:
     for r in risks:
         r["rating"] = rate(r, m)
     return risks
+
+
+def risk_bingo(risks: list[dict], matrix: dict) -> dict:
+    """Return a severity × likelihood count grid and its per-cell band keys.
+
+    Returns the ``RiskBingo`` shape: ``severities``, ``likelihoods``,
+    ``counts[severityIndex][likelihoodIndex]``, ``bands[severityIndex][likelihoodIndex]``,
+    ``unrated``, and ``total``.
+
+    A risk whose severity or (resolved) likelihood is not a matrix level counts
+    once in ``unrated`` and in no cell.  ``total`` is every risk, so
+    ``sum(counts) + unrated == total`` holds.
+    """
+    m = normalize_matrix(matrix)
+    ns = len(m["severities"])
+    nl = len(m["likelihoods"])
+
+    counts: list[list[int]] = [[0] * nl for _ in range(ns)]
+    bands: list[list[str]] = [
+        [m["cells"][si][li] for li in range(nl)] for si in range(ns)
+    ]
+
+    total = len(risks)
+    unrated = 0
+    for r in risks:
+        si = _index(m["severities"], r.get("severity"))
+        likelihood = resolve_likelihood(r, m["likelihoods"])
+        li = _index(m["likelihoods"], likelihood)
+        if si is None or li is None:
+            unrated += 1
+        else:
+            counts[si][li] += 1
+
+    return {
+        "severities": list(m["severities"]),
+        "likelihoods": list(m["likelihoods"]),
+        "counts": counts,
+        "bands": bands,
+        "unrated": unrated,
+        "total": total,
+    }

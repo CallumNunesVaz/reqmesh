@@ -3,7 +3,7 @@ import { usePersistedState } from '../hooks/usePersistedState';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Trash2, Edit3, AlertTriangle, Square, CheckSquare, X, Search } from 'lucide-react';
-import { api, type Risk, type Requirement, type RiskMatrix, type RiskRating } from '../api/client';
+import { api, RISK_STATUSES, type Risk, type Requirement, type RiskMatrix, type RiskRating } from '../api/client';
 import { useAuthStore } from '../store/auth';
 import { useStore } from '../store';
 import { CopyLinkButton, EntityLink } from '../components/entities';
@@ -135,6 +135,30 @@ export default function RisksPage() {
     } catch (err) {
       console.error(err);
       load();
+    }
+  };
+
+  const setRiskStatus = async (riskId: string, status: string) => {
+    if (!projectId) return;
+    const before = risks;
+    setRisks((prev) => prev.map((r) => (r.id === riskId ? { ...r, status } : r)));
+    try {
+      await api.updateRisk(projectId, riskId, { status });
+    } catch (err: any) {
+      setRisks(before);
+      setError(err.message || 'Failed to update risk');
+    }
+  };
+
+  const setRiskDetection = async (riskId: string, detection: string) => {
+    if (!projectId) return;
+    const before = risks;
+    setRisks((prev) => prev.map((r) => (r.id === riskId ? { ...r, detection } : r)));
+    try {
+      await api.updateRisk(projectId, riskId, { detection });
+    } catch (err: any) {
+      setRisks(before);
+      setError(err.message || 'Failed to update risk');
     }
   };
 
@@ -340,6 +364,35 @@ export default function RisksPage() {
                       <option value={r.rating?.likelihood ?? r.likelihood ?? ''}>{r.rating?.likelihood ?? r.likelihood ?? '—'}</option>
                     )}
                     {(matrix?.likelihoods ?? []).map((l) => <option key={l} value={l}>{formatLevel(l)}</option>)}
+                  </select>
+                </div>
+                {/* Status and detection: stored fields the risk page did not
+                    previously show. Status uses the standard vocabulary but a
+                    renamed one must stay selectable; detection draws its options
+                    from the project matrix and renders "not assessed" when unset. */}
+                <div className="flex items-center gap-2 mt-1.5">
+                  <label className="text-[10px] text-muted-foreground">status</label>
+                  <select
+                    className="select h-8 py-0 text-[11px] w-28" disabled={!editable}
+                    value={r.status || ''}
+                    onChange={(e) => setRiskStatus(r.id, e.target.value)}
+                  >
+                    {!RISK_STATUSES.includes(r.status as any) && r.status && (
+                      <option value={r.status}>{r.status}</option>
+                    )}
+                    {RISK_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                  <label className="text-[10px] text-muted-foreground">detection</label>
+                  <select
+                    className="select h-8 py-0 text-[11px] w-32" disabled={!editable}
+                    value={r.detection || ''}
+                    onChange={(e) => setRiskDetection(r.id, e.target.value)}
+                  >
+                    {!r.detection && <option value="">not assessed</option>}
+                    {r.detection && !(matrix?.detections ?? []).includes(r.detection) && (
+                      <option value={r.detection}>{r.detection}</option>
+                    )}
+                    {(matrix?.detections ?? []).map((d) => <option key={d} value={d}>{formatLevel(d)}</option>)}
                   </select>
                 </div>
                 {r.description && (
