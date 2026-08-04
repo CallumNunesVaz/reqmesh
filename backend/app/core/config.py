@@ -137,8 +137,6 @@ class Settings(BaseSettings):
     # Account lockout: lock for this many minutes after too many failed logins.
     lockout_max_attempts: int = 5
     lockout_window_minutes: int = 15
-    # Per-account progressive lockout (exponential backoff on repeated locks).
-    lockout_progressive: bool = True
 
     # ── Rate limiting ─────────────────────────────────────────────────────
     # Maximum concurrent SSE connections per user.

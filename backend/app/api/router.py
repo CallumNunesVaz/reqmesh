@@ -19,6 +19,7 @@ from app.core.tree_utils import build_flat_tree
 from app.models.baseline import DUE_DATE_RE
 from app.models.requirement import RequirementCreate, RequirementUpdate
 from app.services.load_guard import is_safe_id, validate_on_load
+from app.services.sanitize import sanitize_html
 from app.api._utils import paginate
 from app.models.specification import SpecificationCreate, SpecificationUpdate
 from app.models.definition import DefinitionCreate, DefinitionUpdate
@@ -65,6 +66,14 @@ def normalize_baseline_defs(baselines: list) -> list[dict]:
     hand-editable and arrives by git pull, so one bad date must not take down
     every listing that reads baselines — the same reasoning as the is_safe_id
     guard in list_baselines.
+
+    ``description`` is sanitised here for the same reason, and it matters more:
+    the baselines page renders it with ``dangerouslySetInnerHTML``, and
+    `_meta.yaml` never passes through ``load_guard.validate_on_load`` — that
+    runs only on the per-collection read path, so meta-held HTML had no
+    sanitiser on either the read or the write side. Doing it in this function
+    covers both, because every route that reads or writes baseline definitions
+    goes through it.
     """
     result: list[dict] = []
     for item in (baselines or []):
@@ -78,7 +87,7 @@ def normalize_baseline_defs(baselines: list) -> list[dict]:
         result.append({
             "name": item.get("name", ""),
             "symbol": item.get("symbol", ""),
-            "description": item.get("description", ""),
+            "description": sanitize_html(item.get("description", "")),
             "due_date": due,
             "order": len(result) + 1,
         })
