@@ -582,3 +582,62 @@ async def test_dependency(dep_id: str, admin: dict = Depends(require_admin)):
         raise HTTPException(status_code=404, detail=f"No E2E test for '{dep_id}'")
     import asyncio
     return await asyncio.to_thread(checker)
+
+
+# ── Bundled example project ───────────────────────────────────────────────────
+
+class ReseedDemoRequest(BaseModel):
+    #: Must be sent explicitly once the project exists. Re-seeding deletes the
+    #: project directory outright — including its git history — so the caller
+    #: has to say so rather than have a stray POST do it.
+    force: bool = False
+
+
+@router.get("/demo-project")
+async def demo_project_status(admin: dict = Depends(require_admin)):
+    """Whether the bundled example is present, and what re-seeding would replace.
+
+    Returns the requirement count rather than a bare boolean: "this will
+    overwrite 57 requirements" is a warning someone can act on, where "the
+    project exists" is not.
+    """
+    from pathlib import Path
+    from app.services.demo_seed import PROJECT_ID, PROJECT_NAME
+    from app.services.yaml_store import YamlStore
+
+    root = Path(settings.data_root) / PROJECT_ID
+    if not root.exists():
+        return {"exists": False, "id": PROJECT_ID, "name": PROJECT_NAME,
+                "requirements": 0}
+    try:
+        requirements = len(YamlStore(root).list_requirements())
+    except Exception:
+        # A half-written or hand-edited project still exists and still gets
+        # destroyed by a re-seed, so it must not be reported as absent.
+        requirements = 0
+    return {"exists": True, "id": PROJECT_ID, "name": PROJECT_NAME,
+            "requirements": requirements}
+
+
+@router.post("/demo-project/reseed")
+async def reseed_demo_project(body: ReseedDemoRequest,
+                              admin: dict = Depends(require_admin)):
+    """Re-seed the bundled example, replacing whatever is there.
+
+    Admin-only, matching ``delete_project``: this is a delete followed by a
+    write, not a write. A 409 without ``force`` is the guard — a client that
+    forgets the flag gets an error rather than silently discarding the user's
+    work in that project.
+    """
+    from pathlib import Path
+    from app.services.demo_seed import PROJECT_ID, seed_demo_project
+
+    root = Path(settings.data_root)
+    existed = (root / PROJECT_ID).exists()
+    if existed and not body.force:
+        raise HTTPException(
+            status_code=409,
+            detail=f"{PROJECT_ID} already exists — re-seeding replaces it. "
+                   f"Send force to confirm.")
+    seeded = await asyncio.to_thread(seed_demo_project, root, True)
+    return {"id": PROJECT_ID, "replaced": existed, "seeded": seeded}
