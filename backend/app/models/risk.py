@@ -41,6 +41,14 @@ class Risk(BaseModel):
     probability: str = ""
     impact: str = ""
     mitigation: str = ""
+    #: How likely the risk is to be *noticed* before it bites — the third FMEA
+    #: axis. Deliberately does **not** feed the rating: the project's matrix is
+    #: two-dimensional and user-configured, so folding detection into the band
+    #: would silently re-rate every existing risk and leave the configured
+    #: matrix no longer describing its own output. A plain string, for the same
+    #: reason severity and likelihood are: a project may rename its levels, and
+    #: a rename must not make every stored risk fail validation.
+    detection: str = ""
     #: Requirements this risk endangers — "threatens".
     linked_requirements: list[str] = Field(default_factory=list)
     #: Requirements that exist to control this risk — "mitigated by". The
@@ -70,6 +78,7 @@ class RiskUpdate(BaseModel):
     probability: Optional[str] = None
     impact: Optional[str] = None
     mitigation: Optional[str] = None
+    detection: Optional[str] = None
     status: Optional[str] = None
     linked_requirements: Optional[list[str]] = None
     mitigating_requirements: Optional[list[str]] = None
