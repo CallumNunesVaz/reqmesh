@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { GitBranch, Plus, X, LayoutGrid, LayoutList, Search } from 'lucide-react';
 import { api } from '../api/client';
-import type { TraceLink, Requirement, VerificationCase } from '../api/client';
+import type { TraceModelLink, Requirement, VerificationCase } from '../api/client';
 import { removeTraceLink } from '../lib/traceLinks';
 import { useAuthStore } from '../store/auth';
 import { useStore } from '../store';
@@ -23,7 +23,7 @@ const LINK_TYPE_COLORS: Record<string, string> = {
 
 export default function TraceMatrixPage() {
   const { projectId } = useParams<{ projectId: string }>();
-  const [links, setLinks] = useState<TraceLink[]>([]);
+  const [links, setLinks] = useState<TraceModelLink[]>([]);
   const [requirements, setRequirements] = useState<Requirement[]>([]);
   const [verificationCases, setVerificationCases] = useState<VerificationCase[]>([]);
   const [newLink, setNewLink] = useState({ source: '', target: '', type: 'satisfies' });
@@ -43,11 +43,11 @@ export default function TraceMatrixPage() {
   const load = () => {
     if (!projectId) return;
     Promise.all([
-      api.getTraces(projectId),
+      api.getTraceModel(projectId),
       api.listRequirements(projectId),
       api.listVerificationCases(projectId),
-    ]).then(([traces, reqs, vcs]) => {
-      setLinks(traces.links || []);
+    ]).then(([model, reqs, vcs]) => {
+      setLinks(model.links || []);
       setRequirements(reqs);
       setVerificationCases(vcs);
     }).catch(console.error);
@@ -80,20 +80,25 @@ export default function TraceMatrixPage() {
   const addLink = async () => {
     if (!projectId || !newLink.source || !newLink.target) return;
     try {
-      const updated = [...links, { ...newLink }];
-      await api.updateTraces(projectId, { links: updated });
+      const newEntry: TraceModelLink = { ...newLink, holder: 'traces', target_collection: 'traces', stored: true };
+      const updated = [...links, newEntry];
+      // Only send stored links to the update endpoint — derived edges are
+      // consequences of the model and must not be persisted to traces.yaml.
+      const stored = updated.filter((l) => l.stored !== false).map(({ stored, holder, target_collection, ...rest }) => rest);
+      await api.updateTraces(projectId, { links: stored });
       setLinks(updated);
       setNewLink({ source: '', target: '', type: 'satisfies' });
     } catch (err: any) { setError(err.message || 'Failed to add link'); }
   };
 
   // Takes the link itself, never a row index — see removeTraceLink.
-  const removeLink = async (link: TraceLink) => {
+  const removeLink = async (link: TraceModelLink) => {
     if (!projectId) return;
     const updated = removeTraceLink(links, link);
     if (updated === links) return; // not present; nothing to write
     try {
-      await api.updateTraces(projectId, { links: updated });
+      const stored = updated.filter((l) => l.stored !== false).map(({ stored, holder, target_collection, ...rest }) => rest);
+      await api.updateTraces(projectId, { links: stored });
       setLinks(updated);
     } catch (err: any) { setError(err.message || 'Failed to remove link'); }
   };
@@ -246,7 +251,7 @@ export default function TraceMatrixPage() {
                     <EntityLink kind={kindOf(link.target)} id={link.target} name={nameOf(link.target)} className="hover:text-primary" />
                   </td>
                   <td className="px-2 py-2.5">
-                    {editable && (
+                    {editable && link.stored !== false && (
                     <button
                       onClick={() => removeLink(link)}
                       className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"

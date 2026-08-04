@@ -455,6 +455,16 @@ export interface TraceLink {
   type: string;
 }
 
+/** A trace-model link returned by GET /trace-model.  Extends TraceLink with
+ *  origin metadata so the UI can distinguish derived edges from hand-authored
+ *  ones. */
+export interface TraceModelLink extends TraceLink {
+  holder: string;
+  target_collection: string;
+  /** False for registry-derived edges; true for hand-authored traces. */
+  stored: boolean;
+}
+
 /** Offered in the UI. Unlike the risk vocabularies this is not per-project. */
 export const CR_URGENCIES = ['low', 'normal', 'high', 'emergency'] as const;
 
@@ -1050,6 +1060,9 @@ export const api = {
   getTraces: (projectId: string) => request<{ links: TraceLink[] }>(`/projects/${projectId}/traces`),
   updateTraces: (projectId: string, data: { links: TraceLink[] }) =>
     request<{ links: TraceLink[] }>(`/projects/${projectId}/traces`, { method: 'PUT', body: data }),
+  /** Every relationship: registry-derived edges + hand-authored traces. */
+  getTraceModel: (projectId: string) =>
+    request<{ links: TraceModelLink[]; total: number }>(`/projects/${projectId}/trace-model`),
 
   // Change Requests
   listChangeRequests: (projectId: string) => request<ChangeRequest[]>(`/projects/${projectId}/change-requests`),
