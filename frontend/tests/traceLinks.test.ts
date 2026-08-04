@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { removeTraceLink } from '../src/lib/traceLinks';
-import type { TraceLink } from '../src/api/client';
+import type { TraceModelLink } from '../src/api/client';
 
-const mk = (source: string, target: string, type = 'satisfies'): TraceLink =>
-  ({ source, target, type });
+const mk = (source: string, target: string, type = 'satisfies'): TraceModelLink =>
+  ({ source, target, type, holder: 'traces', target_collection: 'traces', stored: true });
 
 describe('removeTraceLink', () => {
   it('removes the clicked link and leaves the rest untouched', () => {

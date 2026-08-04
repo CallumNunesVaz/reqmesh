@@ -1,4 +1,4 @@
-import type { TraceLink } from '../api/client';
+import type { TraceModelLink } from '../api/client';
 
 /**
  * Remove one trace link from the full set.
@@ -14,7 +14,7 @@ import type { TraceLink } from '../api/client';
  * Returns the original array when the link isn't present, so callers can skip
  * a pointless write.
  */
-export function removeTraceLink(links: TraceLink[], link: TraceLink): TraceLink[] {
+export function removeTraceLink(links: TraceModelLink[], link: TraceModelLink): TraceModelLink[] {
   const next = links.filter((l) => l !== link);
   return next.length === links.length ? links : next;
 }
