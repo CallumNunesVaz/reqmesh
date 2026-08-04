@@ -318,6 +318,7 @@ def get_project(project_id: str, request: Request,
         "quality": meta.get("quality"),
         "baselines": normalize_baseline_defs(meta.get("baselines", [])),
         "stakeholders": normalize_stakeholders(meta.get("stakeholders", [])),
+        "system_states": normalize_system_states(meta.get("system_states", [])),
         "risk_matrix": normalize_matrix(meta.get("risk_matrix")),
     }
     # Git settings can hold a credentialed remote URL, so unlike the rest of
@@ -1013,6 +1014,128 @@ def delete_baseline(project_id: str, name: str, user: dict = Depends(require_mai
             store.update_requirement(r["id"], {"baselines": blist})
             updated += 1
     return {"name": name, "requirements_cleared": updated}
+
+
+# ── System States ────────────────────────────────────────────────────────────
+
+class SystemStateCreate(BaseModel):
+    name: str
+    description: str = ""
+
+
+class SystemStateUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+
+
+@router.get("/projects/{project_id}/system-states")
+def list_system_states(project_id: str):
+    store = get_store(project_id)
+    meta = store.read_meta()
+    defs = normalize_system_states(meta.get("system_states", []))
+
+    # Collect every name actually used on a requirement.
+    used: set[str] = set()
+    for r in store.list_requirements():
+        for s in (r.get("system_states") or []):
+            if s:
+                used.add(s)
+
+    defined = {d["name"] for d in defs}
+    orphans = sorted(used - defined)
+
+    return {"states": defs, "orphans": orphans}
+
+
+@router.post("/projects/{project_id}/system-states", status_code=201)
+def create_system_state(project_id: str, data: SystemStateCreate,
+                        user: dict = Depends(require_maintain)):
+    store = get_store(project_id)
+    name = data.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="State name is required")
+
+    meta = store.read_meta()
+    defs = normalize_system_states(meta.get("system_states", []))
+    if any(d["name"] == name for d in defs):
+        raise HTTPException(status_code=409,
+                            detail="A system state with that name already exists")
+
+    defs.append({"name": name, "description": data.description})
+    meta["system_states"] = serialize_system_states(defs)
+    store.write_meta(meta)
+
+    return {"name": name, "description": data.description, "order": len(defs)}
+
+
+@router.patch("/projects/{project_id}/system-states/{name}")
+def update_system_state(project_id: str, name: str, data: SystemStateUpdate,
+                        user: dict = Depends(require_maintain)):
+    store = get_store(project_id)
+    new_name = data.name.strip() if data.name is not None else None
+    if new_name == "":
+        raise HTTPException(status_code=400, detail="State name is required")
+
+    meta = store.read_meta()
+    defs = normalize_system_states(meta.get("system_states", []))
+
+    target: dict | None = None
+    for d in defs:
+        if d["name"] == name:
+            target = d
+            break
+
+    if target is None:
+        raise HTTPException(status_code=404, detail="System state not found")
+
+    if new_name is not None and new_name != name:
+        if any(d["name"] == new_name for d in defs):
+            raise HTTPException(status_code=409,
+                                detail="A system state with that name already exists")
+
+    # Persist the definition changes.
+    if new_name is not None and new_name != name:
+        target["name"] = new_name
+    if data.description is not None:
+        target["description"] = data.description
+
+    meta["system_states"] = serialize_system_states(defs)
+    store.write_meta(meta)
+
+    # Rename cascades to every requirement that referenced the old name.
+    requirements_updated = 0
+    if new_name is not None and new_name != name:
+        for r in store.list_requirements():
+            states = list(r.get("system_states") or [])
+            if name in states:
+                states = [new_name if s == name else s for s in states]
+                store.update_requirement(r["id"], {"system_states": states})
+                requirements_updated += 1
+
+    result = {k: v for k, v in target.items() if k in ("name", "description", "order")}
+    if new_name is not None and new_name != name:
+        result["old_name"] = name
+        result["requirements_updated"] = requirements_updated
+    return result
+
+
+@router.delete("/projects/{project_id}/system-states/{name}")
+def delete_system_state(project_id: str, name: str,
+                        user: dict = Depends(require_maintain)):
+    store = get_store(project_id)
+    meta = store.read_meta()
+    defs = normalize_system_states(meta.get("system_states", []))
+    defs = [d for d in defs if d["name"] != name]
+    meta["system_states"] = serialize_system_states(defs)
+    store.write_meta(meta)
+
+    # Count how many requirements still carry the name — they become orphans.
+    affected = 0
+    for r in store.list_requirements():
+        if name in (r.get("system_states") or []):
+            affected += 1
+
+    return {"name": name, "requirements_affected": affected}
 
 
 # ── Parametric definitions (reusable constraint / calc defs) ─────────────────

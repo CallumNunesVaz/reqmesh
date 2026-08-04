@@ -439,6 +439,8 @@ Key environment variables:
 | GET/POST | `/api/projects/{id}/baselines` | List/create baselines |
 | PATCH/DELETE | `/api/projects/{id}/baselines/{name}` | Rename/delete baseline |
 | PUT | `/api/projects/{id}/baselines/order` | Rewrite the baseline sequence |
+| GET/POST | `/api/projects/{id}/system-states` | List (including orphans)/create system states |
+| PATCH/DELETE | `/api/projects/{id}/system-states/{name}` | Rename/delete system state (rename cascades) |
 | GET/POST | `/api/projects/{id}/definitions` | List/create SysML constraint/calc definitions |
 | PUT/DELETE | `/api/projects/{id}/definitions/{def_id}` | Update/delete definition |
 | GET/POST | `/api/projects/{id}/analysis` | List/create analysis cases |

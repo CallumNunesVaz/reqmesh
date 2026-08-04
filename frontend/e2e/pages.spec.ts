@@ -50,6 +50,14 @@ test('the publish page renders its format options', async ({ app, server }) => {
   await expectNoCrash(app);
 });
 
+test('the system states page renders', async ({ app, server }) => {
+  await signIn(app);
+  await app.goto(`${server.baseURL}/project/${P}/system-states`);
+  await app.waitForSelector('main');
+  await expect(app.getByRole('heading', { name: /system states/i }).first()).toBeVisible();
+  await expectNoCrash(app);
+});
+
 test('an unknown route redirects to the project list rather than blanking', async ({ app, server }) => {
   await signIn(app);
   await app.goto(`${server.baseURL}/no-such-page`);
