@@ -378,7 +378,6 @@ export interface Requirement {
   baselines: string[];
   references: Reference[];
   reviewed: string | null;
-  derived: boolean;
   normative: boolean;
   priorities: Record<string, number>;
   needs: string[];

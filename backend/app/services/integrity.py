@@ -145,7 +145,11 @@ class IntegrityChecker:
 
     def _check_orphan_requirements(self):
         for r in self.reqs:
-            if r.get("derived", False):
+            # `cascade_from` is what records that this requirement was derived
+            # from another, and carries which one. The `derived` boolean it
+            # replaced asserted the same thing with less information and could
+            # disagree with it, so the exemption now follows the link.
+            if r.get("cascade_from"):
                 continue
             parent = r.get("parent")
             if parent and parent not in self._req_ids and parent not in self._vc_ids:
