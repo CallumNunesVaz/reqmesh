@@ -3,7 +3,7 @@ import { copyText } from '../lib/clipboard';
 import {
   ShieldCheck, RefreshCw, Download, CheckCircle2, AlertTriangle, Loader,
   ArrowUpCircle, GitBranch, Server, ExternalLink, Terminal, X, Upload,
-  Monitor, Globe, Network, Clock, Power, FileText, Play, DownloadCloud, Copy,
+  Monitor, Globe, Network, Clock, Power, FileText, Play, DownloadCloud, Copy, Boxes,
 } from 'lucide-react';
 import { api, type SystemInfo, type UpdateCheck, type UpdateStatus, type BuildInfo } from '../api/client';
 import { useAuthStore } from '../store/auth';
@@ -14,6 +14,29 @@ const ACTIVE = new Set(['preparing', 'requested', 'in_progress']);
 
 export default function SystemPage() {
   const user = useAuthStore((s) => s.user);
+  // Bundled example project
+  const [demo, setDemo] = useState<{ exists: boolean; name: string; requirements: number } | null>(null);
+  const [reseeding, setReseeding] = useState(false);
+  const [confirmReseed, setConfirmReseed] = useState(false);
+  const [reseedMsg, setReseedMsg] = useState('');
+  const loadDemo = useCallback(() => {
+    api.getDemoProject().then(setDemo).catch(() => setDemo(null));
+  }, []);
+  useEffect(() => { loadDemo(); }, [loadDemo]);
+  const doReseed = async () => {
+    setReseeding(true); setReseedMsg('');
+    try {
+      // `force` is always true here: the confirmation the user just gave *is*
+      // the force. The server still refuses a request that omits it, so a
+      // future caller cannot destroy the project by forgetting the flag.
+      const r = await api.reseedDemoProject(true);
+      setReseedMsg(r.replaced ? 'Example project replaced.' : 'Example project created.');
+      loadDemo();
+    } catch (e: any) {
+      setReseedMsg(e.message || 'Re-seed failed');
+    } finally { setReseeding(false); setConfirmReseed(false); }
+  };
+
   const isAdmin = user?.role === 'admin';
 
   const [build, setBuild] = useState<BuildInfo | null>(null);
@@ -335,6 +358,36 @@ export default function SystemPage() {
         </div>
       </section>
 
+      {/* ── Example project ──────────────────────────────────────── */}
+      <section className="card p-5">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-medium flex items-center gap-2"><Boxes size={16} /> Example Project</h2>
+          <button
+            className="btn-ghost text-xs"
+            onClick={() => setConfirmReseed(true)}
+            disabled={reseeding}
+            title="Re-seed the bundled Cessna 172S example"
+          >
+            <RefreshCw size={14} className={reseeding ? 'animate-spin' : ''} /> {reseeding ? 'Re-seeding…' : 'Re-seed'}
+          </button>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          {demo === null
+            ? 'Checking…'
+            : demo.exists
+              ? `${demo.name} is loaded, with ${demo.requirements} requirements.`
+              : `${demo.name} is not loaded.`}
+        </p>
+        {demo?.exists && (
+          <p className="text-xs text-amber-500/90 mt-2 flex items-start gap-1.5">
+            <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+            Re-seeding deletes the project and rebuilds it from the bundled copy.
+            Anything changed in it — including its git history — is lost.
+          </p>
+        )}
+        {reseedMsg && <p className="text-xs text-muted-foreground mt-2">{reseedMsg}</p>}
+      </section>
+
       {/* ── Updates card ─────────────────────────────────────────── */}
       <section className="card p-5">
         <div className="flex items-center justify-between mb-3">
@@ -513,6 +566,30 @@ export default function SystemPage() {
       )}
 
       {/* ── Confirm restart ──────────────────────────────────────── */}
+      {confirmReseed && (
+        <BodyPortal>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setConfirmReseed(false)}>
+          <div className="card p-6 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-semibold flex items-center gap-2">
+              <AlertTriangle size={18} className="text-amber-500" />
+              {demo?.exists ? 'Replace the example project?' : 'Load the example project?'}
+            </h3>
+            <p className="text-sm text-muted-foreground mt-3">
+              {demo?.exists
+                ? `${demo.name} currently holds ${demo.requirements} requirements. Re-seeding deletes the project and rebuilds it from the bundled copy — every change made to it, and its git history, is lost. Other projects are untouched.`
+                : `${demo?.name ?? 'The example project'} will be created from the bundled copy.`}
+            </p>
+            <div className="flex justify-end gap-2 mt-5">
+              <button className="btn-ghost" onClick={() => setConfirmReseed(false)}>Cancel</button>
+              <button className="btn-primary" onClick={doReseed} disabled={reseeding}>
+                {reseeding ? <Loader size={15} className="animate-spin" /> : <RefreshCw size={15} />}
+                {demo?.exists ? 'Replace it' : 'Load it'}
+              </button>
+            </div>
+          </div>
+        </div>
+        </BodyPortal>
+      )}
       {confirmRestart && (
         <BodyPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setConfirmRestart(false)}>

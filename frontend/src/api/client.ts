@@ -1164,6 +1164,15 @@ export const api = {
     return request<PughMatrix>(`/projects/${projectId}/pugh?${qs.toString()}`);
   },
 
+  // Bundled example project (admin)
+  getDemoProject: () =>
+    request<{ exists: boolean; id: string; name: string; requirements: number }>('/system/demo-project'),
+  /** Re-seeds the bundled example. `force` is required once it exists — the
+   *  server 409s without it rather than silently discarding work in it. */
+  reseedDemoProject: (force: boolean) =>
+    request<{ id: string; replaced: boolean; seeded: boolean }>(
+      '/system/demo-project/reseed', { method: 'POST', body: { force } }),
+
   // Metrics & Compliance
   getMetrics: (projectId: string) => request<MetricsData>(`/projects/${projectId}/metrics`),
   getCompliance: (projectId: string) =>
