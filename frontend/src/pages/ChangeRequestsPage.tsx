@@ -55,7 +55,12 @@ export default function ChangeRequestsPage() {
   // Bulk operations are maintainer-tier (backend require_maintain), unlike
   // individual create/edit/delete which are propose-tier.
   const canBulk = useAuthStore((s) => s.canEdit());
-  const canMaintain = useAuthStore((s) => s.user !== null && ['maintainer', 'admin'].includes(s.user.role));
+  // `canEdit` rather than a role check of its own: it is maintainer-or-admin
+  // *and* edit mode, and edit mode is the guard against changing data you only
+  // meant to read. A local role-only predicate put Execute and Reject on screen
+  // while the header said VIEWING — the same defect the store's own comment
+  // records fixing for canPropose.
+  const canMaintain = useAuthStore((s) => s.canEdit());
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const dataVersion = useStore((s) => s.dataVersion);
   const entityKinds = useEntityKinds(projectId);
