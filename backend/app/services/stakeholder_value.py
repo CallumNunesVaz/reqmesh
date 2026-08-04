@@ -105,3 +105,33 @@ def rank_requirements(reqs: list[dict], stakeholders: list[dict]) -> list[dict]:
     for s in scored:
         s["rank"] = rank_by_id.get(s["id"])
     return scored
+
+
+def pugh_matrix(reqs: list[dict], stakeholders: list[dict],
+                datum_id: str | None = None, limit: int = 8) -> dict:
+    """Compare the best-valued requirements against each other, Pugh-style.
+
+    A Pugh matrix scores a handful of *alternatives* against weighted
+    *criteria*, relative to a chosen *datum*. Here the criteria are the
+    stakeholders and the alternatives are requirements, so each cell asks "does
+    this requirement matter more to this stakeholder than the datum does?".
+
+    Candidates are the scored requirements from :func:`rank_requirements`, best
+    first, capped at ``limit`` — the cap is not a detail. A Pugh matrix over
+    every requirement is not a Pugh matrix, it is a spreadsheet; the technique
+    only says anything when a person can hold the columns in their head.
+
+    The datum is ``datum_id`` when it names a candidate, else the top-ranked
+    one. Its own column is all zeroes **by definition**, not by accident.
+
+    ``sign`` is 1 above the datum, -1 below, 0 equal, and ``None`` when either
+    side is unscored — an unscored stakeholder cannot be compared, and calling
+    that 0 would assert a parity nobody stated. ``None`` signs are excluded
+    from ``plus``, ``minus`` and ``weighted``.
+
+    Returns ``{datum, limit, total_candidates, stakeholders, columns}``; see
+    ``PughMatrix`` in ``frontend/src/api/client.ts`` for the wire shape. With
+    nothing scored, ``datum`` is None and ``columns`` is empty — an empty
+    matrix, not an error.
+    """
+    raise NotImplementedError
