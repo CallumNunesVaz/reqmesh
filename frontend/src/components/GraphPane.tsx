@@ -1705,6 +1705,65 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
   // A live derivation trace replaces the hop-radius highlight entirely.
   const derivationActive = !!derived && derived.root === selectedReqId;
 
+  //: `reqsById` is a memo over `reqs`, so it changes identity on every data
+  //: refresh — an SSE event from another user, a graph-version bump. Reading it
+  //: through a ref keeps it out of the effect's dependencies: framing must
+  //: follow a *new evaluation*, not a background reload that re-expanded groups
+  //: and pulled the camera away mid-read.
+  const reqsByIdRef = useRef(reqsById);
+  reqsByIdRef.current = reqsById;
+
+  // ── What-if camera framing ──────────────────────────────────────────────
+  // When a new evaluation arrives, expand any collapsed ancestor of every
+  // affected requirement so it has a node, then frame the whole closure so the
+  // user sees what changed. Follows the same pattern as the derivation-trace
+  // effect above: expand collapsed ancestors, wait for relayout, fit subset,
+  // and claim the camera with a time-bounded flag.
+  useEffect(() => {
+    if (!whatIf.impact) return;
+
+    const roots = whatIf.impact.roots ?? [];
+    const affected = whatIf.impact.affected ?? [];
+    const union = new Set<string>([...roots, ...affected]);
+    if (union.size === 0) return;
+
+    // Expand collapsed ancestors so every id in the union has a node.
+    const ancestors = new Set<string>();
+    for (const id of union) {
+      const byId = reqsByIdRef.current;
+      let p = byId.get(id)?.parent ?? null;
+      while (p) { ancestors.add(p); p = byId.get(p)?.parent ?? null; }
+    }
+
+    if (ancestors.size) {
+      derivingRef.current = true;
+      setCollapsed((prev) => {
+        const next = new Set(prev);
+        let changed = false;
+        for (const a of ancestors) if (next.delete(a)) changed = true;
+        return changed ? next : prev;
+      });
+      setGroupsOnly((prev) => {
+        const next = new Set(prev);
+        let changed = false;
+        for (const a of ancestors) if (next.delete(a)) changed = true;
+        return changed ? next : prev;
+      });
+    }
+
+    refocusRef.current = null;
+    // Frame the union once the expansion has laid out.
+    const t = setTimeout(() => {
+      const subset = [...union].map((id) => ({ id }));
+      if (subset.length) {
+        rfRef.current?.fitView({ nodes: subset, padding: 0.25, duration: 600, maxZoom: gs.maxZoom });
+      }
+    }, ancestors.size ? 420 : 60);
+
+    const release = setTimeout(() => { derivingRef.current = false; }, 2500);
+    return () => { clearTimeout(t); clearTimeout(release); };
+  }, [whatIf.impact, gs.maxZoom]);
+
   const wfActive = !!whatIf.impact;
   const wfConnectedIds = useMemo(() => {
     if (!whatIf.impact) return new Set<string>();
