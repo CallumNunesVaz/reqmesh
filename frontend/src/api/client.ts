@@ -477,9 +477,32 @@ export interface RiskBand {
 export interface RiskMatrix {
   severities: string[];
   likelihoods: string[];
+  /** Detection vocabulary. Travels with the matrix but does not address a
+   *  cell — `cells` stays severity x likelihood. */
+  detections: string[];
   bands: RiskBand[];
   /** cells[severityIndex][likelihoodIndex] -> band key */
   cells: string[][];
+}
+
+/** Offered in the UI; not enforced, so a project that renames a state keeps
+ *  its stored risks valid. */
+export const RISK_STATUSES = ['open', 'mitigating', 'monitoring', 'accepted', 'closed'] as const;
+
+/** Counts per severity x likelihood cell — the "bingo card" summary. */
+export interface RiskBingo {
+  severities: string[];
+  likelihoods: string[];
+  /** `cells[severityIndex][likelihoodIndex]` -> how many risks land there. */
+  counts: number[][];
+  /** `bands[severityIndex][likelihoodIndex]` -> the band key that cell rates as,
+   *  so the grid can be coloured the same way the register is. */
+  bands: string[][];
+  /** Risks whose severity or likelihood is not a level in the matrix, so they
+   *  address no cell and would otherwise vanish from a summary that claims to
+   *  cover the register. */
+  unrated: number;
+  total: number;
 }
 
 /** Derived server-side from the project matrix; never stored on the risk. */
@@ -503,6 +526,10 @@ export interface Risk {
   rating?: RiskRating;
   impact: string;
   mitigation: string;
+  /** How likely the risk is to be noticed before it bites. Stored and shown,
+   *  but deliberately not part of the rating — the project matrix is 2D, and
+   *  folding a third axis in would re-rate every existing risk. */
+  detection: string;
   /** Requirements this risk endangers — "Threatens". */
   linked_requirements: string[];
   /** Requirements that control this risk — "Mitigated By". The opposite
