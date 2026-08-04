@@ -23,7 +23,7 @@ PROJECT_NAME = "Cessna 172S Skyhawk SP"
 def _req(pid, tid, name, desc, ptype="functional", status="proposed",
          priority="high", rationale="", source="", verification="test",
          baselines=None, allocated="", priorities=None,
-         needs=None, derived=False, normative=True,
+         needs=None, normative=True,
          references=None, reviewed=None):
     return {
         "id": tid,
@@ -45,7 +45,6 @@ def _req(pid, tid, name, desc, ptype="functional", status="proposed",
         "verification_cases": [],
         "references": references or [],
         "needs": needs or [],
-        "derived": derived,
         "normative": normative,
         "priorities": priorities or {},
         "reviewed": reviewed,
@@ -1117,7 +1116,6 @@ def _requirements() -> list[dict]:
         " aviation.  Mandatory compliance is required for"
         " continued airworthiness.",
         "FAA AD 2024-01-05, NTSB A-22-3",
-        derived=True,
         needs=["design"],
         priorities={"safety": 5, "maintenance": 3},
     ))
