@@ -100,6 +100,19 @@ def test_the_risk_register_is_not_uniformly_open(demo):
     assert len(statuses) >= 3, f"demo risk statuses are all but identical: {statuses}"
 
 
+def test_risk_detection_levels_are_spread(demo):
+    """Detection levels are spread across the demo's risks, with at least one unset."""
+    risks = demo.list_items("risks")
+    detections = [r.get("detection") or "" for r in risks]
+    unset = [d for d in detections if not d]
+    set_detections = [d for d in detections if d]
+
+    assert len(unset) >= 1, "at least one risk must have no detection set"
+    assert len(set(set_detections)) >= 2, (
+        f"detection levels are not spread: {set_detections}"
+    )
+
+
 def test_stakeholder_scores_have_stakeholders_to_weight_against(demo):
     from app.api.router import normalize_stakeholders
     from app.services.stakeholder_value import rank_requirements

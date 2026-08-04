@@ -308,6 +308,17 @@ def project_metrics(project_id: str, _rate: None = Depends(rate_limit(20, 60))):
     }
 
 
+@router.get("/projects/{project_id}/risk-bingo")
+def risk_bingo_endpoint(project_id: str, _rate: None = Depends(rate_limit(20, 60))):
+    """Severity × likelihood grid of risk counts per the project matrix."""
+    from app.services.risk_matrix import risk_bingo, normalize_matrix
+
+    store = get_store(project_id)
+    matrix = normalize_matrix(store.read_meta().get("risk_matrix"))
+    risks = store.list_items("risks")
+    return risk_bingo(risks, matrix)
+
+
 @router.get("/projects/{project_id}/backlog")
 def prioritized_backlog(project_id: str, sort: str = "priority", _rate: None = Depends(rate_limit(20, 60))):
     """Requirements ranked by weighted stakeholder value, best first."""

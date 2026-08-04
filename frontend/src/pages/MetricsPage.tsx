@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Trash2, CheckCircle2, AlertTriangle, Search, TrendingUp, Shield, GitBranch, FileWarning, Sparkles, Sigma, Flame, ShieldCheck, Table } from 'lucide-react';
-import { api, type MetricsData, type ImpactResult, type GapItem, type QualityItem, type EvaluationData, type PughMatrix } from '../api/client';
+import { api, type MetricsData, type ImpactResult, type GapItem, type QualityItem, type EvaluationData, type PughMatrix, type RiskBingo } from '../api/client';
 import { EntityLink } from '../components/entities';
 import { VerdictBadge } from '../components/parametrics';
 import { DefinitionsManager, AnalysisCasesPanel } from '../components/DefinitionsPanel';
@@ -22,6 +22,7 @@ export default function MetricsPage() {
   const [unreviewedCount, setUnreviewedCount] = useState(0);
   const [evaluation, setEvaluation] = useState<EvaluationData | null>(null);
   const [pugh, setPugh] = useState<PughMatrix | null>(null);
+  const [bingo, setBingo] = useState<RiskBingo | null>(null);
   // Definitions and analysis cases are maintainer-tier (backend require_maintain).
   const editable = useAuthStore((s) => s.canEdit());
 
@@ -29,6 +30,7 @@ export default function MetricsPage() {
     if (!projectId) return;
     api.getEvaluation(projectId).then(setEvaluation).catch(() => {});
     api.getPugh(projectId).then(setPugh).catch(() => {});
+    api.getRiskBingo(projectId).then(setBingo).catch(() => {});
     Promise.all([
       api.getMetrics(projectId),
       api.getGapAnalysis(projectId),
@@ -238,6 +240,68 @@ export default function MetricsPage() {
               </div>
             </div>
           )}
+        </motion.div>
+      )}
+
+      {bingo && bingo.total > 0 && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.315 }} className="card p-5 mt-6">
+          <h2 className="font-semibold text-sm text-card-foreground mb-3 flex items-center gap-2">
+            <Table size={16} className="text-cs-teal" /> Risk Bingo
+            <span className="text-xs font-normal text-muted-foreground">
+              {bingo.total} risk{bingo.total !== 1 ? 's' : ''} mapped {bingo.severities.length}×{bingo.likelihoods.length}
+            </span>
+          </h2>
+          <HelpTip>
+            Every severity × likelihood cell counts the risks that land there.
+            A zero cell reads "0", not blank — the shape of the empty space
+            is the point of a bingo card. Each cell is tinted by its band colour.
+          </HelpTip>
+          <div className="flex gap-4 mt-3">
+            <div className="overflow-x-auto max-w-full">
+              <table className="text-xs border-collapse">
+                <thead>
+                  <tr>
+                    <th className="p-1"></th>
+                    {bingo.likelihoods.map((l) => (
+                      <th key={l} className="p-1.5 text-muted-foreground font-medium text-center whitespace-nowrap">
+                        {l.replace(/_/g, ' ')}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {bingo.severities.map((sv, si) => (
+                    <tr key={sv}>
+                      <td className="p-1.5 text-muted-foreground font-medium text-right whitespace-nowrap">
+                        {sv}
+                      </td>
+                      {bingo.likelihoods.map((_, li) => {
+                        const count = bingo.counts[si][li];
+                        const bandKey = bingo.bands[si][li];
+                        const band = risks?.bands?.find((b) => b.key === bandKey);
+                        return (
+                          <td
+                            key={li}
+                            className="p-1.5 text-center tabular-nums border border-border/50 min-w-[3rem]"
+                            style={band ? { backgroundColor: `${band.color}20`, borderColor: `${band.color}40` } : undefined}
+                          >
+                            {count}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {bingo.unrated > 0 && (
+              <div className="shrink-0 flex flex-col items-center justify-center gap-0.5 text-xs text-amber-400 bg-amber-500/5 rounded-lg px-3 py-2">
+                <AlertTriangle size={14} />
+                <span className="font-semibold">{bingo.unrated}</span>
+                <span className="text-[10px] text-muted-foreground">unrated</span>
+              </div>
+            )}
+          </div>
         </motion.div>
       )}
 

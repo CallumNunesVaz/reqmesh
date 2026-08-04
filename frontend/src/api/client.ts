@@ -1033,6 +1033,7 @@ export const api = {
     request<Backlinks>(`/projects/${projectId}/entities/${entityId}/backlinks`),
   listRisks: (projectId: string) => request<Risk[]>(`/projects/${projectId}/risks`),
   getRiskMatrix: (projectId: string) => request<RiskMatrix>(`/projects/${projectId}/risk-matrix`),
+  getRiskBingo: (projectId: string) => request<RiskBingo>(`/projects/${projectId}/risk-bingo`),
   createRisk: (projectId: string, data: Partial<Risk>) =>
     request<Risk>(`/projects/${projectId}/risks`, { method: 'POST', body: data }),
   updateRisk: (projectId: string, riskId: string, data: Partial<Risk>) =>

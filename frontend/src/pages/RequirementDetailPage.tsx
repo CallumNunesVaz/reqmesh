@@ -71,6 +71,7 @@ export default function RequirementDetailPage() {
   const [definitions, setDefinitions] = useState<Definition[]>([]);
   const [affectingCrs, setAffectingCrs] = useState<ChangeRequest[]>([]);
   const [linkedRisks, setLinkedRisks] = useState<Risk[]>([]);
+  const [mitigatingRisks, setMitigatingRisks] = useState<Risk[]>([]);
   const [allRisksRaw, setAllRisksRaw] = useState<Risk[]>([]);
   const [backlinks, setBacklinks] = useState<Backlinks | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
@@ -178,6 +179,28 @@ export default function RequirementDetailPage() {
       }).catch(() => {});
     }
   };
+  /** Add or remove this requirement from a risk's mitigating_requirements.
+   *  Mirrors setRiskLink; the risk owns both lists. */
+  const setMitigatingRiskLink = async (riskId: string, linked: boolean) => {
+    if (!projectId || !reqId) return;
+    const risk = allRisksRaw.find((r) => r.id === riskId);
+    if (!risk) return;
+    const next = linked
+      ? [...(risk.mitigating_requirements || []), reqId]
+      : (risk.mitigating_requirements || []).filter((x) => x !== reqId);
+    const updated = { ...risk, mitigating_requirements: next };
+    setAllRisksRaw((prev) => prev.map((r) => (r.id === riskId ? updated : r)));
+    setMitigatingRisks((prev) => (linked ? [...prev, updated] : prev.filter((r) => r.id !== riskId)));
+    try {
+      await api.updateRisk(projectId, riskId, { mitigating_requirements: next });
+    } catch (err) {
+      console.error(err);
+      api.listRisks(projectId).then((risks) => {
+        setAllRisksRaw(risks);
+        setMitigatingRisks(risks.filter((r) => (r.mitigating_requirements || []).includes(reqId)));
+      }).catch(() => {});
+    }
+  };
   const allocateComponent = async (componentId: string, allocated: boolean) => {
     if (!projectId || !reqId) return;
     try {
@@ -244,8 +267,9 @@ export default function RequirementDetailPage() {
         if (!alive) return;
         setAllRisksRaw(risks);
         setLinkedRisks(risks.filter((r) => r.linked_requirements.includes(reqId)));
+        setMitigatingRisks(risks.filter((r) => (r.mitigating_requirements || []).includes(reqId)));
       })
-      .catch(() => { if (alive) { setAllRisksRaw([]); setLinkedRisks([]); } });
+      .catch(() => { if (alive) { setAllRisksRaw([]); setLinkedRisks([]); setMitigatingRisks([]); } });
     api.getBacklinks(projectId, reqId)
       .then((b) => { if (alive) setBacklinks(b); })
       .catch(() => { if (alive) setBacklinks(null); });
@@ -902,7 +926,7 @@ export default function RequirementDetailPage() {
               </div>
             </motion.div>
           )}
-          {(affectingCrs.length > 0 || linkedRisks.length > 0 || editable) && (
+          {(affectingCrs.length > 0 || linkedRisks.length > 0 || mitigatingRisks.length > 0 || editable) && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.24 }} className="card p-5">
               <h2 className="font-semibold text-sm text-card-foreground mb-3">Change Requests &amp; Risks</h2>
               <div className="space-y-1.5">
@@ -920,7 +944,7 @@ export default function RequirementDetailPage() {
                   which is the same record the Risks page edits. */}
               <div className={affectingCrs.length > 0 ? 'mt-3 pt-3 border-t' : ''}>
                 <LinkEditor
-                  label="Risks" hint="Risks that threaten this requirement" kind="risk"
+                  label="Threatened by" hint="Risks that threaten this requirement" kind="risk"
                   linked={linkedRisks.map((r) => r.id)}
                   options={allRisks}
                   editable={editable}
@@ -928,6 +952,17 @@ export default function RequirementDetailPage() {
                   onRemove={(id) => setRiskLink(id, false)}
                   nameOf={(id) => allRisks.find((r) => r.id === id)?.name ?? ''}
                 />
+                <div className={linkedRisks.length > 0 ? 'mt-3 pt-3 border-t' : ''}>
+                  <LinkEditor
+                    label="Mitigates" hint="Risks this requirement reduces" kind="risk"
+                    linked={mitigatingRisks.map((r) => r.id)}
+                    options={allRisks}
+                    editable={editable}
+                    onAdd={(id) => setMitigatingRiskLink(id, true)}
+                    onRemove={(id) => setMitigatingRiskLink(id, false)}
+                    nameOf={(id) => allRisks.find((r) => r.id === id)?.name ?? ''}
+                  />
+                </div>
               </div>
             </motion.div>
           )}
@@ -1245,7 +1280,7 @@ export default function RequirementDetailPage() {
                   <AutoLinkHtml
                     html={req.rationale || ''}
                     kinds={entityKinds}
-                    className="prose prose-sm dark:prose-invert max-w-none border rounded-lg p-3 min-h-[60px] opacity-90"
+                    className="prose prose-sm dark:prose-invert max-w-none border rounded-lg p-3 min-h-[80px] opacity-90"
                   />
                 )}
               </div>

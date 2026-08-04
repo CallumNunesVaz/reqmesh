@@ -1676,14 +1676,14 @@ RISKS = [
                     " (approximately 8% of all GA accidents per AOPA Nall Report).",
      "severity": "high", "likelihood": "possible",
      "status": "mitigating", "mitigation": "Fuel totalizer on G1000 MFD; pre-flight dipstick check",
-     "linked_requirements": ["PROP0006", "AFRM0006"]},
+     "linked_requirements": ["PROP0006", "AFRM0006"], "detection": "likely"},
     {"id": "RSK00003", "title": "G1000 Display Overheat",
      "description": "PFD or MFD display failure due to excessive cockpit temperatures"
                     " (direct sunlight on ramp, >50°C / 122°F).  The G1000 operating"
                     " temperature specification is −20°C to +55°C.",
      "severity": "medium", "likelihood": "unlikely",
      "status": "monitoring", "mitigation": "Sunshades; cabin ventilation; reversionary mode",
-     "linked_requirements": ["AVNC0001", "AVNC0002"]},
+     "linked_requirements": ["AVNC0001", "AVNC0002"], "detection": "obvious"},
     {"id": "RSK00004", "title": "Carbon Monoxide Incapacitation",
      "description": "CO leaking into cabin via exhaust muff cracks, causing progressive"
                     " crew incapacitation (headache → confusion → unconsciousness)."
@@ -1692,14 +1692,14 @@ RISKS = [
      # Closed rather than open: the AD retrofit is the mitigation, and a register
      # where nothing ever closes says nothing about how the project is managed.
      "status": "closed", "mitigation": "Active CO detector per AD 2024-01-05; muff inspection",
-     "linked_requirements": ["AD2024001", "ENVR0001"]},
+     "linked_requirements": ["AD2024001", "ENVR0001"], "detection": "possible"},
     {"id": "RSK00005", "title": "Alternator Failure in IMC",
      "description": "Alternator failure while in instrument meteorological conditions (IMC)."
                     "  The essential bus provides 30 min of power — sufficient for an"
                     " approach at a nearby airport but requiring prompt action.",
      "severity": "high", "likelihood": "unlikely",
      "status": "mitigating", "mitigation": "Essential bus isolation; battery endurance ≥ 30 min",
-     "linked_requirements": ["ELEC0001", "ELEC0002", "ELEC0003"]},
+     "linked_requirements": ["ELEC0001", "ELEC0002", "ELEC0003"], "detection": "undetectable"},
     {"id": "RSK00006", "title": "Icing Encounter",
      "description": "Inadvertent encounter with structural icing conditions (visible"
                     " moisture + OAT below freezing).  The Cessna 172S is NOT certified"
