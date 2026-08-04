@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 
+from app.services.link_registry import LINKS, targets_of
 from app.services.verification_links import attach as attach_verification_cases
 
 
@@ -166,6 +167,56 @@ def deep_status(req: dict, graph: dict, memo: dict | None = None, visiting: set 
     visiting.discard(rid)
     memo[rid] = all_covered_deep
     return all_covered_deep
+
+
+def all_links(store) -> list[dict]:
+    """Every declared relationship in the project, one dict per edge.
+
+    -> [{"source": str, "target": str, "type": str, "holder": str,
+         "target_collection": str, "stored": bool}]
+    """
+    edges: dict[tuple[str, str, str], dict] = {}
+
+    # Registry-derived edges.
+    for link in LINKS:
+        if link.tree:
+            continue
+        try:
+            items = store.list_items(link.holder)
+        except Exception:
+            continue
+        for item in items:
+            source_id = item.get("id", "")
+            if not source_id:
+                continue
+            for target_id in targets_of(item, link):
+                key = (source_id, target_id, link.label)
+                if key not in edges:
+                    edges[key] = {
+                        "source": source_id,
+                        "target": target_id,
+                        "type": link.label,
+                        "holder": link.holder,
+                        "target_collection": link.target,
+                        "stored": False,
+                    }
+
+    # Hand-authored traces (stored: True).  The overwrite means a stored edge
+    # is never masked by a derived twin.
+    traces = store.read_traces()
+    for link in traces.get("links", []):
+        key = (link["source"], link["target"], link["type"])
+        edges[key] = {
+            "source": link["source"],
+            "target": link["target"],
+            "type": link["type"],
+            "holder": "traces",
+            "target_collection": "traces",
+            "stored": True,
+        }
+
+    result = sorted(edges.values(), key=lambda e: (e["source"], e["target"], e["type"]))
+    return result
 
 
 def trace_all(store) -> list[dict]:
