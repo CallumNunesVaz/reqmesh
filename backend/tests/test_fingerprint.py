@@ -149,18 +149,31 @@ def test_unreviewed_api_endpoint(client, project):
     assert data["items"][0]["id"] == "REQ-UR1"
 
 
-def test_derived_skips_orphan_check(client, project):
+def test_cascaded_requirement_skips_orphan_check(client, project):
+    """Derivation exempts a requirement from the orphan-parent check.
+
+    The exemption follows `cascade_from` — the link that actually records what
+    a requirement was derived from — rather than the `derived` boolean it
+    replaced, which asserted the same thing with less information and could
+    disagree with it.
+    """
     from app.services.yaml_store import YamlStore
     from app.core.config import settings
     from pathlib import Path
 
     store = YamlStore(Path(settings.data_root) / project)
-    store.create_requirement({"id": "REQ-DERIVED", "name": "Derived", "description": "No parent needed", "derived": True, "parent": "NONEXISTENT"})
+    store.create_requirement({"id": "REQ-SOURCE", "name": "Source", "description": "d"})
+    store.create_requirement({"id": "REQ-CASCADED", "name": "Cascaded", "description": "d",
+                              "cascade_from": "REQ-SOURCE", "parent": "NONEXISTENT"})
+    # No cascade_from: the dangling parent must still be reported.
+    store.create_requirement({"id": "REQ-ORPHAN", "name": "Orphan", "description": "d",
+                              "parent": "NONEXISTENT"})
 
     from app.services.integrity import IntegrityChecker
-    checker = IntegrityChecker(store)
-    result = checker.check_all()
-    assert not any(i["type"] == "orphan_parent" and i["id"] == "REQ-DERIVED" for i in result["issues"])
+    issues = IntegrityChecker(store).check_all()["issues"]
+    orphans = {i["id"] for i in issues if i["type"] == "orphan_parent"}
+    assert "REQ-CASCADED" not in orphans
+    assert "REQ-ORPHAN" in orphans
 
 
 def test_non_normative_skips_verification_check(client, project):

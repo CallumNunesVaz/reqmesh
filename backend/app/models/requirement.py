@@ -174,7 +174,6 @@ class Requirement(BaseModel):
     allocated_to: str = ""
     baselines: list[str] = Field(default_factory=list)
     reviewed: Optional[str] = None
-    derived: bool = False
     normative: bool = True
     priorities: dict[str, int] = Field(default_factory=dict)
     needs: list[str] = Field(default_factory=list)
@@ -216,7 +215,6 @@ class RequirementCreate(BaseModel):
     allocated_to: str = ""
     baselines: list[str] = Field(default_factory=list)
     reviewed: Optional[str] = None
-    derived: bool = False
     normative: bool = True
     priorities: dict[str, PriorityScore] = Field(default_factory=dict)
     needs: list[str] = Field(default_factory=list)
@@ -249,7 +247,6 @@ class RequirementUpdate(BaseModel):
     allocated_to: Optional[str] = None
     baselines: Optional[list[str]] = None
     reviewed: Optional[str] = None
-    derived: Optional[bool] = None
     normative: Optional[bool] = None
     priorities: Optional[dict[str, PriorityScore]] = None
     needs: Optional[list[str]] = None

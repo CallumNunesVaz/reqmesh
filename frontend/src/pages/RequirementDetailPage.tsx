@@ -1243,13 +1243,6 @@ export default function RequirementDetailPage() {
               </div>
               <div>
                 <label className="label flex items-center justify-between">
-                  <span>Derived</span>
-                  <input type="checkbox" checked={req.derived || false} onChange={(e) => save({ derived: e.target.checked })} disabled={!editable} className="w-4 h-4 rounded border-muted-foreground/30" />
-                </label>
-                <div className="text-[10px] text-muted-foreground mt-0.5">No parent link required</div>
-              </div>
-              <div>
-                <label className="label flex items-center justify-between">
                   <span>Normative</span>
                   <input type="checkbox" checked={req.normative !== false} onChange={(e) => save({ normative: e.target.checked })} disabled={!editable} className="w-4 h-4 rounded border-muted-foreground/30" />
                 </label>
