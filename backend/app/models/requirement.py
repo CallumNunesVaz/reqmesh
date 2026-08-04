@@ -16,7 +16,7 @@ a type outside this enum rather than coercing it to ``functional``.
 
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Optional
+from typing import Annotated, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -71,6 +71,17 @@ class MeasureKind(str, Enum):
     MOE = "MOE"
     MOP = "MOP"
     TPM = "TPM"
+
+
+#: A stakeholder's score for a requirement, 0-5.
+#:
+#: Bounded on the **write** models only. The read model must still load a
+#: project whose YAML predates the rescale — the same reason
+#: `normalise_requirement_on_load` does not coerce unrecognised values. A
+#: legacy 0-10 score stays on disk until someone edits that requirement, at
+#: which point the slider bounds it and the save writes the new value. Nothing
+#: rewrites history behind the user's back.
+PriorityScore = Annotated[int, Field(ge=0, le=5)]
 
 
 class Relation(BaseModel):
@@ -207,7 +218,7 @@ class RequirementCreate(BaseModel):
     reviewed: Optional[str] = None
     derived: bool = False
     normative: bool = True
-    priorities: dict[str, int] = Field(default_factory=dict)
+    priorities: dict[str, PriorityScore] = Field(default_factory=dict)
     needs: list[str] = Field(default_factory=list)
     references: list[Reference] = Field(default_factory=list)
     system_states: list[str] = Field(default_factory=list)
@@ -240,7 +251,7 @@ class RequirementUpdate(BaseModel):
     reviewed: Optional[str] = None
     derived: Optional[bool] = None
     normative: Optional[bool] = None
-    priorities: Optional[dict[str, int]] = None
+    priorities: Optional[dict[str, PriorityScore]] = None
     needs: Optional[list[str]] = None
     references: Optional[list[Reference]] = None
     system_states: Optional[list[str]] = None
