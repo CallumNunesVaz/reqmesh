@@ -522,6 +522,13 @@ Key environment variables:
 | POST | `/auth/verify-email` | Verify email address |
 | POST | `/auth/resend-verification` | Re-send verification email |
 
+### System (admin)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/system/demo-project` | Whether the bundled example is loaded, and how many requirements re-seeding would replace |
+| POST | `/api/system/demo-project/reseed` | Re-seed the bundled example. 409 unless `force` is sent once the project exists — re-seeding deletes it, git history included |
+
 PUT/PATCH endpoints apply partial updates: only fields present in the body change, and explicitly sending `null` clears a nullable field. PATCH on `/comments` supports `{"resolved": true}`. List endpoints return `{"items": [...], "total": N, "offset": O, "limit": L}` for pagination.
 
 ## Project Data Format
