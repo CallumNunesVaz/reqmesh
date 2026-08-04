@@ -85,6 +85,44 @@ def normalize_baseline_defs(baselines: list) -> list[dict]:
     return result
 
 
+def normalize_system_states(states: list) -> list[dict]:
+    """Normalize project system-state definitions to {name, description, order}.
+
+    Mirrors normalize_baseline_defs, including its reasoning: a bare string is
+    accepted so a project that listed state names before they had descriptions
+    keeps working, and ``order`` is the list position rather than a stored field,
+    so `_meta.yaml` cannot express a sequence that disagrees with itself.
+
+    States are what a requirement's ``system_states`` refers to by name. Defining
+    them on the project is what lets the requirement editor offer a list instead
+    of a comma-separated free-text box, where a typo silently creates a state
+    nobody can find again.
+    """
+    result: list[dict] = []
+    for item in (states or []):
+        if isinstance(item, str):
+            item = {"name": item}
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name", "")).strip()
+        if not name:
+            continue
+        result.append({
+            "name": name,
+            "description": item.get("description", ""),
+            "order": len(result) + 1,
+        })
+    return result
+
+
+def serialize_system_states(defs: list[dict]) -> list[dict]:
+    """The `_meta.yaml` form: ``order`` dropped, empty descriptions omitted."""
+    return [
+        {k: v for k, v in d.items() if k != "order" and (k == "name" or v)}
+        for d in defs
+    ]
+
+
 def normalize_stakeholders(stakeholders: list) -> list[dict]:
     """Normalize project stakeholder definitions to {name, weight}.
 

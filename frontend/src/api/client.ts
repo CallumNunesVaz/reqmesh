@@ -98,6 +98,8 @@ export interface Project {
   baselines?: (string | BaselineDef)[];
   /** Only present on `getProject`. Normalized server-side, so always objects. */
   stakeholders?: StakeholderDef[];
+  /** Only present on `getProject`. Normalized server-side. */
+  system_states?: SystemStateDef[];
   risk_matrix?: RiskMatrix;
 }
 
@@ -151,6 +153,16 @@ export interface SearchResult {
   snippet: string;
   score: number;
   status: string;
+}
+
+/** A project-level system state. `requirement.system_states` holds these by
+ *  name, so defining them is what lets the editor offer a list rather than a
+ *  free-text box where a typo makes a state nobody can find again. */
+export interface SystemStateDef {
+  name: string;
+  description: string;
+  /** 1-based position, derived from storage order server-side. Never sent back. */
+  order: number;
 }
 
 export interface StakeholderDef { name: string; weight: number }
