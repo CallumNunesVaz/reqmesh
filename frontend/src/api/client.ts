@@ -455,12 +455,44 @@ export interface TraceLink {
   type: string;
 }
 
+/** Offered in the UI. Unlike the risk vocabularies this is not per-project. */
+export const CR_URGENCIES = ['low', 'normal', 'high', 'emergency'] as const;
+
+/** One field's redline. `before` is read live from the target, not stored, so
+ *  the diff always shows what would actually change now. */
+export interface CRFieldDiff { before: unknown; after: unknown }
+
+/** The redline for one change request, computed server-side. */
+export interface CRRedline {
+  id: string;
+  targets: Array<{
+    id: string;
+    name: string;
+    /** Field -> {before, after}. Empty when the proposal matches the target
+     *  already — a request that would change nothing. */
+    diffs: Record<string, CRFieldDiff>;
+    /** True when the target has moved since the request was raised, so
+     *  executing would overwrite edits the requester never saw. */
+    stale: boolean;
+  }>;
+  /** True when any target is stale; execute is refused while this holds. */
+  blocked: boolean;
+}
+
 export interface ChangeRequest {
   id: string;
   title: string;
   description: string;
+  /** Why the change is needed, as opposed to `description` — what it is. */
+  rationale: string;
+  urgency: string;
   affected_requirements: string[];
+  /** Target id -> {field: proposed value}. */
+  changes: Record<string, Record<string, unknown>>;
+  /** Target id -> fingerprint when raised; the staleness guard for execute. */
+  base_fingerprints: Record<string, string>;
   status: string;
+  /** The requester. There is deliberately no separate `requester` field. */
   submitted_by: string;
   reviewed_by: string;
   approved_by: string;
