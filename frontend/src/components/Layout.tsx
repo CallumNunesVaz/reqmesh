@@ -21,6 +21,7 @@ import { useUndoStore } from '../store/undo';
 import { api, type PresenceUser } from '../api/client';
 import { WhatIfProvider } from './WhatIfContext';
 import WhatIfPanel from './WhatIfPanel';
+import { ToastProvider } from './Toast';
 
 const GraphPaneCtx = createContext({ graphOpen: false, toggleGraph: () => {} });
 export function useGraphPane() { return useContext(GraphPaneCtx); }
@@ -295,6 +296,7 @@ export default function Layout() {
   const canToggleEdit = useAuthStore((s) => s.canToggleEdit());
 
   return (
+    <ToastProvider>
     <GraphPaneCtx.Provider value={{ graphOpen, toggleGraph }}>
     <ContextPaneCtx.Provider value={contextPaneValue}>
     <SelectedReqCtx.Provider value={{ selectedReqId, selectReq, derivationReq, showDerivation }}>
@@ -578,5 +580,6 @@ export default function Layout() {
     </SelectedReqCtx.Provider>
     </ContextPaneCtx.Provider>
     </GraphPaneCtx.Provider>
+    </ToastProvider>
   );
 }

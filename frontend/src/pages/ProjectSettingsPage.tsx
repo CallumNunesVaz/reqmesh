@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Save, CheckCircle2, Settings, X, Plus, RotateCw, GitBranch, Clock, User } from 'lucide-react';
+import { ArrowLeft, Save, Settings, X, Plus, RotateCw, GitBranch, Clock, User } from 'lucide-react';
 import { api, type StakeholderDef, type RiskMatrix } from '../api/client';
 import { useAuthStore } from '../store/auth';
+import { useToasts } from '../components/Toast';
 
 interface NamingRule {
   prefix_length: number;
@@ -37,13 +38,12 @@ export default function ProjectSettingsPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
   const editable = useAuthStore((s) => s.canEdit());
+  const { addToast } = useToasts();
 
   const [projectName, setProjectName] = useState('');
   const [naming, setNaming] = useState<Record<string, NamingRule>>({});
   const [originalName, setOriginalName] = useState('');
   const [saving, setSaving] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [error, setError] = useState('');
 
   // Git settings
   const [gitUserName, setGitUserName] = useState('');
@@ -189,7 +189,7 @@ export default function ProjectSettingsPage() {
       setGitCommitChangesThreshold(git.commit_changes_threshold || 0);
       setStakeholders(p.stakeholders || []);
       setRiskMatrix(p.risk_matrix || null);
-    }).catch((err: any) => setError(err.message));
+    }).catch((err: any) => addToast('error', `Could not load project settings: ${err.message}`));
     loadGitHistory();
   }, [projectId]);
 
@@ -208,7 +208,6 @@ export default function ProjectSettingsPage() {
 
   const save = async () => {
     if (!projectId) return;
-    setError('');
     setSaving(true);
     try {
       await api.updateProject(projectId, {
@@ -225,10 +224,9 @@ export default function ProjectSettingsPage() {
         },
       });
       setOriginalName(projectName);
-      setSuccess(true);
-      setTimeout(() => setSuccess(false), 2000);
+      addToast('success', 'Settings saved');
     } catch (err: any) {
-      setError(err.message || 'Failed to save');
+      addToast('error', err.message || 'Failed to save');
     } finally {
       setSaving(false);
     }
@@ -237,7 +235,7 @@ export default function ProjectSettingsPage() {
   const dirty = projectName !== originalName;
 
   return (
-    <div className="max-w-3xl mx-auto p-8">
+    <div className="max-w-6xl mx-auto p-8">
       <div className="flex items-center gap-3 mb-6">
         <button onClick={() => navigate(`/project/${projectId}`)} className="btn-secondary p-2">
           <ArrowLeft size={16} />
@@ -249,15 +247,6 @@ export default function ProjectSettingsPage() {
           <p className="text-sm text-muted-foreground mt-1">Configuration for {projectId}</p>
         </div>
       </div>
-
-      {success && (
-        <div className="mb-4 px-4 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm flex items-center gap-2">
-          <CheckCircle2 size={14} /> Saved
-        </div>
-      )}
-      {error && (
-        <div className="mb-4 px-4 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">{error}</div>
-      )}
 
       {/* Project name */}
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="card p-5 mb-6">
