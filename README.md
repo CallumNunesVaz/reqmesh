@@ -17,7 +17,10 @@ An open-source, web-based requirements management tool with:
 - **Deep traceability** — shallow and deep coverage analysis, code-to-requirement tag scanning, cycle detection via Tarjan's SCC
 - **Fingerprint-based review** — content-hash auto-invalidates reviews when normative content changes; no manual bookkeeping
 - **Quality linting** — inline requirement writing feedback (weak words, placeholders, measurability checks) based on INCOSE / EARS / ISO 29148
-- **Planning & estimation** — per-stakeholder priority and a prioritized backlog
+- **Risk management** — two-dimensional risk matrix (severity × likelihood, re-tunable project-wide), bingo grid of risk counts, and bi-directional requirement links (threatens / mitigated-by)
+- **Baselines** — ordered, dated milestones with freeze/diff; a baseline is not a label — definitions carry a sequence and due date, and orphans are surfaced rather than hidden
+- **Change control** — formal change requests with before/after redlines; executing a request whose target has changed since it was raised is refused to prevent overwriting unseen edits
+- **Planning & estimation** — per-stakeholder priority (0-5 slider) rolled into a Pugh matrix, prioritized backlog, and decision records
 - **Rich text editing** — TipTap editor with image support, paste sanitization, and live word count
 - **Guided mode** — toggleable contextual help for every section of the application
 
@@ -416,16 +419,62 @@ Key environment variables:
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET/POST | `/api/projects` | List/create projects |
-| GET/DELETE | `/api/projects/{id}` | Get/delete project |
-| GET | `/api/projects/{id}/requirements` | List/search (`?search=&type=&status=&priority=&offset=&limit=`) |
-| POST | `/api/projects/{id}/requirements` | Create requirement |
+| GET/PATCH/DELETE | `/api/projects/{id}` | Get/update settings/delete project |
+| GET | `/api/projects/{id}/workflow` | Workflow status-transition config |
+| GET/POST | `/api/projects/{id}/requirements` | List/search or create |
+| GET/PUT/DELETE | `/api/projects/{id}/requirements/{req_id}` | Get/update/delete requirement |
 | GET | `/api/projects/{id}/requirements/tree` | Requirement hierarchy |
 | GET | `/api/projects/{id}/requirements/next-uid` | Next free UID |
-| GET/PUT/DELETE | `/api/projects/{id}/requirements/{req_id}` | Get/update/delete |
 | POST | `/api/projects/{id}/requirements/{req_id}/cascade` | Cascade to children |
 | POST | `/api/projects/{id}/requirements/{req_id}/break-cascade` | Break cascade link |
-| GET/POST/PUT/DELETE | `/api/projects/{id}/components` | Component CRUD |
+| GET/POST | `/api/projects/{id}/specifications` | List/create specifications |
+| GET/PUT/DELETE | `/api/projects/{id}/specifications/{spec_id}` | Get/update/delete specification |
+| GET/POST | `/api/projects/{id}/components` | List/create components |
+| GET/PUT/DELETE | `/api/projects/{id}/components/{component_id}` | Get/update/delete component |
 | GET | `/api/projects/{id}/components/tree` | Component hierarchy |
+| GET | `/api/projects/{id}/components/export/bom` | Bill of materials export |
+| GET/POST | `/api/projects/{id}/verification` | List/create verification cases |
+| GET/PUT/DELETE | `/api/projects/{id}/verification/{vc_id}` | Get/update/delete verification case |
+| POST | `/api/projects/{id}/verification/{vc_id}/run` | Record a test execution |
+| GET/POST | `/api/projects/{id}/baselines` | List/create baselines |
+| PATCH/DELETE | `/api/projects/{id}/baselines/{name}` | Rename/delete baseline |
+| PUT | `/api/projects/{id}/baselines/order` | Rewrite the baseline sequence |
+| GET/POST | `/api/projects/{id}/definitions` | List/create SysML constraint/calc definitions |
+| PUT/DELETE | `/api/projects/{id}/definitions/{def_id}` | Update/delete definition |
+| GET/POST | `/api/projects/{id}/analysis` | List/create analysis cases |
+| PUT/DELETE | `/api/projects/{id}/analysis/{case_id}` | Update/delete analysis case |
+| GET | `/api/projects/{id}/analysis/{case_id}/run` | Run an analysis case |
+| GET/PUT | `/api/projects/{id}/traces` | Get/update the trace matrix |
+| GET | `/api/projects/{id}/trace-model` | Every declared relationship in the project |
+
+### Change Control
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET/POST | `/api/projects/{id}/change-requests` | List/create change requests |
+| PUT/DELETE | `/api/projects/{id}/change-requests/{cr_id}` | Update/delete change request |
+| GET | `/api/projects/{id}/change-requests/{cr_id}/redline` | Before/after per affected target |
+| POST | `/api/projects/{id}/change-requests/{cr_id}/execute` | Apply a change request |
+| POST | `/api/projects/{id}/change-requests/{cr_id}/reject` | Reject a change request |
+| GET/POST | `/api/projects/{id}/comments` | List/create comments |
+| PATCH/DELETE | `/api/projects/{id}/comments/{comment_id}` | Resolve/delete comment |
+| GET/POST | `/api/projects/{id}/decisions` | List/create decision records |
+| PUT/DELETE | `/api/projects/{id}/decisions/{dec_id}` | Update/delete decision |
+| POST | `/api/projects/{id}/requirements/{req_id}/review` | Fingerprint baseline a requirement |
+| POST | `/api/projects/{id}/review-all` | Baseline all requirements |
+| GET | `/api/projects/{id}/unreviewed` | Requirements whose content changed since review |
+| GET | `/api/projects/{id}/requirements/{req_id}/fingerprint` | Current review fingerprint |
+| POST | `/api/projects/{id}/scan` | Scan source files for `[impl->REQ-ID]` coverage tags |
+| GET | `/api/projects/{id}/references/freshness` | Stale reference file detection |
+
+### Risks
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET/POST | `/api/projects/{id}/risks` | List/create risks |
+| PUT/DELETE | `/api/projects/{id}/risks/{risk_id}` | Update/delete risk |
+| GET | `/api/projects/{id}/risk-matrix` | Project risk matrix (severity × likelihood) |
+| GET | `/api/projects/{id}/risk-bingo` | Severity × likelihood grid of risk counts |
 
 ### Analysis & Validation
 
@@ -437,23 +486,16 @@ Key environment variables:
 | GET | `/api/projects/{id}/metrics` | Quality, traceability, status distribution |
 | GET | `/api/projects/{id}/gap-analysis` | Missing descriptions, rationales, sources, links |
 | GET | `/api/projects/{id}/conflicts` | Explicit conflicts + duplicate names |
+| GET | `/api/projects/{id}/compliance` | Compliance status across standards |
 | GET | `/api/projects/{id}/quality` | Per-requirement quality scores and findings |
+| GET | `/api/projects/{id}/pugh` | Pugh matrix over the best-valued requirements |
 | GET | `/api/projects/{id}/backlog` | Prioritized backlog |
 | GET | `/api/projects/{id}/evaluation` | Parametric constraint evaluation (design + measured) |
 | POST | `/api/projects/{id}/evaluation/impact` | What-if preview: re-evaluate with hypothetical overrides + dependency-ordered impact trace |
 | GET | `/api/projects/{id}/requirements/{rid}/impact` | Impact analysis (dependents + cascades) |
 | GET | `/api/projects/{id}/requirements/{rid}/history` | Field-level change history |
-
-### Review & Traceability
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/projects/{id}/requirements/{rid}/review` | Fingerprint baseline a requirement |
-| POST | `/api/projects/{id}/review-all` | Baseline all requirements |
-| GET | `/api/projects/{id}/unreviewed` | Requirements whose content changed since review |
 | GET | `/api/projects/{id}/suspect-links` | Links whose target changed since review |
-| POST | `/api/projects/{id}/scan` | Scan source files for `[impl->REQ-ID]` coverage tags |
-| GET | `/api/projects/{id}/references/freshness` | Stale reference file detection |
+| GET | `/api/projects/{id}/search` | Full-text search across all entities |
 
 ### Publishing & Interchange
 
@@ -465,12 +507,14 @@ Key environment variables:
 | POST | `/api/projects/{id}/baselines/{name}/freeze` | Freeze a baseline snapshot |
 | GET | `/api/projects/{id}/baselines/{name}/diff` | Diff current state against baseline |
 
-### Real-time & Auth
+### Real-time, Git & Auth
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/projects/{id}/events` | SSE stream of live changes + presence |
 | GET | `/api/projects/{id}/presence` | Current project viewers |
+| GET | `/api/projects/{id}/git/log` | Recent commits |
+| POST | `/api/projects/{id}/git/test-remote` | Test connectivity to the configured remote |
 | POST | `/auth/login` | Authenticate (rate-limited 5/min) |
 | POST | `/auth/register` | Self-registration |
 | POST | `/auth/forgot-password` | Request password reset email |

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { REQUIREMENT_TYPES, REQUIREMENT_TYPE_META, reqTypeClass } from '../lib/requirementTypes';
-import { X, BookOpen, Boxes, FileText, CheckCircle2, GitBranch, Sigma, Sparkles, ShieldCheck, TrendingUp, Keyboard, Terminal, Globe, Search, Info, AlertTriangle, Lightbulb, ArrowUpCircle } from 'lucide-react';
+import { X, BookOpen, Boxes, FileText, CheckCircle2, GitBranch, Sigma, Sparkles, ShieldCheck, TrendingUp, Keyboard, Terminal, Globe, Search, Info, AlertTriangle, Lightbulb, ArrowUpCircle, Calendar, GitPullRequest } from 'lucide-react';
 
 type DocSection = { id: string; icon: typeof BookOpen; title: string; keywords: string; render: () => ReactNode };
 
@@ -145,6 +145,8 @@ const DOCS: DocSection[] = [
           <LI><strong className="text-card-foreground">Evaluate constraints</strong> with a SysML-style parametric engine</LI>
           <LI><strong className="text-card-foreground">Track quality</strong> with automated linting against INCOSE / EARS guidelines</LI>
           <LI><strong className="text-card-foreground">Review and baseline</strong> with content-fingerprint change control</LI>
+          <LI><strong className="text-card-foreground">Manage risks</strong> with a re-tunable severity × likelihood matrix and bingo grid</LI>
+          <LI><strong className="text-card-foreground">Control changes</strong> with formal change requests, redlines, and execution guards</LI>
           <LI><strong className="text-card-foreground">Import/export</strong> via ReqIF 1.2, SysML v2, CSV, TSV, and XLSX</LI>
           <LI><strong className="text-card-foreground">Collaborate</strong> in real-time with live change streaming and presence</LI>
         </UL>
@@ -390,6 +392,9 @@ const DOCS: DocSection[] = [
         <H3>Broken Chains</H3>
         <P>A requirement that is shallow-covered but not deep-covered has a <strong className="text-card-foreground">broken chain</strong> — one of its coverers is missing its own coverage. The Metrics page identifies these gaps.</P>
 
+        <H3>Trace Matrix</H3>
+        <P>The Trace Matrix page shows <strong className="text-card-foreground">every relationship</strong> declared in the link registry, not only hand-authored <InlineCode>traces.yaml</InlineCode> links — any relation on any entity appears. Hierarchy edges (parent/child) are excluded on purpose: a parent/child edge is where a requirement lives, not what it traces to.</P>
+
         <H3>Code Scanning</H3>
         <P>Run <InlineCode>POST /api/projects/{'{id}'}/scan</InlineCode> or the CLI <InlineCode>scan</InlineCode> command to scan source files for coverage tags:</P>
         <Code>[impl-&gt;dsn~validate-request~1]{"\n"}@covers REQ-AUTH-001</Code>
@@ -423,6 +428,71 @@ const DOCS: DocSection[] = [
           <LI><strong className="text-card-foreground">derived: true</strong> — no parent link needed (e.g. external regulatory mandate)</LI>
           <LI><strong className="text-card-foreground">normative: false</strong> — excluded from coverage and gap analysis; rendered as section headings in published output</LI>
         </UL>
+      </>
+    ),
+  },
+  {
+    id: 'baselines', icon: Calendar, title: 'Baselines',
+    keywords: 'baseline freeze snapshot diff order milestone date sequence orphan',
+    render: () => (
+      <>
+        <H2>Baselines</H2>
+        <P>A baseline is an <strong className="text-card-foreground">ordered, dated milestone</strong>, not a label. Definitions live in project settings, carry a due date, and the sequence is the order they are stored in — moving a baseline up or down rewrites the order via <InlineCode>PUT /api/projects/{'{id}'}/baselines/order</InlineCode>.</P>
+
+        <H3>Constraints</H3>
+        <UL>
+          <LI>Due dates <strong className="text-card-foreground">must not go backwards</strong> in the sequence — each baseline must be dated later than the one before it.</LI>
+          <LI><strong className="text-card-foreground">Freezing</strong> takes a snapshot of every requirement's current state; the <strong className="text-card-foreground">diff</strong> endpoint reports what has drifted since.</LI>
+          <LI>A baseline name used on a requirement but never defined in project settings is an <strong className="text-card-foreground">orphan</strong> — it still appears, marked, so it can be fixed rather than silently hidden.</LI>
+        </UL>
+
+        <Callout variant="tip">Define baselines in Project Settings first, then freeze them. The freeze snapshot is what is compared against the current state — editing a baseline definition after freezing does not retroactively change the snapshot.</Callout>
+      </>
+    ),
+  },
+  {
+    id: 'risks', icon: AlertTriangle, title: 'Risks',
+    keywords: 'risk matrix severity likelihood rating bingo grid threatens mitigated-by detection level',
+    render: () => (
+      <>
+        <H2>Risk Management</H2>
+        <P>Risks carry a <strong className="text-card-foreground">severity</strong> and <strong className="text-card-foreground">likelihood</strong> — the rating is <strong className="text-card-foreground">derived from the project matrix on read</strong> and never stored, so re-tuning the matrix re-rates every risk at once without touching any risk file.</P>
+
+        <H3>Why the matrix is two-dimensional</H3>
+        <P>Detection level is recorded and shown, but it deliberately does <strong className="text-card-foreground">not</strong> affect the rating. The matrix is two-dimensional (severity × likelihood); folding in a third axis would silently re-rate every existing risk whenever the detection scale is adjusted, breaking the guarantee that re-tuning only changes the matrix.</P>
+
+        <H3>Links to requirements</H3>
+        <P>A risk links to requirements in <strong className="text-card-foreground">two directions</strong>:</P>
+        <UL>
+          <LI><strong className="text-card-foreground">threatens</strong> — this risk jeopardises the requirement</LI>
+          <LI><strong className="text-card-foreground">mitigated-by</strong> — this requirement reduces the risk</LI>
+        </UL>
+        <P>Both directions are editable from either side — when you link a risk to a requirement, the requirement automatically shows the risk link.</P>
+
+        <H3>Risk Bingo</H3>
+        <P>The <strong className="text-card-foreground">Risk Bingo</strong> page (<InlineCode>GET /api/projects/{'{id}'}/risk-bingo</InlineCode>) renders a severity × likelihood grid showing the count of risks in each cell, so clusters are immediately visible.</P>
+      </>
+    ),
+  },
+  {
+    id: 'change-requests', icon: GitPullRequest, title: 'Change Requests',
+    keywords: 'change request redline execute reject proposal diff before after target guard',
+    render: () => (
+      <>
+        <H2>Change Requests</H2>
+        <P>A change request carries the <strong className="text-card-foreground">proposal itself</strong>, so it can show a <strong className="text-card-foreground">before/after redline</strong> — what each affected target looked like when the request was raised, and what it will look like after the change is applied.</P>
+
+        <H3>Live before-images</H3>
+        <P>The "before" is read live rather than stored, so the diff always reflects the <strong className="text-card-foreground">current state</strong> of every target. This means executing a change request whose target has changed since it was raised is <strong className="text-card-foreground">refused</strong> — the requester must review the updated target and adjust the proposal before re-submitting. This prevents silently overwriting edits the requester never saw.</P>
+
+        <H3>Actions</H3>
+        <UL>
+          <LI><strong className="text-card-foreground">Execute</strong> (<InlineCode>POST …/execute</InlineCode>) — applies the proposal to each affected target. Refused if any target has changed since the request was raised.</LI>
+          <LI><strong className="text-card-foreground">Reject</strong> (<InlineCode>POST …/reject</InlineCode>) — marks the request as rejected without applying changes.</LI>
+          <LI><strong className="text-card-foreground">Redline</strong> (<InlineCode>GET …/redline</InlineCode>) — returns a per-target diff showing the before/after text.</LI>
+        </UL>
+
+        <Callout variant="info">Change requests are the <strong className="text-card-foreground">propose</strong> tier — contributors can raise and edit them, but only maintainers can execute or reject.</Callout>
       </>
     ),
   },
@@ -503,18 +573,19 @@ const DOCS: DocSection[] = [
   },
   {
     id: 'planning', icon: TrendingUp, title: 'Planning & Estimation',
-    keywords: 'backlog stakeholder priorities burndown decision records estimation',
+    keywords: 'backlog stakeholder priorities burndown decision records estimation pugh',
     render: () => (
       <>
         <H2>Planning & Estimation</H2>
         <P>Lightweight project-planning signals on top of requirements.</P>
 
         <H3>Stakeholder Priorities</H3>
-        <P>Assign per-stakeholder scores:</P>
+        <P>Assign per-stakeholder scores on a <strong className="text-card-foreground">0–5 slider</strong> — each requirement carries one score per stakeholder:</P>
         <Code>{`priorities:
   development: 5
-  customers: 8
-  safety: 10`}</Code>
+  customers: 3
+  safety: 4`}</Code>
+        <P>Scores roll up into a <strong className="text-card-foreground">Pugh matrix</strong> on the Metrics page, ranking requirements by combined stakeholder value.</P>
 
         <H3>Backlog</H3>
         <P><InlineCode>GET /api/projects/{'{id}'}/backlog</InlineCode> returns requirements sorted by a combined priority function. Filter by status or sort by priority.</P>
@@ -565,6 +636,9 @@ const DOCS: DocSection[] = [
           <LI><strong className="text-card-foreground">merge</strong> (default) — creates new entities, updates matching IDs</LI>
           <LI><strong className="text-card-foreground">replace</strong> — wipes existing requirements first, then imports</LI>
         </UL>
+
+        <H3>Publishing & Scoping</H3>
+        <P>When publishing a report, you can scope it by <strong className="text-card-foreground">component subtree</strong> as well as by the functional requirement hierarchy — the report only includes requirements allocated to the chosen scope. A reference the document cannot resolve is <strong className="text-card-foreground">labelled</strong> to distinguish "not in this document" (widen the scope) from "unresolved reference" (a dangling link), so you know whether the gap is a scope choice or an error.</P>
 
         <H3>Export</H3>
         <P>Access via the <strong className="text-card-foreground">Export</strong> button in the header, or:</P>
@@ -802,6 +876,8 @@ const DOCS: DocSection[] = [
     ),
   },
 ];
+
+export const DOC_SECTION_IDS: string[] = DOCS.map((s) => s.id);
 
 /* ── Documentation panel ────────────────────────────────────────────────── */
 
