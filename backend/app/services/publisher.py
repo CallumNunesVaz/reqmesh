@@ -42,7 +42,8 @@ class Publisher:
         "parameters", "verification_details", "system_states",
     ]
 
-    def __init__(self, store, subsystems: list[str] | None = None):
+    def __init__(self, store, subsystems: list[str] | None = None,
+                 components: list[str] | None = None):
         self.store = store
         self.project_id = store.root.name
         self.meta = store.read_meta()
@@ -56,6 +57,42 @@ class Publisher:
         self.now_str = self.now.strftime("%Y-%m-%d %H:%M UTC")
         self._toc = []  # list of (level, label, anchor) for TOC
 
+        # Record every entity id in the project before any scope filter, so
+        # _unresolved_suffix can distinguish "filtered out" from "not in the
+        # project at all".
+        self._project_ids: set[str] = set()
+        for r in all_reqs:
+            self._project_ids.add(r["id"])
+        for v in self.vcs:
+            self._project_ids.add(v["id"])
+        for c in self.components:
+            self._project_ids.add(c["id"])
+        for s in self.specs:
+            self._project_ids.add(s["id"])
+
+        # ── Component scope: expand the component tree, collect satisfied reqs ──
+        comp_req_ids: set[str] | None = None
+        if components is not None:
+            comp_ids_expanded: set[str] = set()
+            def _collect_component(root_id):
+                # Guard on the visited set, not just on arrival: component YAML
+                # is hand-editable and arrives by git pull, so a self-parent or
+                # a parent cycle is reachable without the API ever allowing it,
+                # and would otherwise recurse until the stack gives out.
+                if root_id in comp_ids_expanded:
+                    return
+                comp_ids_expanded.add(root_id)
+                for c in self.components:
+                    if c.get("parent") == root_id:
+                        _collect_component(c["id"])
+            for cid in components:
+                _collect_component(cid)
+            comp_req_ids = set()
+            for c in self.components:
+                if c["id"] in comp_ids_expanded:
+                    for rid in c.get("satisfies", []):
+                        comp_req_ids.add(rid)
+
         if subsystems is not None:
             ids = set()
             def collect(root_id):
@@ -65,6 +102,10 @@ class Publisher:
                         collect(r["id"])
             for sid in subsystems:
                 collect(sid)
+
+            if comp_req_ids is not None:
+                ids &= comp_req_ids
+
             self.reqs = [r for r in all_reqs if r["id"] in ids]
             self.traces = {
                 "links": [l for l in self.traces.get("links", [])
@@ -72,6 +113,15 @@ class Publisher:
             }
             self.vcs = [v for v in self.vcs if any(
                 rid in ids for rid in v.get("verified_requirements", [])
+            )]
+        elif comp_req_ids is not None:
+            self.reqs = [r for r in all_reqs if r["id"] in comp_req_ids]
+            self.traces = {
+                "links": [l for l in self.traces.get("links", [])
+                          if l.get("source") in comp_req_ids and l.get("target") in comp_req_ids]
+            }
+            self.vcs = [v for v in self.vcs if any(
+                rid in comp_req_ids for rid in v.get("verified_requirements", [])
             )]
         else:
             self.reqs = all_reqs
@@ -86,9 +136,21 @@ class Publisher:
     def _badge(self, status: str) -> str:
         return f'<span class="badge badge-{esc(status, quote=True)}">{esc(status)}</span>'
 
+    def _unresolved_suffix(self, entity_id: str) -> str:
+        """'' when the id is in this document, else the reason it is not."""
+        if (entity_id in self._all_req_ids or entity_id in self._vc_by_id or
+                entity_id in self._comp_by_id or entity_id in self._spec_by_id):
+            return ""
+        if entity_id in self._project_ids:
+            return " (not in this document)"
+        return " (unresolved reference)"
+
     def _link(self, entity_id: str, label: str | None = None) -> str:
         """Hyperlink to a requirement, VC, component, spec, or risk by ID."""
         display = label or entity_id
+        suffix = self._unresolved_suffix(entity_id)
+        if suffix:
+            return f'<span class="entity-missing" style="opacity:.7">{esc(display)}{esc(suffix)}</span>'
         if entity_id in self._all_req_ids:
             return f'<a class="entity-link" href="#req-{esc(entity_id, quote=True)}">{esc(display)}</a>'
         if entity_id in self._vc_by_id:
@@ -102,6 +164,9 @@ class Publisher:
     def _latex_link(self, entity_id: str, label: str | None = None) -> str:
         """LaTeX hyperlink to a requirement, VC, component, spec, or risk anchor."""
         display = label or entity_id
+        suffix = self._unresolved_suffix(entity_id)
+        if suffix:
+            return f"{_latex_escape(display)}{_latex_escape(suffix)}"
         if entity_id in self._all_req_ids:
             prefix = "req"
         elif entity_id in self._vc_by_id:
@@ -784,11 +849,14 @@ class Publisher:
             rels = r.get("relations", [])
             if rels:
                 md += "**Relations:** "
-                md += ", ".join(f"{rel['type']}→{rel['target']}" for rel in rels)
+                md += ", ".join(
+                    f"{rel['type']}→{rel['target']}{self._unresolved_suffix(rel['target'])}"
+                    for rel in rels
+                )
                 md += "\n\n"
             parent = r.get("parent")
             if parent:
-                md += f"**Parent:** {parent}\n\n"
+                md += f"**Parent:** {parent}{self._unresolved_suffix(parent)}\n\n"
         return md
 
     def _latex_changelog(self, since: str, until: str) -> list[str]:
