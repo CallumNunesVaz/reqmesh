@@ -1145,18 +1145,38 @@ def _requirements() -> list[dict]:
 # ── verification cases ────────────────────────────────────────────────────────
 
 VERIFICATION_CASES = [
+    # passed — completed successfully
     {"id": "VCAF0001", "name": "Structural Static Test", "method": "test",
-     "description": "Static load test of airframe to ultimate load per FAR 23.305"},
+     "description": "Static load test of airframe to ultimate load per FAR 23.305",
+     "status": "passed", "result": "All test points passed. Ultimate load sustained with no permanent deformation."},
+    {"id": "VCPR0001", "name": "Engine Run-Up Test", "method": "test",
+     "description": "Full-power engine run at 2700 RPM, magneto drop check, fuel flow verification",
+     "status": "passed", "result": "2700 RPM achieved, mag drop 125 RPM (limit 150), fuel flow 15.4 GPH."},
+    {"id": "VCSF0001", "name": "Stall Warning Calibration", "method": "test",
+     "description": "Stall warning horn activation verified 5-10 kn above stall in all configs",
+     "status": "passed", "result": "Horn activated at 55 KCAS (clean), 7 kn margin. All configs within spec."},
+    {"id": "VCPR0004", "name": "Fuel Injection Calibration", "method": "test",
+     "description": "Verify fuel flow balance within 0.5 GPH across all cylinders at 75 % power",
+     "status": "passed", "result": "Max imbalance 0.3 GPH across cylinders at 75 % power. Within 0.5 GPH limit."},
+
+    # failed — landed on a non-SRR requirement so it does not contradict frozen SRR
+    {"id": "VCAV0002", "name": "ADS-B Compliance Test", "method": "test",
+     "description": "ADS-B Out performance verification per 14 CFR 91.227, DO-260B",
+     "status": "failed", "result": "NIC dropped below 7 at low altitude due to GPS antenna masking. Re-test required."},
+
+    # in_progress
+    {"id": "VCPR0002", "name": "Fuel System Flow Test", "method": "test",
+     "description": "Fuel flow test at all flight attitudes and power settings per FAR 23.955",
+     "status": "in_progress"},
+    {"id": "VCEV0001", "name": "CO Detector Validation", "method": "test",
+     "description": "CO detector activation at 50 ±10 ppm, aural/visual alert verified",
+     "status": "in_progress"},
+
+    # pending — not yet started
     {"id": "VCAF0002", "name": "Crashworthiness Analysis", "method": "analysis",
      "description": "FAR 23.561 emergency landing dynamic FEA analysis"},
-    {"id": "VCPR0001", "name": "Engine Run-Up Test", "method": "test",
-     "description": "Full-power engine run at 2700 RPM, magneto drop check, fuel flow verification"},
-    {"id": "VCPR0002", "name": "Fuel System Flow Test", "method": "test",
-     "description": "Fuel flow test at all flight attitudes and power settings per FAR 23.955"},
     {"id": "VCAV0001", "name": "Avionics Integration Test", "method": "test",
      "description": "End-to-end G1000 NXi integration test: PFD/MFD/ADAHRS/GPS/COM"},
-    {"id": "VCAV0002", "name": "ADS-B Compliance Test", "method": "test",
-     "description": "ADS-B Out performance verification per 14 CFR 91.227, DO-260B"},
     {"id": "VCFC0001", "name": "Flight Control Free-Play Check", "method": "inspection",
      "description": "All control surfaces: free play < 0.125 inch, full travel verified"},
     {"id": "VCFC0002", "name": "Flutter Analysis", "method": "analysis",
@@ -1167,18 +1187,12 @@ VERIFICATION_CASES = [
      "description": "Essential bus endurance test: 30 minutes at 15 A load from full charge"},
     {"id": "VCFL0001", "name": "Fuel Flow Test", "method": "test",
      "description": "Fuel flow ≥ 14 GPH at max power, selector valve all positions"},
-    {"id": "VCSF0001", "name": "Stall Warning Calibration", "method": "test",
-     "description": "Stall warning horn activation verified 5-10 kn above stall in all configs"},
     {"id": "VCSF0002", "name": "ELT Functional Test", "method": "test",
      "description": "406 MHz ELT activation test per TSO-C126b, G-switch threshold verified"},
     {"id": "VCCB0001", "name": "Brake Holding Test", "method": "test",
      "description": "Parking brake holding force verified at full static run-up (1800 RPM)"},
-    {"id": "VCEV0001", "name": "CO Detector Validation", "method": "test",
-     "description": "CO detector activation at 50 ±10 ppm, aural/visual alert verified"},
     {"id": "VCPR0003", "name": "Propeller Balance Test", "method": "test",
      "description": "Dynamic balance of propeller assembly to ≤0.2 IPS per SAE ARP 4162"},
-    {"id": "VCPR0004", "name": "Fuel Injection Calibration", "method": "test",
-     "description": "Verify fuel flow balance within 0.5 GPH across all cylinders at 75 % power"},
     {"id": "VCAV0003", "name": "VHF COM Range Test", "method": "test",
      "description": "Voice quality and range test: 100 NM at 5000 ft AGL per TSO-C169a"},
     {"id": "VCEL0003", "name": "Emergency Power Transfer Test", "method": "test",
@@ -1820,6 +1834,20 @@ def seed_demo_project(data_root: Path, force: bool = False) -> bool:
             },
             "default": "proposed",
         },
+        "baselines": [
+            {"name": "SRR", "symbol": "S",
+             "description": "<p>System Requirements Review — requirements baselined.</p>",
+             "due_date": "2026-03-31"},
+            {"name": "PDR", "symbol": "P",
+             "description": "<p>Preliminary Design Review — architecture agreed.</p>",
+             "due_date": "2026-06-30"},
+            {"name": "CDR", "symbol": "C",
+             "description": "<p>Critical Design Review — design released for build.</p>",
+             "due_date": "2026-09-30"},
+            {"name": "TRR", "symbol": "T",
+             "description": "<p>Test Readiness Review — ready for the flight-test campaign.</p>",
+             "due_date": "2026-12-15"},
+        ],
         "quality": {
             "min_words": 5,
             "max_words": 300,
@@ -1837,10 +1865,95 @@ def seed_demo_project(data_root: Path, force: bool = False) -> bool:
 
     # Build requirements
     reqs = {r["id"]: r for r in _requirements()}
+
+    # ── Baseline / status assignment ──
+    # Every requirement lands in exactly one of these buckets.  The earliest
+    # baseline a requirement is in determines its status (per the contract),
+    # and membership is cumulative forward where it makes sense.
+    _BASELINE_STATUS: dict[str, tuple[str, list[str]]] = {
+        # ── SRR (earliest, most mature) ──
+        "ACFT0000":  ("verified",    ["SRR", "PDR", "CDR"]),
+        "AFRM0000":  ("verified",    ["SRR", "PDR", "CDR"]),
+        "AFRM0004":  ("implemented", ["SRR", "PDR", "CDR"]),
+        "AFRM0005":  ("verified",    ["SRR", "PDR"]),
+        "PROP0000":  ("implemented", ["SRR", "PDR", "CDR"]),
+        "AVNC0000":  ("verified",    ["SRR", "PDR", "CDR"]),
+        "FLTC0000":  ("verified",    ["SRR", "PDR", "CDR"]),
+        "SAFE0000":  ("implemented", ["SRR", "PDR", "CDR"]),
+        "SAFE0001":  ("verified",    ["SRR", "PDR"]),
+
+        # ── PDR-first ──
+        "AFRM0001":  ("implemented", ["PDR", "CDR"]),
+        "AFRM0003":  ("approved",    ["PDR"]),
+        "AFRM0007":  ("approved",    ["PDR", "CDR"]),
+        "PROP0001":  ("implemented", ["PDR", "CDR"]),
+        "PROP0002":  ("implemented", ["PDR"]),
+        "PROP0003":  ("approved",    ["PDR", "CDR"]),
+        "AVNC0001":  ("implemented", ["PDR", "CDR"]),
+        "AVNC0005":  ("verified",    ["PDR"]),
+        "FLTC0001":  ("implemented", ["PDR", "CDR"]),
+        "FLTC0002":  ("approved",    ["PDR"]),
+        "FLTC0003":  ("approved",    ["PDR"]),
+
+        # ── CDR-first ──
+        "AFRM0002":  ("approved",    ["CDR"]),
+        "AFRM0006":  ("approved",    ["CDR"]),
+        "PROP0005":  ("approved",    ["CDR"]),
+        "PROP0006":  ("approved",    ["CDR"]),
+        "AVNC0010":  ("approved",    ["CDR"]),
+        "AVNC0003":  ("approved",    ["CDR"]),
+        "AVNC0006":  ("approved",    ["CDR"]),
+        "AVNC0008":  ("approved",    ["CDR"]),
+        "FLTC0005":  ("approved",    ["CDR"]),
+        "LNDG0000":  ("approved",    ["CDR"]),
+        "LNDG0001":  ("approved",    ["CDR"]),
+        "LNDG0003":  ("approved",    ["CDR"]),
+        "ELEC0000":  ("approved",    ["CDR"]),
+        "ELEC0001":  ("approved",    ["CDR"]),
+        "ELEC0002":  ("approved",    ["CDR"]),
+        "ELEC0003":  ("in_review",   ["CDR"]),
+        "ENVR0000":  ("approved",    ["CDR"]),
+        "ENVR0001":  ("approved",    ["CDR"]),
+        "ENVR0003":  ("approved",    ["CDR"]),
+        "SAFE0003":  ("approved",    ["CDR"]),
+        "SAFE0004":  ("approved",    ["CDR"]),
+
+        # ── TRR-first ──
+        "AVNC0009":  ("in_review",   ["TRR"]),
+        "FLTC0006":  ("proposed",    ["TRR"]),
+        "FLTC0007":  ("in_review",   ["TRR"]),
+        "ELEC0004":  ("proposed",    ["TRR"]),
+        "AD2024001": ("proposed",    ["TRR"]),
+        "ENVR0002":  ("proposed",    ["TRR"]),
+
+        # ── Unbaselined (proposed) ──
+        "AFRM0008":  ("proposed",    []),
+        "AFRM0009":  ("proposed",    []),
+        "PROP0004":  ("proposed",    []),
+        "AVNC0002":  ("proposed",    []),
+        "AVNC0004":  ("proposed",    []),
+        "FLTC0004":  ("proposed",    []),
+        # ENVR0002 moved to TRR below
+        "LNDG0002":  ("proposed",    []),
+        "OVERVIEW":  ("proposed",    []),
+
+        # ── Special: exactly one rejected, one deprecated ──
+        "SAFE0002":  ("rejected",    []),
+        "AVNC0007":  ("deprecated",  []),
+    }
+
+    for rid, (status, baselines) in _BASELINE_STATUS.items():
+        reqs[rid]["status"] = status
+        reqs[rid]["baselines"] = list(baselines)
+
     vcs = {}
     for vc in VERIFICATION_CASES:
-        vcs[vc["id"]] = {**vc, "status": "pending", "result": None,
-                         "verified_requirements": []}
+        vcs[vc["id"]] = {
+            **vc,
+            "status": vc.get("status", "pending"),
+            "result": vc.get("result"),
+            "verified_requirements": [],
+        }
 
     # Wire up VC → requirement links
     for vc_id, req_ids in VC_LINKS.items():
@@ -1858,6 +1971,26 @@ def seed_demo_project(data_root: Path, force: bool = False) -> bool:
     for rid in ("SAFE0000", "SAFE0001", "SAFE0003", "AD2024001"):
         _add_attr(reqs[rid], "standard", "FAR Part 23")
     _add_attr(reqs["ACFT0000"], "author", "Systems Engineering")
+
+    # Additional realistic engineering attributes (§7)
+    _add_attr(reqs["ELEC0000"], "bus_voltage", "28 VDC")
+    _add_attr(reqs["ELEC0000"], "ground_clearance", "0")
+    _add_attr(reqs["PROP0001"], "supplier_pn", "IO-360-L2A")
+    _add_attr(reqs["PROP0001"], "tbo_hours", "2000")
+    _add_attr(reqs["AVNC0000"], "icd_ref", "ICD-G1000-172-001")
+    _add_attr(reqs["AVNC0000"], "software_baseline", "v0582.05")
+    _add_attr(reqs["AFRM0004"], "airfoil", "NACA 2412")
+    _add_attr(reqs["LNDG0000"], "design_sink_rate", "10 fps")
+
+    # ── Reviewed fingerprints (§5) ──
+    # Compute fingerprints *after* relations are attached so the fingerprint
+    # matches what the API will recompute on read.
+    from app.services.fingerprint import compute_fingerprint
+
+    _SRR_PDR_IDS = {rid for rid, (_, bl) in _BASELINE_STATUS.items()
+                    if any(b in ("SRR", "PDR") for b in bl)}
+    for rid in _SRR_PDR_IDS:
+        reqs[rid]["reviewed"] = compute_fingerprint(reqs[rid])
 
     # ── Parametrics: SysML-style computable requirements ─────────────────
     # Weight & balance: MTOW bound, useful load derived across requirements,
@@ -2152,6 +2285,51 @@ def seed_demo_project(data_root: Path, force: bool = False) -> bool:
             _owners.setdefault(req_id, []).append(comp.get("name") or comp["id"])
     for r in reqs.values():
         r["allocated_to"] = ", ".join(sorted(_owners.get(r["id"], [])))
+
+    # ── Frozen baselines (§6) ──
+    # Freeze SRR and PDR so the baseline diff view has something to show.
+    # CDR and TRR stay unfrozen — a project where the future is frozen makes no sense.
+    from datetime import datetime, timezone
+
+    def _freeze_baseline(name: str, symbol: str, description: str,
+                         frozen_at: str, status_overrides: dict[str, str] | None = None):
+        snapshot = {}
+        for rid, r in reqs.items():
+            snap = {
+                "name": r.get("name", ""),
+                "description": r.get("description", ""),
+                "status": r.get("status", "proposed"),
+                "priority": r.get("priority", "medium"),
+                "type": r.get("type", "functional"),
+                "parent": r.get("parent"),
+                "relations": r.get("relations", []),
+                "verification_cases": r.get("verification_cases", []),
+                "rationale": r.get("rationale", ""),
+                "source": r.get("source", ""),
+                "allocated_to": r.get("allocated_to", ""),
+            }
+            if status_overrides and rid in status_overrides:
+                snap["status"] = status_overrides[rid]
+            snapshot[rid] = snap
+        store.write_item("baselines", name, {
+            "id": name, "name": name, "symbol": symbol, "description": description,
+            "frozen": True, "frozen_at": frozen_at, "snapshot": snapshot,
+        })
+
+    _freeze_baseline("SRR", "S",
+                     "<p>System Requirements Review — requirements baselined.</p>",
+                     "2026-03-31T10:00:00+00:00",
+                     status_overrides={
+                         # Two verified → snapshot as approved
+                         "ACFT0000": "approved",
+                         "AVNC0000": "approved",
+                         # Two implemented (lowest ids) → snapshot as approved
+                         "AFRM0004": "approved",
+                         "PROP0000": "approved",
+                     })
+    _freeze_baseline("PDR", "P",
+                     "<p>Preliminary Design Review — architecture agreed.</p>",
+                     "2026-06-30T14:00:00+00:00")
 
     # Write everything to disk
     for r in reqs.values():
