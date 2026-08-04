@@ -14,6 +14,7 @@ from pydantic import BaseModel
 
 from app.core.dependencies import get_store, require_maintain, require_maintain_global, require_admin
 from app.core.ids import safe_id
+from app.core.rate_limit import rate_limit
 from app.core.tree_utils import build_flat_tree
 from app.models.baseline import DUE_DATE_RE
 from app.models.requirement import RequirementCreate, RequirementUpdate
@@ -28,6 +29,7 @@ from app.services.yaml_store import YamlStore
 from app.services.search import search_requirements
 from app.services.history import record_change
 from app.services.risk_matrix import normalize_matrix
+from app.services.tracing import all_links
 from app.services.verification_links import (
     attach as attach_verification_cases,
     sync_from_requirement as sync_verification_from_requirement,
@@ -1202,6 +1204,14 @@ def update_traces(project_id: str, data: TraceMatrix, response: Response,
     store.write_traces(data.model_dump(mode="json"), expected_version=if_match)
     response.headers["ETag"] = store.traces_version()
     return data
+
+
+@router.get("/projects/{project_id}/trace-model")
+def get_trace_model(project_id: str, _rate: None = Depends(rate_limit(20, 60))):
+    """Every declared relationship: registry-derived edges + hand-authored traces."""
+    store = get_store(project_id)
+    links = all_links(store)
+    return {"links": links, "total": len(links)}
 
 
 # ── Auto UID ──────────────────────────────────────────────────────────────────

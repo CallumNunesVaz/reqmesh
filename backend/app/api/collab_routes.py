@@ -273,8 +273,19 @@ def allocation_matrix(project_id: str, axis: str = Query("components"),
         # Baselines axis: columns from metadata definitions, not frozen snapshots.
         meta = store.read_meta()
         defs = normalize_baseline_defs(meta.get("baselines", []))
+        defined_names = {d["name"] for d in defs}
         cols = [{"id": d["name"], "name": d["name"], "kind": d["symbol"],
                  "due_date": d["due_date"], "order": d["order"]} for d in defs]
+
+        # Orphan baselines: names on requirements with no definition.
+        orphan_names: set[str] = set()
+        for r in reqs:
+            for bl in (r.get(ax.req_field) or []):
+                if bl and bl not in defined_names:
+                    orphan_names.add(bl)
+        for name in sorted(orphan_names):
+            cols.append({"id": name, "name": name, "kind": "",
+                         "due_date": "", "order": 0})
     else:
         cols = _column_items(store, ax)
 

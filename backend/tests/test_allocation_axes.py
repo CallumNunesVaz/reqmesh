@@ -283,3 +283,67 @@ def test_baselines_axis_type_filter(client, project):
 
     m = matrix(client, project, "baselines", filter_type="functional")
     assert [r["req_id"] for r in m["rows"]] == ["SYST0001"]
+
+
+# ── Orphan baselines ──────────────────────────────────────────────────────────
+
+def test_orphan_baseline_appears_as_column(client, project):
+    """A requirement carrying a baseline name with no definition produces a
+    column with ``order: 0``, and the cell for that requirement is ``True``."""
+    make_req(client, project, "SYST0001", baselines=["Draft"])
+    make_req(client, project, "SYST0002")
+
+    m = matrix(client, project, "baselines")
+    cols = m["columns"]
+    assert len(cols) == 1
+    assert cols[0]["id"] == "Draft"
+    assert cols[0]["name"] == "Draft"
+    assert cols[0]["order"] == 0
+    assert cols[0]["kind"] == ""
+    assert cols[0]["due_date"] == ""
+    # The cell for SYST0001 is True, for SYST0002 is False.
+    row1 = next(r for r in m["rows"] if r["req_id"] == "SYST0001")
+    assert row1["cells"]["Draft"] is True
+    row2 = next(r for r in m["rows"] if r["req_id"] == "SYST0002")
+    assert row2["cells"]["Draft"] is False
+
+
+def test_orphan_baselines_after_defined_in_sequence(client, project):
+    """Defined baselines come first in sequence order, orphans after, sorted by
+    name."""
+    client.patch(f"/api/projects/{project}", json={"baselines": [
+        {"name": "PDR"}, {"name": "SRR"},
+    ]})
+    make_req(client, project, "SYST0001", baselines=["Zeta", "Alpha"])
+    make_req(client, project, "SYST0002", baselines=["Beta"])
+
+    m = matrix(client, project, "baselines")
+    cols = m["columns"]
+    # DR → PDR, SRR (defined, in sequence order 1,2), then orphans sorted.
+    # PDR, SRR (order 1,2) because the patch stores them in that list order.
+    assert [c["id"] for c in cols] == ["PDR", "SRR", "Alpha", "Beta", "Zeta"]
+    assert [c["order"] for c in cols] == [1, 2, 0, 0, 0]
+
+
+def test_no_definitions_still_returns_orphan_columns(client, project):
+    """A project with no baseline definitions at all still returns columns for
+    the names its requirements carry."""
+    make_req(client, project, "SYST0001", baselines=["Draft", "Final"])
+    make_req(client, project, "SYST0002", baselines=["Draft"])
+
+    m = matrix(client, project, "baselines")
+    cols = m["columns"]
+    assert len(cols) == 2
+    assert [c["id"] for c in cols] == ["Draft", "Final"]
+    for c in cols:
+        assert c["order"] == 0
+        assert c["kind"] == ""
+        assert c["due_date"] == ""
+
+    # Cells.
+    row1 = next(r for r in m["rows"] if r["req_id"] == "SYST0001")
+    assert row1["cells"]["Draft"] is True
+    assert row1["cells"]["Final"] is True
+    row2 = next(r for r in m["rows"] if r["req_id"] == "SYST0002")
+    assert row2["cells"]["Draft"] is True
+    assert row2["cells"].get("Final", False) is False
