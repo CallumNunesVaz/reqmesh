@@ -155,6 +155,38 @@ export interface SearchResult {
 
 export interface StakeholderDef { name: string; weight: number }
 
+/** Scores run 0-5. Bounded server-side on write only, so a project written
+ *  before the rescale can still hold a larger number until it is next edited. */
+export const PRIORITY_MIN = 0;
+export const PRIORITY_MAX = 5;
+
+/** One requirement's column in the Pugh matrix. */
+export interface PughColumn {
+  id: string;
+  name: string;
+  value: number;
+  rank: number;
+  /** Keyed by stakeholder name. `sign` is the comparison against the datum;
+   *  `null` when either side is unscored, which is not the same as parity. */
+  cells: Record<string, { score: number | null; sign: number | null }>;
+  plus: number;
+  minus: number;
+  /** Sum of weight x sign over the comparable stakeholders. */
+  weighted: number;
+}
+
+/** Stakeholders are the criteria, requirements the alternatives, and every
+ *  column is scored relative to `datum` — whose own column is all zeroes by
+ *  definition. `null` datum means nothing is scored yet. */
+export interface PughMatrix {
+  datum: string | null;
+  limit: number;
+  /** Scored requirements before `limit` was applied. */
+  total_candidates: number;
+  stakeholders: StakeholderDef[];
+  columns: PughColumn[];
+}
+
 export interface RequirementValue {
   id: string;
   /** null when no defined stakeholder has scored it — not the same as 0. */
