@@ -1,8 +1,9 @@
 import { useMemo, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Play, Pause, SkipBack, SkipForward, Check, RotateCcw, Loader2, X, Minimize2, FlaskConical } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Check, RotateCcw, Loader2, X, Minimize2, FlaskConical, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useWhatIf } from './WhatIfContext';
 import { VerdictBadge, MarginTag } from './parametrics';
+import { requirementVerdict } from '../lib/whatIfVerdict';
 import type { ImpactStepParam, ImpactStepConstraint, ConstraintStatus } from '../api/client';
 
 function ParamStep({ step }: { step: ImpactStepParam }) {
@@ -70,6 +71,19 @@ export default function WhatIfPanel() {
   const timerRef = useRef<ReturnType<typeof setInterval>>();
   const stepRef = useRef(stepIndex);
   stepRef.current = stepIndex;
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!impact || impact.steps.length === 0) return;
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      setStepIndex(Math.max(0, stepIndex - 1));
+      setPlaying(false);
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      setStepIndex(Math.min(impact.steps.length - 1, stepIndex + 1));
+      setPlaying(false);
+    }
+  };
 
   useEffect(() => {
     if (playing && steps.length > 0) {
@@ -161,7 +175,7 @@ export default function WhatIfPanel() {
 
   // ── Full overlay ──────────────────────────────────────────────────────────
   return (
-    <div className="absolute inset-0 z-30 bg-background/95 backdrop-blur-sm overflow-auto">
+    <div className="absolute inset-0 z-30 bg-background/95 backdrop-blur-sm overflow-auto" tabIndex={-1} onKeyDown={handleKeyDown}>
       <div className="flex flex-col h-full">
         <div className="flex items-start justify-between p-3 border-b shrink-0">
           <div>
@@ -219,11 +233,27 @@ export default function WhatIfPanel() {
                 <SkipBack size={12} />
               </button>
               <button
+                onClick={() => { setStepIndex(Math.max(0, stepIndex - 1)); setPlaying(false); }}
+                disabled={stepIndex === 0}
+                className="p-1 rounded hover:bg-accent text-muted-foreground disabled:opacity-30"
+                title="Step back"
+              >
+                <ChevronLeft size={12} />
+              </button>
+              <button
                 onClick={() => setPlaying(!playing)}
                 className="p-1 rounded hover:bg-accent text-muted-foreground"
                 title={playing ? 'Pause' : 'Play'}
               >
                 {playing ? <Pause size={12} /> : <Play size={12} />}
+              </button>
+              <button
+                onClick={() => { setStepIndex(Math.min(impact.steps.length - 1, stepIndex + 1)); setPlaying(false); }}
+                disabled={stepIndex >= impact.steps.length - 1}
+                className="p-1 rounded hover:bg-accent text-muted-foreground disabled:opacity-30"
+                title="Step forward"
+              >
+                <ChevronRight size={12} />
               </button>
               <button
                 onClick={() => setStepIndex(impact.steps.length - 1)}
@@ -239,10 +269,22 @@ export default function WhatIfPanel() {
             </div>
 
             <div className="flex-1 overflow-auto p-3 space-y-1.5">
-              {impact.steps.slice(0, stepIndex + 1).map((step, i) => (
+              {impact.steps.slice(0, stepIndex + 1).map((step, i) => {
+                const v = impact.evaluation ? requirementVerdict(impact.evaluation, step.owner) : 'unknown';
+                const verdictBorder = v === 'pass'
+                  ? 'border-l-emerald-400/70'
+                  : v === 'fail'
+                    ? 'border-l-red-400/70'
+                    : '';
+                const verdictBg = v === 'pass'
+                  ? 'bg-emerald-500/5'
+                  : v === 'fail'
+                    ? 'bg-red-500/5'
+                    : '';
+                return (
                 <div
                   key={i}
-                  className={`p-2 rounded border transition-colors cursor-pointer ${
+                  className={`p-2 rounded border transition-colors cursor-pointer border-l-2 ${verdictBorder} ${verdictBg} ${
                     i === stepIndex
                       ? 'border-primary/60 bg-primary/5'
                       : 'border-transparent hover:bg-accent'
@@ -250,12 +292,26 @@ export default function WhatIfPanel() {
                   onClick={() => { setStepIndex(i); setPlaying(false); }}
                 >
                   <div className="flex items-center gap-1.5 mb-1">
+                    {/* The verdict in words as well as colour. A tint alone is
+                        unreadable to anyone who cannot separate the hues, and
+                        this is the answer the whole panel exists to give. */}
+                    {v !== 'unknown' && (
+                      <span className={`text-[9px] font-semibold uppercase tracking-wider ${
+                        v === 'pass' ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {v === 'pass' ? 'pass' : 'fail'}
+                      </span>
+                    )}
                     <span className="text-[9px] uppercase tracking-wider text-muted-foreground font-semibold">
                       {step.kind === 'param' ? 'Param' : 'Constraint'}
                     </span>
                     <span className={`text-[9px] font-mono ${rootOwners.has(step.owner) ? 'text-blue-400' : 'text-muted-foreground'}`}>
                       {step.owner}
                     </span>
+                    {v !== 'unknown' && (
+                      <span className={`text-[9px] font-semibold ml-auto ${v === 'pass' ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {v === 'pass' ? 'pass' : 'fail'}
+                      </span>
+                    )}
                   </div>
                   {step.kind === 'param' ? (
                     <ParamStep step={step} />
@@ -263,7 +319,8 @@ export default function WhatIfPanel() {
                     <ConstraintStep step={step} />
                   )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           </>
         )}
