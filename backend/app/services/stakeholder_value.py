@@ -134,4 +134,103 @@ def pugh_matrix(reqs: list[dict], stakeholders: list[dict],
     nothing scored, ``datum`` is None and ``columns`` is empty — an empty
     matrix, not an error.
     """
-    raise NotImplementedError
+    # Rank all requirements first — build the matrix on top of the ranking
+    # rather than recomputing values.
+    ranked = rank_requirements(reqs, stakeholders)
+
+    # Candidates are every requirement with a non-None value, best first.
+    candidates = [r for r in ranked if r["value"] is not None]
+    total_candidates = len(candidates)
+
+    if total_candidates == 0:
+        return {
+            "datum": None,
+            "limit": limit,
+            "total_candidates": 0,
+            "stakeholders": stakeholders,
+            "columns": [],
+        }
+
+    # Determine the datum.  An explicit id that names a candidate is honoured;
+    # anything else (None, not scored, not in the capped set) falls back to the
+    # top-ranked candidate so a stale link still renders.
+    limited = candidates[:limit]
+    limited_ids = {c["id"] for c in limited}
+
+    if datum_id and datum_id in {c["id"] for c in candidates}:
+        if datum_id in limited_ids:
+            datum_id_actual = datum_id
+        else:
+            # The caller asked for a datum that exists but is not among the
+            # capped columns — fall back to top-ranked so the matrix is still
+            # useful.
+            datum_id_actual = limited[0]["id"]
+    else:
+        datum_id_actual = limited[0]["id"]
+
+    # Build an id->priorities lookup over the raw requirements so we can
+    # compare the datum's scores against every candidate's without a linear
+    # scan per stakeholder.
+    req_by_id: dict[str, dict] = {r["id"]: r for r in reqs}
+    datum_req = req_by_id.get(datum_id_actual, {})
+    datum_priorities = datum_req.get("priorities", {})
+
+    columns: list[dict] = []
+    for cand in limited:
+        cand_req = req_by_id.get(cand["id"], {})
+        cand_priorities = cand_req.get("priorities", {})
+        is_datum = cand["id"] == datum_id_actual
+
+        cells: dict[str, dict] = {}
+        plus = 0
+        minus = 0
+        weighted_sum = 0.0
+
+        for s in stakeholders:
+            name = s["name"]
+            weight = float(s.get("weight", 1.0))
+
+            d_score = datum_priorities.get(name)
+            c_score = cand_priorities.get(name)
+
+            # Score shown in the cell is this requirement's own score.
+            score = c_score if c_score is not None else None
+
+            if is_datum:
+                # The datum's own column is all zeroes — that is what a datum
+                # means, not a bug.
+                sign = 0
+            elif d_score is None or c_score is None:
+                # An unscored stakeholder on either side cannot be compared.
+                sign = None
+            elif c_score > d_score:
+                sign = 1
+                plus += 1
+                weighted_sum += weight * sign
+            elif c_score < d_score:
+                sign = -1
+                minus += 1
+                weighted_sum += weight * sign
+            else:
+                sign = 0
+
+            cells[name] = {"score": score, "sign": sign}
+
+        columns.append({
+            "id": cand["id"],
+            "name": cand.get("name", ""),
+            "value": cand["value"],
+            "rank": cand["rank"],
+            "cells": cells,
+            "plus": plus,
+            "minus": minus,
+            "weighted": round(weighted_sum, 2),
+        })
+
+    return {
+        "datum": datum_id_actual,
+        "limit": limit,
+        "total_candidates": total_candidates,
+        "stakeholders": stakeholders,
+        "columns": columns,
+    }

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Trash2, CheckCircle2, AlertTriangle, Search, TrendingUp, Shield, GitBranch, FileWarning, Sparkles, Sigma, Flame, ShieldCheck } from 'lucide-react';
-import { api, type MetricsData, type ImpactResult, type GapItem, type QualityItem, type EvaluationData } from '../api/client';
+import { Plus, Trash2, CheckCircle2, AlertTriangle, Search, TrendingUp, Shield, GitBranch, FileWarning, Sparkles, Sigma, Flame, ShieldCheck, Table } from 'lucide-react';
+import { api, type MetricsData, type ImpactResult, type GapItem, type QualityItem, type EvaluationData, type PughMatrix } from '../api/client';
 import { EntityLink } from '../components/entities';
 import { VerdictBadge } from '../components/parametrics';
 import { DefinitionsManager, AnalysisCasesPanel } from '../components/DefinitionsPanel';
@@ -21,12 +21,14 @@ export default function MetricsPage() {
   const [qualityAvg, setQualityAvg] = useState(0);
   const [unreviewedCount, setUnreviewedCount] = useState(0);
   const [evaluation, setEvaluation] = useState<EvaluationData | null>(null);
+  const [pugh, setPugh] = useState<PughMatrix | null>(null);
   // Definitions and analysis cases are maintainer-tier (backend require_maintain).
   const editable = useAuthStore((s) => s.canEdit());
 
   useEffect(() => {
     if (!projectId) return;
     api.getEvaluation(projectId).then(setEvaluation).catch(() => {});
+    api.getPugh(projectId).then(setPugh).catch(() => {});
     Promise.all([
       api.getMetrics(projectId),
       api.getGapAnalysis(projectId),
@@ -304,6 +306,84 @@ export default function MetricsPage() {
           <DefinitionsManager projectId={projectId} editable={editable} />
           <AnalysisCasesPanel projectId={projectId} editable={editable} />
         </div>
+      )}
+
+      {pugh && pugh.columns.length > 0 && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.33 }} className="card p-5 mt-6">
+          <h2 className="font-semibold text-sm text-card-foreground mb-1 flex items-center gap-2">
+            <Table size={16} className="text-cs-teal" /> Pugh Matrix
+            <span className="text-xs font-normal text-muted-foreground">
+              {pugh.columns.length} of {pugh.total_candidates} candidates
+            </span>
+          </h2>
+          <HelpTip>
+            A Pugh matrix compares the best-valued requirements (columns) against weighted stakeholders
+            (rows), relative to a chosen datum. Each cell shows whether the requirement scores above
+            (+), below (−), or equal to (0) the datum for that stakeholder. The datum's own column is
+            all zero — that is what a datum means.
+          </HelpTip>
+          <div className="overflow-x-auto mt-3">
+            <table className="w-full text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="text-left py-1.5 px-2 text-muted-foreground font-medium w-32">Stakeholder</th>
+                  {pugh.columns.map((col) => (
+                    <th key={col.id} className={`py-1.5 px-2 text-center font-mono text-[11px] ${col.id === pugh.datum ? 'text-primary' : 'text-foreground'}`}>
+                      <div className="truncate max-w-[100px]" title={col.id}>{col.id}</div>
+                      {col.id === pugh.datum && (
+                        <span className="badge bg-primary/10 text-primary text-[9px]">datum</span>
+                      )}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {pugh.stakeholders.map((s, si) => (
+                  <tr key={s.name} className="border-b border-border/50 hover:bg-accent/30">
+                    <td className="py-1.5 px-2 text-foreground">
+                      <span className="font-medium">{s.name}</span>
+                      <span className="text-muted-foreground ml-1">×{s.weight}</span>
+                    </td>
+                    {pugh.columns.map((col) => {
+                      const cell = col.cells[s.name];
+                      if (!cell) return <td key={col.id} className="py-1.5 px-2 text-center text-muted-foreground">–</td>;
+                      const signChar = cell.sign === 1 ? '+' : cell.sign === -1 ? '−' : cell.sign === 0 ? '0' : '·';
+                      const signColor = cell.sign === 1 ? 'text-emerald-400' : cell.sign === -1 ? 'text-red-400' : 'text-muted-foreground';
+                      return (
+                        <td key={col.id} className={`py-1.5 px-2 text-center tabular-nums ${signColor}`}>
+                          <span className="font-semibold">{signChar}</span>
+                          {cell.score != null && (
+                            <span className="text-muted-foreground ml-0.5">{cell.score}</span>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t border-border">
+                  <td className="py-1.5 px-2 text-muted-foreground text-[10px] uppercase tracking-wider">plus / minus</td>
+                  {pugh.columns.map((col) => (
+                    <td key={col.id} className="py-1.5 px-2 text-center tabular-nums text-[10px]">
+                      <span className="text-emerald-400">{col.plus}</span>
+                      <span className="text-muted-foreground"> / </span>
+                      <span className="text-red-400">{col.minus}</span>
+                    </td>
+                  ))}
+                </tr>
+                <tr>
+                  <td className="py-1 px-2 text-muted-foreground text-[10px] uppercase tracking-wider">weighted</td>
+                  {pugh.columns.map((col) => (
+                    <td key={col.id} className={`py-1 px-2 text-center tabular-nums text-[11px] font-mono ${col.weighted > 0 ? 'text-emerald-400' : col.weighted < 0 ? 'text-red-400' : 'text-muted-foreground'}`}>
+                      {col.weighted > 0 ? '+' : ''}{col.weighted.toFixed(2)}
+                    </td>
+                  ))}
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </motion.div>
       )}
 
       {quality.length > 0 && (
