@@ -16,6 +16,7 @@ interface WhatIfState {
 interface WhatIfActions {
   setOverride: (ref: string, value: number, original: number) => void;
   removeOverride: (ref: string) => void;
+  evaluate: () => void;
   clear: () => void;
   confirm: (projectId: string) => Promise<void>;
   setStepIndex: (i: number) => void;
@@ -32,6 +33,7 @@ const WhatIfCtx = createContext<WhatIfState & WhatIfActions>({
   playing: false,
   setOverride: () => {},
   removeOverride: () => {},
+  evaluate: () => {},
   clear: () => {},
   confirm: async () => {},
   setStepIndex: () => {},
@@ -41,8 +43,6 @@ const WhatIfCtx = createContext<WhatIfState & WhatIfActions>({
 export function useWhatIf() {
   return useContext(WhatIfCtx);
 }
-
-const DEBOUNCE_MS = 250;
 
 export function WhatIfProvider({ projectId, children }: { projectId: string; children: React.ReactNode }) {
   const editMode = useAuthStore((s) => s.editMode);
@@ -57,7 +57,6 @@ export function WhatIfProvider({ projectId, children }: { projectId: string; chi
   const [stepIndex, setStepIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
 
-  const timerRef = useRef<ReturnType<typeof setTimeout>>();
   const seqRef = useRef(0);
 
   const fetchImpact = useCallback((ov: Record<string, number>) => {
@@ -96,29 +95,26 @@ export function WhatIfProvider({ projectId, children }: { projectId: string; chi
   }, [editMode]);
 
   const setOverride = useCallback((ref: string, value: number, original: number) => {
-    setOverrides((prev) => {
-      const next = { ...prev, [ref]: value };
-      setBase((b) => ({ ...b, [ref]: original }));
-      clearTimeout(timerRef.current);
-      timerRef.current = setTimeout(() => fetchImpact(next), DEBOUNCE_MS);
-      return next;
-    });
-  }, [fetchImpact]);
+    setOverrides((prev) => ({ ...prev, [ref]: value }));
+    setBase((b) => ({ ...b, [ref]: original }));
+  }, []);
 
   const removeOverride = useCallback((ref: string) => {
     setOverrides((prev) => {
       const next = { ...prev };
       delete next[ref];
-      setBase((b) => {
-        const nb = { ...b };
-        delete nb[ref];
-        return nb;
-      });
-      clearTimeout(timerRef.current);
-      timerRef.current = setTimeout(() => fetchImpact(next), DEBOUNCE_MS);
       return next;
     });
-  }, [fetchImpact]);
+    setBase((b) => {
+      const nb = { ...b };
+      delete nb[ref];
+      return nb;
+    });
+  }, []);
+
+  const evaluate = useCallback(() => {
+    fetchImpact(overrides);
+  }, [fetchImpact, overrides]);
 
   const clear = useCallback(() => {
     setOverrides({});
@@ -127,7 +123,6 @@ export function WhatIfProvider({ projectId, children }: { projectId: string; chi
     setStepIndex(0);
     setPlaying(false);
     setError(null);
-    clearTimeout(timerRef.current);
     bumpGraphVersion();
     bumpDataVersion();
   }, [bumpGraphVersion, bumpDataVersion]);
@@ -161,10 +156,6 @@ export function WhatIfProvider({ projectId, children }: { projectId: string; chi
     clear();
   }, [overrides, clear, bumpGraphVersion, bumpDataVersion]);
 
-  useEffect(() => {
-    return () => clearTimeout(timerRef.current);
-  }, []);
-
   const value: WhatIfState & WhatIfActions = {
     overrides,
     base,
@@ -175,6 +166,7 @@ export function WhatIfProvider({ projectId, children }: { projectId: string; chi
     playing,
     setOverride,
     removeOverride,
+    evaluate,
     clear,
     confirm,
     setStepIndex,
