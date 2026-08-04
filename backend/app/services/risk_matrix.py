@@ -24,6 +24,17 @@ DEFAULT_LIKELIHOODS = ["rare", "unlikely", "possible", "likely", "almost_certain
 # Rating bands, least to most serious. The colours are the matrix's whole
 # point — a band without one cannot be drawn — so they live with the band
 # rather than in the frontend, and travel with the project when it is exported.
+#: How likely a risk is to be spotted before it bites, best detection first.
+#: Configurable per project like the other axes, and — unlike them — it does not
+#: address a cell: the matrix stays two-dimensional, so adding detection cannot
+#: re-rate a single existing risk.
+DEFAULT_DETECTIONS = ["obvious", "likely", "possible", "unlikely", "undetectable"]
+
+#: The risk lifecycle. A plain list rather than an enum, matching how severity
+#: and likelihood are handled here: a project that renames a state must not find
+#: every stored risk invalid. The UI offers these; it does not enforce them.
+DEFAULT_RISK_STATUSES = ["open", "mitigating", "monitoring", "accepted", "closed"]
+
 DEFAULT_BANDS = [
     {"key": "low", "label": "Low", "color": "#22c55e"},
     {"key": "medium", "label": "Medium", "color": "#eab308"},
@@ -55,6 +66,10 @@ def default_matrix() -> dict:
     return {
         "severities": list(DEFAULT_SEVERITIES),
         "likelihoods": list(DEFAULT_LIKELIHOODS),
+        # Not an axis of `cells` — see DEFAULT_DETECTIONS. It travels with the
+        # matrix because it is the same kind of thing (a per-project vocabulary
+        # the UI offers), not because it addresses a cell.
+        "detections": list(DEFAULT_DETECTIONS),
         "bands": [dict(b) for b in DEFAULT_BANDS],
         "cells": [list(row) for row in DEFAULT_CELLS],
     }
