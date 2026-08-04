@@ -20,8 +20,17 @@ from ruamel.yaml import YAML
 
 SETTINGS_FILE = Path.home() / ".reqmesh" / "settings.yaml"
 
-_yaml = YAML()
-_yaml.indent(mapping=2, sequence=4, offset=2)
+def _settings_yaml() -> YAML:
+    """A YAML instance per call, for the reason `yaml_store` uses one.
+
+    ruamel keeps parser and emitter state on the object, so a load or dump that
+    raises part-way poisons it for the rest of the process. This one was shared
+    with no lock at all, which is both a race and a poisoning hazard; per-call
+    removes both without needing either.
+    """
+    y = YAML()
+    y.indent(mapping=2, sequence=4, offset=2)
+    return y
 
 # Curated, admin-editable settings. Each entry: type, UI category, label, and
 # whether the value is secret (redacted on read). Only these keys can be changed
@@ -127,7 +136,7 @@ def load_overrides() -> dict:
     if not SETTINGS_FILE.exists():
         return {}
     with open(SETTINGS_FILE) as f:
-        return _yaml.load(f) or {}
+        return _settings_yaml().load(f) or {}
 
 
 def save_overrides(data: dict) -> None:
@@ -136,7 +145,7 @@ def save_overrides(data: dict) -> None:
     fd, tmp = tempfile.mkstemp(dir=SETTINGS_FILE.parent, suffix=".tmp")
     try:
         with os.fdopen(fd, "w") as f:
-            _yaml.dump(data, f)
+            _settings_yaml().dump(data, f)
         os.replace(tmp, SETTINGS_FILE)
         try:
             os.chmod(SETTINGS_FILE, 0o600)  # may hold secrets

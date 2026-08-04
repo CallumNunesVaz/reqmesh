@@ -20,26 +20,40 @@ from app.core.ids import safe_id
 # working; the implementation moved to core so core.auth can share it.
 _file_lock = file_lock
 
-yaml = YAML()
-yaml.indent(mapping=2, sequence=4, offset=2)
-yaml.preserve_quotes = True
-yaml.width = 120
+def _round_trip_yaml() -> YAML:
+    """A round-trip YAML for exactly one load or dump.
 
-# A ruamel YAML() instance carries mutable parser/emitter state, so two threads
-# using this shared object interleave into `expected DocumentEndEvent, but got
-# DocumentStartEvent` — and the instance stays broken afterwards, so every
-# later write in the process fails too. The file lock only excludes *other*
-# processes holding a different fd, so guard the shared object directly.
-# Matters now that request handlers can run on the threadpool.
-_yaml_lock = threading.Lock()
+    Not shared, and deliberately not shared-plus-locked, which is what this was
+    before. A ruamel instance carries emitter state on the object: a dump that
+    raises part-way leaves it mid-document, and *every* later dump in the process
+    then fails with `expected DocumentEndEvent, but got DocumentStartEvent`. A
+    lock stops two threads interleaving but cannot un-poison the object, so one
+    failed write turned every subsequent save in that worker into a 500 until the
+    process was restarted — 56 of them in production before a container recreate
+    cleared it, with "Internal Server Error" the only thing the user saw.
+
+    Constructing one is cheap; parsing is what costs, which is why the read-only
+    list path has its own fast loader and the collection cache exists. Per-call
+    instances remove the failure mode rather than narrowing it.
+    """
+    y = YAML()
+    y.indent(mapping=2, sequence=4, offset=2)
+    y.preserve_quotes = True
+    y.width = 120
+    return y
 
 # Round-trip mode is what preserves a user's comments and formatting through an
 # edit — a core promise of a git-native, hand-editable store — but it is ~6.5x
 # slower to parse than safe mode. So: round-trip on the read-modify-write path
 # (`_parse_yaml`), and this fast loader on the read-only list path, where the
 # document is never written back and comments therefore can't be lost.
-_fast_yaml = YAML(typ="safe")
-_fast_yaml_lock = threading.Lock()
+def _fast_reader() -> YAML:
+    """Safe-mode loader for the read-only list path, also per-call.
+
+    A poisoned loader is as fatal as a poisoned emitter, and for the same reason
+    — the state lives on the object.
+    """
+    return YAML(typ="safe")
 
 # Cache of parsed collections, keyed by directory. Invalidated by comparing a
 # cheap signature of the directory (each file's mtime_ns + size) — one scandir
@@ -132,8 +146,7 @@ class YamlStore:
         empty value use :meth:`_read_yaml`.
         """
         with open(path) as f:
-            with _yaml_lock:
-                data = yaml.load(f)
+            data = _round_trip_yaml().load(f)
         if data is None:
             return {}
         if not isinstance(data, dict):
@@ -160,8 +173,7 @@ class YamlStore:
         fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
         try:
             with os.fdopen(fd, "w") as f:
-                with _yaml_lock:
-                    yaml.dump(data, f)
+                _round_trip_yaml().dump(data, f)
                 f.flush()
                 os.fsync(f.fileno())
             os.replace(tmp, path)
@@ -206,8 +218,7 @@ class YamlStore:
         with the safe loader — never use the result for a write-back, as it
         carries no comments or formatting."""
         with open(path) as f:
-            with _fast_yaml_lock:
-                data = _fast_yaml.load(f)
+            data = _fast_reader().load(f)
         if data is None:
             return {}
         if not isinstance(data, dict):
