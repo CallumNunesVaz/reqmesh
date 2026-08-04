@@ -1,5 +1,5 @@
 import { Suspense } from 'react';
-import { Outlet, useParams } from 'react-router-dom';
+import { Outlet, useParams, useLocation } from 'react-router-dom';
 import { GuardedLink as Link } from './navGuard';
 import LoadingSplash from './LoadingSplash';
 import { PanelRight, PanelRightClose, PanelRightOpen, LogIn, LogOut, User, Pencil, Eye, FileDown, FileUp, Users, Search, HelpCircle, BookOpen, Server, SlidersHorizontal, Undo2, Redo2 } from 'lucide-react';
@@ -123,10 +123,31 @@ export default function Layout() {
   // panes keep their proportions via flex-grow. Because the canvas holds the
   // larger share it absorbs more of the delta in pixels, leaving the
   // size-sensitive inspector comparatively stable.
-  const [graphFrac, setGraphFrac] = useState(() => {
-    const saved = parseFloat(localStorage.getItem('rt-graph-frac') || '');
-    return saved >= 0.15 && saved <= 0.85 ? saved : 0.52;
-  });
+  // Each page wants a different split — the allocation matrix is worth the width
+  // the requirement form does not need — so the fraction is remembered per page
+  // rather than once for the app.
+  //
+  // Keyed on the *last* path segment, not the whole path: keying on the full
+  // path would give every requirement its own remembered split, so dragging on
+  // one would teach the app nothing about the next.
+  //
+  // A page nobody has sized yet falls back to the last split the user chose
+  // anywhere, not to a fixed default. Snapping an unvisited page to 0.52 when
+  // the user has clearly settled on something wider reads as the app forgetting.
+  const pageKey = (useLocation().pathname.split('/').filter(Boolean).pop() || 'overview')
+    .replace(/[^a-z0-9-]/gi, '');
+  const readFrac = (k: string) => {
+    const v = parseFloat(localStorage.getItem(k) || '');
+    return v >= 0.15 && v <= 0.85 ? v : null;
+  };
+  const [graphFrac, setGraphFrac] = useState(
+    () => readFrac(`rt-graph-frac:${pageKey}`) ?? readFrac('rt-graph-frac') ?? 0.52,
+  );
+  // Follow the route: without this the split from the page just left would
+  // persist visually until the next drag.
+  useEffect(() => {
+    setGraphFrac(readFrac(`rt-graph-frac:${pageKey}`) ?? readFrac('rt-graph-frac') ?? 0.52);
+  }, [pageKey]);
   const [navWidth, setNavWidth] = useState(() => {
     const saved = parseInt(localStorage.getItem('rt-nav-width') || '', 10);
     return Math.min(Math.max(isNaN(saved) ? 300 : saved, NAV_MIN), NAV_MAX);
@@ -179,6 +200,9 @@ export default function Layout() {
     const onUp = (ev: PointerEvent) => {
       const f = fracAt(ev.clientX);
       setGraphFrac(f);
+      // Both: the per-page split, and the app-wide fallback a page that has
+      // never been sized will inherit.
+      localStorage.setItem(`rt-graph-frac:${pageKey}`, String(f));
       localStorage.setItem('rt-graph-frac', String(f));
       setResizing(false);
       window.removeEventListener('pointermove', onMove);
@@ -186,7 +210,10 @@ export default function Layout() {
     };
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
-  }, [navWidth, navCollapsed, canvasBonus]);
+    // `pageKey` is a dependency: without it the handler closes over the page
+    // that was open when it was created, and a drag after navigating would save
+    // the new split under the previous page's key.
+  }, [navWidth, navCollapsed, canvasBonus, pageKey]);
 
   const startNavResize = useCallback((e: React.PointerEvent) => {
     e.preventDefault();
