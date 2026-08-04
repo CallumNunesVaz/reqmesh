@@ -2,14 +2,15 @@ import { useEffect, useMemo, useState } from 'react';
 import { usePersistedState } from '../hooks/usePersistedState';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Trash2, GitPullRequest, Square, CheckSquare, X, Search } from 'lucide-react';
-import { api, type ChangeRequest } from '../api/client';
+import { Plus, Trash2, GitPullRequest, Square, CheckSquare, X, Search, Play, Edit3, Ban } from 'lucide-react';
+import { api, type ChangeRequest, type CRRedline, CR_URGENCIES } from '../api/client';
 import { useAuthStore } from '../store/auth';
 import { useStore } from '../store';
 import { CopyLinkButton, EntityLink } from '../components/entities';
 import { useFocusedEntity } from '../components/useFocusedEntity';
 import { AutoLinkText } from '../components/autoLink';
 import { useEntityKinds } from '../components/entityIndex';
+import { useConfirm } from '../components/ConfirmDialog';
 
 const statusBadges: Record<string, string> = {
   submitted: 'border-blue-500/30 bg-blue-500/10 text-blue-400',
@@ -20,19 +21,45 @@ const statusBadges: Record<string, string> = {
   closed: 'border-zinc-500/30 bg-zinc-500/10 text-zinc-400',
 };
 
+const urgencyBadges: Record<string, string> = {
+  low: 'border-zinc-500/30 bg-zinc-500/10 text-zinc-400',
+  normal: 'border-blue-500/30 bg-blue-500/10 text-blue-400',
+  high: 'border-amber-500/30 bg-amber-500/10 text-amber-400',
+  emergency: 'border-red-500/30 bg-red-500/10 text-red-400',
+};
+
+/** Render a single diff field: before strikethrough, after marked. */
+function DiffField({ field, before, after }: { field: string; before: unknown; after: unknown }) {
+  const beforeStr = String(before ?? '');
+  const afterStr = String(after ?? '');
+  return (
+    <div className="text-xs py-0.5">
+      <span className="font-mono text-muted-foreground">{field}: </span>
+      <span className="line-through text-red-400">{beforeStr}</span>
+      <span className="mx-1 text-muted-foreground">→</span>
+      <span className="text-emerald-400">{afterStr}</span>
+    </div>
+  );
+}
+
 export default function ChangeRequestsPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const [crs, setCrs] = useState<ChangeRequest[]>([]);
+  const [redlines, setRedlines] = useState<Record<string, CRRedline>>({});
   const [showCreate, setShowCreate] = useState(false);
   const [error, setError] = useState('');
-  const [form, setForm] = useState({ id: '', title: '', description: '' });
+  const [form, setForm] = useState({ id: '', title: '', description: '', rationale: '', urgency: 'normal' });
+  const [editingCrId, setEditingCrId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({ title: '', description: '', rationale: '', urgency: 'normal' });
   const editable = useAuthStore((s) => s.canPropose());
   // Bulk operations are maintainer-tier (backend require_maintain), unlike
   // individual create/edit/delete which are propose-tier.
   const canBulk = useAuthStore((s) => s.canEdit());
+  const canMaintain = useAuthStore((s) => s.user !== null && ['maintainer', 'admin'].includes(s.user.role));
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const dataVersion = useStore((s) => s.dataVersion);
   const entityKinds = useEntityKinds(projectId);
+  const showConfirm = useConfirm();
   // Persisted per project — see RequirementsPage/ComponentsPage for why.
   const pk = (field: string) => (projectId ? `rt-crs-${field}-${projectId}` : null);
   const [search, setSearch] = usePersistedState(pk('search'), '');
@@ -44,13 +71,28 @@ export default function ChangeRequestsPage() {
   };
   useEffect(load, [projectId, dataVersion]);
 
+  // Fetch redlines for each CR after the list loads.
+  useEffect(() => {
+    if (!projectId || crs.length === 0) return;
+    const fetched: Record<string, CRRedline> = {};
+    let alive = true;
+    Promise.all(
+      crs.map((cr) =>
+        api.getCRRedline(projectId, cr.id)
+          .then((rl) => { if (alive) fetched[cr.id] = rl; })
+          .catch(() => {})
+      )
+    ).then(() => { if (alive) setRedlines(fetched); });
+    return () => { alive = false; };
+  }, [projectId, crs]);
+
   const filteredCRs = useMemo(() => {
     if (!search && !filterStatus) return crs;
     const q = search.toLowerCase();
     return crs.filter((cr) => {
       if (filterStatus && cr.status !== filterStatus) return false;
       if (q) {
-        const hay = `${cr.id} ${cr.title || ''} ${cr.description || ''}`.toLowerCase();
+        const hay = `${cr.id} ${cr.title || ''} ${cr.description || ''} ${cr.rationale || ''}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
@@ -65,27 +107,76 @@ export default function ChangeRequestsPage() {
     e.preventDefault();
     if (!projectId || !form.id.trim()) return;
     try {
-      await api.createChangeRequest(projectId, form);
+      await api.createChangeRequest(projectId, {
+        id: form.id.trim(),
+        title: form.title,
+        description: form.description,
+        rationale: form.rationale,
+        urgency: form.urgency,
+      });
       setShowCreate(false);
-      setForm({ id: '', title: '', description: '' });
+      setForm({ id: '', title: '', description: '', rationale: '', urgency: 'normal' });
       load();
     } catch (err: any) { setError(err.message || 'Failed to create'); }
   };
 
-  const handleStatus = async (crId: string, status: string) => {
-    if (!projectId) return;
+  const handleDelete = async (crId: string) => {
+    const ok = await showConfirm('Delete this change request?', 'Delete');
+    if (!ok) return;
     try {
-      await api.updateChangeRequest(projectId, crId, { status });
-      load();
-    } catch (err: any) { setError(err.message || 'Failed to update'); }
+      await api.deleteChangeRequest(projectId!, crId);
+      setCrs((prev) => prev.filter((c) => c.id !== crId));
+    } catch (err: any) { setError(err.message || 'Failed to delete'); }
   };
 
-  const handleDelete = async (crId: string) => {
-    if (!projectId || !confirm('Delete this change request?')) return;
+  const handleExecute = async (crId: string, rl: CRRedline | undefined) => {
+    const blocked = rl?.blocked;
+    const msg = blocked
+      ? `This change request is stale — ${rl?.targets.filter(t => t.stale).map(t => t.id).join(', ')} changed since it was raised. Execute anyway?`
+      : 'Apply all proposed changes?';
+    const ok = await showConfirm(msg, 'Execute');
+    if (!ok) return;
     try {
-      await api.deleteChangeRequest(projectId, crId);
-      setCrs(crs.filter((c) => c.id !== crId));
-    } catch (err: any) { setError(err.message || 'Failed to delete'); }
+      await api.executeChangeRequest(projectId!, crId);
+      load();
+    } catch (err: any) { setError(err.message || 'Failed to execute'); }
+  };
+
+  const handleReject = async (crId: string) => {
+    const ok = await showConfirm('Reject this change request?', 'Reject');
+    if (!ok) return;
+    try {
+      await api.rejectChangeRequest(projectId!, crId);
+      load();
+    } catch (err: any) { setError(err.message || 'Failed to reject'); }
+  };
+
+  const startEditing = (cr: ChangeRequest) => {
+    setEditingCrId(cr.id);
+    setEditForm({
+      title: cr.title || '',
+      description: cr.description || '',
+      rationale: cr.rationale || '',
+      urgency: cr.urgency || 'normal',
+    });
+  };
+
+  const cancelEditing = () => {
+    setEditingCrId(null);
+  };
+
+  const handleModifySave = async (crId: string) => {
+    if (!projectId) return;
+    try {
+      await api.updateChangeRequest(projectId, crId, {
+        title: editForm.title,
+        description: editForm.description,
+        rationale: editForm.rationale,
+        urgency: editForm.urgency,
+      });
+      setEditingCrId(null);
+      load();
+    } catch (err: any) { setError(err.message || 'Failed to modify'); }
   };
 
   const toggleCR = (id: string) => setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -101,7 +192,8 @@ export default function ChangeRequestsPage() {
 
   const handleBulkCRDelete = async () => {
     if (!projectId) return;
-    if (!confirm(`Delete ${selectedIds.size} change request(s)?`)) return;
+    const ok = await showConfirm(`Delete ${selectedIds.size} change request(s)?`, 'Delete');
+    if (!ok) return;
     await api.bulkDeleteChangeRequests(projectId, [...selectedIds]);
     clearCRSelection();
     load();
@@ -160,15 +252,31 @@ export default function ChangeRequestsPage() {
             <div className="flex items-end gap-3">
               <div className="w-32"><label className="label">ID</label><input className="input font-mono" placeholder="CR-001" value={form.id} onChange={e => setForm({...form, id: e.target.value})} autoFocus /></div>
               <div className="flex-1"><label className="label">Title</label><input className="input" placeholder="Change request title" value={form.title} onChange={e => setForm({...form, title: e.target.value})} /></div>
+              <div className="w-28">
+                <label className="label">Urgency</label>
+                <select className="select" value={form.urgency} onChange={e => setForm({...form, urgency: e.target.value})}>
+                  {CR_URGENCIES.map((u) => <option key={u} value={u}>{u}</option>)}
+                </select>
+              </div>
               <button type="submit" className="btn-primary">Create</button>
               <button type="button" onClick={() => setShowCreate(false)} className="btn-secondary">Cancel</button>
+            </div>
+            <div className="mt-2">
+              <label className="label">Description</label>
+              <input className="input" placeholder="What the change is" value={form.description} onChange={e => setForm({...form, description: e.target.value})} />
+            </div>
+            <div className="mt-2">
+              <label className="label">Rationale</label>
+              <input className="input" placeholder="Why the change is needed" value={form.rationale} onChange={e => setForm({...form, rationale: e.target.value})} />
             </div>
           </motion.form>
         )}
       </AnimatePresence>
 
       <div className="space-y-3">
-        {filteredCRs.map((cr, i) => (
+        {filteredCRs.map((cr, i) => {
+          const rl = redlines[cr.id];
+          return (
           <motion.div key={cr.id} id={`entity-${cr.id}`} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.03 }}
             className={`card p-4 hover:shadow-md transition-shadow group ${focusId === cr.id ? 'ring-2 ring-primary/50' : ''}`}>
             <div className="flex items-center gap-3">
@@ -183,8 +291,18 @@ export default function ChangeRequestsPage() {
               )}
               <div className="w-9 h-9 bg-purple-500/10 text-purple-400 rounded-lg flex items-center justify-center"><GitPullRequest size={18} /></div>
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2"><span className="font-mono text-xs text-muted-foreground">{cr.id}</span><h3 className="font-medium text-card-foreground">{cr.title || 'Untitled'}</h3><span className={`badge border ${statusBadges[cr.status] || ''}`}>{cr.status}</span><CopyLinkButton kind="change" id={cr.id} className="opacity-0 group-hover:opacity-100" /></div>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-xs text-muted-foreground">{cr.id}</span>
+                  <h3 className="font-medium text-card-foreground">{cr.title || 'Untitled'}</h3>
+                  <span className={`badge border ${statusBadges[cr.status] || ''}`}>{cr.status}</span>
+                  <span className={`badge border ${urgencyBadges[cr.urgency] || ''}`}>{cr.urgency}</span>
+                  <CopyLinkButton kind="change" id={cr.id} className="opacity-0 group-hover:opacity-100" />
+                </div>
                 {cr.description && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1"><AutoLinkText text={cr.description} kinds={entityKinds} /></p>}
+                <div className="flex flex-wrap items-center gap-2 mt-1 text-[10px] text-muted-foreground">
+                  {cr.submitted_by && <span>by <span className="font-medium text-foreground">{cr.submitted_by}</span></span>}
+                  {cr.rationale && <span className="italic">— {cr.rationale}</span>}
+                </div>
                 {cr.affected_requirements.length > 0 && (
                   <div className="flex flex-wrap items-center gap-1.5 mt-2">
                     <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Affects</span>
@@ -195,18 +313,85 @@ export default function ChangeRequestsPage() {
                     ))}
                   </div>
                 )}
+                {/* Redline: before/after per field */}
+                {rl && rl.targets.length > 0 && (
+                  <div className="mt-2 pt-2 border-t border-border text-xs">
+                    {rl.targets.map((t) => {
+                      const diffKeys = Object.keys(t.diffs);
+                      if (t.stale && diffKeys.length === 0 && rl.targets.length === 1) {
+                        return <span key={t.id} className="text-amber-400">Target {t.id} no longer exists</span>;
+                      }
+                      return (
+                        <div key={t.id} className="mb-1">
+                          <span className="font-mono text-muted-foreground">
+                            <EntityLink kind="requirement" id={t.id} name={t.name} className="hover:text-primary" />
+                          </span>
+                          {t.stale && <span className="ml-1 text-amber-400 italic">(stale)</span>}
+                          {diffKeys.length > 0 && (
+                            <div className="ml-2 mt-0.5 space-y-0">
+                              {diffKeys.map((field) => (
+                                <DiffField key={field} field={field} before={t.diffs[field].before} after={t.diffs[field].after} />
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
-              <div className="flex items-center gap-1">
-                <select className="select text-xs py-1 w-28" value={cr.status} onChange={e => handleStatus(cr.id, e.target.value)} disabled={!editable}>
-                  <option value="submitted">Submitted</option><option value="in_review">In Review</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="implemented">Implemented</option><option value="closed">Closed</option>
-                </select>
-                {editable && (
-                <button onClick={() => handleDelete(cr.id)} className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all" title="Delete"><Trash2 size={14} /></button>
+              <div className="flex items-center gap-1 shrink-0">
+                {editingCrId === cr.id ? (
+                  <div className="flex flex-col gap-1 items-end" onClick={(e) => e.stopPropagation()}>
+                    <input className="input text-xs w-36" placeholder="Title" value={editForm.title} onChange={e => setEditForm({...editForm, title: e.target.value})} />
+                    <select className="select text-xs w-36" value={editForm.urgency} onChange={e => setEditForm({...editForm, urgency: e.target.value})}>
+                      {CR_URGENCIES.map((u) => <option key={u} value={u}>{u}</option>)}
+                    </select>
+                    <div className="flex gap-1">
+                      <button onClick={() => handleModifySave(cr.id)} className="btn-primary text-xs py-0.5 px-2">Save</button>
+                      <button onClick={cancelEditing} className="btn-secondary text-xs py-0.5 px-2">Cancel</button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {canMaintain && (
+                      <button
+                        onClick={() => handleExecute(cr.id, rl)}
+                        className="p-1.5 rounded-md hover:bg-emerald-500/10 text-muted-foreground hover:text-emerald-400 opacity-0 group-hover:opacity-100 transition-all"
+                        title="Execute"
+                      >
+                        <Play size={14} />
+                      </button>
+                    )}
+                    {editable && (
+                      <button
+                        onClick={() => startEditing(cr)}
+                        className="p-1.5 rounded-md hover:bg-primary/10 text-muted-foreground hover:text-primary opacity-0 group-hover:opacity-100 transition-all"
+                        title="Modify"
+                      >
+                        <Edit3 size={14} />
+                      </button>
+                    )}
+                    {canMaintain && (
+                      <button
+                        onClick={() => handleReject(cr.id)}
+                        className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                        title="Reject"
+                      >
+                        <Ban size={14} />
+                      </button>
+                    )}
+                    {editable && (
+                      <button onClick={() => handleDelete(cr.id)} className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all" title="Delete">
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
             </div>
           </motion.div>
-        ))}
+        )})}
       </div>
       {selectedIds.size > 0 && canBulk && (
         <div className="sticky bottom-6 z-40 mx-auto w-fit max-w-full flex flex-wrap items-center justify-center gap-3 bg-card border rounded-xl shadow-2xl px-4 py-3">

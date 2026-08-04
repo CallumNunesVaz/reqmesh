@@ -221,6 +221,9 @@ def _required_guard(route: APIRoute) -> str | None:
                 return "require_maintain"
             if any(seg in path for seg in ("/change-requests", "/risks",
                     "/comments", "/decisions")):
+                # Execute and reject are maintainer-tier — they write requirements.
+                if path.endswith("/execute") or path.endswith("/reject"):
+                    return "require_maintain"
                 return "require_edit"
             return "require_maintain"
         return None
