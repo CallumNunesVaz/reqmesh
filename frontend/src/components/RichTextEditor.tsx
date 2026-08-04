@@ -138,7 +138,7 @@ export default function RichTextEditor({ content, onChange, onBlur, disabled = f
       return;
     }
     if (editor && content !== editor.getHTML()) {
-      editor.commands.setContent(content || '', false);
+      editor.commands.setContent(content || '', { emitUpdate: false });
     }
   }, [content, editor]);
 
