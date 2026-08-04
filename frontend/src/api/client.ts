@@ -1072,6 +1072,14 @@ export const api = {
     request<ChangeRequest>(`/projects/${projectId}/change-requests/${crId}`, { method: 'PUT', body: data }),
   deleteChangeRequest: (projectId: string, crId: string, force = false) =>
     request<{ok?: true} | undefined>(`/projects/${projectId}/change-requests/${crId}${force ? '?force=true' : ''}`, { method: 'DELETE' }),
+  getCRRedline: (projectId: string, crId: string) =>
+    request<CRRedline>(`/projects/${projectId}/change-requests/${crId}/redline`),
+  executeChangeRequest: (projectId: string, crId: string) =>
+    request<{ id: string; status: string; updated: number }>(`/projects/${projectId}/change-requests/${crId}/execute`, { method: 'POST' }),
+  rejectChangeRequest: (projectId: string, crId: string) =>
+    request<{ id: string; status: string }>(`/projects/${projectId}/change-requests/${crId}/reject`, { method: 'POST' }),
+  getRequirementFingerprint: (projectId: string, reqId: string) =>
+    request<{ id: string; fingerprint: string }>(`/projects/${projectId}/requirements/${reqId}/fingerprint`),
 
   // Risks
   getBacklinks: (projectId: string, entityId: string) =>
