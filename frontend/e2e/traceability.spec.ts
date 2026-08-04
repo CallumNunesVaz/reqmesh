@@ -2,6 +2,14 @@ import { test, expect, signIn, setEditMode, api, DEMO_PROJECT } from './fixtures
 
 const P = DEMO_PROJECT;
 
+function hexToRgb(hex: string): string {
+  const h = hex.replace('#', '');
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
 test.describe('risk matrix', () => {
   test('a risk rating is derived from the matrix, and re-banding re-rates it', async ({ app, server }) => {
     await signIn(app);
@@ -48,12 +56,15 @@ test.describe('risk matrix', () => {
     const after = (await api<any[]>(app, `/projects/${P}/risks`)).find((r) => r.id === 'RSK00006');
     expect(after.rating.band).not.toBe(bandBefore);
 
-    // And the list badge follows the matrix rather than a table in the client.
+    // And the severity indicator on the card follows the matrix rather than a
+    // table in the client — the coloured dot next to the title should carry
+    // the band that was just reassigned.
     await app.goto(`${server.baseURL}/project/${P}/risks`);
     await app.waitForSelector('main');
-    const badge = app.locator('main .card').filter({ hasText: 'RSK00006' })
-      .locator('span.badge').first();
-    await expect(badge).toHaveText(new RegExp(after.rating.label, 'i'));
+    const dot = app.locator('main .card').filter({ hasText: 'RSK00006' })
+      .locator('span.w-2.h-2.rounded-full').first();
+    const expected = hexToRgb(after.rating.color);
+    await expect(dot).toHaveCSS('background-color', expected);
   });
 });
 
