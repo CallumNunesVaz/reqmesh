@@ -260,20 +260,22 @@ test('toggling one baseline does not tick other cells in that row', async ({ app
 
 test('moving a baseline down reorders columns on the matrix', async ({ app, server }) => {
   await signIn(app);
-  // Create baselines without due dates so the monotonic check does not fire.
-  await postApi(app, `/projects/${P}/baselines`, { name: 'SRR', symbol: 'S' });
-  await postApi(app, `/projects/${P}/baselines`, { name: 'PDR', symbol: 'P' });
-  await postApi(app, `/projects/${P}/baselines`, { name: 'CDR', symbol: 'C' });
+  // Names of its own, deliberately not the demo's. The seeded project defines
+  // SRR/PDR/CDR/TRR *with* due dates, and creating over them keeps those dates —
+  // so a reorder here would be refused by the monotonic check and the test would
+  // be asserting against a rejected write rather than a reorder.
+  await postApi(app, `/projects/${P}/baselines`, { name: 'ZZA', symbol: 'A' });
+  await postApi(app, `/projects/${P}/baselines`, { name: 'ZZB', symbol: 'B' });
+  await postApi(app, `/projects/${P}/baselines`, { name: 'ZZC', symbol: 'C' });
   await app.goto(`${server.baseURL}/project/${P}/allocation`);
   await app.waitForSelector('main');
   await app.getByRole('tab', { name: 'Baselines' }).click();
   await app.waitForTimeout(1200);
 
   // Confirm initial order: SRR, PDR, CDR
+  const ours = (d: any) => d.columns.map((c: any) => c.id).filter((i: string) => i.startsWith('ZZ'));
   const beforeData = await api<any>(app, `/projects/${P}/allocation-matrix?axis=baselines`);
-  expect(beforeData.columns[0].id).toBe('SRR');
-  expect(beforeData.columns[1].id).toBe('PDR');
-  expect(beforeData.columns[2].id).toBe('CDR');
+  expect(ours(beforeData)).toEqual(['ZZA', 'ZZB', 'ZZC']);
 
   // Go to baselines page and move PDR down
   await app.goto(`${server.baseURL}/project/${P}/baselines`);
@@ -282,7 +284,7 @@ test('moving a baseline down reorders columns on the matrix', async ({ app, serv
   await app.waitForTimeout(1000);
 
   // Click "Move down" on PDR — find its card and click the button inside it
-  const pdrCard = app.locator('.card').filter({ hasText: 'PDR' }).first();
+  const pdrCard = app.locator('.card').filter({ hasText: 'ZZB' }).first();
   await pdrCard.locator('button[title="Move down"]').click();
   await app.waitForTimeout(2000);
 
@@ -293,35 +295,31 @@ test('moving a baseline down reorders columns on the matrix', async ({ app, serv
   await app.waitForTimeout(1200);
 
   const afterData = await api<any>(app, `/projects/${P}/allocation-matrix?axis=baselines`);
-  expect(afterData.columns[0].id).toBe('SRR');
-  expect(afterData.columns[1].id).toBe('CDR');
-  expect(afterData.columns[2].id).toBe('PDR');
+  expect(ours(afterData)).toEqual(['ZZA', 'ZZC', 'ZZB']);
 });
 
 test('a backwards due date shows the server error message', async ({ app, server }) => {
   await signIn(app);
-  await seedBaselines(app);
+  // Entirely its own baselines. The seeded project already defines SRR/PDR/CDR/TRR
+  // with ascending due dates, so borrowing those names meant creating over
+  // existing rows (409) and comparing against dates this test never set.
+  await postApi(app, `/projects/${P}/baselines`, { name: 'YYA', due_date: '2027-01-01' });
+  await postApi(app, `/projects/${P}/baselines`, { name: 'YYB', due_date: '2027-02-01' });
   await app.goto(`${server.baseURL}/project/${P}/baselines`);
   await app.waitForSelector('main');
   await setEditMode(app, true);
   await app.waitForTimeout(1000);
 
-  // Edit PDR and set a due date before SRR's 2026-01-01
-  const editBtns = app.locator('button[title="Edit baseline"]');
-  await expect(editBtns).toHaveCount(3);
-  // PDR is the second baseline (SRR, PDR, CDR)
-  await editBtns.nth(1).click();
+  // Pull YYB back before YYA, which the server must refuse.
+  const card = app.locator('.card').filter({ hasText: 'YYB' }).first();
+  await card.locator('button[title="Edit baseline"]').click();
   await app.waitForTimeout(500);
-
-  // Set due date before SRR's
-  const dateInput = app.locator('input[type="date"]');
-  await dateInput.fill('2025-06-01');
+  await app.locator('input[type="date"]').fill('2026-01-01');
   await app.waitForTimeout(300);
-
-  // Save
   await app.getByRole('button', { name: 'Save' }).click();
   await app.waitForTimeout(1500);
 
-  // The error must be visible
-  await expect(app.locator('main')).toContainText('Due dates must not go backwards');
+  // The error surfaces as a toast, which Layout renders outside `main`.
+  await expect(app.locator('body')).toContainText('Due dates must not go backwards');
 });
+
