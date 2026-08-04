@@ -75,39 +75,16 @@ def _evict_old_buckets(now: float, window_seconds: int) -> None:
         del _window_attempts[k]
 
 
-# Per-account login lockout counters (complement to the per-IP rate limit)
-_account_lockouts: dict[str, int] = {}
-_locks_cleared_at: float = 0.0
-
-
-def check_account_lockout(username: str, max_attempts: int, window_minutes: int) -> None:
-    """Progressive per-account lockout with exponential backoff.
-
-    Unlike the per-IP rate limit, this tracks lockout *counts* for repeated
-    lockouts on the same account, increasing the window exponentially.
-    """
-    if not max_attempts or not window_minutes:
-        return
-
-    global _locks_cleared_at
-    now = time.time()
-    if now - _locks_cleared_at > 3600:
-        _locks_cleared_at = now
-        _account_lockouts.clear()
-
-    count = _account_lockouts.get(username, 0) + 1
-    _account_lockouts[username] = count
-
-    if count <= 1:
-        return
-
-    # Exponential backoff: 2^count minutes
-    backoff = min(2 ** count, 60) * 60  # cap at 1 hour
-    if count > 3:
-        raise HTTPException(
-            status_code=429,
-            detail=f"Too many lockouts on this account. Try again later.",
-        )
+# Per-account lockout lives in `core.auth.authenticate`, not here. It counts
+# failed logins in the user record (`failed_attempts` / `locked_until`), so it
+# survives a restart and is visible to the admin user list.
+#
+# A second, in-memory "progressive lockout" used to sit at this point in the
+# file. It was dead: nothing called it, and the `lockout_progressive` setting
+# that documented it was read nowhere — so an operator reading the config saw a
+# defence that did not exist. Reviving it would also have been a downgrade: it
+# keyed an unevicted dict on the attacker-supplied username, which is a memory
+# footprint anyone could grow by posting logins for names that do not exist.
 
 
 def rate_limit(max_attempts: int = 5, window_seconds: int = 60):
