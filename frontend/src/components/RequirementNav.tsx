@@ -347,18 +347,24 @@ export default function RequirementNav({ width = 300, collapsed, onToggleCollaps
     return nodes.reduce((c, n) => c + 1 + countNodes(n.children), 0);
   }
 
-  const navItems = [
-    { to: `/project/${projectId}`, label: 'Overview', icon: Home },
-    { to: `/project/${projectId}/requirements`, label: 'Requirements', icon: ClipboardList },
-    { to: `/project/${projectId}/specifications`, label: 'Specifications', icon: FileText },
-    { to: `/project/${projectId}/components`, label: 'Components', icon: Boxes },
-    { to: `/project/${projectId}/verification`, label: 'Verification', icon: CheckCircle2 },
-    { to: `/project/${projectId}/traces`, label: 'Trace Matrix', icon: GitBranch },
-    { to: `/project/${projectId}/change-requests`, label: 'Change Requests', icon: GitPullRequest },
-    { to: `/project/${projectId}/risks`, label: 'Risks', icon: AlertTriangle },
-    { to: `/project/${projectId}/baselines`, label: 'Baselines', icon: History },
-    { to: `/project/${projectId}/allocation`, label: 'Allocation', icon: Grid3X3 },
-    { to: `/project/${projectId}/metrics`, label: 'Metrics', icon: BarChart3 },
+  const navGroups = [
+    [
+      { to: `/project/${projectId}`, label: 'Overview', icon: Home },
+    ],
+    [
+      { to: `/project/${projectId}/requirements`, label: 'Requirements', icon: ClipboardList },
+      { to: `/project/${projectId}/specifications`, label: 'Specifications', icon: FileText },
+      { to: `/project/${projectId}/components`, label: 'Components', icon: Boxes },
+      { to: `/project/${projectId}/verification`, label: 'Verification', icon: CheckCircle2 },
+      { to: `/project/${projectId}/risks`, label: 'Risks', icon: AlertTriangle },
+      { to: `/project/${projectId}/baselines`, label: 'Baselines', icon: History },
+    ],
+    [
+      { to: `/project/${projectId}/change-requests`, label: 'Change Requests', icon: GitPullRequest },
+      { to: `/project/${projectId}/allocation`, label: 'Allocation', icon: Grid3X3 },
+      { to: `/project/${projectId}/traces`, label: 'Trace Matrix', icon: GitBranch },
+      { to: `/project/${projectId}/metrics`, label: 'Metrics', icon: BarChart3 },
+    ],
   ];
 
   if (collapsed) {
@@ -371,20 +377,25 @@ export default function RequirementNav({ width = 300, collapsed, onToggleCollaps
         >
           <PanelLeft size={16} />
         </button>
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          const active = location.pathname === item.to;
-          return (
-            <button
-              key={item.to}
-              onClick={() => navigate(item.to)}
-              className={`p-1.5 rounded-md transition-all ${active ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent'}`}
-              title={item.label}
-            >
-              <Icon size={16} />
-            </button>
-          );
-        })}
+        {navGroups.map((group, gi) => (
+          <span key={gi} className="contents">
+            {gi > 0 && <span className="w-6 h-px bg-border/60" />}
+            {group.map((item) => {
+              const Icon = item.icon;
+              const active = location.pathname === item.to;
+              return (
+                <button
+                  key={item.to}
+                  onClick={() => navigate(item.to)}
+                  className={`p-1.5 rounded-md transition-all ${active ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent'}`}
+                  title={item.label}
+                >
+                  <Icon size={16} />
+                </button>
+              );
+            })}
+          </span>
+        ))}
       </div>
     );
   }
@@ -408,24 +419,29 @@ export default function RequirementNav({ width = 300, collapsed, onToggleCollaps
           </button>
         </div>
 
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          const active = location.pathname === item.to;
-          return (
-            <button
-              key={item.to}
-              onClick={() => navigate(item.to)}
-              className={`flex items-center gap-2 w-full px-3 py-1.5 text-xs font-medium rounded-lg transition-all mb-0.5 ${
-                active
-                  ? 'bg-primary text-primary-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent'
-              }`}
-            >
-              <Icon size={14} />
-              {item.label}
-            </button>
-          );
-        })}
+        {navGroups.map((group, gi) => (
+          <span key={gi} className="contents">
+            {gi > 0 && <div className="my-1.5 border-t border-border/40" />}
+            {group.map((item) => {
+              const Icon = item.icon;
+              const active = location.pathname === item.to;
+              return (
+                <button
+                  key={item.to}
+                  onClick={() => navigate(item.to)}
+                  className={`flex items-center gap-2 w-full px-3 py-1.5 text-xs font-medium rounded-lg transition-all mb-0.5 ${
+                    active
+                      ? 'bg-primary text-primary-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent'
+                  }`}
+                >
+                  <Icon size={14} />
+                  {item.label}
+                </button>
+              );
+            })}
+          </span>
+        ))}
 
         <div className="mt-3 pt-3 border-t">
           <div className="relative">
