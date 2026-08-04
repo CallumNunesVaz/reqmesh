@@ -782,7 +782,6 @@ function BulkEditModal({
     source: '',
     allocated_to: '',
     baselines: null as string[] | null,
-    derived: null as boolean | null,
     normative: null as boolean | null,
     system_states: '',
     subject: '',
@@ -816,7 +815,6 @@ function BulkEditModal({
     if (form.source) updates.source = form.source;
     if (form.allocated_to) updates.allocated_to = form.allocated_to;
     if (form.baselines !== null) updates.baselines = form.baselines;
-    if (form.derived !== null) updates.derived = form.derived;
     if (form.normative !== null) updates.normative = form.normative;
     if (form.system_states) updates.system_states = form.system_states.split(',').map(s => s.trim()).filter(Boolean);
     if (form.subject) updates.subject = form.subject;
@@ -1014,18 +1012,6 @@ function BulkEditModal({
 
               {/* Booleans */}
               <div className="flex items-center gap-6">
-                <label className="flex items-center gap-2 text-xs cursor-pointer">
-                  <span className="text-muted-foreground">Derived:</span>
-                  <select className="select text-xs py-0.5 w-24" value={form.derived === null ? '' : String(form.derived)}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setForm({ ...form, derived: v === '' ? null : v === 'true' });
-                    }}>
-                    <option value="">No change</option>
-                    <option value="true">True</option>
-                    <option value="false">False</option>
-                  </select>
-                </label>
                 <label className="flex items-center gap-2 text-xs cursor-pointer">
                   <span className="text-muted-foreground">Normative:</span>
                   <select className="select text-xs py-0.5 w-24" value={form.normative === null ? '' : String(form.normative)}
