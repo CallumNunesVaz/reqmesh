@@ -310,3 +310,22 @@ def test_attributes_on_requirements(demo):
     assert len(with_attrs) >= 6, (
         f"only {len(with_attrs)} requirements have attributes (need ≥ 6)"
     )
+
+
+def test_scores_are_zero_to_five_and_not_all_identical(demo):
+    """Every priority score is in 0..5, and the demo shows a spread."""
+    reqs = demo.list_requirements()
+    scores: set[int] = set()
+    for r in reqs:
+        for name, score in (r.get("priorities") or {}).items():
+            assert isinstance(score, int), (
+                f"{r['id']} priorities[{name!r}] = {score!r} is not an int"
+            )
+            assert 0 <= score <= 5, (
+                f"{r['id']} priorities[{name!r}] = {score} is outside 0..5"
+            )
+            scores.add(score)
+    # The demo must still show a spread — not every score the same.
+    assert len(scores) >= 3, (
+        f"demo priority scores are too uniform: only values {sorted(scores)}"
+    )

@@ -1075,6 +1075,14 @@ export const api = {
   runAnalysisCase: (projectId: string, caseId: string) =>
     request<EvaluationData & { case: AnalysisCase }>(`/projects/${projectId}/analysis/${encodeURIComponent(caseId)}/run`),
 
+  // Pugh matrix
+  getPugh: (projectId: string, datum?: string, limit: number = 8) => {
+    const qs = new URLSearchParams();
+    if (datum) qs.set('datum', datum);
+    qs.set('limit', String(limit));
+    return request<PughMatrix>(`/projects/${projectId}/pugh?${qs.toString()}`);
+  },
+
   // Metrics & Compliance
   getMetrics: (projectId: string) => request<MetricsData>(`/projects/${projectId}/metrics`),
   getCompliance: (projectId: string) =>

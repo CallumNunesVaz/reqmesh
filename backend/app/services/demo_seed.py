@@ -78,7 +78,7 @@ def _requirements() -> list[dict]:
         "FAR Part 23 Amendment 64",
         baselines=["PDR"],
         needs=["design"],
-        priorities={"development": 10, "customers": 10, "safety": 10},
+        priorities={"development": 5, "customers": 5, "safety": 5},
     ))
 
     # ════════════════════════════════════════════════════════════
@@ -100,7 +100,7 @@ def _requirements() -> list[dict]:
         baselines=["PDR"],
         allocated="Airframe Team",
         needs=["design", "verification_case"],
-        priorities={"development": 5, "safety": 10, "customers": 3},
+        priorities={"development": 3, "safety": 5, "customers": 2},
     ))
 
     r.append(_req(
@@ -116,7 +116,7 @@ def _requirements() -> list[dict]:
         "Cessna DS-110",
         allocated="Structures",
         needs=["design"],
-        priorities={"development": 3, "safety": 5, "customers": 5},
+        priorities={"development": 2, "safety": 3, "customers": 3},
     ))
 
     r.append(_req(
@@ -132,7 +132,7 @@ def _requirements() -> list[dict]:
         " vs lap belts alone.",
         "FAR 23.561, FAR 23.785",
         needs=["design", "verification_case"],
-        priorities={"development": 2, "safety": 8, "customers": 5},
+        priorities={"development": 1, "safety": 4, "customers": 3},
     ))
 
     r.append(_req(
@@ -152,7 +152,7 @@ def _requirements() -> list[dict]:
         "GAMA Publication 10, Cessna DR-420",
         allocated="Cockpit Integration",
         needs=["design"],
-        priorities={"development": 3, "customers": 8, "safety": 4},
+        priorities={"development": 2, "customers": 4, "safety": 2},
     ))
 
     r.append(_req(
@@ -171,7 +171,7 @@ def _requirements() -> list[dict]:
         "Cessna DS-120",
         baselines=["PDR"],
         needs=["design", "verification_case"],
-        priorities={"development": 5, "safety": 5, "customers": 6},
+        priorities={"development": 3, "safety": 3, "customers": 3},
     ))
 
     r.append(_req(
@@ -187,7 +187,7 @@ def _requirements() -> list[dict]:
         " corresponds to the Normal Category envelope.",
         "FAR 23.337, FAR 23.305",
         needs=["verification_case"],
-        priorities={"development": 3, "safety": 10},
+        priorities={"development": 2, "safety": 5},
     ))
 
     r.append(_req(
@@ -205,7 +205,7 @@ def _requirements() -> list[dict]:
         "FAR 23.963, Cessna DS-121",
         allocated="Fuel Systems",
         needs=["design", "verification_case"],
-        priorities={"development": 3, "safety": 5, "customers": 4},
+        priorities={"development": 2, "safety": 3, "customers": 2},
     ))
 
     r.append(_req(
@@ -218,7 +218,7 @@ def _requirements() -> list[dict]:
         "system", "approved", "high",
         baselines=["PDR"],
         needs=["design"],
-        priorities={"development": 3, "safety": 4, "customers": 2},
+        priorities={"development": 2, "safety": 2, "customers": 1},
     ))
 
     r.append(_req(
@@ -231,7 +231,7 @@ def _requirements() -> list[dict]:
         " not exceed 10 lb at V_A.</p>",
         "system", "approved", "medium",
         needs=["design", "verification_case"],
-        priorities={"development": 2, "safety": 3},
+        priorities={"development": 1, "safety": 2},
     ))
 
     r.append(_req(
@@ -243,7 +243,7 @@ def _requirements() -> list[dict]:
         " trim tab. Pedal forces shall not exceed 50 lb at V_A.</p>",
         "system", "approved", "medium",
         needs=["design"],
-        priorities={"development": 2, "safety": 3},
+        priorities={"development": 1, "safety": 2},
     ))
 
     # ════════════════════════════════════════════════════════════
@@ -266,7 +266,7 @@ def _requirements() -> list[dict]:
         baselines=["PDR"],
         allocated="Powerplant Team",
         needs=["design", "verification_case"],
-        priorities={"development": 5, "safety": 8, "customers": 5, "maintenance": 4},
+        priorities={"development": 3, "safety": 4, "customers": 3, "maintenance": 2},
     ))
 
     r.append(_req(
@@ -283,7 +283,7 @@ def _requirements() -> list[dict]:
         "Lycoming IO-360 Operator's Manual",
         allocated="Engine Integration",
         needs=["design", "verification_case"],
-        priorities={"development": 3, "safety": 8, "maintenance": 5},
+        priorities={"development": 2, "safety": 4, "maintenance": 3},
     ))
 
     r.append(_req(
@@ -301,7 +301,7 @@ def _requirements() -> list[dict]:
         " spread.",
         "Lycoming Service Instruction 1427",
         needs=["design"],
-        priorities={"development": 3, "safety": 6, "maintenance": 2},
+        priorities={"development": 2, "safety": 3, "maintenance": 1},
     ))
 
     r.append(_req(
@@ -323,7 +323,7 @@ def _requirements() -> list[dict]:
         " failure.",
         "FAR 33.37, Lycoming Service Instruction 1148",
         needs=["design", "verification_case"],
-        priorities={"development": 3, "safety": 10},
+        priorities={"development": 2, "safety": 5},
     ))
 
     r.append(_req(
@@ -344,7 +344,7 @@ def _requirements() -> list[dict]:
         "Garmin G1000 NXi Engine Indication",
         allocated="Avionics Integration",
         needs=["design"],
-        priorities={"development": 2, "customers": 5, "maintenance": 6},
+        priorities={"development": 1, "customers": 3, "maintenance": 3},
     ))
 
     r.append(_req(
@@ -363,7 +363,7 @@ def _requirements() -> list[dict]:
         "McCauley TCDS P-874",
         allocated="Powerplant",
         needs=["verification_case"],
-        priorities={"development": 2, "customers": 6, "safety": 3},
+        priorities={"development": 1, "customers": 3, "safety": 2},
     ))
 
     r.append(_req(
@@ -387,7 +387,7 @@ def _requirements() -> list[dict]:
         baselines=["CDR"],
         allocated="Fuel Systems",
         needs=["design", "verification_case"],
-        priorities={"development": 4, "safety": 9, "maintenance": 3},
+        priorities={"development": 2, "safety": 5, "maintenance": 2},
     ))
 
     # ════════════════════════════════════════════════════════════
@@ -413,7 +413,7 @@ def _requirements() -> list[dict]:
         baselines=["CDR"],
         allocated="Avionics Integration",
         needs=["design", "verification_case"],
-        priorities={"development": 8, "customers": 9, "safety": 6},
+        priorities={"development": 4, "customers": 5, "safety": 3},
     ))
 
     r.append(_req(
@@ -434,7 +434,7 @@ def _requirements() -> list[dict]:
         " single-pilot IFR platform.",
         "Garmin G1000 NXi Pilot's Guide",
         needs=["design", "verification_case"],
-        priorities={"development": 4, "safety": 8, "customers": 7},
+        priorities={"development": 2, "safety": 4, "customers": 4},
     ))
 
     r.append(_req(
@@ -454,7 +454,7 @@ def _requirements() -> list[dict]:
         " for student pilots navigating unfamiliar airspace.",
         "Garmin G1000 NXi Pilot's Guide",
         needs=["design"],
-        priorities={"development": 4, "customers": 8, "safety": 5},
+        priorities={"development": 2, "customers": 4, "safety": 3},
     ))
 
     # Decision record for G1000 NXi selection
@@ -491,7 +491,7 @@ def _requirements() -> list[dict]:
         " redundancy and compatibility with legacy procedures.",
         "14 CFR 91.227, Garmin G1000 NXi AFMS",
         needs=["design", "verification_case"],
-        priorities={"development": 5, "safety": 8, "customers": 6},
+        priorities={"development": 3, "safety": 4, "customers": 3},
     ))
 
     r.append(_req(
@@ -510,7 +510,7 @@ def _requirements() -> list[dict]:
         " navigation.",
         "TSO-C145d, Garmin GIA 64W Specification",
         needs=["design"],
-        priorities={"development": 4, "safety": 9},
+        priorities={"development": 2, "safety": 5},
     ))
 
     r.append(_req(
@@ -529,7 +529,7 @@ def _requirements() -> list[dict]:
         " training for the instrument rating practical test.",
         "TSO-C36e, TSO-C40c",
         needs=["design"],
-        priorities={"development": 2, "safety": 5, "customers": 4},
+        priorities={"development": 1, "safety": 3, "customers": 2},
     ))
 
     r.append(_req(
@@ -547,7 +547,7 @@ def _requirements() -> list[dict]:
         " enable simultaneous monitoring of ATC and ATIS/AWOS.",
         "ICAO Annex 10, EASA AMC 20-25",
         needs=["design", "verification_case"],
-        priorities={"development": 3, "safety": 5, "customers": 6},
+        priorities={"development": 2, "safety": 3, "customers": 3},
     ))
 
     r.append(_req(
@@ -561,7 +561,7 @@ def _requirements() -> list[dict]:
         " radio reception.</p>",
         "functional", "approved", "medium",
         needs=["design"],
-        priorities={"development": 2, "customers": 3},
+        priorities={"development": 1, "customers": 2},
     ))
 
     r.append(_req(
@@ -581,7 +581,7 @@ def _requirements() -> list[dict]:
         " minimal additional hardware cost.",
         "DO-260B, 14 CFR 91.225, 14 CFR 91.227",
         needs=["design", "verification_case"],
-        priorities={"development": 4, "safety": 9, "customers": 7},
+        priorities={"development": 2, "safety": 5, "customers": 4},
     ))
 
     r.append(_req(
@@ -595,7 +595,7 @@ def _requirements() -> list[dict]:
         " music input with automatic muting during radio reception.</p>",
         "interface", "approved", "medium",
         needs=["design"],
-        priorities={"development": 2, "customers": 6},
+        priorities={"development": 1, "customers": 3},
     ))
 
     # ════════════════════════════════════════════════════════════
@@ -619,7 +619,7 @@ def _requirements() -> list[dict]:
         baselines=["PDR"],
         allocated="Flight Controls Team",
         needs=["design", "verification_case"],
-        priorities={"development": 5, "safety": 10, "customers": 3},
+        priorities={"development": 3, "safety": 5, "customers": 2},
     ))
 
     r.append(_req(
@@ -633,7 +633,7 @@ def _requirements() -> list[dict]:
         " a minimum breaking strength of 920 lb.</p>",
         "functional", "approved", "critical",
         needs=["design"],
-        priorities={"development": 4, "safety": 9},
+        priorities={"development": 2, "safety": 5},
     ))
 
     r.append(_req(
@@ -653,7 +653,7 @@ def _requirements() -> list[dict]:
         " the Frise nose this produces a proverse yaw moment that"
         " reduces the need for coordinated rudder input.",
         needs=["design", "verification_case"],
-        priorities={"development": 3, "safety": 5},
+        priorities={"development": 2, "safety": 3},
     ))
 
     r.append(_req(
@@ -672,7 +672,7 @@ def _requirements() -> list[dict]:
         " providing a linear trim-force gradient that pilots"
         " find intuitive.",
         needs=["design"],
-        priorities={"development": 3, "safety": 5},
+        priorities={"development": 2, "safety": 3},
     ))
 
     r.append(_req(
@@ -685,7 +685,7 @@ def _requirements() -> list[dict]:
         " at typical cruise power settings (2400 RPM, leaned).</p>",
         "system", "approved", "medium",
         needs=["design"],
-        priorities={"development": 2, "safety": 3, "customers": 4},
+        priorities={"development": 1, "safety": 2, "customers": 2},
     ))
 
     r.append(_req(
@@ -705,7 +705,7 @@ def _requirements() -> list[dict]:
         " the normal landing setting.  The Cessna 172S POH"
         " recommends 10° for short-field takeoff.",
         needs=["design", "verification_case"],
-        priorities={"development": 4, "safety": 6, "customers": 5},
+        priorities={"development": 2, "safety": 3, "customers": 3},
     ))
 
     r.append(_req(
@@ -726,7 +726,7 @@ def _requirements() -> list[dict]:
         " intermediate settings.",
         allocated="Electrical Integration",
         needs=["design"],
-        priorities={"development": 2, "safety": 4},
+        priorities={"development": 1, "safety": 2},
     ))
 
     r.append(_req(
@@ -748,7 +748,7 @@ def _requirements() -> list[dict]:
         " but the manual wheel provides a reliable mechanical"
         " baseline and is used as the primary means of trimming.",
         needs=["design"],
-        priorities={"development": 2, "customers": 5},
+        priorities={"development": 1, "customers": 3},
     ))
 
     # ── Landing Gear ───────────────────────────────────────────────────────
@@ -771,7 +771,7 @@ def _requirements() -> list[dict]:
         baselines=["CDR"],
         allocated="Landing Gear Team",
         needs=["design", "verification_case"],
-        priorities={"development": 3, "safety": 6, "maintenance": 5},
+        priorities={"development": 2, "safety": 3, "maintenance": 3},
     ))
 
     r.append(_req(
@@ -784,7 +784,7 @@ def _requirements() -> list[dict]:
         " to 100 mph.  The track shall be 8 ft 4.5 in.</p>",
         "system", "approved", "high",
         needs=["design"],
-        priorities={"development": 2, "safety": 4},
+        priorities={"development": 1, "safety": 2},
     ))
 
     r.append(_req(
@@ -803,7 +803,7 @@ def _requirements() -> list[dict]:
         " a wear item requiring inspection every 100 hours; its"
         " design as a sealed hydraulic unit minimizes maintenance.",
         needs=["design"],
-        priorities={"development": 2, "safety": 4, "maintenance": 4},
+        priorities={"development": 1, "safety": 2, "maintenance": 2},
     ))
 
     r.append(_req(
@@ -823,7 +823,7 @@ def _requirements() -> list[dict]:
         " hands-free run-up.  Adequate holding force at full"
         " static RPM is essential for the pre-takeoff engine check.",
         needs=["design", "verification_case"],
-        priorities={"development": 2, "safety": 8},
+        priorities={"development": 1, "safety": 4},
     ))
 
     # ════════════════════════════════════════════════════════════
@@ -850,7 +850,7 @@ def _requirements() -> list[dict]:
         baselines=["CDR"],
         allocated="Electrical Systems",
         needs=["design", "verification_case"],
-        priorities={"development": 4, "safety": 7, "maintenance": 3},
+        priorities={"development": 2, "safety": 4, "maintenance": 2},
     ))
 
     r.append(_req(
@@ -865,7 +865,7 @@ def _requirements() -> list[dict]:
         " of charging current to the battery at 1000 RPM.</p>",
         "system", "approved", "high",
         needs=["design"],
-        priorities={"development": 3, "safety": 4},
+        priorities={"development": 2, "safety": 2},
     ))
 
     r.append(_req(
@@ -887,7 +887,7 @@ def _requirements() -> list[dict]:
         " airport in an alternator-out scenario in the traffic"
         " pattern (worst case).",
         needs=["verification_case"],
-        priorities={"development": 2, "safety": 8},
+        priorities={"development": 1, "safety": 4},
     ))
 
     r.append(_req(
@@ -904,7 +904,7 @@ def _requirements() -> list[dict]:
         " breakers rated at 125% of maximum continuous load.</p>",
         "non_functional_reliability", "approved", "high",
         needs=["design"],
-        priorities={"development": 3, "safety": 6},
+        priorities={"development": 2, "safety": 3},
     ))
 
     r.append(_req(
@@ -918,7 +918,7 @@ def _requirements() -> list[dict]:
         " detected.</p>",
         "interface", "approved", "low",
         needs=["design"],
-        priorities={"development": 1, "maintenance": 3},
+        priorities={"development": 1, "maintenance": 2},
     ))
 
     # ════════════════════════════════════════════════════════════
@@ -936,7 +936,7 @@ def _requirements() -> list[dict]:
         "functional", "approved", "high",
         baselines=["CDR"],
         needs=["design"],
-        priorities={"development": 2, "customers": 7, "safety": 2},
+        priorities={"development": 1, "customers": 4, "safety": 1},
     ))
 
     r.append(_req(
@@ -958,7 +958,7 @@ def _requirements() -> list[dict]:
         " the FAA's 2023 policy encouraging active CO detection.",
         "FAR 23.831, AD 73-08-03",
         needs=["design", "verification_case"],
-        priorities={"development": 2, "safety": 7, "customers": 5},
+        priorities={"development": 1, "safety": 4, "customers": 3},
     ))
 
     r.append(_req(
@@ -972,7 +972,7 @@ def _requirements() -> list[dict]:
         " the vent bezel.</p>",
         "functional", "approved", "medium",
         needs=["design"],
-        priorities={"development": 1, "customers": 5},
+        priorities={"development": 1, "customers": 3},
     ))
 
     r.append(_req(
@@ -989,7 +989,7 @@ def _requirements() -> list[dict]:
         " system for IFR operations or any flight encountering"
         " visible moisture.",
         needs=["design", "verification_case"],
-        priorities={"development": 1, "safety": 9},
+        priorities={"development": 1, "safety": 5},
     ))
 
     # ════════════════════════════════════════════════════════════
@@ -1012,7 +1012,7 @@ def _requirements() -> list[dict]:
         " enhanced.",
         "FAR 23.1300, FAR 23.1309",
         needs=["design", "verification_case"],
-        priorities={"development": 3, "safety": 10, "customers": 5},
+        priorities={"development": 2, "safety": 5, "customers": 3},
     ))
 
     r.append(_req(
@@ -1033,7 +1033,7 @@ def _requirements() -> list[dict]:
         " activation during normal approach speeds.",
         "FAR 23.207",
         needs=["design", "verification_case"],
-        priorities={"development": 2, "safety": 10},
+        priorities={"development": 1, "safety": 5},
     ))
 
     r.append(_req(
@@ -1051,7 +1051,7 @@ def _requirements() -> list[dict]:
         " emergency procedure (fuel shutoff, dive to extinguish,"
         " forced landing) before structural damage occurs.",
         needs=["design", "verification_case"],
-        priorities={"development": 1, "safety": 10},
+        priorities={"development": 1, "safety": 5},
     ))
 
     r.append(_req(
@@ -1072,7 +1072,7 @@ def _requirements() -> list[dict]:
         " crew is incapacitated.",
         "TSO-C126b",
         needs=["verification_case"],
-        priorities={"development": 1, "safety": 10},
+        priorities={"development": 1, "safety": 5},
     ))
 
     r.append(_req(
@@ -1094,7 +1094,7 @@ def _requirements() -> list[dict]:
         " preventive maintenance item (FAR 43 Appendix A).",
         "FAR 23.1385, FAR 23.1401",
         needs=["design"],
-        priorities={"development": 2, "customers": 3, "safety": 6},
+        priorities={"development": 1, "customers": 2, "safety": 3},
     ))
 
     # ════════════════════════════════════════════════════════════
@@ -1119,7 +1119,7 @@ def _requirements() -> list[dict]:
         "FAA AD 2024-01-05, NTSB A-22-3",
         derived=True,
         needs=["design"],
-        priorities={"safety": 10, "maintenance": 5},
+        priorities={"safety": 5, "maintenance": 3},
     ))
 
     # ════════════════════════════════════════════════════════════
