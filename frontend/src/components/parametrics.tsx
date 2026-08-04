@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, X, Sigma, CheckCircle2, XCircle, HelpCircle, AlertTriangle, MinusCircle, FlaskConical, Ruler, Boxes, ArrowUp, ArrowDown, Beaker } from 'lucide-react';
+import { Plus, X, Sigma, CheckCircle2, XCircle, HelpCircle, AlertTriangle, MinusCircle, FlaskConical, Ruler, Boxes, ArrowUp, ArrowDown, Beaker, Play } from 'lucide-react';
 import type {
   Parameter, Constraint, Definition,
   EvaluatedRequirement, EvaluatedConstraint, EvalVerdict, ConstraintStatus,
@@ -145,6 +145,16 @@ export function ParametricsCard({ reqId, parameters, constraints, evaluated, edi
         {evaluated?.measured_verdict && (
           <VerdictBadge status={evaluated.measured_verdict} prefix="measured" />
         )}
+        {whatIf && (
+          <button
+            onClick={() => whatIf.evaluate()}
+            disabled={Object.keys(whatIf.overrides).length === 0}
+            className="ml-auto inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded border bg-primary/10 text-primary border-primary/30 hover:bg-primary/20 disabled:opacity-30 disabled:cursor-not-allowed transition-colors shrink-0"
+            title="Evaluate overrides"
+          >
+            <Play size={10} /> Evaluate
+          </button>
+        )}
       </div>
 
       {/* Parameters */}
@@ -192,6 +202,12 @@ export function ParametricsCard({ reqId, parameters, constraints, evaluated, edi
                               const n = parseFloat(e.target.value);
                               if (!isNaN(n)) {
                                 whatIf.setOverride(ref, n, p.value ?? 0);
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                whatIf.evaluate();
                               }
                             }}
                           />

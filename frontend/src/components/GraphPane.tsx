@@ -33,6 +33,7 @@ import { useTheme } from './ThemeProvider';
 import { useSelectedReq, useContextPane } from './Layout';
 import { useStore } from '../store';
 import { useWhatIf } from './WhatIfContext';
+import { requirementVerdict } from '../lib/whatIfVerdict';
 import { formatReqType, reqTypeColor } from '../lib/requirementTypes';
 import { effectiveHiddenComponents, filterableComponentIds, isReqHiddenByComponents, isReqHiddenByBaselines, migrateLegacyFilterList, requirementsRevealed, pruneUnknownIds } from '../lib/graphFilters';
 
@@ -928,6 +929,13 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
       }
     }
 
+    // Verdict of the requirement currently highlighted on the canvas (the
+    // step owner).  Passed as node data so the node component can colour its
+    // pulse by verdict — green for pass, red for fail, neutral for unknown.
+    const wfStepVerdict = wfEval && wfStepOwner
+      ? requirementVerdict(wfEval, wfStepOwner)
+      : null;
+
     const nodes: Node[] = filteredReqs.filter(r => visIds.has(r.id)).map(req => {
       // Parametric compartments: prefer evaluated values (derived params get
       // their computed number), fall back to the raw declarations.
@@ -1029,6 +1037,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
           previewDelta: previewByReq.get(req.id)?.delta ?? null,
           isOverrideRoot: wfRootOwners.has(req.id),
           pulseActive: wfStepOwner === req.id,
+          wfStepVerdict,
           vcCount: (req.verification_cases ?? []).length,
           desc: stripHtml(req.description).slice(0, 320),
           hasMissingInfo: !req.description || !req.name || !req.rationale || (req.verification_cases?.length ?? 0) === 0,
@@ -2285,8 +2294,8 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
           85%, 100% { transform: translateY(min(0px, calc(-100% + var(--desc-h, 46px)))); }
         }
         @keyframes rtPulse {
-          0%, 100% { filter: drop-shadow(0 0 4px currentColor) drop-shadow(0 0 8px currentColor); }
-          50% { filter: drop-shadow(0 0 12px currentColor) drop-shadow(0 0 20px currentColor); }
+          0%, 100% { filter: drop-shadow(0 0 6px currentColor) drop-shadow(0 0 14px currentColor) !important; }
+          50% { filter: drop-shadow(0 0 16px currentColor) drop-shadow(0 0 28px currentColor) !important; }
         }
         .rt-pulse {
           animation: rtPulse 0.6s ease-in-out infinite;
