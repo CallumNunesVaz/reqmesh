@@ -111,6 +111,16 @@ export default function RequirementDetailPage() {
   const [projectBaselines, setProjectBaselines] = useState<string[]>([]);
   const [projectSystemStates, setProjectSystemStates] = useState<SystemStateDef[]>([]);
   const statusOptions = workflow?.states || ['proposed', 'approved', 'implemented', 'verified', 'rejected', 'deprecated'];
+  /** Reachable states from the current one per the project workflow.
+   *  Always includes the current value so a requirement in a state the workflow
+   *  no longer mentions (hand-edited YAML, renamed workflow) still reads correctly. */
+  const allowedStatuses = useMemo(() => {
+    if (!workflow?.transitions || !req) return statusOptions;
+    const allowed = workflow.transitions[req.status] || [];
+    const set = new Set(allowed);
+    set.add(req.status);
+    return Array.from(set);
+  }, [workflow, req?.status, statusOptions]);
   const refSuggestions = useMemo(() => {
     const reqItems = [...allReqs, req].filter(Boolean).map((r) => ({ id: r!.id, label: r!.name || r!.id }));
     const vcItems = allVcs.map((v) => ({ id: v.id, label: v.name || v.id }));
@@ -1216,7 +1226,7 @@ export default function RequirementDetailPage() {
               <div>
                 <label className="label">Status</label>
         <select className="select" value={req.status} onChange={(e) => save({ status: e.target.value })} disabled={!editable} style={{ color: statusColors[req.status]?.text }}>
-          {statusOptions.map((s) => (<option key={s} value={s} style={{ color: statusColors[s]?.text }}>{s}</option>))}
+          {allowedStatuses.map((s) => (<option key={s} value={s} style={{ color: statusColors[s]?.text }}>{s}</option>))}
         </select>
       </div>
               <div>
