@@ -19,6 +19,9 @@ class AnalysisCase(BaseModel):
     doc: str = ""
     # Requirement ids to evaluate; empty means the whole project.
     scope: list[str] = Field(default_factory=list)
+    #: Components in scope for this analysis. A thermal or mass study is scoped
+    #: to hardware at least as often as to requirements.
+    scope_components: list[str] = Field(default_factory=list)
     # Hypothetical parameter values, keyed by fully-qualified ref "ENTITY.param".
     overrides: dict[str, float] = Field(default_factory=dict)
 
@@ -28,6 +31,7 @@ class AnalysisCaseCreate(BaseModel):
     name: str = ""
     doc: str = ""
     scope: list[str] = Field(default_factory=list)
+    scope_components: list[str] = Field(default_factory=list)
     overrides: dict[str, float] = Field(default_factory=dict)
 
 
@@ -35,4 +39,5 @@ class AnalysisCaseUpdate(BaseModel):
     name: Optional[str] = None
     doc: Optional[str] = None
     scope: Optional[list[str]] = None
+    scope_components: Optional[list[str]] = None
     overrides: Optional[dict[str, float]] = None
