@@ -267,10 +267,15 @@ export default function TraceMatrixPage() {
         </div>
       ) : (
         <div className="card mt-6 overflow-auto max-h-[70vh]">
-          <table className="text-sm border-separate border-spacing-0">
+          <table className="text-sm border-separate border-spacing-0 w-full">
+            {/* Same reasoning as the allocation matrix: `w-full` lets a sparse
+                matrix fill the pane rather than leaving a blank strip beside it,
+                while the cells' min-widths keep a dense one overflowing into the
+                container's scroll. The header column takes a width so the
+                surplus goes to the data columns instead of the long ids. */}
             <thead>
               <tr>
-                <th className="sticky top-0 left-0 z-20 bg-card border-b border-r px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider text-left min-w-[100px]">
+                <th className="sticky top-0 left-0 z-20 bg-card border-b border-r px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider text-left w-[180px] min-w-[100px]">
                   Source \ Target
                 </th>
                 {matrixTargets.map((tgt) => (
