@@ -198,10 +198,21 @@ export default function AllocationMatrixPage() {
             </div>
           </div>
         ) : (
-          <table className="border-collapse text-xs">
+          <table className="border-collapse text-xs w-full">
+            {/* `w-full` so a sparse axis fills the pane instead of leaving a
+                blank strip down its right side — the baselines axis is five
+                columns and used 437px of 620px. Because `min-width` on the cells
+                still holds, a dense axis (components is 81 columns) overflows
+                exactly as before and the container scrolls. Both are the browser
+                reflowing on width, so it tracks the resizable pane with no JS. */}
             <thead>
               <tr>
-                <th className="sticky top-0 left-0 z-20 bg-card border-b border-r px-3 py-2 text-left font-semibold text-muted-foreground min-w-[140px]">
+                {/* A width, not just a min-width: with `table-layout: auto` the
+                    surplus is handed out in proportion to each column's
+                    max-content, and the requirement names are far longer than a
+                    tick, so this column would swallow nearly all of it and leave
+                    the cells as narrow as they started. */}
+                <th className="sticky top-0 left-0 z-20 bg-card border-b border-r px-3 py-2 text-left font-semibold text-muted-foreground w-[200px] min-w-[140px]">
                   {transpose ? data.column_label.replace(/s$/, '') : 'Requirement'}
                 </th>
                 {cols.map((col: any) => {
