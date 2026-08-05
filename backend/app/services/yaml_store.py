@@ -5,6 +5,7 @@ import hashlib
 import os
 import tempfile
 import threading
+from collections import OrderedDict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -59,7 +60,8 @@ def _fast_reader() -> YAML:
 # cheap signature of the directory (each file's mtime_ns + size) — one scandir
 # instead of re-parsing every file on every call. Without it a single page load
 # re-parsed the whole project a dozen times over.
-_collection_cache: dict[str, tuple[tuple, list[dict]]] = {}
+_CACHE_MAX_ENTRIES = 64
+_collection_cache: "OrderedDict[str, tuple[tuple, list[dict]]]" = OrderedDict()
 _cache_lock = threading.Lock()
 
 
@@ -235,12 +237,15 @@ class YamlStore:
         with _cache_lock:
             hit = _collection_cache.get(key)
             if hit is not None and hit[0] == signature:
+                _collection_cache.move_to_end(key)
                 # Copy so a caller mutating a result can't poison the cache.
                 return [dict(item) for item in hit[1]]
 
         items = self._read_collection(d)
         with _cache_lock:
             _collection_cache[key] = (signature, [dict(i) for i in items])
+            while len(_collection_cache) > _CACHE_MAX_ENTRIES:
+                _collection_cache.popitem(last=False)
         return items
 
     def _read_collection(self, d: Path) -> list[dict]:

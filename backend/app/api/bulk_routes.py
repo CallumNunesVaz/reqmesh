@@ -314,6 +314,19 @@ def bulk_reparent_requirements(project_id: str, data: dict, user: dict = Depends
 
     new_prefix = _leading_prefix(new_parent) if new_parent else ""
 
+    # Pre-scan all requirements once to build the used-numbers set for the
+    # destination prefix.  The per-id rescan in the old code was O(n·m) with
+    # a regex per pair; moving 200 requirements in a 5000-requirement project
+    # was a million regex matches.  This single scan feeds a live set that
+    # each group updates with its own allocations, matching the old rescan
+    # result exactly.
+    used_nums_by_prefix: dict[str, set[int]] = {}
+    if new_prefix and re_prefix:
+        for r in store.list_requirements():
+            mm = re.match(r"^" + re.escape(new_prefix) + r"\D*(\d+)$", r["id"])
+            if mm:
+                used_nums_by_prefix.setdefault(new_prefix, set()).add(int(mm.group(1)))
+
     updated: list[str] = []
     id_map: dict[str, str] = {}  # old_id -> new_id, across every moved subtree
 
@@ -324,27 +337,26 @@ def bulk_reparent_requirements(project_id: str, data: dict, user: dict = Depends
         old_prefix = _leading_prefix(req_id)
         if re_prefix and new_parent and new_prefix and old_prefix and old_prefix != new_prefix:
             subtree = _collect_subtree(children_by_parent, req_id)
-            subtree_set = set(subtree)
             # Mirror the new parent's ID shape (separator + zero-padded width)
             # so re-prefixed IDs match the destination namespace's convention.
             pm = re.match(r"^[A-Za-z]+(\D*)(\d+)$", new_parent)
             sep, width = (pm.group(1), len(pm.group(2))) if pm else ("", 4)
-            # Allocate fresh suffixes past whatever the new prefix already uses,
-            # so a moved item never overwrites an existing ID (e.g. the parent).
-            used_nums = set()
-            for r in store.list_requirements():
-                if r["id"] in subtree_set:
-                    continue
-                mm = re.match(r"^" + re.escape(new_prefix) + r"\D*(\d+)$", r["id"])
-                if mm:
-                    used_nums.add(int(mm.group(1)))
-            next_num = (max(used_nums) + 1) if used_nums else 1
+            # Use the pre-scanned used-numbers set, warmed by allocations from
+            # earlier groups.  Exclude any subtree node that already bears the
+            # new prefix — the old per-id scan did the same, and changing it
+            # would shift the allocation.
+            live_nums = used_nums_by_prefix.setdefault(new_prefix, set())
+            subtree_new_nums = {int(mm.group(1)) for old_id in subtree
+                                if (mm := re.match(r"^" + re.escape(new_prefix) + r"\D*(\d+)$", old_id))}
+            effective_used = live_nums - subtree_new_nums
+            next_num = (max(effective_used) + 1) if effective_used else 1
             # Only nodes that share the moved group's prefix are renamed; other
             # descendants keep their ID but still get their parent pointer fixed.
             local_map = {old_id: old_id for old_id in subtree}
             for old_id in subtree:
                 if old_id.startswith(old_prefix):
                     local_map[old_id] = f"{new_prefix}{sep}{str(next_num).zfill(width)}"
+                    live_nums.add(next_num)
                     next_num += 1
             for old_id in subtree:
                 node = store.get_requirement(old_id)
