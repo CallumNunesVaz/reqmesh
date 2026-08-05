@@ -213,7 +213,7 @@ export function ParametricsCard({ reqId, parameters, constraints, evaluated, edi
                           />
                         )}
                         <button
-                          className={`shrink-0 ${whatIfOpenNow ? 'text-blue-400' : 'text-muted-foreground hover:text-blue-400'} opacity-0 group-hover:opacity-100 transition-all`}
+                          className={`shrink-0 ${whatIfOpenNow ? 'text-blue-400' : 'text-muted-foreground hover:text-blue-400'} transition-all`}
                           title="What-if override"
                           onClick={(e) => {
                             e.stopPropagation();

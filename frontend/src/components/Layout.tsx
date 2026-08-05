@@ -20,7 +20,7 @@ import { useStore } from '../store';
 import { useUndoStore } from '../store/undo';
 import { api, type PresenceUser } from '../api/client';
 import { WhatIfProvider } from './WhatIfContext';
-import WhatIfPanel from './WhatIfPanel';
+import WhatIfBar from './WhatIfBar';
 import { ToastProvider } from './Toast';
 
 const GraphPaneCtx = createContext({ graphOpen: false, toggleGraph: () => {} });
@@ -134,8 +134,12 @@ export default function Layout() {
   // A page nobody has sized yet falls back to the last split the user chose
   // anywhere, not to a fixed default. Snapping an unvisited page to 0.52 when
   // the user has clearly settled on something wider reads as the app forgetting.
-  const pageKey = (useLocation().pathname.split('/').filter(Boolean).pop() || 'overview')
+  const location = useLocation();
+  const pageKey = (location.pathname.split('/').filter(Boolean).pop() || 'overview')
     .replace(/[^a-z0-9-]/gi, '');
+  // A requirement detail page has its own inline WhatIfPanel; the floating bar
+  // would duplicate the same state on the same screen.
+  const isReqDetail = /\/requirements\/[^/]+$/.test(location.pathname);
   const readFrac = (k: string) => {
     const v = parseFloat(localStorage.getItem(k) || '');
     return v >= 0.15 && v <= 0.85 ? v : null;
@@ -577,7 +581,7 @@ export default function Layout() {
                   }}
                 >
                   <PageArea><Outlet /></PageArea>
-                  {isInProject && <WhatIfPanel />}
+                  {isInProject && !isReqDetail && <WhatIfBar />}
                 </main>
               )}
             </div>

@@ -10,7 +10,7 @@ import { test, expect, signIn, setEditMode, DEMO_PROJECT } from './fixtures';
  * happened to use it.
  */
 const ROUTES = [
-  'requirements', 'requirements/AFRM0001', 'components', 'components/GDC',
+  'requirements', 'requirements/AFRM0001', 'requirements/ACFT0000', 'components', 'components/GDC',
   'specifications', 'verification', 'risks', 'change-requests', 'baselines',
   'traces', 'allocation', 'metrics',
 ];
@@ -81,5 +81,16 @@ test.describe('viewing mode', () => {
 
     const controls = await mutatingControls(app);
     expect(controls.length).toBeGreaterThan(0);
+  });
+
+  test('no Confirm control on requirement detail page in viewing mode', async ({ app, server }) => {
+    await signIn(app);
+    await app.goto(`${server.baseURL}/project/${DEMO_PROJECT}/requirements/ACFT0000`);
+    await app.waitForSelector('main', { timeout: 20_000 });
+    await expect(app.getByRole('button', { name: 'VIEWING' })).toBeVisible({ timeout: 20_000 });
+    await app.waitForTimeout(1200);
+
+    // The Confirm button must not be visible while the header says VIEWING.
+    await expect(app.getByRole('button', { name: 'Confirm' })).toHaveCount(0);
   });
 });
