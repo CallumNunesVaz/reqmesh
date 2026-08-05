@@ -12,6 +12,7 @@ import { AutoLinkText } from '../components/autoLink';
 import { useEntityKinds } from '../components/entityIndex';
 import { useConfirm } from '../components/ConfirmDialog';
 import { HistoryPanel } from '../components/HistoryPanel';
+import { CommentThread } from '../components/CommentThread';
 
 const statusBadges: Record<string, string> = {
   submitted: 'border-blue-500/30 bg-blue-500/10 text-blue-400',
@@ -345,6 +346,10 @@ export default function ChangeRequestsPage() {
                     })}
                   </div>
                 )}
+                <div className="mt-3 pt-3 border-t border-border">
+                  <h4 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Comments</h4>
+                  <CommentThread entityKind="change_requests" entityId={cr.id} />
+                </div>
                 <div className="mt-3 pt-3 border-t border-border">
                   <h4 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Change History</h4>
                   <HistoryPanel itemId={cr.id} />

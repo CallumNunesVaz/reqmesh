@@ -20,14 +20,54 @@ from typing import Callable
 
 logger = logging.getLogger(__name__)
 
-CURRENT_SCHEMA_VERSION = 1
+CURRENT_SCHEMA_VERSION = 2
 _MARKER = ".reqmesh-schema.json"
+
+
+def _migrate_1_to_2(data_root: Path) -> None:
+    """Comments attach to any entity, not just requirements.
+
+    ``requirement_id`` becomes ``entity_kind`` + ``entity_id``. Idempotent: a
+    comment that already has ``entity_id`` is left alone, so a re-run — or a
+    project that a newer version already touched — is a no-op.
+
+    One unreadable comment must not abort the migration and take startup with
+    it, so failures are logged per file and the rest continue. A file that
+    fails is left at the old shape and simply keeps working through the
+    ``requirement_id`` compatibility path.
+    """
+    from app.services.yaml_store import YamlStore
+
+    migrated = 0
+    for project in sorted(p for p in Path(data_root).iterdir() if p.is_dir()):
+        if not (project / "_meta.yaml").exists():
+            continue
+        comments = project / "comments"
+        if not comments.exists():
+            continue
+        store = YamlStore(project)
+        for f in sorted(comments.glob("*.yaml")):
+            try:
+                item = store._parse_yaml(f)
+                if not item or item.get("entity_id"):
+                    continue
+                req_id = item.pop("requirement_id", "")
+                if not req_id:
+                    continue
+                item["entity_kind"] = "requirements"
+                item["entity_id"] = req_id
+                store._write_yaml(f, item)
+                migrated += 1
+            except Exception as exc:
+                logger.warning("Skipping comment %s during migration to 2: %s", f, exc)
+    if migrated:
+        logger.info("Migrated %d comment(s) to entity_kind/entity_id", migrated)
 
 
 # ── Migration registry ───────────────────────────────────────────────────────
 # MIGRATIONS[n] upgrades data from schema (n-1) to schema n.
 MIGRATIONS: dict[int, Callable[[Path], None]] = {
-    # 2: _migrate_1_to_2,   # future migrations register here
+    2: _migrate_1_to_2,
 }
 
 

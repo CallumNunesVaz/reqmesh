@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { GuardedLink as Link } from '../components/navGuard';
 import { motion } from 'framer-motion';
 import { Trash2, ArrowLeft, Plus, X, ArrowRight, ArrowLeftRight, Sparkles, ShieldCheck, ExternalLink, ChevronRight, Waypoints, AlertTriangle, CheckCircle2, GitFork, Loader, Save, Undo2, GitPullRequest, Ban } from 'lucide-react';
-import { api, baselineNames, CR_URGENCIES, type StakeholderDef, type SystemStateDef, type RequirementValue, type Requirement, type VerificationCase, type QualityItem, type Component, type Specification, type ChangeRequest, type Risk, type EvaluatedRequirement, type Definition, type Comment, type DecisionRecord, type Backlinks } from '../api/client';
+import { api, baselineNames, CR_URGENCIES, type StakeholderDef, type SystemStateDef, type RequirementValue, type Requirement, type VerificationCase, type QualityItem, type Component, type Specification, type ChangeRequest, type Risk, type EvaluatedRequirement, type Definition, type DecisionRecord, type Backlinks } from '../api/client';
 import { ParametricsCard } from '../components/parametrics';
 import RichTextEditor from '../components/RichTextEditor';
 import AutocompleteInput from '../components/AutocompleteInput';
@@ -24,6 +24,7 @@ import { LinkEditor } from '../components/LinkEditor';
 import { useKeyboardShortcuts } from '../components/useKeyboardShortcuts';
 import LoadingSplash from '../components/LoadingSplash';
 import { HistoryPanel } from '../components/HistoryPanel';
+import { CommentThread } from '../components/CommentThread';
 import { statusColors } from '../components/RequirementNode';
 import { REQUIREMENT_TYPE_META, formatReqType, reqTypeColor, typeOptionsFor } from '../lib/requirementTypes';
 const priorityOptions = ['low', 'medium', 'high', 'critical'];
@@ -75,7 +76,6 @@ export default function RequirementDetailPage() {
   const [mitigatingRisks, setMitigatingRisks] = useState<Risk[]>([]);
   const [allRisksRaw, setAllRisksRaw] = useState<Risk[]>([]);
   const [backlinks, setBacklinks] = useState<Backlinks | null>(null);
-  const [comments, setComments] = useState<Comment[]>([]);
   const [decisions, setDecisions] = useState<DecisionRecord[]>([]);
   const entityKinds = useEntityKinds(projectId);
   const { graphOpen, toggleGraph } = useGraphPane();
@@ -298,7 +298,6 @@ export default function RequirementDetailPage() {
       setProjectSystemStates(p.system_states || []);
     }).catch(() => {});
     api.getRequirementValue(projectId, reqId).then((v) => { if (alive) setReqValue(v); }).catch(() => { if (alive) setReqValue(null); });
-    api.listComments(projectId, reqId).then((v) => { if (alive) setComments(v); }).catch(() => { if (alive) setComments([]); });
     api.listDecisions(projectId).then((decs) => { if (alive) setDecisions(decs.filter((d) => d.linked_requirements?.includes(reqId))); }).catch(() => { if (alive) setDecisions([]); });
     return () => { alive = false; };
   }, [projectId, reqId]);
@@ -1127,29 +1126,9 @@ export default function RequirementDetailPage() {
               </div>
             </motion.div>
           )}
-          {(comments.length > 0 || canPropose) && (
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.26 }} className="card p-5">
-              <h2 className="font-semibold text-sm text-card-foreground mb-3 flex items-center justify-between">
-                <span>Comments ({comments.length})</span>
-                <AddCommentForm projectId={projectId!} reqId={reqId!} onAdded={() => api.listComments(projectId!, reqId).then(setComments).catch(() => {})} disabled={!canPropose} />
-              </h2>
-              <div className="space-y-3">
-                {comments.map((c) => (
-                  <div key={c.id} className={`flex items-start gap-3 p-2.5 rounded-lg text-xs ${c.resolved ? 'bg-muted/30 opacity-60' : 'bg-accent/30'}`}>
-                    <span className="w-1 self-stretch rounded-full shrink-0" style={{ background: 'hsl(var(--primary) / 0.4)' }} />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <span className="font-medium text-foreground">{c.author}</span>
-                        <span className="text-muted-foreground">{new Date(c.created).toLocaleDateString()}</span>
-                        {c.resolved && <span className="badge bg-emerald-500/10 text-emerald-400 text-[9px]">Resolved</span>}
-                      </div>
-                      <p className="text-muted-foreground leading-relaxed">{c.text}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </motion.div>
-          )}
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.26 }} className="card p-5">
+            <CommentThread entityKind="requirements" entityId={reqId!} />
+          </motion.div>
           {decisions.length > 0 && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.27 }} className="card p-5">
               <h2 className="font-semibold text-sm text-card-foreground mb-3">Related Decisions ({decisions.length})</h2>
@@ -1517,37 +1496,6 @@ export default function RequirementDetailPage() {
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-function AddCommentForm({ projectId, reqId, onAdded, disabled }: { projectId: string; reqId: string; onAdded: () => void; disabled: boolean }) {
-  const [show, setShow] = useState(false);
-  const [text, setText] = useState('');
-  const [busy, setBusy] = useState(false);
-  const user = useAuthStore((s) => s.user);
-  if (!show) {
-    return disabled ? null : (
-      <button onClick={() => setShow(true)} className="text-xs text-muted-foreground hover:text-foreground">+ Add comment</button>
-    );
-  }
-  const submit = async () => {
-    if (!text.trim()) return;
-    setBusy(true);
-    try {
-      await api.createComment(projectId, { requirement_id: reqId, author: user?.username || 'unknown', text: text.trim() });
-      setText('');
-      setShow(false);
-      onAdded();
-    } catch (e: any) {
-      console.warn('Comment submit failed: %s', e?.message || e);
-    }
-    finally { setBusy(false); }
-  };
-  return (
-    <div className="flex gap-1.5 mt-1">
-      <input className="input text-xs flex-1" placeholder="Write a comment..." value={text}
-        onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') submit(); if (e.key === 'Escape') setShow(false); }} autoFocus />
-      <button onClick={submit} disabled={busy || !text.trim()} className="btn-primary text-xs">{busy ? '...' : 'Send'}</button>
     </div>
   );
 }

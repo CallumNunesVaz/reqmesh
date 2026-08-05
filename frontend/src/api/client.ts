@@ -603,7 +603,8 @@ export interface Risk {
 
 export interface Comment {
   id: string;
-  requirement_id: string;
+  entity_kind: string;
+  entity_id: string;
   author: string;
   text: string;
   resolved: boolean;
@@ -1131,14 +1132,16 @@ export const api = {
     request<{ok?: true} | undefined>(`/projects/${projectId}/risks/${riskId}${force ? '?force=true' : ''}`, { method: 'DELETE' }),
 
   // Comments
-  listComments: (projectId: string, requirementId?: string) => {
-    const qs = requirementId ? `?requirement_id=${encodeURIComponent(requirementId)}` : '';
+  listComments: (projectId: string, entityKind: string, entityId: string) => {
+    const qs = `?entity_kind=${encodeURIComponent(entityKind)}&entity_id=${encodeURIComponent(entityId)}`;
     return request<Comment[]>(`/projects/${projectId}/comments${qs}`);
   },
-  createComment: (projectId: string, data: { requirement_id: string; author: string; text: string }) =>
+  createComment: (projectId: string, data: { entity_kind: string; entity_id: string; text: string }) =>
     request<Comment>(`/projects/${projectId}/comments`, { method: 'POST', body: data }),
   deleteComment: (projectId: string, commentId: string) =>
     request<void>(`/projects/${projectId}/comments/${commentId}`, { method: 'DELETE' }),
+  updateComment: (projectId: string, commentId: string, data: { resolved?: boolean; text?: string }) =>
+    request<Comment>(`/projects/${projectId}/comments/${commentId}`, { method: 'PATCH', body: data }),
 
   // Decisions
   listDecisions: (projectId: string) => request<DecisionRecord[]>(`/projects/${projectId}/decisions`),

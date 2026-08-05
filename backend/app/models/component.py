@@ -47,6 +47,16 @@ class Component(BaseModel):
     # Numeric quantities (mass, power draw, cost…) that budget rollups sum
     # over the design tree.
     parameters: list[Parameter] = Field(default_factory=list)
+    # Baseline names this component belongs to, mirroring `requirement.baselines`
+    # (and, like it, holding names rather than ids — a baseline is a label, not a
+    # record that can dangle, which is why neither is in the link registry).
+    #
+    # Requirements and components are the only entities that carry baselines.
+    # Risks, change requests, verification cases, specifications and decisions
+    # reach a baseline *through* the requirements and components they reference;
+    # giving them their own field would duplicate that relationship and let the
+    # two disagree.
+    baselines: list[str] = Field(default_factory=list)
     created: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     modified: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
@@ -64,6 +74,7 @@ class ComponentCreate(BaseModel):
     verification_cases: list[str] = Field(default_factory=list)
     relations: list[Relation] = Field(default_factory=list)
     parameters: list[Parameter] = Field(default_factory=list)
+    baselines: list[str] = Field(default_factory=list)
 
 
 class ComponentUpdate(BaseModel):
@@ -79,3 +90,4 @@ class ComponentUpdate(BaseModel):
     relations: Optional[list[Relation]] = None
     attributes: Optional[list[AttributeValue]] = None
     parameters: Optional[list[Parameter]] = None
+    baselines: Optional[list[str]] = None

@@ -13,6 +13,7 @@ import { AutoLinkText } from '../components/autoLink';
 import { useEntityKinds } from '../components/entityIndex';
 import { HelpTip } from '../components/HelpTip';
 import { HistoryPanel } from '../components/HistoryPanel';
+import { CommentThread } from '../components/CommentThread';
 
 const statusBadges: Record<string, string> = {
   pending: 'border-amber-500/30 bg-amber-500/10 text-amber-400',
@@ -799,6 +800,10 @@ export default function VerificationPage() {
                           </div>
                         </div>
                         )}
+                        <div className="border-t pt-3">
+                          <h4 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Comments</h4>
+                          <CommentThread entityKind="verification_cases" entityId={vc.id} />
+                        </div>
                         <div className="border-t pt-3">
                           <h4 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Change History</h4>
                           <HistoryPanel itemId={vc.id} />

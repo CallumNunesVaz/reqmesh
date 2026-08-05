@@ -45,7 +45,7 @@ def test_project_name_is_escaped_in_every_notifier(sent):
     email_service.notify_risk(store, "p", "RSK1", "created", "bob")
     email_service.notify_decision(store, "p", "DEC1", "created", "bob")
     email_service.notify_reviewed(store, "p", "R1", "bob", "")
-    email_service.notify_comment(store, "p", "R1", "bob", "hello")
+    email_service.notify_comment(store, "p", "requirements", "R1", "bob", "hello")
 
     assert len(sent) == 5
     for msg in sent:
@@ -57,14 +57,14 @@ def test_username_is_escaped(sent):
     store = _Store("Safe Project")
     email_service.notify_risk(store, "p", "RSK1", "created", PAYLOAD)
     email_service.notify_reviewed(store, "p", "R1", PAYLOAD, "")
-    email_service.notify_comment(store, "p", "R1", PAYLOAD, "hello")
+    email_service.notify_comment(store, "p", "requirements", "R1", PAYLOAD, "hello")
     for msg in sent:
         assert PAYLOAD not in msg["body"]
 
 
 def test_comment_text_is_escaped(sent):
     store = _Store("Safe Project")
-    email_service.notify_comment(store, "p", "R1", "bob", PAYLOAD)
+    email_service.notify_comment(store, "p", "requirements", "R1", "bob", PAYLOAD)
     email_service.notify_reviewed(store, "p", "R1", "bob", PAYLOAD)
     for msg in sent:
         assert PAYLOAD not in msg["body"]

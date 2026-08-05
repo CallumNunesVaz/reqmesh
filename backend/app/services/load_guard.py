@@ -108,7 +108,26 @@ def _validate_specification(item: dict) -> None:
         item["url"] = ""
 
 
+def _validate_comment(item: dict) -> None:
+    """Coerce a pre-schema-2 comment to ``entity_kind``/``entity_id``.
+
+    Migration 2 rewrites these on disk, but it cannot be relied on alone: a data
+    root that predates the migration framework is stamped at the current schema
+    without anything running, and a comment file that failed to migrate is left
+    at the old shape on purpose. Doing it here as well means the API never
+    serves a comment with no target, whichever of those happened — the same
+    "disk is not a trusted input" reasoning as the sanitiser above.
+    """
+    if item.get("entity_id"):
+        return
+    req_id = item.pop("requirement_id", "")
+    if req_id:
+        item["entity_kind"] = "requirements"
+        item["entity_id"] = str(req_id)
+
+
 _SPECIFIC = {
     "requirements": _validate_requirement,
     "specifications": _validate_specification,
+    "comments": _validate_comment,
 }
