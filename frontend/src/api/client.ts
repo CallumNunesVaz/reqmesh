@@ -335,6 +335,8 @@ export interface AnalysisCase {
   name?: string;
   doc?: string;
   scope: string[];
+  /** Components in scope for this analysis — "Scope (components)". */
+  scope_components: string[];
   overrides: Record<string, number>;
 }
 
@@ -448,6 +450,8 @@ export interface Specification {
    *  `javascript:` href is stored XSS against every viewer. */
   url: string;
   requirements: string[];
+  /** Components contained by this specification — "Contains (components)". */
+  components: string[];
   children: string[];
   created: string;
   modified: string;
@@ -520,6 +524,8 @@ export interface ChangeRequest {
   rationale: string;
   urgency: string;
   affected_requirements: string[];
+  /** Components affected by this change — "Affects (components)". */
+  affected_components: string[];
   /** Target id -> {field: proposed value}. */
   changes: Record<string, Record<string, unknown>>;
   /** Target id -> fingerprint when raised; the staleness guard for execute. */
@@ -600,6 +606,10 @@ export interface Risk {
   /** Requirements that control this risk — "Mitigated By". The opposite
    *  direction to `linked_requirements`; a requirement may appear in both. */
   mitigating_requirements: string[];
+  /** Components this risk threatens — "Threatens (components)". */
+  linked_components: string[];
+  /** Components that control this risk — "Mitigated By (components)". */
+  mitigating_components: string[];
   status: string;
   created: string;
   modified: string;
@@ -623,6 +633,8 @@ export interface DecisionRecord {
   rationale: string;
   consequences: string;
   linked_requirements: string[];
+  /** Components this decision resolves — "Decides on". */
+  linked_components: string[];
   status: string;
   decided_by: string;
   created: string;

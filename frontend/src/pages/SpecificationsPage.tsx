@@ -3,7 +3,7 @@ import { usePersistedState, setCodec } from '../hooks/usePersistedState';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, FileText, Trash2, ChevronDown, Square, CheckSquare, X, Search, ExternalLink, Edit3 } from 'lucide-react';
-import { api, type Requirement, type Specification } from '../api/client';
+import { api, type Requirement, type Component, type Specification } from '../api/client';
 import { useStore } from '../store';
 import { useAuthStore } from '../store/auth';
 import { CopyLinkButton, EntityLink } from '../components/entities';
@@ -11,6 +11,7 @@ import { useFocusedEntity } from '../components/useFocusedEntity';
 import { AutoLinkText } from '../components/autoLink';
 import { useEntityKinds } from '../components/entityIndex';
 import { isSafeExternalUrl } from '../lib/safeUrl';
+import { LinkEditor } from '../components/LinkEditor';
 import { HistoryPanel } from '../components/HistoryPanel';
 import { CommentThread } from '../components/CommentThread';
 
@@ -24,6 +25,7 @@ export default function SpecificationsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [newSpec, setNewSpec] = useState({ id: '', name: '', description: '', url: '' });
   const [requirements, setRequirements] = useState<Requirement[]>([]);
+  const [components, setComponents] = useState<Component[]>([]);
   // Persisted per project — see RequirementsPage/ComponentsPage for why.
   const pk = (field: string) => (projectId ? `rt-specs-${field}-${projectId}` : null);
   const [search, setSearch] = usePersistedState(pk('search'), '');
@@ -34,6 +36,7 @@ export default function SpecificationsPage() {
     if (!projectId) return;
     api.listSpecifications(projectId).then(setSpecifications).catch(console.error);
     api.listRequirements(projectId).then(setRequirements).catch(() => {});
+    api.listComponents(projectId).then(setComponents).catch(() => {});
   };
 
   useEffect(load, [projectId, dataVersion]);
@@ -95,6 +98,17 @@ export default function SpecificationsPage() {
     });
     setEditingId(spec.id);
     setShowCreate(true);
+  };
+
+  const setSpecComponents = async (specId: string, linked: string[]) => {
+    if (!projectId) return;
+    setSpecifications(specifications.map((s) => (s.id === specId ? { ...s, components: linked } : s)));
+    try {
+      await api.updateSpecification(projectId, specId, { components: linked } as any);
+    } catch (err) {
+      console.error(err);
+      load();
+    }
   };
 
   const handleDelete = async (specId: string) => {
@@ -295,6 +309,17 @@ export default function SpecificationsPage() {
                             ))}
                           </div>
                         )}
+                      </div>
+                      <div>
+                        <LinkEditor
+                          label="Components" hint="" kind="component"
+                          linked={(spec.components || [])}
+                          options={components}
+                          editable={editable}
+                          onAdd={(id) => setSpecComponents(spec.id, [...(spec.components || []), id])}
+                          onRemove={(id) => setSpecComponents(spec.id, (spec.components || []).filter((x) => x !== id))}
+                          nameOf={(id) => components.find((c) => c.id === id)?.name ?? ''}
+                        />
                       </div>
                       {spec.children.length > 0 && (
                         <div>

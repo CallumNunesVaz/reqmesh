@@ -3,7 +3,7 @@ import { usePersistedState } from '../hooks/usePersistedState';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Trash2, GitPullRequest, Square, CheckSquare, X, Search, Play, Edit3, Ban } from 'lucide-react';
-import { api, type ChangeRequest, type CRRedline, CR_URGENCIES } from '../api/client';
+import { api, type ChangeRequest, type Component, type CRRedline, CR_URGENCIES } from '../api/client';
 import { useAuthStore } from '../store/auth';
 import { useStore } from '../store';
 import { CopyLinkButton, EntityLink } from '../components/entities';
@@ -11,6 +11,7 @@ import { useFocusedEntity } from '../components/useFocusedEntity';
 import { AutoLinkText } from '../components/autoLink';
 import { useEntityKinds } from '../components/entityIndex';
 import { useConfirm } from '../components/ConfirmDialog';
+import { LinkEditor } from '../components/LinkEditor';
 import { HistoryPanel } from '../components/HistoryPanel';
 import { CommentThread } from '../components/CommentThread';
 
@@ -63,6 +64,7 @@ export default function ChangeRequestsPage() {
   // while the header said VIEWING — the same defect the store's own comment
   // records fixing for canPropose.
   const canMaintain = useAuthStore((s) => s.canEdit());
+  const [components, setComponents] = useState<Component[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const dataVersion = useStore((s) => s.dataVersion);
   const entityKinds = useEntityKinds(projectId);
@@ -77,6 +79,14 @@ export default function ChangeRequestsPage() {
     api.listChangeRequests(projectId).then(setCrs).catch(console.error);
   };
   useEffect(load, [projectId, dataVersion]);
+  useEffect(() => {
+    if (!projectId) return;
+    let alive = true;
+    api.listComponents(projectId)
+      .then((v) => { if (alive) setComponents(v); })
+      .catch(() => { if (alive) setComponents([]); });
+    return () => { alive = false; };
+  }, [projectId, dataVersion]);
 
   // Fetch redlines for each CR after the list loads.
   useEffect(() => {
@@ -170,6 +180,17 @@ export default function ChangeRequestsPage() {
 
   const cancelEditing = () => {
     setEditingCrId(null);
+  };
+
+  const setAffectedComponents = async (crId: string, linked: string[]) => {
+    if (!projectId) return;
+    setCrs((prev) => prev.map((c) => (c.id === crId ? { ...c, affected_components: linked } : c)));
+    try {
+      await api.updateChangeRequest(projectId, crId, { affected_components: linked });
+    } catch (err) {
+      console.error(err);
+      load();
+    }
   };
 
   const handleModifySave = async (crId: string) => {
@@ -320,6 +341,17 @@ export default function ChangeRequestsPage() {
                     ))}
                   </div>
                 )}
+                <div className="mt-2">
+                  <LinkEditor
+                    label="Affects (components)" hint="" kind="component"
+                    linked={(cr.affected_components || [])}
+                    options={components}
+                    editable={editable}
+                    onAdd={(id) => setAffectedComponents(cr.id, [...(cr.affected_components || []), id])}
+                    onRemove={(id) => setAffectedComponents(cr.id, (cr.affected_components || []).filter((x) => x !== id))}
+                    nameOf={(id) => components.find((c) => c.id === id)?.name ?? ''}
+                  />
+                </div>
                 {/* Redline: before/after per field */}
                 {rl && rl.targets.length > 0 && (
                   <div className="mt-2 pt-2 border-t border-border text-xs">

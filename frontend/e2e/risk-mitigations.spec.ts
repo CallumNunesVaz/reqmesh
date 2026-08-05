@@ -45,11 +45,13 @@ test('mitigated-by persists and does not overwrite threatens', async ({ app, ser
   await expect(riskCard).toBeVisible();
 
   // Select the "Threatens" dropdown and add the threatened requirement.
-  const threatensSelect = riskCard.locator('select').filter({ hasText: '+ link…' }).first();
+  const threatensSelect = riskCard.locator('[data-link-editor="Threatens"] select');
   await threatensSelect.selectOption(`${threatenedReq.id} — ${threatenedReq.name}`);
 
   // Now add a requirement to "Mitigated By".
-  const mitigatedSelect = riskCard.locator('select').filter({ hasText: '+ link…' }).last();
+  // Addressed by name, not position: component pickers now sit after this one,
+  // so `.last()` silently pointed at the wrong control.
+  const mitigatedSelect = riskCard.locator('[data-link-editor="Mitigated By"] select');
   await mitigatedSelect.selectOption(`${mitigatingReq.id} — ${mitigatingReq.name}`);
 
   // Wait for the optimistic update + API call to settle.
