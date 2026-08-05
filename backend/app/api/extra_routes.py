@@ -549,6 +549,20 @@ def freeze_baseline(project_id: str, name: str, user: dict = Depends(require_mai
             "source": r.get("source", ""),
             "allocated_to": r.get("allocated_to", ""),
         }
+    comps = store.list_components()
+    component_snapshot = {}
+    for c in comps:
+        component_snapshot[c["id"]] = {
+            "name": c.get("name", ""),
+            "description": c.get("description", ""),
+            "type": c.get("type", "assembly"),
+            "parent": c.get("parent"),
+            "part_number": c.get("part_number", ""),
+            "supplier": c.get("supplier", ""),
+            "quantity": c.get("quantity", 1),
+            "satisfies": c.get("satisfies", []),
+            "verification_cases": c.get("verification_cases", []),
+        }
     meta = store.read_meta()
     defs = normalize_baseline_defs(meta.get("baselines", []))
     sym, desc = "", ""
@@ -558,13 +572,19 @@ def freeze_baseline(project_id: str, name: str, user: dict = Depends(require_mai
             break
     data = {"name": name, "symbol": sym, "description": desc,
             "frozen_at": datetime.now(timezone.utc).isoformat(),
-            "frozen": True, "snapshot": snapshot}
+            "frozen": True, "snapshot": snapshot,
+            "component_snapshot": component_snapshot}
     store.write_item("baselines", name, data)
     for r in reqs:
         existing = list(r.get("baselines") or [])
         if name not in existing:
             existing.append(name)
             store.update_requirement(r["id"], {"baselines": existing})
+    for c in comps:
+        existing = list(c.get("baselines") or [])
+        if name not in existing:
+            existing.append(name)
+            store.update_item("components", c["id"], {"baselines": existing})
     return {"name": name, "symbol": sym, "description": desc, "requirements": len(snapshot)}
 
 

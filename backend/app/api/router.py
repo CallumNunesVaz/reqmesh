@@ -856,12 +856,19 @@ def list_baselines(project_id: str):
         for bl in (r.get("baselines") or []):
             if bl:
                 baselines.setdefault(bl, []).append(r["id"])
+    # Aggregate components per baseline from their .baselines arrays
+    comp_baselines: dict[str, list[str]] = {}
+    for c in store.list_components():
+        for bl in (c.get("baselines") or []):
+            if bl:
+                comp_baselines.setdefault(bl, []).append(c["id"])
     # Also surface baseline definitions that have no requirements yet
     seen = set()
     result = []
     for d in defs:
         name = d["name"]
         reqs = baselines.get(name, [])
+        comps = comp_baselines.get(name, [])
         # A name that can't be a filename can't have a frozen snapshot. Checked
         # rather than passed to get_item, which raises 400 and would take the
         # whole listing down for one bad entry — _meta.yaml is hand-editable
@@ -875,18 +882,25 @@ def list_baselines(project_id: str):
             "order": d["order"],
             "requirements": reqs,
             "count": len(reqs),
+            "components": comps,
+            "component_count": len(comps),
             "frozen": frozen is not None,
             "frozen_at": (frozen or {}).get("frozen_at", ""),
             "frozen_count": len((frozen or {}).get("snapshot", {})),
+            "frozen_component_count": len((frozen or {}).get("component_snapshot", {})),
         })
         seen.add(name)
-    for name, reqs in baselines.items():
+    for name in set(baselines.keys()) | set(comp_baselines.keys()):
         if name not in seen:
+            reqs = baselines.get(name, [])
+            comps = comp_baselines.get(name, [])
             result.append({
                 "name": name, "symbol": "", "description": "",
                 "due_date": "", "order": 0,
                 "requirements": reqs, "count": len(reqs),
+                "components": comps, "component_count": len(comps),
                 "frozen": False, "frozen_at": "", "frozen_count": 0,
+                "frozen_component_count": 0,
             })
     # Defined baselines first (sequence order), then undefined orphans sorted by name.
     orphans = [r for r in result if r["order"] == 0]
@@ -998,6 +1012,14 @@ def rename_baseline(project_id: str, name: str, data: RenameBaseline, user: dict
             blist = [new_name if b == name else b for b in blist]
             store.update_requirement(r["id"], {"baselines": blist})
             updated += 1
+    # Rename on all components
+    comps_updated = 0
+    for c in store.list_components():
+        blist = list(c.get("baselines") or [])
+        if name in blist:
+            blist = [new_name if b == name else b for b in blist]
+            store.update_item("components", c["id"], {"baselines": blist})
+            comps_updated += 1
     frozen = store.get_item("baselines", name)
     if frozen is not None:
         frozen["name"] = new_name
@@ -1007,7 +1029,7 @@ def rename_baseline(project_id: str, name: str, data: RenameBaseline, user: dict
             frozen["description"] = data.description
         store.write_item("baselines", new_name, frozen)
         store.delete_item("baselines", name)
-    elif updated == 0:
+    elif updated == 0 and comps_updated == 0:
         raise HTTPException(status_code=404, detail="Baseline not found")
     return {"old_name": name, "new_name": new_name, "requirements_updated": updated}
 
@@ -1030,6 +1052,11 @@ def delete_baseline(project_id: str, name: str, user: dict = Depends(require_mai
             blist.remove(name)
             store.update_requirement(r["id"], {"baselines": blist})
             updated += 1
+    for c in store.list_components():
+        blist = list(c.get("baselines") or [])
+        if name in blist:
+            blist.remove(name)
+            store.update_item("components", c["id"], {"baselines": blist})
     return {"name": name, "requirements_cleared": updated}
 
 
