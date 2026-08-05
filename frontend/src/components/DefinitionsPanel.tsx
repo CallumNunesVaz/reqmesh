@@ -124,6 +124,10 @@ export function AnalysisCasesPanel({ projectId, editable }: { projectId: string;
       await api.createAnalysisCase(projectId, {
         id: draft.id.trim(), name: draft.name.trim(),
         scope: draft.scope.split(',').map((s) => s.trim()).filter(Boolean),
+        // This panel scopes an analysis by requirement only; components are set
+        // from the analysis page. Sent explicitly rather than left off so the
+        // created case has the same shape as one the API returns.
+        scope_components: [],
         overrides,
       });
       setDraft({ id: '', name: '', scope: '', overrides: '' });

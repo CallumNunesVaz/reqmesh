@@ -19,7 +19,13 @@ export function LinkEditor({ label, hint, kind, linked, options, editable, onAdd
 }) {
   const available = options.filter((o) => !linked.includes(o.id));
   return (
-    <div>
+    // `data-link-editor` names this editor so a test can address it directly.
+    // The e2e suite used to reach the "Mitigated By" picker as the *last*
+    // select on the risk card; adding the component pickers after it silently
+    // repointed that selector at a different control, and the test failed on a
+    // timeout rather than on an assertion. Position is not a stable handle when
+    // controls get added beside it.
+    <div data-link-editor={label || kind}>
       {label && <label className="label">{label}</label>}
       <p className="text-[11px] text-muted-foreground -mt-1 mb-1.5">{hint}</p>
       {linked.length === 0 && <p className="text-xs text-muted-foreground italic mb-1.5">None linked</p>}

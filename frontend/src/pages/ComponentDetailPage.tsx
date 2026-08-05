@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Trash2, ArrowLeft, Save, X, ChevronRight, CheckCircle2 } from 'lucide-react';
-import { api, baselineNames, COMPONENT_TYPES, type Component, type Requirement, type VerificationCase } from '../api/client';
+import { api, baselineNames, COMPONENT_TYPES, type Component, type Requirement, type VerificationCase, type Backlinks } from '../api/client';
 import { CopyLinkButton, EntityLink, COMPONENT_TYPE_META, type EntityKind } from '../components/entities';
 import { useEntityKinds } from '../components/entityIndex';
 import { AutoLinkHtml } from '../components/autoLink';
@@ -16,6 +16,18 @@ import { LinkEditor } from '../components/LinkEditor';
 import RichTextEditor from '../components/RichTextEditor';
 import { HistoryPanel } from '../components/HistoryPanel';
 import { CommentThread } from '../components/CommentThread';
+
+/** Registry collection -> the entity kinds EntityLink knows how to render.
+ *  Collections without a detail page of their own (decisions, analysis cases)
+ *  fall back to a plain chip rather than linking somewhere that 404s. */
+const BACKLINK_KINDS: Record<string, EntityKind> = {
+  requirements: 'requirement',
+  components: 'component',
+  verification_cases: 'verification',
+  specifications: 'specification',
+  change_requests: 'change',
+  risks: 'risk',
+};
 
 /** Ids of a component and everything beneath it — a component may not be
  *  reparented into its own branch, so those options must be excluded. */
@@ -49,6 +61,7 @@ export default function ComponentDetailPage() {
   const [error, setError] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [projectBaselines, setProjectBaselines] = useState<string[]>([]);
+  const [backlinks, setBacklinks] = useState<Backlinks | null>(null);
 
   const [form, setForm] = useState({
     name: '', description: '', type: 'assembly', part_number: '', supplier: '',
@@ -79,6 +92,9 @@ export default function ComponentDetailPage() {
     api.getProject(projectId).then((p) => {
       setProjectBaselines(baselineNames(p.baselines));
     }).catch(() => {});
+    api.getBacklinks(projectId, componentId)
+      .then((b) => setBacklinks(b))
+      .catch(() => setBacklinks(null));
   };
 
   useEffect(load, [projectId, componentId]);
@@ -350,6 +366,44 @@ export default function ComponentDetailPage() {
               </div>
             )}
           </motion.div>
+
+          {/* Backlinks — everything that points at this component, computed
+              server-side from the link registry. Read-only: each link is owned
+              by the record holding it, so editing lives on that record's page. */}
+          {backlinks && backlinks.total > 0 && (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="card p-5">
+              <h2 className="font-semibold text-sm text-card-foreground mb-1">Referenced By</h2>
+              <p className="text-[11px] text-muted-foreground mb-3">
+                {backlinks.total} record{backlinks.total === 1 ? '' : 's'} refer to this component.
+                Deleting it will ask before breaking them.
+              </p>
+              <div className="space-y-2.5">
+                {backlinks.groups.map((g) => (
+                  <div key={g.collection}>
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
+                      {g.label}{g.items.length === 1 ? '' : 's'}
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {g.items.map((it) => (
+                        <span key={`${g.collection}-${it.id}`}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-muted text-xs"
+                          title={it.label}>
+                          {BACKLINK_KINDS[g.collection] ? (
+                            <EntityLink kind={BACKLINK_KINDS[g.collection]} id={it.id}
+                              name={it.name || undefined} className="hover:text-primary max-w-[180px]" />
+                          ) : (
+                            <span className="text-foreground truncate max-w-[180px]">
+                              <span className="font-mono">{it.id}</span>{it.name ? ` — ${it.name}` : ''}
+                            </span>
+                          )}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          )}
 
           {editable && (
             <button onClick={() => { const d = form; save({ ...d, parent: d.parent || null } as any); }} className="btn-primary w-full justify-center">

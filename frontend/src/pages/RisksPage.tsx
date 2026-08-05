@@ -3,7 +3,7 @@ import { usePersistedState } from '../hooks/usePersistedState';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Trash2, Edit3, Square, CheckSquare, X, Search } from 'lucide-react';
-import { api, RISK_STATUSES, type Risk, type Requirement, type RiskMatrix } from '../api/client';
+import { api, RISK_STATUSES, type Risk, type Requirement, type Component, type RiskMatrix } from '../api/client';
 import { useAuthStore } from '../store/auth';
 import { useStore } from '../store';
 import { CopyLinkButton } from '../components/entities';
@@ -45,6 +45,10 @@ export default function RisksPage() {
   // by hand-editing YAML.
   const [requirements, setRequirements] = useState<Requirement[]>([]);
 
+  // Components are loaded so the "Threatens (components)" and "Mitigated By
+  // (components)" links can be edited here, mirroring the requirement editors.
+  const [components, setComponents] = useState<Component[]>([]);
+
   // The project's risk matrix: supplies the severity/likelihood vocabularies the
   // dropdowns offer, so a project that renamed its axes does not get a form
   // offering levels its own matrix cannot rate.
@@ -74,6 +78,15 @@ export default function RisksPage() {
     api.listRequirements(projectId)
       .then((v) => { if (alive) setRequirements(v); })
       .catch(() => { if (alive) setRequirements([]); });
+    return () => { alive = false; };
+  }, [projectId, dataVersion]);
+
+  useEffect(() => {
+    if (!projectId) return;
+    let alive = true;
+    api.listComponents(projectId)
+      .then((v) => { if (alive) setComponents(v); })
+      .catch(() => { if (alive) setComponents([]); });
     return () => { alive = false; };
   }, [projectId, dataVersion]);
 
@@ -111,6 +124,28 @@ export default function RisksPage() {
     setRisks((prev) => prev.map((r) => (r.id === riskId ? { ...r, mitigating_requirements: linked } : r)));
     try {
       await api.updateRisk(projectId, riskId, { mitigating_requirements: linked });
+    } catch (err) {
+      console.error(err);
+      load();
+    }
+  };
+
+  const setRiskLinkedComponents = async (riskId: string, linked: string[]) => {
+    if (!projectId) return;
+    setRisks((prev) => prev.map((r) => (r.id === riskId ? { ...r, linked_components: linked } : r)));
+    try {
+      await api.updateRisk(projectId, riskId, { linked_components: linked });
+    } catch (err) {
+      console.error(err);
+      load();
+    }
+  };
+
+  const setRiskMitigatingComponents = async (riskId: string, linked: string[]) => {
+    if (!projectId) return;
+    setRisks((prev) => prev.map((r) => (r.id === riskId ? { ...r, mitigating_components: linked } : r)));
+    try {
+      await api.updateRisk(projectId, riskId, { mitigating_components: linked });
     } catch (err) {
       console.error(err);
       load();
@@ -401,7 +436,9 @@ export default function RisksPage() {
                     <AutoLinkHtml html={r.description} kinds={entityKinds} />
                   </div>
                 )}
-                {(r.linked_requirements.length > 0 || (r.mitigating_requirements || []).length > 0 || editable) && (
+                {(r.linked_requirements.length > 0 || (r.mitigating_requirements || []).length > 0
+                 || (r.linked_components || []).length > 0 || (r.mitigating_components || []).length > 0
+                 || editable) && (
                   <div className="mt-2">
                     <LinkEditor
                       label="Threatens" hint="" kind="requirement"
@@ -421,6 +458,28 @@ export default function RisksPage() {
                         onAdd={(id) => setRiskMitigations(r.id, [...(r.mitigating_requirements || []), id])}
                         onRemove={(id) => setRiskMitigations(r.id, (r.mitigating_requirements || []).filter((x) => x !== id))}
                         nameOf={(id) => requirements.find((q) => q.id === id)?.name ?? ''}
+                      />
+                    </div>
+                    <div className="mt-2">
+                      <LinkEditor
+                        label="Threatens (components)" hint="" kind="component"
+                        linked={(r.linked_components || [])}
+                        options={components}
+                        editable={editable}
+                        onAdd={(id) => setRiskLinkedComponents(r.id, [...(r.linked_components || []), id])}
+                        onRemove={(id) => setRiskLinkedComponents(r.id, (r.linked_components || []).filter((x) => x !== id))}
+                        nameOf={(id) => components.find((q) => q.id === id)?.name ?? ''}
+                      />
+                    </div>
+                    <div className="mt-2">
+                      <LinkEditor
+                        label="Mitigated By (components)" hint="" kind="component"
+                        linked={(r.mitigating_components || [])}
+                        options={components}
+                        editable={editable}
+                        onAdd={(id) => setRiskMitigatingComponents(r.id, [...(r.mitigating_components || []), id])}
+                        onRemove={(id) => setRiskMitigatingComponents(r.id, (r.mitigating_components || []).filter((x) => x !== id))}
+                        nameOf={(id) => components.find((q) => q.id === id)?.name ?? ''}
                       />
                     </div>
                   </div>
