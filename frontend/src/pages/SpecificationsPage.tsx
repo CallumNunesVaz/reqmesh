@@ -11,6 +11,7 @@ import { useFocusedEntity } from '../components/useFocusedEntity';
 import { AutoLinkText } from '../components/autoLink';
 import { useEntityKinds } from '../components/entityIndex';
 import { isSafeExternalUrl } from '../lib/safeUrl';
+import { HistoryPanel } from '../components/HistoryPanel';
 
 export default function SpecificationsPage() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -306,6 +307,10 @@ export default function SpecificationsPage() {
                           </div>
                         </div>
                       )}
+                      <div className="pt-3 border-t border-border">
+                        <h4 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Change History</h4>
+                        <HistoryPanel itemId={spec.id} />
+                      </div>
                     </div>
                   </motion.div>
                 )}

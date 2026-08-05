@@ -496,6 +496,7 @@ Key environment variables:
 | POST | `/api/projects/{id}/evaluation/impact` | What-if preview: re-evaluate with hypothetical overrides + dependency-ordered impact trace |
 | GET | `/api/projects/{id}/requirements/{rid}/impact` | Impact analysis (dependents + cascades) |
 | GET | `/api/projects/{id}/requirements/{rid}/history` | Field-level change history |
+| GET | `/api/projects/{id}/history/{item_id}` | Field-level change history for any entity |
 | GET | `/api/projects/{id}/suspect-links` | Links whose target changed since review |
 | GET | `/api/projects/{id}/search` | Full-text search across all entities |
 

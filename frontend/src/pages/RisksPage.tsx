@@ -13,6 +13,7 @@ import { useEntityKinds } from '../components/entityIndex';
 import { LinkEditor } from '../components/LinkEditor';
 import { deleteWithReferenceCheck } from '../lib/forceDelete';
 import RichTextEditor from '../components/RichTextEditor';
+import { HistoryPanel } from '../components/HistoryPanel';
 
 const formatLevel = (s: string) => s.replace(/_/g, ' ');
 
@@ -423,6 +424,10 @@ export default function RisksPage() {
                     </div>
                   </div>
                 )}
+                <div className="mt-3 pt-3 border-t border-border">
+                  <h4 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Change History</h4>
+                  <HistoryPanel itemId={r.id} />
+                </div>
               </div>
               {editable && (
               <div className="flex items-center gap-0.5 shrink-0">
