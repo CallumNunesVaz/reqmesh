@@ -15,6 +15,7 @@ from __future__ import annotations
 import re
 
 _REQ_DEF_RE = re.compile(r"^requirement\s+def\s+([A-Za-z0-9_]+)\s*\{")
+_REQ_USAGE_RE = re.compile(r"^requirement\s+([A-Za-z0-9_]+)\s*:\s*([A-Za-z0-9_]+)\s*\{")
 _PART_DEF_RE = re.compile(r"^part\s+def\s+([A-Za-z0-9_]+)\s*\{")
 _DOC_RE = re.compile(r"doc\s*/\*(.*?)\*/", re.DOTALL)
 _TEXT_RE = re.compile(r"text\s*/\*\s*\"(.*?)\"\s*\*/", re.DOTALL)
@@ -100,8 +101,24 @@ def parse_sysml(content: str | bytes) -> dict:
 
         # --- block openers ---
         rm = _REQ_DEF_RE.match(line)
+        rum = _REQ_USAGE_RE.match(line)
         pm = _PART_DEF_RE.match(line)
-        if rm:
+        if rum:
+            saw_req = True
+            rid, type_id = rum.group(1), rum.group(2)
+            if in_vc_section:
+                entry = {"id": rid, "name": rid, "cascade_from": type_id, "verified_requirements": []}
+                verification_cases.append(entry)
+                stack.append(("vc", entry))
+            else:
+                entry = {"id": rid, "name": rid, "cascade_from": type_id, "attributes": [],
+                         "relations": [], "verification_cases": [], "parameters": [], "constraints": []}
+                parent = nearest("requirement")
+                if parent:
+                    entry["parent"] = parent
+                requirements.append(entry)
+                stack.append(("requirement", entry))
+        elif rm:
             saw_req = True
             rid = rm.group(1)
             if in_vc_section:
@@ -198,6 +215,14 @@ def parse_sysml(content: str | bytes) -> dict:
 
     for entry in requirements:
         entry.pop("_pending_assume", None)
+
+    # Clear cascade_from when the type reference does not resolve to a
+    # requirement in this file — a dangling link is worse than a lost one.
+    all_imported_ids = {r["id"] for r in requirements}
+    for entry in requirements:
+        cfrom = entry.get("cascade_from")
+        if cfrom and cfrom not in all_imported_ids:
+            entry.pop("cascade_from", None)
 
     return {
         "requirements": requirements,

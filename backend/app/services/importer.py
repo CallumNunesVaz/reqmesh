@@ -62,6 +62,8 @@ def _normalise_requirement(raw: dict) -> dict | None:
     }
     if raw.get("subject"):
         req["subject"] = raw["subject"]
+    if raw.get("cascade_from"):
+        req["cascade_from"] = raw["cascade_from"]
     return req
 
 
