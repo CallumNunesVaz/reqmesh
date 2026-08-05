@@ -105,6 +105,8 @@ def export_sysml_v2(store) -> str:
         pid = r.get("parent") if isinstance(r.get("parent"), str) and r["parent"] else None
         req_by_parent.setdefault(pid, []).append(r)
 
+    all_exported_ids = {r["id"] for r in reqs}
+
     # Render requirements as SysML requirement definitions.
     def render_req(r: dict, indent_level: int = 2) -> list[str]:
         rid = r["id"].replace("-", "_").replace(".", "_")
@@ -114,7 +116,16 @@ def export_sysml_v2(store) -> str:
         name = r.get("name", rid) or rid
         # Escape quotes in name
         name_escaped = name.replace('"', '\\"')
-        body.append(f"{prefix}requirement def {rid} {{")
+
+        # Cascaded requirements become usages typed by their master, so the
+        # cascade link survives a round-trip through SysML v2 (definition/usage
+        # is the SysML v2 idiom that maps onto cascade).
+        cascade_from = r.get("cascade_from")
+        if cascade_from and cascade_from in all_exported_ids:
+            master_safe = cascade_from.replace("-", "_").replace(".", "_")
+            body.append(f"{prefix}requirement {rid} : {master_safe} {{")
+        else:
+            body.append(f"{prefix}requirement def {rid} {{")
         body.append(f"{prefix}  doc /* {name_escaped} */")
         body.append(f"{prefix}  :>> status = {r.get('status', 'proposed')};")
         body.append(f"{prefix}  :>> priority = {r.get('priority', 'medium')};")
