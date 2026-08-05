@@ -344,6 +344,10 @@ export default function BaselinesPage() {
                         <GitBranch size={12} />
                         {b.frozen ? `${b.frozen_count} frozen` : ''} {b.count} requirement{b.count !== 1 ? 's' : ''}
                       </span>
+                      <span className="flex items-center gap-1">
+                        <Layers size={12} />
+                        {b.component_count} component{b.component_count !== 1 ? 's' : ''}
+                      </span>
                       {b.frozen_at && (
                         <span className="flex items-center gap-1">
                           <Clock size={12} />
@@ -451,6 +455,44 @@ export default function BaselinesPage() {
                                 key={rid}
                                 kind="requirement"
                                 id={rid}
+                                className="badge bg-muted text-muted-foreground hover:text-foreground transition-colors text-xs"
+                                showIcon
+                              />
+                            ))}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                )}
+                {/* Components list */}
+                {b.components.length > 0 && (
+                  <div className={`${b.requirements.length > 0 ? 'pt-2' : 'mt-3 pt-3 border-t border-border/50'}`}>
+                    {/* Show a toggle only when there are no requirements — otherwise
+                        the requirements toggle above also reveals this section. */}
+                    {b.requirements.length === 0 && (
+                      <button
+                        onClick={() => toggleExpand(b.name)}
+                        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        {expanded.has(b.name) ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                        Components ({b.component_count})
+                      </button>
+                    )}
+                    <AnimatePresence>
+                      {expanded.has(b.name) && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          className="overflow-hidden"
+                        >
+                          <div className="flex flex-wrap gap-1.5 mt-2">
+                            {b.components.map((cid) => (
+                              <EntityLink
+                                key={cid}
+                                kind="component"
+                                id={cid}
                                 className="badge bg-muted text-muted-foreground hover:text-foreground transition-colors text-xs"
                                 showIcon
                               />

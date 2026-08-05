@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Trash2, ArrowLeft, Save, X, ChevronRight, CheckCircle2 } from 'lucide-react';
-import { api, COMPONENT_TYPES, type Component, type Requirement, type VerificationCase } from '../api/client';
+import { api, baselineNames, COMPONENT_TYPES, type Component, type Requirement, type VerificationCase } from '../api/client';
 import { CopyLinkButton, EntityLink, COMPONENT_TYPE_META, type EntityKind } from '../components/entities';
 import { useEntityKinds } from '../components/entityIndex';
 import { AutoLinkHtml } from '../components/autoLink';
@@ -48,6 +48,7 @@ export default function ComponentDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [projectBaselines, setProjectBaselines] = useState<string[]>([]);
 
   const [form, setForm] = useState({
     name: '', description: '', type: 'assembly', part_number: '', supplier: '',
@@ -75,6 +76,9 @@ export default function ComponentDetailPage() {
       });
       setLoading(false);
     }).catch((err) => { setError(err.message); setLoading(false); });
+    api.getProject(projectId).then((p) => {
+      setProjectBaselines(baselineNames(p.baselines));
+    }).catch(() => {});
   };
 
   useEffect(load, [projectId, componentId]);
@@ -299,6 +303,33 @@ export default function ComponentDetailPage() {
                   onChange={(e) => setForm({ ...form, supplier: e.target.value })}
                   onBlur={(e) => save({ supplier: e.target.value })}
                   disabled={!editable} />
+              </div>
+              <div>
+                <label className="label">Baselines</label>
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  {projectBaselines.map((b) => {
+                    const active = (component.baselines || []).includes(b);
+                    return (
+                      <button
+                        key={b}
+                        type="button"
+                        onClick={() => {
+                          const current = component.baselines || [];
+                          const next = active ? current.filter(x => x !== b) : [...current, b];
+                          save({ baselines: next });
+                        }}
+                        disabled={!editable}
+                        className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
+                          active
+                            ? 'bg-primary/15 text-primary border-primary/30'
+                            : 'bg-muted text-muted-foreground border-transparent hover:border-primary/20'
+                        }`}
+                      >
+                        {b}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </motion.div>

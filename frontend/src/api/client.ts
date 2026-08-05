@@ -126,9 +126,12 @@ export const baselineNames = (baselines?: (string | BaselineDef)[]): string[] =>
 export interface BaselineInfo extends BaselineDef {
   requirements: string[];
   count: number;
+  components: string[];
+  component_count: number;
   frozen: boolean;
   frozen_at: string;
   frozen_count: number;
+  frozen_component_count: number;
 }
 
 export interface BaselineDiff {
@@ -419,6 +422,7 @@ export interface Component {
   relations: { type: string; target: string }[];
   attributes: { key: string; value: string }[];
   parameters: Parameter[];
+  baselines: string[];
   created: string;
   modified: string;
 }
