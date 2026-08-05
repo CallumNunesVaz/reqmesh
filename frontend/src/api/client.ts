@@ -884,6 +884,13 @@ export interface ImpactResultData {
   roots: string[];
 }
 
+export interface HistoryEntry {
+  timestamp: string;
+  action: string;
+  user: string;
+  changes: Record<string, { before: unknown; after: unknown }>;
+}
+
 export const api = {
   // Build metadata (version, git sha, build time)
   getVersion: () => request<BuildInfo>('/version'),
@@ -1250,6 +1257,9 @@ export const api = {
   // History
   getRequirementHistory: (projectId: string, reqId: string) =>
     request<unknown[]>(`/projects/${projectId}/requirements/${reqId}/history`),
+
+  getItemHistory: (projectId: string, itemId: string) =>
+    request<HistoryEntry[]>(`/projects/${projectId}/history/${itemId}`),
 
   // Git
   gitLog: (projectId: string, limit: number = 50) =>

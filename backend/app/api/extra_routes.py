@@ -379,6 +379,11 @@ def requirement_history(project_id: str, req_id: str):
     return get_store(project_id).list_history(req_id)[:50]
 
 
+@router.get("/projects/{project_id}/history/{item_id}")
+def item_history(project_id: str, item_id: str):
+    return get_store(project_id).list_history(item_id)[:50]
+
+
 # ── Git Log ───────────────────────────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/git/log")

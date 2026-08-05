@@ -23,6 +23,7 @@ import ParametricsGuide from '../components/ParametricsGuide';
 import { LinkEditor } from '../components/LinkEditor';
 import { useKeyboardShortcuts } from '../components/useKeyboardShortcuts';
 import LoadingSplash from '../components/LoadingSplash';
+import { HistoryPanel } from '../components/HistoryPanel';
 import { statusColors } from '../components/RequirementNode';
 import { REQUIREMENT_TYPE_META, formatReqType, reqTypeColor, typeOptionsFor } from '../lib/requirementTypes';
 const priorityOptions = ['low', 'medium', 'high', 'critical'];
@@ -1166,6 +1167,10 @@ export default function RequirementDetailPage() {
               </div>
             </motion.div>
           )}
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28 }} className="card p-5">
+            <h2 className="font-semibold text-sm text-card-foreground mb-3">Change History</h2>
+            <HistoryPanel itemId={reqId!} defaultOpen />
+          </motion.div>
         </div>
         <div className="space-y-6">
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="card p-5">
