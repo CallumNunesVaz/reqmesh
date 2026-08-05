@@ -38,6 +38,7 @@ def _req(pid, tid, name, desc, ptype="functional", status="proposed",
         "verification_method": verification,
         "verification_status": "pending",
         "baselines": baselines or [],
+        "system_states": [],
         "allocated_to": allocated,
         "cascade_from": None,
         "attributes": [],
@@ -1812,6 +1813,20 @@ def seed_demo_project(data_root: Path, force: bool = False) -> bool:
         # came back unranked. Weights are relative, not a distribution — safety
         # outranks the rest on a certified aircraft, and maintenance is a real
         # but secondary voice.
+        # The flight phases the requirements below are qualified against. A
+        # requirement with no states applies in all of them — a wing spar has
+        # no phase — so only genuinely phase-dependent behaviour is tagged.
+        "system_states": [
+            {"name": "Preflight", "description": "On the ground before engine start: walkaround, checklists, external power available."},
+            {"name": "Taxi", "description": "Under own power on the ground, on nosewheel steering and brakes."},
+            {"name": "Takeoff", "description": "Full-power roll through the initial climb to 50 ft, flaps at the takeoff setting."},
+            {"name": "Climb", "description": "Best-rate or cruise climb to altitude at full throttle."},
+            {"name": "Cruise", "description": "Level flight at cruise power with the mixture leaned, navigating en route."},
+            {"name": "Descent", "description": "Powered descent from cruise altitude toward the destination."},
+            {"name": "Approach", "description": "Configured for landing with flaps extended, on a published or visual approach."},
+            {"name": "Landing", "description": "Touchdown through rollout to taxi speed."},
+            {"name": "Emergency", "description": "Abnormal or emergency operation: engine failure, fire, or loss of electrical power."},
+        ],
         "stakeholders": [
             {"name": "safety", "weight": 3.0},
             {"name": "customers", "weight": 2.0},
@@ -1863,6 +1878,46 @@ def seed_demo_project(data_root: Path, force: bool = False) -> bool:
 
     # Build requirements
     reqs = {r["id"]: r for r in _requirements()}
+
+    # ── System states ──
+    # Only requirements whose behaviour actually changes with flight phase are
+    # tagged. Structure and architecture requirements are deliberately left
+    # empty: "the main spar during cruise" is not a distinction the design
+    # makes, and tagging everything would turn the field into noise the moment
+    # a reader tried to filter on it.
+    _SYSTEM_STATES: dict[str, list[str]] = {
+        # Ground handling — only meaningful with weight on wheels.
+        "LNDG0001": ["Takeoff", "Landing"],
+        "LNDG0002": ["Taxi", "Takeoff", "Landing"],
+        "LNDG0003": ["Taxi", "Landing", "Emergency"],
+        # Configuration changes are phase-defined by the POH.
+        "FLTC0005": ["Takeoff", "Approach", "Landing"],
+        "FLTC0006": ["Takeoff", "Approach", "Landing"],
+        "FLTC0007": ["Climb", "Cruise", "Descent"],
+        # Powerplant — the mag check is a preflight action, mixture is cruise.
+        "PROP0002": ["Takeoff", "Climb", "Cruise"],
+        "PROP0003": ["Preflight", "Takeoff"],
+        "PROP0004": ["Preflight", "Takeoff", "Cruise"],
+        "PROP0006": ["Takeoff", "Climb", "Cruise"],
+        # Avionics — navigation source depends on the phase of flight.
+        "AVNC0004": ["Cruise", "Approach"],
+        "AVNC0005": ["Approach"],
+        "AVNC0007": ["Preflight", "Taxi", "Approach"],
+        "AVNC0008": ["Takeoff", "Cruise", "Approach"],
+        # Environmental — heat and defrost are descent/winter concerns.
+        "ENVR0001": ["Climb", "Cruise", "Descent"],
+        "ENVR0002": ["Taxi", "Cruise"],
+        "ENVR0003": ["Descent", "Approach", "Landing"],
+        # Electrical.
+        "ELEC0002": ["Emergency"],
+        "ELEC0004": ["Preflight"],
+        # Safety.
+        "SAFE0001": ["Takeoff", "Approach", "Landing"],
+        "SAFE0003": ["Emergency"],
+        "SAFE0004": ["Taxi", "Takeoff", "Landing"],
+    }
+    for _rid, _states in _SYSTEM_STATES.items():
+        reqs[_rid]["system_states"] = list(_states)
 
     # ── Baseline / status assignment ──
     # Every requirement lands in exactly one of these buckets.  The earliest
