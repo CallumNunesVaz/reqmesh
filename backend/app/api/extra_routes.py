@@ -268,14 +268,9 @@ def list_comments(
     project_id: str,
     entity_kind: Optional[str] = Query(None),
     entity_id: Optional[str] = Query(None),
-    requirement_id: Optional[str] = Query(None),
     offset: Optional[int] = Query(None, ge=0),
     limit: Optional[int] = Query(None, ge=1, le=2000),
 ):
-    # Deprecated: requirement_id=X is equivalent to entity_kind="requirements", entity_id=X.
-    if requirement_id:
-        entity_kind = "requirements"
-        entity_id = requirement_id
     if entity_id and not entity_kind:
         raise HTTPException(status_code=400, detail="entity_kind is required when filtering by entity_id")
     comments = get_store(project_id).list_items("comments")
@@ -295,10 +290,6 @@ def list_comments(
 @router.post("/projects/{project_id}/comments", status_code=201)
 def create_comment(project_id: str, data: CommentCreate, user: dict = Depends(require_edit)):
     c = data.model_dump(mode="json")
-    # The CommentCreate validator already coerces requirement_id → entity_kind/entity_id
-    # and rejects invalid entity_kinds. We must NOT persist requirement_id, so
-    # the stored YAML has only one source of truth.
-    c.pop("requirement_id", None)
     c["id"] = f"COMMENT-{uuid.uuid4().hex[:8].upper()}"
     c["resolved"] = False
     c.setdefault("author", user.get("username", ""))
@@ -387,11 +378,6 @@ def delete_decision(project_id: str, dec_id: str, force: bool = False, user: dic
 
 
 # ── Version History ───────────────────────────────────────────────────────────
-
-@router.get("/projects/{project_id}/requirements/{req_id}/history")
-def requirement_history(project_id: str, req_id: str):
-    return get_store(project_id).list_history(req_id)[:50]
-
 
 @router.get("/projects/{project_id}/history/{item_id}")
 def item_history(project_id: str, item_id: str):
@@ -533,7 +519,7 @@ def get_unreviewed(project_id: str):
 def freeze_baseline(project_id: str, name: str, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     safe_id(name, "baseline name")
-    reqs = store.list_requirements()
+    reqs = [r for r in store.list_requirements() if name in (r.get("baselines") or [])]
     snapshot = {}
     for r in reqs:
         snapshot[r["id"]] = {
@@ -549,7 +535,7 @@ def freeze_baseline(project_id: str, name: str, user: dict = Depends(require_mai
             "source": r.get("source", ""),
             "allocated_to": r.get("allocated_to", ""),
         }
-    comps = store.list_components()
+    comps = [c for c in store.list_components() if name in (c.get("baselines") or [])]
     component_snapshot = {}
     for c in comps:
         component_snapshot[c["id"]] = {
@@ -575,16 +561,6 @@ def freeze_baseline(project_id: str, name: str, user: dict = Depends(require_mai
             "frozen": True, "snapshot": snapshot,
             "component_snapshot": component_snapshot}
     store.write_item("baselines", name, data)
-    for r in reqs:
-        existing = list(r.get("baselines") or [])
-        if name not in existing:
-            existing.append(name)
-            store.update_requirement(r["id"], {"baselines": existing})
-    for c in comps:
-        existing = list(c.get("baselines") or [])
-        if name not in existing:
-            existing.append(name)
-            store.update_item("components", c["id"], {"baselines": existing})
     return {"name": name, "symbol": sym, "description": desc, "requirements": len(snapshot)}
 
 

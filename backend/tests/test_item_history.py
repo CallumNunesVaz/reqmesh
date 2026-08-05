@@ -58,17 +58,22 @@ def test_entity_with_no_history_returns_empty_list(client, project):
     assert res.json() == []
 
 
-def test_requirement_history_is_identical_through_both_routes(client, project):
-    """A requirement's history is the same whether fetched through the new
-    generic route or the old requirement-specific one."""
+def test_requirement_history_alias_is_404(client, project):
+    """The legacy requirement-specific history route is removed; the generic
+    route serves requirements and everything else."""
     from tests.conftest import make_req
 
     make_req(client, project, "R-HIST", name="Original Name")
     client.put(f"/api/projects/{project}/requirements/R-HIST", json={"name": "New Name"})
 
-    via_generic = client.get(f"/api/projects/{project}/history/R-HIST").json()
-    via_specific = client.get(f"/api/projects/{project}/requirements/R-HIST/history").json()
-    assert via_generic == via_specific
+    # Generic route still works.
+    via_generic = client.get(f"/api/projects/{project}/history/R-HIST")
+    assert via_generic.status_code == 200
+    assert len(via_generic.json()) >= 1
+
+    # Old alias is gone.
+    res = client.get(f"/api/projects/{project}/requirements/R-HIST/history")
+    assert res.status_code == 404, res.text
 
 
 def test_invalid_item_id_returns_400(client, project):

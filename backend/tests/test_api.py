@@ -135,7 +135,7 @@ def test_history_records_field_changes(client, project):
     make_req(client, project, "SYST0001", name="Before")
     client.put(f"/api/projects/{project}/requirements/SYST0001", json={"name": "After"})
 
-    entries = client.get(f"/api/projects/{project}/requirements/SYST0001/history").json()
+    entries = client.get(f"/api/projects/{project}/history/SYST0001").json()
     actions = [e["action"] for e in entries]
     assert "create" in actions and "update" in actions
     update = next(e for e in entries if e["action"] == "update")
@@ -192,6 +192,10 @@ def test_verification_case_lifecycle(client, project):
 
 def test_baseline_freeze_and_diff(client, project):
     make_req(client, project, "SYST0001", name="Original")
+    # Tick the requirement into the baseline before freezing — freezing captures
+    # membership, it does not sweep every record.
+    client.put(f"/api/projects/{project}/requirements/SYST0001",
+               json={"baselines": ["BL1"]})
     res = client.post(f"/api/projects/{project}/baselines/BL1/freeze")
     assert res.json()["requirements"] == 1
 

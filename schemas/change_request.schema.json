@@ -11,6 +11,17 @@
       ],
       "title": "CRStatus",
       "type": "string"
+    },
+    "CRUrgency": {
+      "description": "How soon the change needs deciding.\n\nAn enum rather than a per-project list, unlike the risk vocabularies: a\nchange request's urgency is not an axis a project configures, and CRStatus\nabove is already an enum, so this stays consistent with its own file.",
+      "enum": [
+        "low",
+        "normal",
+        "high",
+        "emergency"
+      ],
+      "title": "CRUrgency",
+      "type": "string"
     }
   },
   "properties": {
@@ -35,9 +46,39 @@
       "title": "Affected Requirements",
       "type": "array"
     },
+    "affected_components": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Affected Components",
+      "type": "array"
+    },
     "status": {
       "$ref": "#/$defs/CRStatus",
       "default": "submitted"
+    },
+    "urgency": {
+      "$ref": "#/$defs/CRUrgency",
+      "default": "normal"
+    },
+    "rationale": {
+      "default": "",
+      "title": "Rationale",
+      "type": "string"
+    },
+    "changes": {
+      "additionalProperties": {
+        "type": "object"
+      },
+      "title": "Changes",
+      "type": "object"
+    },
+    "base_fingerprints": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Base Fingerprints",
+      "type": "object"
     },
     "submitted_by": {
       "default": "",

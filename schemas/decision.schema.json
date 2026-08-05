@@ -36,6 +36,13 @@
       "title": "Linked Requirements",
       "type": "array"
     },
+    "linked_components": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Linked Components",
+      "type": "array"
+    },
     "status": {
       "default": "accepted",
       "title": "Status",

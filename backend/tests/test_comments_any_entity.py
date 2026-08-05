@@ -3,8 +3,8 @@
 Before the model carried ``entity_kind`` + ``entity_id``, a comment could only
 target a requirement, so a risk or a change request could not be discussed at
 all.  These tests assert the new shape round-trips through every commentable
-collection, that the legacy ``requirement_id`` path still works, and that the
-delete guard respects the comment link direction so a comment on a risk does
+collection, that the legacy ``requirement_id`` path is now rejected, and that
+the delete guard respects the comment link direction so a comment on a risk does
 **not** block deleting a requirement of the same id.
 """
 
@@ -101,28 +101,32 @@ def test_entity_id_without_entity_kind_is_400(client, project):
     assert "entity_kind" in res.text.lower()
 
 
-def test_legacy_requirement_id_on_create_stores_entity_kind(client, project):
+def test_legacy_requirement_id_on_create_is_422(client, project):
     make_req(client, project, "REQ-LEGACY")
     res = client.post(
         f"/api/projects/{project}/comments",
         json={"requirement_id": "REQ-LEGACY", "text": "via legacy field"},
     )
-    assert res.status_code == 201, res.text
-    comment = res.json()
-    assert comment["entity_kind"] == "requirements"
-    assert comment["entity_id"] == "REQ-LEGACY"
-    # The stored YAML must not carry the deprecated key.
-    assert "requirement_id" not in comment
+    assert res.status_code == 422, res.text
 
 
-def test_list_by_legacy_requirement_id_finds_the_comment(client, project):
+def test_list_by_legacy_requirement_id_is_ignored(client, project):
+    """The legacy query parameter is ignored — all comments are returned, not
+    just the one that would have matched."""
     make_req(client, project, "REQ-OLDQ")
-    c = _create_comment(client, project, entity_kind="requirements", entity_id="REQ-OLDQ")
+    make_req(client, project, "REQ-OTHER")
+    c1 = _create_comment(client, project, entity_kind="requirements", entity_id="REQ-OLDQ")
+    c2 = _create_comment(client, project, entity_kind="requirements", entity_id="REQ-OTHER",
+                         text="another")
+    # Query with the deprecated parameter — the filter is ignored so all
+    # comments come back, not just the one on REQ-OLDQ.
     res = client.get(f"/api/projects/{project}/comments?requirement_id=REQ-OLDQ")
     assert res.status_code == 200
     body = res.json()
     assert isinstance(body, list)
-    assert any(x["id"] == c["id"] for x in body), f"comment {c['id']} not found via deprecated query"
+    ids = {x["id"] for x in body}
+    assert c1["id"] in ids  # present, but because *all* comments are returned
+    assert c2["id"] in ids  # also present, proving the filter was ignored
 
 
 def test_invalid_entity_kind_is_422(client, project):

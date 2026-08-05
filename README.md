@@ -225,7 +225,7 @@ If a project directory is a git repository, every mutation is auto-committed wit
 - **Offline mode** — `RT_OFFLINE_MODE=true` suppresses all outbound network calls (git push, SMTP).
 - `GET /api/projects/{id}/git/log` — recent commits
 - `POST /api/projects/{id}/hooks/install` — pre-commit hook
-- `GET /api/projects/{id}/requirements/{rid}/history` — field-level change history (works with or without git)
+- `GET /api/projects/{id}/history/{item_id}` — field-level change history (works with or without git)
 
 ## Interchange
 
@@ -495,7 +495,7 @@ Key environment variables:
 | GET | `/api/projects/{id}/evaluation` | Parametric constraint evaluation (design + measured) |
 | POST | `/api/projects/{id}/evaluation/impact` | What-if preview: re-evaluate with hypothetical overrides + dependency-ordered impact trace |
 | GET | `/api/projects/{id}/requirements/{rid}/impact` | Impact analysis (dependents + cascades) |
-| GET | `/api/projects/{id}/requirements/{rid}/history` | Field-level change history |
+| GET | `/api/projects/{id}/history/{item_id}` | Field-level change history for any entity |
 | GET | `/api/projects/{id}/history/{item_id}` | Field-level change history for any entity |
 | GET | `/api/projects/{id}/suspect-links` | Links whose target changed since review |
 | GET | `/api/projects/{id}/search` | Full-text search across all entities |

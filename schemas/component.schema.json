@@ -237,6 +237,13 @@
       "title": "Parameters",
       "type": "array"
     },
+    "baselines": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Baselines",
+      "type": "array"
+    },
     "created": {
       "title": "Created",
       "type": "string"

@@ -27,6 +27,22 @@ test('baselines survive a settings save', async ({ app, server }) => {
 
   const baselineName = 'E2E-SURVIVE';
 
+  // Define the baseline in metadata first so it appears in list_baselines.
+  // Freezing no longer sweeps every requirement into a baseline — it captures
+  // only what is ticked, so a baseline with no members (or no metadata
+  // definition) would otherwise not appear in the listing.
+  await app.evaluate(async ({ project, name, token }: {
+    project: string; name: string; token: string;
+  }) => {
+    const r = await fetch(`/api/projects/${project}`, {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token },
+      body: JSON.stringify({ baselines: [{ name, symbol: 'E', description: 'E2E survivor' }] }),
+    });
+    return r.status;
+  }, { project: P, name: baselineName, token: csrfToken });
+
   // Freeze a baseline via POST.  Include the CSRF token header so the
   // global CSRF middleware accepts the request.
   const freezeStatus = await app.evaluate(async ({ project, name, token }: {
