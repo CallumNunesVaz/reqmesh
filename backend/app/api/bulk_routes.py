@@ -58,6 +58,26 @@ def bulk_update_requirements(project_id: str, data: dict, user: dict = Depends(r
         raise HTTPException(status_code=422, detail=exc.errors())
     if not ids or not updates:
         raise HTTPException(status_code=400, detail="ids and updates required")
+
+    # Validate workflow transitions for every requirement before writing anything.
+    # A single violation rejects the whole batch — a partially applied bulk
+    # update is worse than a rejected one.
+    if "status" in updates:
+        from app.services.workflow import validate_transition
+        meta = store.read_meta()
+        for req_id in ids:
+            before = store.get_requirement(req_id)
+            if before is None:
+                continue
+            new_status = updates["status"]
+            if before.get("status") != new_status:
+                err = validate_transition(meta, before.get("status", "proposed"), new_status)
+                if err:
+                    raise HTTPException(
+                        status_code=409,
+                        detail=f"{req_id}: {err}",
+                    )
+
     updated = []
     skipped = []
     for req_id in ids:

@@ -658,6 +658,14 @@ def update_requirement(project_id: str, req_id: str, data: RequirementUpdate, us
     if "verification_cases" in update_dict:
         sync_verification_from_requirement(store, req_id, update_dict["verification_cases"])
 
+    if "status" in update_dict and before.get("status") != update_dict["status"]:
+        from app.services.workflow import validate_transition
+        err = validate_transition(store.read_meta(),
+                                  before.get("status", "proposed"),
+                                  update_dict["status"])
+        if err:
+            raise HTTPException(status_code=409, detail=err)
+
     result = store.update_requirement(req_id, update_dict)
     if result is None:
         raise HTTPException(status_code=404, detail="Requirement not found")
