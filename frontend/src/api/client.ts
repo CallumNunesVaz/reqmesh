@@ -1262,9 +1262,6 @@ export const api = {
     request<{ deleted: number }>(`/projects/${projectId}/change-requests/bulk-delete`, { method: 'POST', body: { ids } }),
 
   // History
-  getRequirementHistory: (projectId: string, reqId: string) =>
-    request<unknown[]>(`/projects/${projectId}/requirements/${reqId}/history`),
-
   getItemHistory: (projectId: string, itemId: string) =>
     request<HistoryEntry[]>(`/projects/${projectId}/history/${itemId}`),
 

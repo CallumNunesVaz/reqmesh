@@ -443,11 +443,6 @@
       "default": null,
       "title": "Reviewed"
     },
-    "derived": {
-      "default": false,
-      "title": "Derived",
-      "type": "boolean"
-    },
     "normative": {
       "default": true,
       "title": "Normative",

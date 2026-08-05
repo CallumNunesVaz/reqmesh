@@ -37,8 +37,8 @@ def test_component_create_update_with_baselines(client, project):
 
 # ── Freeze ─────────────────────────────────────────────────────────────────────
 
-def test_freeze_writes_component_snapshot_and_appends_to_components(client, project):
-    """Freezing a baseline captures components and appends the name to them."""
+def test_freeze_writes_component_snapshot(client, project):
+    """Freezing a baseline captures only ticked components."""
     from .conftest import make_req
 
     # Define the baseline
@@ -46,9 +46,13 @@ def test_freeze_writes_component_snapshot_and_appends_to_components(client, proj
         {"name": "BL1", "symbol": "B", "description": "First baseline"},
     ]})
 
-    # Create a requirement and a component
+    # Create a requirement and a component, and tick them into the baseline
     make_req(client, project, "REQ-001", name="Altitude hold")
+    client.put(f"/api/projects/{project}/requirements/REQ-001",
+               json={"baselines": ["BL1"]})
     _make_component(client, project, "C-001", name="Controller", type="software")
+    client.put(f"/api/projects/{project}/components/C-001",
+               json={"baselines": ["BL1"]})
 
     # Freeze
     res = client.post(f"/api/projects/{project}/baselines/BL1/freeze")
@@ -60,18 +64,18 @@ def test_freeze_writes_component_snapshot_and_appends_to_components(client, proj
     frozen = store.get_item("baselines", "BL1")
     assert frozen is not None
 
-    # component_snapshot exists
+    # component_snapshot exists and contains only the ticked component
     assert "component_snapshot" in frozen
     cs = frozen["component_snapshot"]
     assert "C-001" in cs
     assert cs["C-001"]["name"] == "Controller"
     assert cs["C-001"]["type"] == "software"
 
-    # Baseline name was appended to the component
+    # Freezing does not modify membership — the component still has BL1
     comp = store.get_component("C-001")
     assert "BL1" in (comp.get("baselines") or [])
 
-    # Baseline name was also appended to the requirement (existing behaviour)
+    # Requirement likewise still has BL1
     req = store.get_requirement("REQ-001")
     assert "BL1" in (req.get("baselines") or [])
 

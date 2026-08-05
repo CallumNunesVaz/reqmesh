@@ -36,6 +36,10 @@ class ChangeRequest(BaseModel):
     title: str = ""
     description: str = ""
     affected_requirements: list[str] = Field(default_factory=list)
+    #: A change often lands on the design, not only on the text: swapping a part
+    #: is a change request against a component. Without this the CR could name
+    #: the requirement it rewrites but not the thing being rebuilt.
+    affected_components: list[str] = Field(default_factory=list)
     status: CRStatus = CRStatus.SUBMITTED
     urgency: CRUrgency = CRUrgency.NORMAL
     #: Why the change is needed, as opposed to `description`, which is what it
@@ -82,6 +86,7 @@ class ChangeRequestUpdate(BaseModel):
     rationale: Optional[str] = None
     changes: Optional[dict[str, dict[str, Any]]] = None
     affected_requirements: Optional[list[str]] = None
+    affected_components: Optional[list[str]] = None
     submitted_by: Optional[str] = None
     reviewed_by: Optional[str] = None
     approved_by: Optional[str] = None

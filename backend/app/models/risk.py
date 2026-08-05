@@ -57,6 +57,17 @@ class Risk(BaseModel):
     #: typed relation because the two are asked and answered independently, and
     #: a requirement can legitimately appear in both.
     mitigating_requirements: list[str] = Field(default_factory=list)
+    #: The same two relationships, against the design rather than the
+    #: specification. A risk usually lives in a *part* — "this actuator is a
+    #: single point of failure" was unsayable while risks could only point at
+    #: requirements, which is a statement about the thing, not about the text
+    #: describing it.
+    #:
+    #: Separate fields rather than one polymorphic list: these are lists, so a
+    #: single discriminator could not say which collection each entry belongs
+    #: to, and `link_registry` needs a concrete target per row.
+    linked_components: list[str] = Field(default_factory=list)
+    mitigating_components: list[str] = Field(default_factory=list)
     status: str = "open"
     created: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     modified: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
@@ -82,3 +93,5 @@ class RiskUpdate(BaseModel):
     status: Optional[str] = None
     linked_requirements: Optional[list[str]] = None
     mitigating_requirements: Optional[list[str]] = None
+    linked_components: Optional[list[str]] = None
+    mitigating_components: Optional[list[str]] = None

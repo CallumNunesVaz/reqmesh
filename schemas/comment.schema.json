@@ -4,8 +4,12 @@
       "title": "Id",
       "type": "string"
     },
-    "requirement_id": {
-      "title": "Requirement Id",
+    "entity_kind": {
+      "title": "Entity Kind",
+      "type": "string"
+    },
+    "entity_id": {
+      "title": "Entity Id",
       "type": "string"
     },
     "author": {
@@ -30,7 +34,8 @@
   },
   "required": [
     "id",
-    "requirement_id"
+    "entity_kind",
+    "entity_id"
   ],
   "title": "reqmesh comment",
   "type": "object",

@@ -39,6 +39,11 @@
       "title": "Mitigation",
       "type": "string"
     },
+    "detection": {
+      "default": "",
+      "title": "Detection",
+      "type": "string"
+    },
     "linked_requirements": {
       "items": {
         "type": "string"
@@ -51,6 +56,20 @@
         "type": "string"
       },
       "title": "Mitigating Requirements",
+      "type": "array"
+    },
+    "linked_components": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Linked Components",
+      "type": "array"
+    },
+    "mitigating_components": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Mitigating Components",
       "type": "array"
     },
     "status": {

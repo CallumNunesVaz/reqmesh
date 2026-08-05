@@ -87,10 +87,19 @@ LINKS: tuple[Link, ...] = (
     # ── everything else that cites a requirement ─────────────────────────────
     Link("specifications", "requirements", "requirements", "contains"),
     Link("change_requests", "affected_requirements", "requirements", "affects"),
+    Link("change_requests", "affected_components", "components", "affects"),
     Link("analysis_cases", "scope", "requirements", "scope"),
     Link("decisions", "linked_requirements", "requirements", "decides on"),
+    Link("decisions", "linked_components", "components", "decides on"),
     Link("risks", "linked_requirements", "requirements", "threatens"),
     Link("risks", "mitigating_requirements", "requirements", "mitigated by"),
+    # The same relationships against the design. Declared as separate rows with
+    # concrete targets rather than one polymorphic row: these fields are lists,
+    # so a single `kind_field` discriminator could not say which collection each
+    # entry belongs to — that trick works for comments only because a comment
+    # points at exactly one thing.
+    Link("risks", "linked_components", "components", "threatens"),
+    Link("risks", "mitigating_components", "components", "mitigated by"),
     # ── comments → anything ───────────────────────────────────────────────────
     # A comment attaches to any entity, so these rows all share one field and
     # are told apart by `entity_kind`. Declared per collection rather than as a

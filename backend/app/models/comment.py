@@ -3,11 +3,6 @@
 Comments used to carry a required ``requirement_id``, so a risk, a decision or a
 change request could not be discussed at all — surprising in a tool built around
 review. They now carry ``entity_kind`` + ``entity_id``.
-
-``requirement_id`` is still **accepted** on create for one release so existing
-clients keep working, but it is not stored: it is coerced to
-``entity_kind="requirements"``. Stored comments were rewritten by schema
-migration 2.
 """
 from __future__ import annotations
 
@@ -44,17 +39,11 @@ class Comment(BaseModel):
 class CommentCreate(BaseModel):
     entity_kind: str = ""
     entity_id: str = ""
-    #: Deprecated. Accepted for one release; coerced to
-    #: ``entity_kind="requirements"`` and never stored.
-    requirement_id: str = ""
     author: str = ""
     text: str = ""
 
     @model_validator(mode="after")
     def _resolve_target(self) -> "CommentCreate":
-        if self.requirement_id and not self.entity_id:
-            self.entity_kind = "requirements"
-            self.entity_id = self.requirement_id
         if not self.entity_id:
             raise ValueError("entity_id is required")
         if self.entity_kind not in commentable_collections():
