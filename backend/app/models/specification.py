@@ -17,6 +17,10 @@ class Specification(BaseModel):
     # schemes a real deployment needs is wider than http/https alone.
     url: str = ""
     requirements: list[str] = Field(default_factory=list)
+    #: Components this specification covers. A spec that governs a part rather
+    #: than a requirement had nowhere to say so — a supplier document covers the
+    #: item, not only the text describing it.
+    components: list[str] = Field(default_factory=list)
     children: list[str] = Field(default_factory=list)
     created: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     modified: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
@@ -34,4 +38,5 @@ class SpecificationUpdate(BaseModel):
     description: Optional[str] = None
     url: Optional[str] = None
     requirements: Optional[list[str]] = None
+    components: Optional[list[str]] = None
     children: Optional[list[str]] = None

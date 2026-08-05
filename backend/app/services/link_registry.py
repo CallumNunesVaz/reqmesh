@@ -86,9 +86,11 @@ LINKS: tuple[Link, ...] = (
          derived_inverse="verification_cases", inverse_stored=False),
     # ── everything else that cites a requirement ─────────────────────────────
     Link("specifications", "requirements", "requirements", "contains"),
+    Link("specifications", "components", "components", "contains"),
     Link("change_requests", "affected_requirements", "requirements", "affects"),
     Link("change_requests", "affected_components", "components", "affects"),
     Link("analysis_cases", "scope", "requirements", "scope"),
+    Link("analysis_cases", "scope_components", "components", "scope"),
     Link("decisions", "linked_requirements", "requirements", "decides on"),
     Link("decisions", "linked_components", "components", "decides on"),
     Link("risks", "linked_requirements", "requirements", "threatens"),
