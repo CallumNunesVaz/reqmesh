@@ -45,6 +45,14 @@ class Link:
     a discrepancy that has no effect on anything.
 
     ``label`` is what the relationship is called in the UI.
+
+    ``kind_field`` names a sibling field on the holder that says which
+    collection this particular record points at. It exists for comments, which
+    attach to any entity: one row is declared per commentable collection, all
+    sharing ``field``, and a row matches only when the holder's ``kind_field``
+    equals its ``target``. Keeping ``target`` a real collection name — rather
+    than making it nullable — is what lets every consumer that loads
+    ``list_items(link.target)`` stay exactly as it was.
     """
 
     holder: str
@@ -54,6 +62,7 @@ class Link:
     many: bool = True
     derived_inverse: str | None = None
     inverse_stored: bool = True
+    kind_field: str | None = None
     # A self-referential tree link (parent). Traversal treats these separately:
     # deleting a node with children is a different question from deleting one
     # that a specification happens to cite.
@@ -82,7 +91,20 @@ LINKS: tuple[Link, ...] = (
     Link("decisions", "linked_requirements", "requirements", "decides on"),
     Link("risks", "linked_requirements", "requirements", "threatens"),
     Link("risks", "mitigating_requirements", "requirements", "mitigated by"),
-    Link("comments", "requirement_id", "requirements", "comments on", many=False),
+    # ── comments → anything ───────────────────────────────────────────────────
+    # A comment attaches to any entity, so these rows all share one field and
+    # are told apart by `entity_kind`. Declared per collection rather than as a
+    # single wildcard row so that `links_into`, `find_dangling` and the
+    # integrity checker keep seeing a concrete target collection.
+    Link("comments", "entity_id", "requirements", "comments on", many=False, kind_field="entity_kind"),
+    Link("comments", "entity_id", "components", "comments on", many=False, kind_field="entity_kind"),
+    Link("comments", "entity_id", "risks", "comments on", many=False, kind_field="entity_kind"),
+    Link("comments", "entity_id", "change_requests", "comments on", many=False, kind_field="entity_kind"),
+    Link("comments", "entity_id", "decisions", "comments on", many=False, kind_field="entity_kind"),
+    Link("comments", "entity_id", "specifications", "comments on", many=False, kind_field="entity_kind"),
+    Link("comments", "entity_id", "verification_cases", "comments on", many=False, kind_field="entity_kind"),
+    Link("comments", "entity_id", "analysis_cases", "comments on", many=False, kind_field="entity_kind"),
+    Link("comments", "entity_id", "definitions", "comments on", many=False, kind_field="entity_kind"),
 )
 
 
@@ -133,6 +155,20 @@ def targets_of(item: dict, link: Link) -> list[str]:
     return [text] if text else []
 
 
+def kind_matches(item: dict, link: Link) -> bool:
+    """Whether *item* points at ``link.target`` through a discriminated link.
+
+    Always True for an ordinary link. For a discriminated one (comments), the
+    holder's ``kind_field`` has to name this link's target — otherwise a comment
+    on ``RSK-1`` would be reported as a referrer of a *requirement* with that
+    id, since the rows share a field and only the discriminator tells them
+    apart.
+    """
+    if link.kind_field is None:
+        return True
+    return str(item.get(link.kind_field, "")).strip() == link.target
+
+
 def find_referrers(store, collection: str, item_id: str,
                    include_tree: bool = True) -> list[dict]:
     """Every record pointing at ``collection/item_id``.
@@ -161,7 +197,7 @@ def find_referrers(store, collection: str, item_id: str,
             if holder == collection and it.get("id") == item_id:
                 continue          # a record referring to itself is not a referrer
             for ln in holder_links:
-                if item_id in targets_of(it, ln):
+                if item_id in targets_of(it, ln) and kind_matches(it, ln):
                     out.append({
                         "holder": holder,
                         "id": it.get("id", ""),
@@ -195,6 +231,11 @@ def find_dangling(store) -> list[dict]:
             continue
         for it in items:
             for ln in links_from(holder):
+                if not kind_matches(it, ln):
+                    # Without this, a comment on a risk is checked against every
+                    # other collection's id set too and reported dangling in all
+                    # of them.
+                    continue
                 for target_id in targets_of(it, ln):
                     if target_id not in ids.get(ln.target, set()):
                         issues.append({

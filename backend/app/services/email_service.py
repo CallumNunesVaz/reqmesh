@@ -234,17 +234,33 @@ def send_password_reset(email: str, token: str, base_url: str) -> None:
     _send_email(email, subject, body)
 
 
-def notify_comment(store, project_id: str, req_id: str, author: str, text: str) -> None:
-    """A comment was added to a requirement."""
+def notify_comment(store, project_id: str, entity_kind: str, entity_id: str,
+                   author: str, text: str) -> None:
+    """A comment was added to an entity."""
     if not _is_configured():
         return
+    from app.services.link_registry import COLLECTION_LABELS
+
     pname = _project_name(store)
-    url = _link(project_id, f"/requirements/{req_id}")
-    snippet = text[:120] + ("..." if len(text) > 120 else "")
-    subject = f"Comment on {req_id} by {author} in {pname}"
+
+    # Only requirements and components have a detail route; everything else
+    # links to its list page.  `change_requests` → `change-requests`.
+    _deep_links: dict[str, str] = {
+        "requirements": f"/requirements/{entity_id}",
+        "components": f"/components/{entity_id}",
+        "risks": "/risks",
+        "change_requests": "/change-requests",
+        "specifications": "/specifications",
+        "verification_cases": "/verification",
+    }
+    path = _deep_links.get(entity_kind, "/")
+    url = _link(project_id, path)
+
+    label = COLLECTION_LABELS.get(entity_kind, entity_kind)
+    subject = f"Comment on {label} {entity_id} by {author} in {pname}"
     body = (
-        f"<p><strong>{esc_html_text(author)}</strong> commented on requirement"
-        f" <strong>{req_id}</strong> in project <strong>{pname}</strong>.</p>"
+        f"<p><strong>{esc_html_text(author)}</strong> commented on {label}"
+        f" <strong>{entity_id}</strong> in project <strong>{pname}</strong>.</p>"
         f"<blockquote>{esc_html_text(text)}</blockquote>"
         f'<p><a href="{url}">View in reqmesh</a></p>'
     )

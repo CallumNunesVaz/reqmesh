@@ -15,6 +15,7 @@ import LoadingSplash from '../components/LoadingSplash';
 import { LinkEditor } from '../components/LinkEditor';
 import RichTextEditor from '../components/RichTextEditor';
 import { HistoryPanel } from '../components/HistoryPanel';
+import { CommentThread } from '../components/CommentThread';
 
 /** Ids of a component and everything beneath it — a component may not be
  *  reparented into its own branch, so those options must be excluded. */
@@ -251,6 +252,9 @@ export default function ComponentDetailPage() {
             editable={editable}
             onChange={(next) => save({ parameters: next as any })}
           />
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.19 }} className="card p-5">
+            <CommentThread entityKind="components" entityId={componentId!} />
+          </motion.div>
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="card p-5">
             <h2 className="font-semibold text-sm text-card-foreground mb-3">Change History</h2>
             <HistoryPanel itemId={componentId!} defaultOpen />

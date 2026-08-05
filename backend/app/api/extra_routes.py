@@ -266,13 +266,23 @@ def delete_risk(project_id: str, risk_id: str, force: bool = False, user: dict =
 @router.get("/projects/{project_id}/comments")
 def list_comments(
     project_id: str,
+    entity_kind: Optional[str] = Query(None),
+    entity_id: Optional[str] = Query(None),
     requirement_id: Optional[str] = Query(None),
     offset: Optional[int] = Query(None, ge=0),
     limit: Optional[int] = Query(None, ge=1, le=2000),
 ):
-    comments = get_store(project_id).list_items("comments")
+    # Deprecated: requirement_id=X is equivalent to entity_kind="requirements", entity_id=X.
     if requirement_id:
-        comments = [c for c in comments if c.get("requirement_id") == requirement_id]
+        entity_kind = "requirements"
+        entity_id = requirement_id
+    if entity_id and not entity_kind:
+        raise HTTPException(status_code=400, detail="entity_kind is required when filtering by entity_id")
+    comments = get_store(project_id).list_items("comments")
+    if entity_kind:
+        comments = [c for c in comments if c.get("entity_kind") == entity_kind]
+    if entity_id:
+        comments = [c for c in comments if c.get("entity_id") == entity_id]
     comments = sorted_by_modified(comments, key="created")
     if offset is None and limit is None:
         return comments
@@ -285,13 +295,17 @@ def list_comments(
 @router.post("/projects/{project_id}/comments", status_code=201)
 def create_comment(project_id: str, data: CommentCreate, user: dict = Depends(require_edit)):
     c = data.model_dump(mode="json")
+    # The CommentCreate validator already coerces requirement_id → entity_kind/entity_id
+    # and rejects invalid entity_kinds. We must NOT persist requirement_id, so
+    # the stored YAML has only one source of truth.
+    c.pop("requirement_id", None)
     c["id"] = f"COMMENT-{uuid.uuid4().hex[:8].upper()}"
     c["resolved"] = False
     c.setdefault("author", user.get("username", ""))
     store = get_store(project_id)
     result = store.create_item("comments", c)
     from app.services.email_service import notify_comment, _safe_notify
-    _safe_notify(notify_comment, store, project_id, data.requirement_id, user.get("username", ""), data.text)
+    _safe_notify(notify_comment, store, project_id, c["entity_kind"], c["entity_id"], user.get("username", ""), c["text"])
     return result
 
 
