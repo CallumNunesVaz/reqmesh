@@ -37,6 +37,27 @@ from app.services.verification_links import (
 )
 
 
+def _check_precondition(request: Request, current: dict) -> None:
+    """409 if the record moved since the client loaded it.
+
+    Opt-in: no If-Match means no check, so existing partial-update callers are
+    unaffected. ``modified`` is the version token because yaml_store already
+    stamps it on every write — introducing a separate counter would give two
+    sources of truth for the same question.
+    """
+    if_match = request.headers.get("If-Match")
+    if if_match is None:
+        return
+    stored_modified = current.get("modified", "")
+    if if_match != stored_modified:
+        entity_id = current.get("id", "item")
+        raise HTTPException(
+            status_code=409,
+            detail=f"{entity_id} was changed at {stored_modified}. "
+                   f"Reload to see their version before saving yours.",
+        )
+
+
 class ProjectCreate(BaseModel):
     id: str
     name: str
@@ -625,13 +646,15 @@ def create_requirement(project_id: str, data: RequirementCreate, user: dict = De
 
 
 @router.put("/projects/{project_id}/requirements/{req_id}")
-def update_requirement(project_id: str, req_id: str, data: RequirementUpdate, user: dict = Depends(require_maintain)):
+def update_requirement(project_id: str, req_id: str, data: RequirementUpdate,
+                       request: Request, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     update_dict = data.model_dump(mode="json", exclude_unset=True)
 
     before = store.get_requirement(req_id)
     if before is None:
         raise HTTPException(status_code=404, detail="Requirement not found")
+    _check_precondition(request, before)
 
     # Reparenting must not create a loop: nothing prevented A.parent=B and
     # B.parent=A, which made both (and everything under them) unreachable in
@@ -821,9 +844,13 @@ def create_specification(project_id: str, data: SpecificationCreate, user: dict 
 
 
 @router.put("/projects/{project_id}/specifications/{spec_id}")
-def update_specification(project_id: str, spec_id: str, data: SpecificationUpdate, user: dict = Depends(require_maintain)):
+def update_specification(project_id: str, spec_id: str, data: SpecificationUpdate,
+                         request: Request, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     before = store.get_specification(spec_id)
+    if before is None:
+        raise HTTPException(status_code=404, detail="Specification not found")
+    _check_precondition(request, before)
     update_dict = data.model_dump(mode="json", exclude_unset=True)
     result = store.update_specification(spec_id, update_dict)
     if result is None:
@@ -1207,11 +1234,13 @@ def create_definition(project_id: str, data: DefinitionCreate, user: dict = Depe
 
 
 @router.put("/projects/{project_id}/definitions/{def_id}")
-def update_definition(project_id: str, def_id: str, data: DefinitionUpdate, user: dict = Depends(require_maintain)):
+def update_definition(project_id: str, def_id: str, data: DefinitionUpdate,
+                      request: Request, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     existing = store.get_item("definitions", def_id)
     if existing is None:
         raise HTTPException(status_code=404, detail="Definition not found")
+    _check_precondition(request, existing)
     existing.update({k: v for k, v in data.model_dump().items() if v is not None})
     return store.write_item("definitions", def_id, existing)
 
@@ -1249,11 +1278,13 @@ def create_analysis_case(project_id: str, data: AnalysisCaseCreate, user: dict =
 
 
 @router.put("/projects/{project_id}/analysis/{case_id}")
-def update_analysis_case(project_id: str, case_id: str, data: AnalysisCaseUpdate, user: dict = Depends(require_maintain)):
+def update_analysis_case(project_id: str, case_id: str, data: AnalysisCaseUpdate,
+                         request: Request, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     existing = store.get_item("analysis_cases", case_id)
     if existing is None:
         raise HTTPException(status_code=404, detail="Analysis case not found")
+    _check_precondition(request, existing)
     existing.update({k: v for k, v in data.model_dump().items() if v is not None})
     return store.write_item("analysis_cases", case_id, existing)
 
@@ -1314,9 +1345,13 @@ def create_verification_case(project_id: str, data: VerificationCaseCreate, user
 
 
 @router.put("/projects/{project_id}/verification/{vc_id}")
-def update_verification_case(project_id: str, vc_id: str, data: VerificationCaseUpdate, user: dict = Depends(require_maintain)):
+def update_verification_case(project_id: str, vc_id: str, data: VerificationCaseUpdate,
+                             request: Request, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     before = store.get_verification_case(vc_id)
+    if before is None:
+        raise HTTPException(status_code=404, detail="Verification case not found")
+    _check_precondition(request, before)
     update_dict = data.model_dump(mode="json", exclude_unset=True)
     result = store.update_verification_case(vc_id, update_dict)
     if result is None:
