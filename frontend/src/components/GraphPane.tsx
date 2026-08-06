@@ -1995,7 +1995,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
               <div className="absolute top-full left-0 mt-1.5 z-50 w-60 max-w-[calc(100cqw-1.5rem)] rounded-xl bg-graph-panel border border-graph-border shadow-2xl p-4">
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-[11px] font-semibold text-graph-text uppercase tracking-wider">Filters</span>
-                  <button onClick={() => setShowFilters(false)} className="text-graph-muted hover:text-graph-text">
+                  <button onClick={() => setShowFilters(false)} className="text-graph-muted hover:text-graph-text" aria-label="Close filters" title="Close filters">
                     <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
                   </button>
                 </div>
@@ -2100,7 +2100,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
               <div className="absolute top-full left-0 mt-1.5 z-50 w-64 max-w-[calc(100cqw-1.5rem)] rounded-xl bg-graph-panel border border-graph-border shadow-2xl p-4">
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-[11px] font-semibold text-graph-text uppercase tracking-wider">Layout Settings</span>
-                  <button onClick={() => setShowSettings(false)} className="text-graph-muted hover:text-graph-text">
+                  <button onClick={() => setShowSettings(false)} className="text-graph-muted hover:text-graph-text" aria-label="Close layout settings" title="Close layout settings">
                     <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
                   </button>
                 </div>
@@ -2266,7 +2266,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
           <button onClick={loadData} className="p-1.5 rounded-lg bg-graph-panel border border-graph-border text-graph-text hover:text-foreground hover:bg-graph-control-hover transition-colors shadow-sm" title="Refresh">
             <RotateCw size={13} />
           </button>
-          <button onClick={resetView} className="p-1.5 rounded-lg bg-graph-panel border border-graph-border text-graph-text hover:text-foreground hover:bg-graph-control-hover transition-colors shadow-sm" title="Reset view">
+          <button onClick={resetView} className="p-1.5 rounded-lg bg-graph-panel border border-graph-border text-graph-text hover:text-foreground hover:bg-graph-control-hover transition-colors shadow-sm" title="Reset view" aria-label="Reset view">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
           </button>
         </Panel>
@@ -2303,6 +2303,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
                 onClick={() => setDerived(null)}
                 className="shrink-0 rounded px-1 text-graph-muted hover:text-foreground hover:bg-graph-control-hover"
                 title="Clear derivation trace"
+                aria-label="Clear derivation trace"
               >
                 <svg width="11" height="11" viewBox="0 0 14 14" fill="none"><path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>
               </button>
