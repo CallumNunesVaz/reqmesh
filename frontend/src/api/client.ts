@@ -975,6 +975,42 @@ export interface HistoryEntry {
   changes: Record<string, { before: unknown; after: unknown }>;
 }
 
+/** One date bucket in the activity graph. */
+export interface ActivityBucket {
+  date: string;
+  verification: number;
+  change: number;
+  specification: number;
+  requirement: number;
+  component: number;
+  decision: number;
+  risk: number;
+}
+
+/** Response from GET /projects/{id}/activity. */
+export interface ActivityData {
+  buckets: ActivityBucket[];
+  kinds: string[];
+  total: number;
+  since: string;
+  until: string;
+  bucket: 'day' | 'week';
+}
+
+/** Fixed stacking order — this is the CVD guarantee.  Adjacent segments in
+ *  this sequence never leave a deuteranope or protanope unable to tell them
+ *  apart in either theme.  Sorting this alphabetically would silently break
+ *  the guarantee: "change"→"component" puts green beside orange. */
+export const ACTIVITY_KIND_ORDER = [
+  'verification',
+  'change',
+  'specification',
+  'requirement',
+  'component',
+  'decision',
+  'risk',
+] as const;
+
 export const api = {
   // Build metadata (version, git sha, build time)
   getVersion: () => request<BuildInfo>('/version'),
@@ -1311,6 +1347,14 @@ export const api = {
 
   // Metrics & Compliance
   getMetrics: (projectId: string) => request<MetricsData>(`/projects/${projectId}/metrics`),
+  getActivity: (projectId: string, params?: { since?: string; until?: string; bucket?: 'day' | 'week' }) => {
+    const qs = new URLSearchParams();
+    if (params?.since) qs.set('since', params.since);
+    if (params?.until) qs.set('until', params.until);
+    if (params?.bucket) qs.set('bucket', params.bucket);
+    const qsStr = qs.toString();
+    return request<ActivityData>(`/projects/${projectId}/activity${qsStr ? '?' + qsStr : ''}`);
+  },
   getCompliance: (projectId: string) =>
     request<{ standards: { name: string; count: number }[]; tracked_count: number; total_requirements: number }>(`/projects/${projectId}/compliance`),
 

@@ -12,6 +12,7 @@ from pathlib import Path
 from app.core.config import settings as global_settings
 from app.services.sanitize import sanitize_html
 from app.services.verification_links import attach as attach_verification_cases
+from app.services.entity_kinds import resolve_entity_label
 from app.services.publishers.css import CSS
 from app.services.publishers.latex_helpers import (
     latex_engine_available,
@@ -185,24 +186,12 @@ class Publisher:
     # ── Changelog (optional date-bounded diff report) ────────────────────────────
 
     def _entity_label(self, item_id: str) -> tuple[str, str]:
-        """(kind, name) for an audited item id — history is keyed by id alone."""
-        if item_id in self._all_req_ids:
-            return "Requirement", self._all_req_ids[item_id].get("name", "")
-        if item_id in self._vc_by_id:
-            return "Verification", self._vc_by_id[item_id].get("name", "")
-        if item_id in self._comp_by_id:
-            return "Component", self._comp_by_id[item_id].get("name", "")
-        if item_id in self._spec_by_id:
-            return "Specification", self._spec_by_id[item_id].get("name", "")
-        for kind, key in (("Risk", "risks"), ("Change Request", "change_requests"), ("Decision", "decisions")):
-            try:
-                for it in self.store.list_items(key):
-                    if it.get("id") == item_id:
-                        return kind, it.get("title", "") or it.get("name", "")
-            except Exception:
-                pass
-        # Deleted items keep their audit trail but no longer resolve to a record.
-        return "Item", ""
+        """(kind, name) for an audited item id — history is keyed by id alone.
+
+        Delegates to the shared ``resolve_entity_label`` so the activity
+        endpoint and every future caller agree on the same precedence order.
+        """
+        return resolve_entity_label(self.store, item_id)
 
     @staticmethod
     def _fmt_value(v) -> str:

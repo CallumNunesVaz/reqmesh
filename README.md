@@ -328,6 +328,20 @@ Configurable per project via `_meta.yaml` (`quality.rules`, `quality.weights`, `
 - **`priorities`** — per-stakeholder scores (`{"development": 5, "customers": 8, "safety": 10}`)
 - **Prioritized backlog** — `GET /api/projects/{id}/backlog` returns requirements ordered by combined priority scores
 
+## Activity
+
+The metrics page plots project activity over time: a stacked bar per day (or
+week) coloured by entity kind, drawn from the audit history every write already
+records. It answers "what kind of work has been happening, and when" — a burst
+of risk edits before a review, a quiet fortnight, a spike of requirement churn
+after a change request landed.
+
+Counts are **distinct items touched**, not audit entries, so a bulk status
+change across forty requirements registers as forty items on one day rather
+than swamping the chart. The window defaults to the last 90 days and is capped
+at 365; entries are skipped by filename before being parsed, so the cost tracks
+the window rather than the project's whole history.
+
 ## Allocation Matrix
 
 An interactive cross-reference grid between requirements and the entities
@@ -521,7 +535,7 @@ Key environment variables:
 | POST | `/api/projects/{id}/evaluation/impact` | What-if preview: re-evaluate with hypothetical overrides + dependency-ordered impact trace |
 | GET | `/api/projects/{id}/requirements/{rid}/impact` | Impact analysis (dependents + cascades) |
 | GET | `/api/projects/{id}/history/{item_id}` | Field-level change history for any entity |
-| GET | `/api/projects/{id}/history/{item_id}` | Field-level change history for any entity |
+| GET | `/api/projects/{id}/activity` | Audit activity bucketed by date and entity kind (`since`, `until`, `bucket=day\|week`) |
 | GET | `/api/projects/{id}/suspect-links` | Links whose target changed since review |
 | GET | `/api/projects/{id}/search` | Full-text search across all entities |
 

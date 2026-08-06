@@ -396,6 +396,139 @@ def item_history(project_id: str, item_id: str):
     return get_store(project_id).list_history(item_id)[:50]
 
 
+# ── Activity (aggregated audit graph) ─────────────────────────────────────────
+
+@router.get("/projects/{project_id}/activity")
+def activity(
+    project_id: str,
+    since: str = Query(""),
+    until: str = Query(""),
+    bucket: str = Query("day"),
+):
+    """Aggregated audit activity bucketed by date and entity kind.
+
+    Counts **distinct item ids** per bucket per kind, not raw audit entries.
+    A bulk status change writes N entries in one action and would otherwise
+    spike a single day into the darkest bucket and dwarf every real day beside
+    it.
+    """
+    from collections import defaultdict
+    from datetime import date, datetime, timedelta, timezone
+
+    from app.services.entity_kinds import resolve_entity_label, KIND_LABEL_TO_KEY
+
+    if bucket not in ("day", "week"):
+        raise HTTPException(status_code=400, detail="bucket must be 'day' or 'week'")
+
+    today = datetime.now(timezone.utc).date()
+    until_dt = date.fromisoformat(until) if until else today
+
+    if since:
+        since_dt = date.fromisoformat(since)
+    else:
+        since_dt = until_dt - timedelta(days=90)
+
+    # Cap the look-back window at 365 days.
+    max_since = until_dt - timedelta(days=365)
+    if since_dt < max_since:
+        since_dt = max_since
+
+    since_iso = since_dt.isoformat()
+    until_iso = until_dt.isoformat()
+
+    store = get_store(project_id)
+    raw = store.list_all_history(since_iso, until_iso)
+
+    # Stream-bucket: one pass over the history, one dict per bucket day.
+    # days_in_range is computed *after* clamping every date to the window so
+    # we never return a zero-day that falls outside the clamped period.
+    days_in_range = (until_dt - since_dt).days + 1
+    # seed every date in the range with an empty set per kind
+    bucket_data: dict[str, dict[str, set[str]]] = {}
+    for i in range(days_in_range):
+        d = since_dt + timedelta(days=i)
+        if bucket == "week":
+            # ISO week: Monday of the week containing *d*.
+            key = (d - timedelta(days=d.weekday())).isoformat()
+        else:
+            key = d.isoformat()
+        if key not in bucket_data:
+            bucket_data[key] = defaultdict(set)
+
+    for entry in raw:
+        item_id = str(entry.get("item_id", ""))
+        ts = str(entry.get("timestamp", ""))
+        if not item_id or not ts:
+            continue
+
+        try:
+            entry_date = date.fromisoformat(ts[:10])
+        except (ValueError, TypeError):
+            continue
+
+        # Skip entries outside the clamped window (list_all_history bounding
+        # is `>=` / `<=` on string timestamps; epsilon is safe here).
+        if entry_date < since_dt or entry_date > until_dt:
+            continue
+
+        if bucket == "week":
+            key = (entry_date - timedelta(days=entry_date.weekday())).isoformat()
+        else:
+            key = entry_date.isoformat()
+
+        kind_label, _name = resolve_entity_label(store, item_id)
+        kind_key = KIND_LABEL_TO_KEY.get(kind_label, "item")
+        bucket_data[key][kind_key].add(item_id)
+
+    # Assemble the ordered list of buckets.  Kinds with a nonzero total are
+    # tracked so the legend only shows what actually exists.
+    all_kind_keys = ["verification", "change", "specification", "requirement",
+                     "component", "decision", "risk"]
+
+    buckets_out = []
+    for i in range(days_in_range):
+        d = since_dt + timedelta(days=i)
+        if bucket == "week":
+            key = (d - timedelta(days=d.weekday())).isoformat()
+        else:
+            key = d.isoformat()
+
+        bd = bucket_data.get(key, {})
+        b = {"date": key, **{k: len(bd.get(k, set())) for k in all_kind_keys}}
+        buckets_out.append(b)
+
+    # Deduplicate consecutive week keys (the loop produces the same key for Mon–Sun).
+    if bucket == "week":
+        seen: set[str] = set()
+        deduped = []
+        for b in buckets_out:
+            if b["date"] not in seen:
+                seen.add(b["date"])
+                deduped.append(b)
+        buckets_out = deduped
+
+    # Compute totals from the final (deduplicated) buckets, not the per-day
+    # loop, so a week's activity is not summed once per weekday in the range.
+    kind_totals: dict[str, int] = {k: 0 for k in all_kind_keys}
+    total = 0
+    for b in buckets_out:
+        for k in all_kind_keys:
+            n = b[k]
+            kind_totals[k] += n
+            total += n
+
+    kinds = [k for k in all_kind_keys if kind_totals[k] > 0]
+
+    return {
+        "buckets": buckets_out,
+        "kinds": kinds,
+        "total": total,
+        "since": since_iso,
+        "until": until_iso,
+        "bucket": bucket,
+    }
+
+
 # ── Git Log ───────────────────────────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/git/log")

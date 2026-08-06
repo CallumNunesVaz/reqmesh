@@ -8,6 +8,7 @@ import { VerdictBadge } from '../components/parametrics';
 import { DefinitionsManager, AnalysisCasesPanel } from '../components/DefinitionsPanel';
 import { HelpTip } from '../components/HelpTip';
 import LoadingSplash from '../components/LoadingSplash';
+import ActivityChart from '../components/ActivityChart';
 import { useAuthStore } from '../store/auth';
 
 export default function MetricsPage() {
@@ -85,6 +86,8 @@ export default function MetricsPage() {
           );
         })}
       </div>
+
+      <ActivityChart />
 
       <div className="grid grid-cols-1 @3xl:grid-cols-2 gap-6">
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }} className="card p-5">
