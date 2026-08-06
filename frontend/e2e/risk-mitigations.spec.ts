@@ -54,8 +54,16 @@ test('mitigated-by persists and does not overwrite threatens', async ({ app, ser
   const mitigatedSelect = riskCard.locator('[data-link-editor="Mitigated By"] select');
   await mitigatedSelect.selectOption(`${mitigatingReq.id} — ${mitigatingReq.name}`);
 
-  // Wait for the optimistic update + API call to settle.
-  await app.waitForTimeout(1500);
+  // Poll the API until both link changes land — no fixed sleep.
+  await expect(async () => {
+    const current: any[] = await app.evaluate(async (project: string) => {
+      const r = await fetch(`/api/projects/${project}/risks`, { credentials: 'include' });
+      return r.json();
+    }, P);
+    const updated = current.find((r2: any) => r2.id === risk.id);
+    expect(updated?.linked_requirements).toContain(threatenedReq.id);
+    expect(updated?.mitigating_requirements || []).toContain(mitigatingReq.id);
+  }).toPass({ timeout: 10_000 });
 
   // Reload the page.
   await app.goto(`${server.baseURL}/project/${P}/risks`);

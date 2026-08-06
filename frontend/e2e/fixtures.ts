@@ -132,7 +132,30 @@ export const test = base.extend<{ app: Page }, { requireAuth: boolean; server: S
     // *dismisses* dialogs unless something listens — which silently turns a
     // delete into a no-op that still reports success.
     page.on('dialog', (d) => d.accept().catch(() => {}));
-    await page.goto(server.baseURL);
+
+    // `waitUntil: 'commit'`, not the default `'load'`.
+    //
+    // This fixture, not any individual test, was the source of a flake that
+    // reddened a *different* test on each of four consecutive full runs —
+    // every test runs this setup, so the victim was simply whichever one lost
+    // the race. It never reproduced alone. The failures were all:
+    //
+    //   Test timeout of 60000ms exceeded while setting up "app".
+    //   page.goto: net::ERR_ABORTED; navigating to "…", waiting until "load"
+    //
+    // `load` waits for every subresource; `commit` resolves once the response
+    // has begun. The real readiness condition is `header` on the next line,
+    // which cannot appear until the bundle has executed and React has mounted
+    // — so nothing is lost by not waiting for `load`, and the abort window
+    // closes.
+    //
+    // The precise trigger is not settled: the trace shows the navigation
+    // request with status -1 and no timings, which says the response never
+    // completed but not why. Two candidates were ruled out — reducing worker
+    // count did not help, and a client-side redirect race would have left a
+    // completed 200 in the trace first. Do not "restore" `load` on the theory
+    // that it is stricter and therefore safer; it is what was breaking.
+    await page.goto(server.baseURL, { waitUntil: 'commit' });
     await page.waitForSelector('header', { timeout: 20_000 });
     await use(page);
   },
