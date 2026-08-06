@@ -47,6 +47,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       editMode: false,
       passwordChangeRequired: passwordChangeRequired ?? false,
     });
+    // Honour the post-login redirect carried from session expiry.
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const next = params.get('next');
+      if (next) {
+        window.location.href = next;
+      }
+    }
   },
 
   loginGuest: (csrfToken) => {
@@ -58,6 +66,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       editMode: false,
       passwordChangeRequired: false,
     });
+    // Honour the post-login redirect carried from session expiry.
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const next = params.get('next');
+      if (next) {
+        window.location.href = next;
+      }
+    }
   },
 
   logout: () => {

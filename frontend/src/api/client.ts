@@ -70,6 +70,39 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     const detail = err.detail;
+
+    // When the session expires, clear auth state and redirect to sign-in
+    // rather than letting callers render empty-state UI.
+    // Auth endpoints are exempt: a wrong-password response must show the
+    // form error, not bounce the page, and the startup whoami probe
+    // legitimately returns 401 for a signed-out visitor.
+    if (res.status === 401 && !path.startsWith('/auth/')) {
+      // Only *expiry* redirects — a 401 while already signed out must not.
+      //
+      // Without this guard the redirect loops forever, and the loop is worse
+      // than the bug it fixes. With RT_REQUIRE_AUTH the projects list is itself
+      // 401 to an unauthenticated caller (verified: GET /api/projects -> 401),
+      // so: session expires, redirect to `/`, ProjectsPage mounts and calls
+      // listProjects(), that 401s, redirect to `/` again — a reloading tab you
+      // cannot sign in from. The empty page this feature replaces at least had
+      // a working Sign in button.
+      //
+      // Reading the user *before* logout() is what makes it terminate: the
+      // first 401 redirects and clears the store, and every 401 afterwards
+      // finds no user and simply reports the error.
+      const wasSignedIn = !!useAuthStore.getState().user;
+      useAuthStore.getState().logout();
+      if (wasSignedIn && typeof window !== 'undefined') {
+        const returnTo = window.location.pathname + window.location.search;
+        const url = returnTo && returnTo !== '/' ? `/?next=${encodeURIComponent(returnTo)}` : '/';
+        window.location.href = url;
+      }
+      throw new ApiError(
+        typeof detail === 'string' ? detail : 'Session expired',
+        res.status,
+      );
+    }
+
     // A structured detail (the delete guard's 409 carries the referrer list)
     // used to be interpolated into a string as "[object Object]", losing the
     // very information the caller needs to offer a sensible next step.
