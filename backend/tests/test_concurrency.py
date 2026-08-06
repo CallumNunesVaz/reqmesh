@@ -15,7 +15,6 @@ The repo had no concurrency test at all, which is why these went unnoticed:
 """
 import threading
 
-import pytest
 
 from app.core import auth
 from app.core.dependencies import get_store

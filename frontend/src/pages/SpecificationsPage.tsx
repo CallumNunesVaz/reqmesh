@@ -41,6 +41,7 @@ export default function SpecificationsPage() {
     api.listComponents(projectId).then(setComponents).catch(() => {});
   };
 
+ // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(load, [projectId, dataVersion]);
 
   const reqNames = useMemo(() => new Map(requirements.map((r) => [r.id, r.name])), [requirements]);
@@ -66,6 +67,7 @@ export default function SpecificationsPage() {
   // so the contents the link pointed towards are actually visible.
   const focusId = useFocusedEntity(
     specifications.length > 0,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     useCallback((id: string) => setExpanded((prev) => new Set(prev).add(id)), []),
   );
 

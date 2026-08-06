@@ -1,6 +1,5 @@
 """Tests for all_links() and the GET /trace-model endpoint."""
 
-import pytest
 from pathlib import Path
 
 from app.services.tracing import all_links

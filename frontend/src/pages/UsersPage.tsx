@@ -105,6 +105,7 @@ export default function UsersPage() {
     }).catch((err) => setLoadError(err.message || 'Failed to load users'));
   };
 
+ // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (isAdmin || isAuthenticated) load(); }, [isAdmin, isAuthenticated]);
 
   const toggleSort = (col: typeof sortBy) => {

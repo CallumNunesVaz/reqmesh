@@ -17,6 +17,7 @@ export function DefinitionsManager({ projectId, editable }: { projectId: string;
   const { addToast } = useToasts();
 
   const load = () => api.listDefinitions(projectId).then(setDefs).catch(() => setDefs([]));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, [projectId]);
 
   const add = async () => {
@@ -118,6 +119,7 @@ export function AnalysisCasesPanel({ projectId, editable }: { projectId: string;
   const { addToast } = useToasts();
 
   const load = () => api.listAnalysisCases(projectId).then(setCases).catch(() => setCases([]));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, [projectId]);
 
   const add = async () => {

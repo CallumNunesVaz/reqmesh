@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import datetime
-import itertools
 import logging
 import re
 import string
@@ -532,7 +531,6 @@ def next_uid(project_id: str, parent: str | None = None):
 
     base = prefix + separator if separator else prefix
     max_suffix = -1
-    suffix_pattern = re.escape(base)
     for r in reqs:
         rid = r.get("id", "")
         if rid.startswith(base):

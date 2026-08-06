@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
 
-import pytest
 
 from app.services.entity_kinds import resolve_entity_label
 from app.services.yaml_store import YamlStore

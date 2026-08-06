@@ -11,8 +11,6 @@ import re
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from html import escape as html_escape
-from typing import Optional
 
 import logging
 

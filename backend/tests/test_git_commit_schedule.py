@@ -15,7 +15,6 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from app import main as main_mod
 from app.services import git_auto_commit as gac
 from app.core.config import settings
 from app.core.dependencies import (require_admin, require_edit,

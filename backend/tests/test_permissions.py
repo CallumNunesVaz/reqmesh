@@ -98,7 +98,6 @@ import pytest
 from fastapi.routing import APIRoute
 
 from app.main import app
-from app.core.dependencies import require_edit, require_maintain, require_maintain_global, require_admin
 
 _PERM_DEP_NAMES = frozenset({
     "require_edit", "require_maintain", "require_maintain_global", "require_admin",

@@ -1,6 +1,5 @@
 """Hand-edited YAML with unparseable values must degrade gracefully."""
 
-import pytest
 
 from app.services.evaluation import (
     evaluate_project,

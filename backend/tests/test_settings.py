@@ -1,6 +1,5 @@
 """Runtime application-settings store and API."""
 
-import os
 
 from app.core import settings_store as ss
 from app.core.config import settings

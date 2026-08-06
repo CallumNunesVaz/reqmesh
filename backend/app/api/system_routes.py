@@ -77,7 +77,6 @@ async def system_info(admin: dict = Depends(require_admin)):
     import platform
     import socket
     import sys
-    import time as _time
 
     info = updater.runtime_info()
 
@@ -470,7 +469,7 @@ def _detect_latex(engine: str) -> tuple[bool, dict]:
 
 
 def _test_latex_compile(engine: str) -> dict:
-    import shutil, subprocess, tempfile, os
+    import shutil, subprocess, tempfile
     from pathlib import Path as P
     if not shutil.which(engine):
         return {"ok": False, "error": f"{engine} not found"}
@@ -524,7 +523,6 @@ This is a minimal reqmesh dependency test.
 
 
 def _collect_deps() -> list[dict]:
-    import shutil, platform
     results = []
 
     _INSTALL_GUIDES: dict[str, str] = {

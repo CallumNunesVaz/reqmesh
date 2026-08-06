@@ -1,6 +1,4 @@
-import tempfile
 from pathlib import Path
-from unittest.mock import patch, MagicMock
 
 from app.services.git_service import ensure_remote, push_to_remote, is_repo
 

@@ -79,11 +79,11 @@ def validate(project_path, quality, quality_floor):
     if quality:
         from app.services.quality import project_quality
         q = project_quality(store)
-        click.echo(f"\n  ══ Quality Linting ══")
+        click.echo("\n  ══ Quality Linting ══")
         click.echo(f"  Average score: {q['average']}/100  (floor: {quality_floor})")
         worst = [r for r in q["per_requirement"] if r["score"] < 80][:10]
         if worst:
-            click.echo(f"  Top issues:")
+            click.echo("  Top issues:")
             for r in worst:
                 color = "red" if r["score"] < quality_floor else "yellow"
                 click.echo(click.style(f"    {r['id']}: {r['score']}/100 — {r.get('name','')}", fg=color))

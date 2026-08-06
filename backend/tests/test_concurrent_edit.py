@@ -82,7 +82,7 @@ def test_no_if_match_header_is_backward_compatible(client, project):
 
 def test_current_token_allows_write(client, project):
     """A client that holds the latest modified token may write."""
-    req = make_req(client, project, "REQ-001", name="original")
+    make_req(client, project, "REQ-001", name="original")
 
     # After a write, GET the fresh modified.
     client.put(
@@ -125,7 +125,7 @@ def test_409_detail_names_entity_id(client, project):
 
 def test_precondition_is_per_entity(client, project):
     """A stale token for REQ-1 must not block a write to REQ-2."""
-    req1 = make_req(client, project, "REQ-001", name="req one")
+    make_req(client, project, "REQ-001", name="req one")
     req2 = make_req(client, project, "REQ-002", name="req two")
 
     # Change REQ-1 to make REQ-1's token stale.

@@ -131,6 +131,7 @@ export default function ProjectSettingsPage() {
       setStakeholders(p.stakeholders || []);
       setRiskMatrix(p.risk_matrix || null);
     }).catch((err: any) => addToast('error', `Could not load project settings: ${err.message}`));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
 
   const example = (rule: NamingRule) => {

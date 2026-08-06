@@ -98,6 +98,7 @@ export default function RequirementsPage() {
       .catch(() => {});
     api.getProject(projectId).then((p) => setProjectBaselines(baselineNames(p.baselines))).catch(() => {});
   };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(load, [projectId, dataVersion]);
 
   // '/' focuses search
@@ -802,6 +803,7 @@ function BulkEditModal({
 
   useEffect(() => {
     if (open) { setForm(INITIAL); setError(''); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   const hasChanges = Object.entries(form).some(([k, v]) => {

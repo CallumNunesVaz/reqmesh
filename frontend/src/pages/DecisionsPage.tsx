@@ -86,6 +86,7 @@ export default function DecisionsPage() {
 
   const focusId = useFocusedEntity(
     decisions.length > 0,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     useCallback((id: string) => setExpanded((prev) => new Set(prev).add(id)), []),
   );
 

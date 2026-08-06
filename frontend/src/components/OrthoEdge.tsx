@@ -9,6 +9,7 @@ import { roundedPath, type Pt } from './orthoRoute';
 // slow traveling pulse that shows the link's direction.
 
 function OrthoEdge({ id, data, style, markerEnd }: EdgeProps) {
+// eslint-disable-next-line react-hooks/exhaustive-deps
   const pts = (data?.points as Pt[] | undefined) ?? [];
 
   const { path, labelX, labelY } = useMemo(() => {

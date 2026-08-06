@@ -1,4 +1,3 @@
-import textwrap
 from pathlib import Path
 
 from app.services.quality import score_requirement, project_quality, strip_html, _load_config
