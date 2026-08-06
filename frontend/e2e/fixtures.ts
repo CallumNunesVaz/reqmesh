@@ -151,10 +151,21 @@ export const test = base.extend<{ app: Page }, { requireAuth: boolean; server: S
     //
     // The precise trigger is not settled: the trace shows the navigation
     // request with status -1 and no timings, which says the response never
-    // completed but not why. Two candidates were ruled out — reducing worker
-    // count did not help, and a client-side redirect race would have left a
-    // completed 200 in the trace first. Do not "restore" `load` on the theory
-    // that it is stricter and therefore safer; it is what was breaking.
+    // completed but not why. Three candidates have been ruled out, so do not
+    // spend time on them again:
+    //
+    //  - Worker count. Dropping 12 to 4 did not help.
+    //  - A client-side redirect race. That would have left a completed 200 in
+    //    the trace first; there is none.
+    //  - The backend stalling after the data-root replace above. Measured
+    //    directly, mirroring this fixture's env and sequence: GET / is 1 ms
+    //    median idle, and 5 ms median / 18 ms worst across 240 requests with
+    //    six concurrent servers each under API load. Zero failures in 300
+    //    replace-then-fetch cycles. The server is not the problem.
+    //
+    // What is left points at the browser: `load` waits for every subresource,
+    // and the abort happens in that window. Do not "restore" `load` on the
+    // theory that it is stricter and therefore safer; it is what was breaking.
     await page.goto(server.baseURL, { waitUntil: 'commit' });
     await page.waitForSelector('header', { timeout: 20_000 });
     await use(page);

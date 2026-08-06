@@ -97,6 +97,63 @@ describe('request', () => {
   });
 });
 
+describe('session expiry (401 handling)', () => {
+  it('calls logout and still rejects on a 401 from a normal endpoint', async () => {
+    const { useAuthStore } = await import('../src/store/auth');
+    useAuthStore.getState().login('alice', 'admin', 'csrf-tok');
+    expect(useAuthStore.getState().user).not.toBeNull();
+
+    stubFetch({ status: 401, json: async () => ({ detail: 'Session expired' }) });
+    await expect(api.listProjects()).rejects.toThrow('Session expired');
+
+    expect(useAuthStore.getState().user).toBeNull();
+    expect(useAuthStore.getState().csrfToken).toBeNull();
+  });
+
+  it('does NOT call logout on a 401 from an auth endpoint', async () => {
+    const { useAuthStore } = await import('../src/store/auth');
+    useAuthStore.getState().login('alice', 'admin', 'csrf-tok');
+    expect(useAuthStore.getState().user).not.toBeNull();
+
+    stubFetch({ status: 401, json: async () => ({ detail: 'Invalid credentials' }) });
+    await expect(api.login('alice', 'wrong')).rejects.toThrow('Invalid credentials');
+
+    // Auth store must still have the previous user — logout must not fire.
+    expect(useAuthStore.getState().user).not.toBeNull();
+  });
+
+  it('does not redirect a second time once already signed out', async () => {
+    // The redirect must fire on *expiry*, not on every 401, or it loops: with
+    // RT_REQUIRE_AUTH the projects list is itself 401 to an unauthenticated
+    // caller, so redirecting to `/` lands on a page whose own listProjects()
+    // 401s and redirects again — a reloading tab you cannot sign in from.
+    //
+    // Asserted through the store rather than through `window.location`, which
+    // this environment does not have: the guard reads the user before clearing
+    // it, so "already signed out" is the terminating condition.
+    const { useAuthStore } = await import('../src/store/auth');
+    useAuthStore.getState().logout();
+    expect(useAuthStore.getState().user).toBeNull();
+
+    stubFetch({ status: 401, json: async () => ({ detail: 'Not authenticated' }) });
+    await expect(api.listProjects()).rejects.toThrow('Not authenticated');
+
+    // Still signed out, and the call reported the error rather than bouncing.
+    expect(useAuthStore.getState().user).toBeNull();
+  });
+
+  it('does not log the user out on a 403', async () => {
+    const { useAuthStore } = await import('../src/store/auth');
+    useAuthStore.getState().login('alice', 'admin', 'csrf-tok');
+    expect(useAuthStore.getState().user).not.toBeNull();
+
+    stubFetch({ status: 403, json: async () => ({ detail: 'Forbidden' }) });
+    await expect(api.listProjects()).rejects.toThrow('Forbidden');
+
+    expect(useAuthStore.getState().user).not.toBeNull();
+  });
+});
+
 describe('listRequirements', () => {
   // The list endpoint is paginated; the unwrapping wrapper asks for the
   // server's max page so "list the project" callers see a plain array.
