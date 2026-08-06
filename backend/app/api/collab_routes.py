@@ -228,6 +228,10 @@ AXES: dict[str, MatrixAxis] = {
 
 class AllocationRequest(BaseModel):
     req_id: str
+    #: Preferred identifier for the row entity; ``req_id`` remains the alias so
+    #: existing callers of every matrix are unaffected.
+    row_id: str | None = None
+    row_kind: str = "requirements"
     #: The column entity. ``component_id`` is the original spelling and still
     #: works, so existing callers of the components matrix are unaffected.
     target_id: str | None = None
@@ -240,6 +244,9 @@ class AllocationRequest(BaseModel):
         if not target:
             raise HTTPException(status_code=422, detail="target_id is required")
         return target
+
+    def resolved_row(self) -> str:
+        return self.row_id or self.req_id
 
 
 def _axis_or_404(axis: str) -> MatrixAxis:
@@ -262,12 +269,26 @@ def _column_name(item: dict) -> str:
 
 @router.get("/projects/{project_id}/allocation-matrix")
 def allocation_matrix(project_id: str, axis: str = Query("components"),
+                      rows: str = Query("requirements"),
                       search: str = Query(""), filter_type: str = Query(""),
                       _rate: None = Depends(rate_limit(20, 60))):
     """Requirements against components, verification cases, risks, or baselines."""
     ax = _axis_or_404(axis)
     store = get_store(project_id)
-    reqs = store.list_requirements()
+
+    if rows not in ("requirements", "components"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown rows value: {rows} (use requirements or components)")
+    if rows == "components" and ax.req_field is None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"rows=components is only valid with axis=baselines, not {ax.key}")
+
+    if rows == "components":
+        row_entities: list[dict] = store.list_components()
+    else:
+        row_entities = store.list_requirements()
 
     if ax.req_field is not None:
         # Baselines axis: columns from metadata definitions, not frozen snapshots.
@@ -277,10 +298,10 @@ def allocation_matrix(project_id: str, axis: str = Query("components"),
         cols = [{"id": d["name"], "name": d["name"], "kind": d["symbol"],
                  "due_date": d["due_date"], "order": d["order"]} for d in defs]
 
-        # Orphan baselines: names on requirements with no definition.
+        # Orphan baselines: names on entities with no definition.
         orphan_names: set[str] = set()
-        for r in reqs:
-            for bl in (r.get(ax.req_field) or []):
+        for entity in row_entities:
+            for bl in (entity.get(ax.req_field) or []):
                 if bl and bl not in defined_names:
                     orphan_names.add(bl)
         for name in sorted(orphan_names):
@@ -290,36 +311,45 @@ def allocation_matrix(project_id: str, axis: str = Query("components"),
         cols = _column_items(store, ax)
 
     if filter_type:
-        reqs = [r for r in reqs if r.get("type") == filter_type]
+        row_entities = [e for e in row_entities if e.get("type") == filter_type]
     if search:
         q = search.lower()
-        reqs = [r for r in reqs if q in r["id"].lower() or q in r.get("name", "").lower()]
+        row_entities = [e for e in row_entities
+                        if q in e["id"].lower() or q in e.get("name", "").lower()]
         cols = [c for c in cols if q in c["id"].lower() or q in _column_name(c).lower()]
 
     linked: dict[str, set[str]] = {}
     if ax.req_field is not None:
-        # Membership is held by the requirement, not the column.
-        for r in reqs:
-            for bl in (r.get(ax.req_field) or []):
+        # Membership is held by the row entity, not the column.
+        for entity in row_entities:
+            for bl in (entity.get(ax.req_field) or []):
                 if bl:
-                    linked.setdefault(r["id"], set()).add(bl)
+                    linked.setdefault(entity["id"], set()).add(bl)
     else:
         for c in cols:
             for rid in (c.get(ax.field) or []):
                 if rid:
                     linked.setdefault(rid, set()).add(c["id"])
 
-    rows = []
-    for r in reqs:
-        hits = linked.get(r["id"], set())
-        rows.append({
-            "req_id": r["id"],
-            "req_name": r.get("name", ""),
-            "req_status": r.get("status", ""),
-            "req_type": r.get("type", ""),
-            "allocated_to": r.get("allocated_to", ""),
+    rows_out = []
+    for entity in row_entities:
+        hits = linked.get(entity["id"], set())
+        row: dict[str, object] = {
+            "row_id": entity["id"],
+            "row_name": entity.get("name", ""),
+            "row_status": entity.get("status", "") if rows == "requirements" else "",
+            "row_type": entity.get("type", ""),
             "cells": {c["id"]: c["id"] in hits for c in cols},
-        })
+        }
+        if rows == "requirements":
+            row.update({
+                "req_id": entity["id"],
+                "req_name": entity.get("name", ""),
+                "req_status": entity.get("status", ""),
+                "req_type": entity.get("type", ""),
+                "allocated_to": entity.get("allocated_to", ""),
+            })
+        rows_out.append(row)
 
     columns = [{
         "id": c["id"],
@@ -337,19 +367,22 @@ def allocation_matrix(project_id: str, axis: str = Query("components"),
            if ax.key == "components" else {}),
     } for c in cols]
 
-    covered = sum(1 for r in rows if any(r["cells"].values()))
+    covered = sum(1 for r in rows_out if any(r["cells"].values()))
+    total_reqs = len(store.list_requirements())
     return {
         "axis": ax.key,
         "verb": ax.verb,
         "column_label": ax.column_label,
-        "rows": rows,
+        "row_kind": rows,
+        "rows": rows_out,
         "columns": columns,
-        "total_requirements": len(rows),
+        "total_requirements": total_reqs,
+        "total_rows": len(rows_out),
         "total_columns": len(columns),
         "total_components": len(columns),   # legacy name, components axis
         "allocated": covered,
-        "unallocated": len(rows) - covered,
-        "allocation_pct": round(covered / len(rows) * 100, 1) if rows else 0,
+        "unallocated": len(rows_out) - covered,
+        "allocation_pct": round(covered / len(rows_out) * 100, 1) if rows_out else 0,
     }
 
 
@@ -364,25 +397,60 @@ def set_allocation(project_id: str, data: AllocationRequest, user: dict = Depend
     writing anything back to the requirement would create a second copy that
     could disagree with the first.
 
-    The baselines axis is the exception: its membership is held by the
-    requirement in ``req_field``, and it stores baseline **names**, not ids.
+    The baselines axis is the exception: its membership is held by the row
+    entity in ``req_field``, and it stores baseline **names**, not ids.
+    With ``row_kind="components"`` the row entity is a component rather than
+    a requirement.
     """
     ax = _axis_or_404(data.axis)
     target_id = data.resolved_target()
     store = get_store(project_id)
 
-    req = store.get_requirement(data.req_id)
-    if not req:
-        raise HTTPException(status_code=404, detail="Requirement not found")
+    if data.row_kind not in ("requirements", "components"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown row_kind: {data.row_kind} (use requirements or components)")
+    if data.row_kind == "components" and data.axis != "baselines":
+        raise HTTPException(
+            status_code=400,
+            detail=f"row_kind=components is only valid with axis=baselines, not {data.axis}")
+
+    entity_id = data.resolved_row()
 
     if ax.req_field is not None:
-        # Baselines axis: write to requirement.baselines. The column is checked
-        # against the metadata definitions rather than the `baselines`
+        # Baselines axis: write to the row entity's baselines field. The column
+        # is checked against the metadata definitions rather than the `baselines`
         # collection, which holds only the snapshots of baselines that have
         # been frozen — an unfrozen baseline is still a legitimate column.
         defs = normalize_baseline_defs(store.read_meta().get("baselines", []))
         if target_id not in {d["name"] for d in defs}:
             raise HTTPException(status_code=404, detail="Baseline not found")
+
+        if data.row_kind == "components":
+            comp = store.get_item("components", entity_id)
+            if not comp:
+                raise HTTPException(status_code=404, detail="Component not found")
+
+            blist = list(comp.get(ax.req_field) or [])
+
+            if data.allocated:
+                if target_id not in blist:
+                    blist.append(target_id)
+            else:
+                blist = [b for b in blist if b != target_id]
+
+            store.update_item("components", entity_id, {ax.req_field: blist})
+
+            return {"req_id": data.req_id, "row_id": entity_id,
+                    "row_kind": "components",
+                    "axis": ax.key, "target_id": target_id,
+                    "component_id": target_id,
+                    "allocated": data.allocated, "allocated_to": ""}
+
+        # Row kind is "requirements" (requirement-held axis, as before).
+        req = store.get_requirement(entity_id)
+        if not req:
+            raise HTTPException(status_code=404, detail="Requirement not found")
 
         blist = list(req.get(ax.req_field) or [])
 
@@ -392,11 +460,28 @@ def set_allocation(project_id: str, data: AllocationRequest, user: dict = Depend
         else:
             blist = [b for b in blist if b != target_id]
 
-        store.update_requirement(data.req_id, {ax.req_field: blist})
+        # `entity_id`, not `data.req_id` — the read above used the resolved row,
+        # so writing the raw alias would read one record and update another
+        # whenever a caller sends `row_id` and `req_id` that differ.
+        store.update_requirement(entity_id, {ax.req_field: blist})
 
-        return {"req_id": data.req_id, "axis": ax.key, "target_id": target_id,
+        return {"req_id": data.req_id, "row_id": entity_id,
+                "row_kind": "requirements",
+                "axis": ax.key, "target_id": target_id,
                 "component_id": target_id,
                 "allocated": data.allocated, "allocated_to": ""}
+
+    # Link axes: the row is always a requirement, and the write goes to the
+    # holder (the column entity).
+    #
+    # `entity_id` throughout, so `row_id` is the preferred identifier on every
+    # axis rather than only on the baselines one — two axes disagreeing about
+    # which field names the row is exactly the sort of split that survives
+    # tests and bites a caller later.
+
+    req = store.get_requirement(entity_id)
+    if not req:
+        raise HTTPException(status_code=404, detail="Requirement not found")
 
     holder = store.get_item(ax.holder, target_id)
     if not holder:
@@ -406,10 +491,10 @@ def set_allocation(project_id: str, data: AllocationRequest, user: dict = Depend
 
     current = [x for x in (holder.get(ax.field) or []) if x]
     if data.allocated:
-        if data.req_id not in current:
-            current.append(data.req_id)
+        if entity_id not in current:
+            current.append(entity_id)
     else:
-        current = [r for r in current if r != data.req_id]
+        current = [r for r in current if r != entity_id]
     store.update_item(ax.holder, target_id, {ax.field: current})
 
     allocated_to = ""
@@ -419,12 +504,14 @@ def set_allocation(project_id: str, data: AllocationRequest, user: dict = Depend
         owners = [
             _column_name(c) or c["id"]
             for c in store.list_items(ax.holder)
-            if data.req_id in (c.get(ax.field) or [])
+            if entity_id in (c.get(ax.field) or [])
         ]
         allocated_to = ", ".join(sorted(owners))
-        store.update_requirement(data.req_id, {ax.link.derived_inverse: allocated_to})
+        store.update_requirement(entity_id, {ax.link.derived_inverse: allocated_to})
 
-    return {"req_id": data.req_id, "axis": ax.key, "target_id": target_id,
+    return {"req_id": data.req_id, "row_id": entity_id,
+            "row_kind": "requirements",
+            "axis": ax.key, "target_id": target_id,
             # Original spelling, so callers of the components matrix still parse.
             "component_id": target_id,
             "allocated": data.allocated, "allocated_to": allocated_to}

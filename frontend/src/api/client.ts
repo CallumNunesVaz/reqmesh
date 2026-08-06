@@ -239,12 +239,22 @@ export interface AllocationMatrixData {
   /** Reads as "<requirement> <verb> <column>", e.g. "is verified by". */
   verb: string;
   column_label: string;
+  /** ``"requirements"`` (default) or ``"components"`` — which entity kind the
+   *  rows represent.  Only ``"components"`` on the baselines axis. */
+  row_kind: 'requirements' | 'components';
   rows: Array<{
+    /** Generic keys, always present. */
+    row_id: string;
+    row_name: string;
+    row_status: string;
+    row_type: string;
+    /** --- requirement-specific keys (only when ``row_kind == "requirements"``) --- */
     req_id: string;
     req_name: string;
     req_status: string;
     req_type: string;
     allocated_to: string;
+    /** ---- cells ---- */
     cells: Record<string, boolean>;
   }>;
   columns: Array<{
@@ -264,6 +274,7 @@ export interface AllocationMatrixData {
     order?: number;
   }>;
   total_requirements: number;
+  total_rows: number;
   total_columns: number;
   allocated: number;
   unallocated: number;
@@ -1343,19 +1354,22 @@ export const api = {
 
   // Allocation matrix
   getAllocationMatrix: (projectId: string, axis: MatrixAxis = 'components',
-                        search?: string, filterType?: string) => {
+                        search?: string, filterType?: string, rows?: string) => {
     const qs = new URLSearchParams();
     if (axis) qs.set('axis', axis);
     if (search) qs.set('search', search);
     if (filterType) qs.set('filter_type', filterType);
+    if (rows) qs.set('rows', rows);
     const qsStr = qs.toString();
     return request<AllocationMatrixData>(`/projects/${projectId}/allocation-matrix${qsStr ? '?' + qsStr : ''}`);
   },
   setAllocation: (projectId: string, reqId: string, targetId: string, allocated: boolean,
-                  axis: MatrixAxis = 'components') =>
-    request<{ req_id: string; axis: MatrixAxis; target_id: string; allocated: boolean; allocated_to: string }>(
+                  axis: MatrixAxis = 'components', rowKind?: string, rowId?: string) =>
+    request<{ req_id: string; row_id: string; row_kind: string; axis: MatrixAxis;
+              target_id: string; allocated: boolean; allocated_to: string }>(
       `/projects/${projectId}/allocation`,
-      { method: 'POST', body: { req_id: reqId, target_id: targetId, axis, allocated } }),
+      { method: 'POST', body: { req_id: reqId, row_id: rowId || reqId, row_kind: rowKind || 'requirements',
+                                target_id: targetId, axis, allocated } }),
 
   // CI test-result import
   importTestResults: (projectId: string, file: File, format: string, dryRun: boolean) => {
