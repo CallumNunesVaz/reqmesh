@@ -987,6 +987,20 @@ export interface ActivityBucket {
   risk: number;
 }
 
+/** Git repository status, returned by GET /projects/{id}/git/status. */
+export interface GitStatus {
+  is_repo: boolean;
+  branch: string;
+  dirty: boolean;
+  commit_count: number;
+  head: { hash: string; date: string; message: string } | null;
+  remote_url: string;
+  has_remote: boolean;
+  ahead: number | null;
+  last_push: { at: string; ok: boolean; error: string | null } | null;
+  hook_installed: boolean;
+}
+
 /** Response from GET /projects/{id}/activity. */
 export interface ActivityData {
   buckets: ActivityBucket[];
@@ -1411,6 +1425,24 @@ export const api = {
 
   gitTestRemote: (projectId: string, remoteUrl: string) =>
     request<{ ok: boolean; error?: string; branches?: string[]; branch_count?: number }>(`/projects/${projectId}/git/test-remote`, { method: 'POST', body: { remote_url: remoteUrl } }),
+
+  gitStatus: (projectId: string) =>
+    request<GitStatus>(`/projects/${projectId}/git/status`),
+
+  gitInit: (projectId: string) =>
+    request<{ initialised: boolean }>(`/projects/${projectId}/git/init`, { method: 'POST' }),
+
+  gitPush: (projectId: string) =>
+    request<{ ok: boolean; error: string | null }>(`/projects/${projectId}/git/push`, { method: 'POST' }),
+
+  gitDeleteRemote: (projectId: string) =>
+    request<{ ok: boolean }>(`/projects/${projectId}/git/remote`, { method: 'DELETE' }),
+
+  gitInstallHook: (projectId: string) =>
+    request<{ installed: boolean; path: string }>(`/projects/${projectId}/hooks/install`, { method: 'POST' }),
+
+  gitUninstallHook: (projectId: string) =>
+    request<{ installed: boolean }>(`/projects/${projectId}/hooks/uninstall`, { method: 'POST' }),
 
   // Import (ReqIF / SysML)
   importProject: (projectId: string, file: File, format: string, mode: string) => {

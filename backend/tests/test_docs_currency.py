@@ -137,12 +137,13 @@ _RAW_UNDOCUMENTED = {
     "/api/projects/{project_id}/test-results/sample",
     "/api/projects/{project_id}/test-results/import",
 
-    # Git internals — the restore and hook management endpoints are called by
-    # the Git settings UI; the README already covers log, test-remote, and
-    # the auto-commit story in prose.
+    # Git restore — an internal called by the settings UI's history list; the
+    # README covers the restore behaviour in prose rather than as a route.
+    #
+    # status/init/push/remote and the hook endpoints are deliberately NOT here:
+    # they are the whole point of the git panel, and allowlisting the headline
+    # routes of a feature is how the gate stops meaning anything.
     "/api/projects/{project_id}/git/restore",
-    "/api/projects/{project_id}/hooks/install",
-    "/api/projects/{project_id}/hooks/uninstall",
 
     # Suspect-link clear — an admin utility on the Validation page.
     "/api/projects/{project_id}/suspect-links/clear",

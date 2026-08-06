@@ -210,7 +210,7 @@ def _required_guard(route: APIRoute) -> str | None:
         # decision — the remote determines where the whole project history is
         # shipped. Kept in step with router._guard_git_settings, which refuses a
         # remote_url change from anyone below admin.
-        if path.endswith("/git/test-remote"):
+        if path.endswith("/git/test-remote") or path.endswith("/git/remote"):
             return "require_admin"
         if methods & {"POST", "PUT", "PATCH", "DELETE"}:
             # Allow read-only computation endpoints to skip permission guards.
