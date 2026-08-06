@@ -13,14 +13,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query, Depends, File, Form, UploadFile
+from fastapi import APIRouter, HTTPException, Query, Depends, File, Form, Request, UploadFile
 from pydantic import BaseModel
 
 from app.core.config import settings
 from app.core.dependencies import get_store, require_edit, require_maintain, require_admin
 from app.core.rate_limit import rate_limit
 from app.core.ids import safe_id
-from app.api.router import normalize_baseline_defs
+from app.api.router import normalize_baseline_defs, _check_precondition
 from app.api._utils import sorted_by_modified, read_upload_capped, paginate
 from app.models.change_request import ChangeRequestCreate, ChangeRequestUpdate
 from app.services.change_requests import redline as compute_redline
@@ -73,9 +73,13 @@ def create_change_request(project_id: str, data: ChangeRequestCreate, user: dict
 
 
 @router.put("/projects/{project_id}/change-requests/{cr_id}")
-def update_change_request(project_id: str, cr_id: str, data: ChangeRequestUpdate, user: dict = Depends(require_edit)):
+def update_change_request(project_id: str, cr_id: str, data: ChangeRequestUpdate,
+                          request: Request, user: dict = Depends(require_edit)):
     store = get_store(project_id)
     before = store.get_item("change_requests", cr_id)
+    if before is None:
+        raise HTTPException(status_code=404, detail="Change request not found")
+    _check_precondition(request, before)
     result = store.update_item("change_requests", cr_id, data.model_dump(mode="json", exclude_unset=True))
     if result is None:
         raise HTTPException(status_code=404, detail="Change request not found")
@@ -237,9 +241,13 @@ def create_risk(project_id: str, data: RiskCreate, user: dict = Depends(require_
 
 
 @router.put("/projects/{project_id}/risks/{risk_id}")
-def update_risk(project_id: str, risk_id: str, data: RiskUpdate, user: dict = Depends(require_edit)):
+def update_risk(project_id: str, risk_id: str, data: RiskUpdate,
+                request: Request, user: dict = Depends(require_edit)):
     store = get_store(project_id)
     before = store.get_item("risks", risk_id)
+    if before is None:
+        raise HTTPException(status_code=404, detail="Risk not found")
+    _check_precondition(request, before)
     result = store.update_item("risks", risk_id, data.model_dump(mode="json", exclude_unset=True))
     if result is None:
         raise HTTPException(status_code=404, detail="Risk not found")
@@ -353,9 +361,13 @@ def create_decision(project_id: str, data: DecisionRecordCreate, user: dict = De
 
 
 @router.put("/projects/{project_id}/decisions/{dec_id}")
-def update_decision(project_id: str, dec_id: str, data: DecisionRecordUpdate, user: dict = Depends(require_edit)):
+def update_decision(project_id: str, dec_id: str, data: DecisionRecordUpdate,
+                    request: Request, user: dict = Depends(require_edit)):
     store = get_store(project_id)
     before = store.get_item("decisions", dec_id)
+    if before is None:
+        raise HTTPException(status_code=404, detail="Decision not found")
+    _check_precondition(request, before)
     result = store.update_item("decisions", dec_id, data.model_dump(mode="json", exclude_unset=True))
     if result is None:
         raise HTTPException(status_code=404, detail="Decision not found")

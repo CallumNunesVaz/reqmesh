@@ -231,6 +231,17 @@ export default function RequirementDetailPage() {
         : prev.filter((c) => c.id !== componentId));
       setReq((r) => (r ? { ...r, allocated_to: result.allocated_to } : r));
       if (savedRef.current) savedRef.current = { ...savedRef.current, allocated_to: result.allocated_to };
+      // Re-anchor `modified` from the server. Allocating writes `allocated_to`
+      // back onto the requirement, so the stored timestamp moves — and the
+      // If-Match token on the next full save comes from savedRef. Without this
+      // the page refuses your own save with "reload to see their version"
+      // when you are the only person editing. The allocation response does not
+      // carry `modified`, hence the re-read; it is one request on a
+      // user-initiated toggle, not a hot path.
+      try {
+        const fresh = await api.getRequirement(projectId, reqId);
+        if (savedRef.current) savedRef.current = { ...savedRef.current, modified: fresh.modified };
+      } catch { /* leave the old token; a spurious 409 is recoverable, a crash is not */ }
     } catch (err) {
       addToast('error', err instanceof Error ? err.message : 'Save failed');
     }
@@ -350,7 +361,7 @@ export default function RequirementDetailPage() {
     }
     setSaving(true);
     try {
-      const updated = await api.updateRequirement(projectId, reqId, diff);
+      const updated = await api.updateRequirement(projectId, reqId, diff, saved.modified);
       useUndoStore.getState().push({
         description: `Update ${reqId}`,
         undo: async () => { await api.updateRequirement(projectId, reqId, beforeFields); },
@@ -550,8 +561,11 @@ export default function RequirementDetailPage() {
   const flipRelation = async (index: number, targetId: string, relType: string) => {
     if (!projectId || !reqId || !req) return;
     const updatedRelations = req.relations.filter((_, i) => i !== index);
-    await api.updateRequirement(projectId, reqId, { relations: updatedRelations });
-    const updated = { ...req, relations: updatedRelations };
+    // Anchor on the server's response, not a locally rebuilt object: the local
+    // one carries the *old* `modified`, which becomes a stale If-Match token
+    // and refuses the user's own next save.
+    const saved = await api.updateRequirement(projectId, reqId, { relations: updatedRelations });
+    const updated = { ...req, ...saved, relations: updatedRelations };
     setReq(updated);
     savedRef.current = updated;
     try {

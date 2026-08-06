@@ -39,6 +39,7 @@ interface RequestOptions {
   method?: string;
   body?: unknown;
   raw?: boolean;
+  ifMatch?: string;
 }
 
 function getCsrfToken(): string {
@@ -54,6 +55,10 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     if (csrf) {
       headers['X-CSRF-Token'] = csrf;
     }
+  }
+
+  if (options.ifMatch) {
+    headers['If-Match'] = options.ifMatch;
   }
 
   if (body && !(body instanceof FormData)) {
@@ -1074,8 +1079,8 @@ export const api = {
     request<Component>(`/projects/${projectId}/components/${componentId}`),
   createComponent: (projectId: string, data: Partial<Component>) =>
     request<Component>(`/projects/${projectId}/components`, { method: 'POST', body: data }),
-  updateComponent: (projectId: string, componentId: string, data: Partial<Component>) =>
-    request<Component>(`/projects/${projectId}/components/${componentId}`, { method: 'PUT', body: data }),
+  updateComponent: (projectId: string, componentId: string, data: Partial<Component>, ifMatch?: string) =>
+    request<Component>(`/projects/${projectId}/components/${componentId}`, { method: 'PUT', body: data, ifMatch }),
   deleteComponent: (projectId: string, componentId: string, force = false) =>
     request<{ok?: true} | undefined>(`/projects/${projectId}/components/${componentId}${force ? '?force=true' : ''}`, { method: 'DELETE' }),
   getComponentsForRequirement: (projectId: string, reqId: string) =>
@@ -1086,8 +1091,8 @@ export const api = {
     request<Requirement>(`/projects/${projectId}/requirements/${reqId}`),
   createRequirement: (projectId: string, data: Partial<Requirement>) =>
     request<Requirement>(`/projects/${projectId}/requirements`, { method: 'POST', body: data }),
-  updateRequirement: (projectId: string, reqId: string, data: Partial<Requirement>) =>
-    request<Requirement>(`/projects/${projectId}/requirements/${reqId}`, { method: 'PUT', body: data }),
+  updateRequirement: (projectId: string, reqId: string, data: Partial<Requirement>, ifMatch?: string) =>
+    request<Requirement>(`/projects/${projectId}/requirements/${reqId}`, { method: 'PUT', body: data, ifMatch }),
   deleteRequirement: (projectId: string, reqId: string, force = false) =>
     request<{ok?: true} | undefined>(`/projects/${projectId}/requirements/${reqId}${force ? '?force=true' : ''}`, { method: 'DELETE' }),
   cascadeRequirement: (projectId: string, reqId: string) =>

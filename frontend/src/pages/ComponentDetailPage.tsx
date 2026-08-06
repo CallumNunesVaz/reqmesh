@@ -103,7 +103,10 @@ export default function ComponentDetailPage() {
     if (!projectId || !componentId) return;
     setError('');
     try {
-      const updated = await api.updateComponent(projectId, componentId, data);
+      // `component?.modified` is the version this form was populated from, so
+      // the server can refuse a save that would overwrite someone else's edit
+      // made since. Omitted when unknown, which behaves exactly as before.
+      const updated = await api.updateComponent(projectId, componentId, data, component?.modified);
       setComponent(updated);
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 2000);

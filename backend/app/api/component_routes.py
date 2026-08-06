@@ -10,9 +10,10 @@ from __future__ import annotations
 import csv
 import io
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import Response
 
+from app.api.router import _check_precondition
 from app.core.dependencies import get_store, require_maintain
 from app.core.ids import safe_id
 from app.core.tree_utils import build_flat_tree
@@ -158,12 +159,16 @@ def create_component(project_id: str, data: ComponentCreate, user: dict = Depend
 
 @router.put("/projects/{project_id}/components/{component_id}")
 def update_component(
-    project_id: str, component_id: str, data: ComponentUpdate, user: dict = Depends(require_maintain)
+    project_id: str, component_id: str, data: ComponentUpdate, request: Request,
+    user: dict = Depends(require_maintain)
 ):
     store = get_store(project_id)
     before = store.get_component(component_id)
     if before is None:
         raise HTTPException(status_code=404, detail="Component not found")
+    # Components are edited from a full-record form the same way requirements
+    # are, so they carry the same opt-in lost-update guard.
+    _check_precondition(request, before)
 
     update = data.model_dump(mode="json", exclude_unset=True)
     if "parent" in update:
