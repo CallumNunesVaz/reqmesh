@@ -65,10 +65,12 @@ test('re-banding a matrix cell moves the metrics without touching any risk', asy
   // than assuming one click reaches `other`.
   await cell.click();
   await app.getByRole('button', { name: /^Save$/ }).first().click();
-  await app.waitForTimeout(2000);
+  // Poll the API until the save lands — no fixed sleep.
+  await expect(async () => {
+    const stored = await api<any>(app, `/projects/${P}/risk-matrix`);
+    expect(stored.cells[si][li], 'the click did not change the cell').not.toBe(current);
+  }).toPass({ timeout: 10_000 });
 
-  const stored = await api<any>(app, `/projects/${P}/risk-matrix`);
-  expect(stored.cells[si][li], 'the click did not change the cell').not.toBe(current);
   expect(other).toBeTruthy();
 
   const after = (await api<any>(app, `/projects/${P}/metrics`)).risks;

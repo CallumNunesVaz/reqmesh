@@ -55,10 +55,8 @@ test('a failed requirement update raises an error toast', async ({ app, server }
   expect(value, 'the first real option must carry a value to select').toBeTruthy();
   await linkSelect.selectOption(value!);
 
-  // Wait for the optimistic update + API call + 500 response.
-  await app.waitForTimeout(1500);
-
-  // The error toast should appear.
+  // The error toast should appear — the expect below has its own timeout,
+  // so no fixed sleep is needed here.
   const alert = app.locator('[role=alert]').last();
   await expect(alert).toBeVisible({ timeout: 10_000 });
   await expect(alert).toContainText('Server write error');
@@ -128,7 +126,9 @@ test('a successful save raises no error toast', async ({ app, server }) => {
   const saveBtn = app.getByRole('button', { name: 'Save changes' });
   if (await saveBtn.isEnabled({ timeout: 3000 }).catch(() => false)) {
     await saveBtn.click();
-    await app.waitForTimeout(1500);
+    // Wait for the save to complete — the button becomes disabled when there
+    // are no unsaved changes, which is a real condition, not a guess.
+    await expect(saveBtn).toBeDisabled({ timeout: 10_000 });
   }
 
   // No [role=alert] error toast anywhere.

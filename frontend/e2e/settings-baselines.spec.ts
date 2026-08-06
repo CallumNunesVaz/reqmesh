@@ -76,7 +76,17 @@ test('baselines survive a settings save', async ({ app, server }) => {
   // The demo project's name.
   await nameInput.fill('Cessna-172-E2E');
   await app.getByRole('button', { name: /^Save/ }).first().click();
-  await app.waitForTimeout(2000);
+  // Poll the API until the save lands — no fixed sleep.
+  await expect(async () => {
+    const result = await app.evaluate(async ({ project, name }: {
+      project: string; name: string;
+    }) => {
+      const r = await fetch(`/api/projects/${project}/baselines`, { credentials: 'include' });
+      const list: any[] = await r.json();
+      return list.find((b: any) => b.name === name) != null;
+    }, { project: P, name: baselineName });
+    expect(result).toBe(true);
+  }).toPass({ timeout: 10_000 });
 
   // The baseline must still exist — the settings save must NOT have posted
   // `baselines: []` and wiped it.

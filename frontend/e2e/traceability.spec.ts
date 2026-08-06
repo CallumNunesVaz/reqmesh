@@ -22,10 +22,20 @@ test.describe('risk matrix', () => {
     const card = app.locator('main .card').filter({ hasText: 'RSK00006' }).first();
     await card.locator('select').filter({ has: app.locator('option[value=critical]') }).first()
       .selectOption('critical');
-    await app.waitForTimeout(1200);
+    // Wait for the severity PATCH to land before touching the likelihood select.
+    await expect(async () => {
+      const risks = await api<any[]>(app, `/projects/${P}/risks`);
+      const r = risks.find((r2: any) => r2.id === 'RSK00006');
+      expect(r?.severity).toBe('critical');
+    }).toPass({ timeout: 10_000 });
     await card.locator('select').filter({ has: app.locator('option[value=possible]') }).first()
       .selectOption('possible');
-    await app.waitForTimeout(1500);
+    // Wait for the likelihood PATCH to land before checking the rating.
+    await expect(async () => {
+      const risks = await api<any[]>(app, `/projects/${P}/risks`);
+      const r = risks.find((r2: any) => r2.id === 'RSK00006');
+      expect(r?.rating?.likelihood).toBe('possible');
+    }).toPass({ timeout: 10_000 });
 
     const before = (await api<any[]>(app, `/projects/${P}/risks`)).find((r) => r.id === 'RSK00006');
     expect(before.severity).toBe('critical');
@@ -46,7 +56,12 @@ test.describe('risk matrix', () => {
     await cell.scrollIntoViewIfNeeded();
     await cell.click();
     await app.getByRole('button', { name: /^Save$/ }).first().click();
-    await app.waitForTimeout(2000);
+    // Poll the API until the save lands — no fixed sleep.
+    await expect(async () => {
+      const stored = await api<any>(app, `/projects/${P}/risk-matrix`);
+      const criticalRow = stored.cells[stored.severities.length - 1];
+      expect(criticalRow[2]).not.toBe('high');
+    }).toPass({ timeout: 10_000 });
 
     // The edit must have landed on the cell that rates critical x possible.
     const stored = await api<any>(app, `/projects/${P}/risk-matrix`);

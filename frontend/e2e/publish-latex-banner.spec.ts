@@ -28,19 +28,19 @@ test('the LaTeX warning matches what the server reports', async ({ app, server }
 
   // Select PDF — the banner is gated on the chosen format.
   await app.getByText('PDF', { exact: false }).first().click();
-  // Give the probe time to resolve; the bug was that the banner showed while
-  // it was still in flight, so a bare expect() could pass by racing it.
-  await app.waitForTimeout(1500);
-
-  const shown = await app.getByText(BANNER).count();
-
-  if (status.available) {
-    expect(shown, `server reports engine "${status.engine}", so the banner must not claim otherwise`)
-      .toBe(0);
-  } else {
-    expect(shown, 'server reports no engine, so the warning is correct and must appear')
-      .toBeGreaterThan(0);
-  }
+  // Poll until the probe resolves rather than sleeping and hoping — the bug was
+  // that the banner showed while it was still in flight, so a bare expect()
+  // could pass by racing it.
+  await expect(async () => {
+    const shown = await app.getByText(BANNER).count();
+    if (status.available) {
+      expect(shown, `server reports engine "${status.engine}", so the banner must not claim otherwise`)
+        .toBe(0);
+    } else {
+      expect(shown, 'server reports no engine, so the warning is correct and must appear')
+        .toBeGreaterThan(0);
+    }
+  }).toPass({ timeout: 10_000 });
 });
 
 test('the banner is absent before the probe resolves', async ({ app, server }) => {
