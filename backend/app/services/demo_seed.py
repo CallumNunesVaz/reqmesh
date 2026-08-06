@@ -1242,13 +1242,15 @@ VC_LINKS: dict[str, list[str]] = {
 
 
 def _comp(cid, name, ctype, parent, desc="", part_number="", supplier="",
-          quantity=1, satisfies=None, verification_cases=None, parameters=None):
+          quantity=1, satisfies=None, verification_cases=None, parameters=None,
+          baselines=None):
     return {
         "id": cid, "name": name, "description": desc, "type": ctype,
         "parent": parent, "part_number": part_number, "supplier": supplier,
         "quantity": quantity, "satisfies": satisfies or [],
         "verification_cases": verification_cases or [],
         "attributes": [], "parameters": parameters or [],
+        "baselines": baselines or [],
     }
 
 
@@ -1520,6 +1522,8 @@ SPECIFICATIONS = [
      "requirements": ["ACFT0000", "AFRM0000", "PROP0000", "AVNC0000",
                       "FLTC0000", "LNDG0000", "ELEC0000", "ENVR0000",
                       "SAFE0000"],
+     "components": ["FUSE", "WING", "EMP", "GEAR", "ENG", "PRPL", "FUEL",
+                     "AVIO", "ELEC", "FLTC", "ENVR", "SAFE"],
      "children": ["SPEC-AVIO"]},
     {"id": "SPEC-AVIO", "name": "Avionics Subsystem Specification",
      "description": "G1000 NXi avionics suite requirements, refined from"
@@ -1527,6 +1531,7 @@ SPECIFICATIONS = [
      "requirements": ["AVNC0001", "AVNC0002", "AVNC0003", "AVNC0004",
                       "AVNC0005", "AVNC0006", "AVNC0007", "AVNC0008",
                       "AVNC0009", "AVNC0010"],
+     "components": ["GDU", "GIA", "GDC", "GRS", "GMU", "GEA", "GTX", "GMA"],
      "children": []},
 ]
 
@@ -1632,24 +1637,28 @@ CHANGE_REQUESTS = [
                     "  Net increase of 30 BHP with minimal weight gain (12 lb).  Would improve"
                     " takeoff roll and climb rate.  Requires new type certificate amendment.",
      "affected_requirements": ["PROP0001", "PROP0000", "PROP0005"],
+     "affected_components": ["ENG", "PRPL"],
      "status": "submitted", "submitted_by": "Powerplant Lead"},
     {"id": "CR000002", "title": "Landing Gear Corrosion Inspection",
      "description": "Add 100-hour corrosion inspection interval for spring steel main gear"
                     " legs, particularly at the forged attachment fitting interface where"
                     " paint wear can expose bare metal.",
      "affected_requirements": ["LNDG0001"],
+     "affected_components": ["MLEG"],
      "status": "in_review", "submitted_by": "Maintenance Engineering"},
     {"id": "CR000003", "title": "LED Exterior Lighting Retrofit",
      "description": "Authorise LED replacement for all exterior lights as an owner-performed"
                     " preventive maintenance item.  LED bulbs reduce electrical load from 12 A"
                     " to 3.5 A, extending alternator and battery life.",
      "affected_requirements": ["SAFE0004", "ELEC0000"],
+     "affected_components": ["NAVL", "TAIL", "BCON", "STRB", "TAXI"],
      "status": "submitted", "submitted_by": "Electrical Systems"},
     {"id": "CR000004", "title": "USB-C Charging Ports",
      "description": "Install dual USB-C (60W PD) charging ports in the cockpit for pilot"
                     " and co-pilot electronic flight bags (EFBs).  Requires circuit breaker"
                     " addition to the main bus and a supplemental type certificate (STC).",
      "affected_requirements": ["ELEC0003", "AFRM0003"],
+     "affected_components": ["MBUS"],
      "status": "submitted", "submitted_by": "Avionics Integration"},
 ]
 
@@ -1660,6 +1669,10 @@ RISKS = [
     # on read (see services/risk_matrix.py). `likelihood` is the five-band scale the
     # matrix indexes; the free-text `probability` these carried predates it and only
     # survives through a compatibility mapping, so it is not what a demo should show.
+    #
+    # linked_components / mitigating_components connect risks to the design tree.
+    # Where mitigation text names a physical thing the component is linked; where it
+    # does not the field is deliberately empty — linking everything teaches nothing.
     {"id": "RSK00001", "title": "Engine Failure on Takeoff",
      "description": "Loss of engine power during takeoff below 500 ft AGL.  Consequences:"
                     " forced landing straight ahead or within 30° of heading.  Cessna 172's"
@@ -1668,21 +1681,26 @@ RISKS = [
                     " airspeed.",
      "severity": "critical", "likelihood": "rare",
      "status": "open", "mitigation": "Pre-takeoff run-up check; engine trend monitoring",
-     "linked_requirements": ["PROP0001", "PROP0003"]},
+     "linked_requirements": ["PROP0001", "PROP0003"],
+     "linked_components": ["ENG"],
+     "mitigating_components": ["LMAG", "RMAG"]},
     {"id": "RSK00002", "title": "Fuel Exhaustion in Flight",
      "description": "Fuel mismanagement or undetected leak leading to fuel exhaustion"
                     " before destination.  Leading cause of general aviation accidents"
                     " (approximately 8% of all GA accidents per AOPA Nall Report).",
      "severity": "high", "likelihood": "possible",
      "status": "mitigating", "mitigation": "Fuel totalizer on G1000 MFD; pre-flight dipstick check",
-     "linked_requirements": ["PROP0006", "AFRM0006"], "detection": "likely"},
+     "linked_requirements": ["PROP0006", "AFRM0006"], "detection": "likely",
+     "linked_components": ["TANK", "FQSND"],
+     "mitigating_components": ["GDU"]},
     {"id": "RSK00003", "title": "G1000 Display Overheat",
      "description": "PFD or MFD display failure due to excessive cockpit temperatures"
                     " (direct sunlight on ramp, >50°C / 122°F).  The G1000 operating"
                     " temperature specification is −20°C to +55°C.",
      "severity": "medium", "likelihood": "unlikely",
      "status": "monitoring", "mitigation": "Sunshades; cabin ventilation; reversionary mode",
-     "linked_requirements": ["AVNC0001", "AVNC0002"], "detection": "obvious"},
+     "linked_requirements": ["AVNC0001", "AVNC0002"], "detection": "obvious",
+     "linked_components": ["GDU"]},
     {"id": "RSK00004", "title": "Carbon Monoxide Incapacitation",
      "description": "CO leaking into cabin via exhaust muff cracks, causing progressive"
                     " crew incapacitation (headache → confusion → unconsciousness)."
@@ -1691,14 +1709,18 @@ RISKS = [
      # Closed rather than open: the AD retrofit is the mitigation, and a register
      # where nothing ever closes says nothing about how the project is managed.
      "status": "closed", "mitigation": "Active CO detector per AD 2024-01-05; muff inspection",
-     "linked_requirements": ["AD2024001", "ENVR0001"], "detection": "possible"},
+     "linked_requirements": ["AD2024001", "ENVR0001"], "detection": "possible",
+     "linked_components": ["MUFF", "SHUD"],
+     "mitigating_components": ["CODT"]},
     {"id": "RSK00005", "title": "Alternator Failure in IMC",
      "description": "Alternator failure while in instrument meteorological conditions (IMC)."
                     "  The essential bus provides 30 min of power — sufficient for an"
-                    " approach at a nearby airport but requiring prompt action.",
+                    "  approach at a nearby airport but requiring prompt action.",
      "severity": "high", "likelihood": "unlikely",
      "status": "mitigating", "mitigation": "Essential bus isolation; battery endurance ≥ 30 min",
-     "linked_requirements": ["ELEC0001", "ELEC0002", "ELEC0003"], "detection": "undetectable"},
+     "linked_requirements": ["ELEC0001", "ELEC0002", "ELEC0003"], "detection": "undetectable",
+     "linked_components": ["ALT"],
+     "mitigating_components": ["BATT", "EBUS"]},
     {"id": "RSK00006", "title": "Icing Encounter",
      "description": "Inadvertent encounter with structural icing conditions (visible"
                     " moisture + OAT below freezing).  The Cessna 172S is NOT certified"
@@ -1707,44 +1729,75 @@ RISKS = [
                     " effectiveness.",
      "severity": "high", "likelihood": "possible",
      "status": "open", "mitigation": "Pitot heat; immediate 180° turn or descent",
-     "linked_requirements": ["AFRM0004", "ENVR0003", "SAFE0001"]},
+     "linked_requirements": ["AFRM0004", "ENVR0003", "SAFE0001"],
+     "linked_components": ["WING", "EMP"]},
 ]
 
 # ── comments ──────────────────────────────────────────────────────────────────
 
 COMMENTS = [
+    # ── comments on requirements ──────────────────────────────────────────
     {"id": "gen-001", "author": "Chief Systems Engineer",
-     "requirement_id": "ACFT0000",
+     "entity_kind": "requirements", "entity_id": "ACFT0000",
      "text": "All FAR Part 23 Amendment 64 references verified against current eCFR text."
             "  Amendment 65 (effective 2025) adds active CO detector mandate — see AD2024001.",
      "resolved": False},
     {"id": "gen-002", "author": "Avionics Lead",
-     "requirement_id": "AVNC0000",
+     "entity_kind": "requirements", "entity_id": "AVNC0000",
      "text": "G1000 NXi software baseline is v0582.05.  Confirm with Garmin that this"
             " includes the WAAS/SBAS LPV unlock.  Supplier lead time: 16 weeks.",
      "resolved": False},
     {"id": "gen-003", "author": "Structures Engineer",
-     "requirement_id": "AFRM0005",
+     "entity_kind": "requirements", "entity_id": "AFRM0005",
      "text": "Main spar ultimate load FEA complete.  Positive margin of 12% at +3.8g."
             "  Recommend physical load test to validate FEA boundary conditions.",
      "resolved": True},
     {"id": "gen-004", "author": "Electrical Systems",
-     "requirement_id": "ELEC0002",
+     "entity_kind": "requirements", "entity_id": "ELEC0002",
      "text": "Battery endurance test at −20°C showed 28 min to essential bus dropout"
             " (vs 30 min spec).  Cold-soak effect reduces SLA capacity by ~15%."
             "  Consider upgrading to 18 Ah battery for cold-weather margin.",
      "resolved": False},
     {"id": "gen-005", "author": "Test Pilot",
-     "requirement_id": "FLTC0002",
+     "entity_kind": "requirements", "entity_id": "FLTC0002",
      "text": "Aileron roll rate at Va measured at 42°/s (clean).  This is within the"
             " acceptable range for a training aircraft (40-60°/s).  No adverse yaw"
             " noted during flight test — Frise/differential combination is effective.",
      "resolved": False},
     {"id": "gen-006", "author": "Flight Test",
-     "requirement_id": "SAFE0001",
+     "entity_kind": "requirements", "entity_id": "SAFE0001",
      "text": "Stall warning horn calibration verified in flight.  Clean stall: V_S1 = 48 KCAS,"
             " horn at 55 KCAS (7 kn margin).  Full flap: V_S0 = 40 KCAS, horn at 47 KCAS"
             " (7 kn margin).  Both within the 5-10 kn specification.",
+     "resolved": False},
+
+    # ── comments on non-requirement entities ──────────────────────────────
+    {"id": "gen-007", "author": "Powerplant Lead",
+     "entity_kind": "risks", "entity_id": "RSK00001",
+     "text": "Engine failure probability modelled at 1.2 × 10⁻⁵ per flight hour"
+            " based on Lycoming fleet data.  Well within the FAR 33 continued"
+            " airworthiness threshold.  Dual magnetos are the primary mitigation —"
+            " single-mag failure is non-catastrophic.",
+     "resolved": False},
+    {"id": "gen-008", "author": "Avionics Integration",
+     "entity_kind": "change_requests", "entity_id": "CR000003",
+     "text": "LED lighting retrofit is a good candidate for the first STC batch."
+            "  Whelen PARmetheus direct-replacement bulbs have the same base and"
+            "  beam pattern as the halogen originals.  Recommend field trial on"
+            "  two fleet aircraft before fleet-wide approval.",
+     "resolved": False},
+    {"id": "gen-009", "author": "Structures Engineer",
+     "entity_kind": "components", "entity_id": "SPAR",
+     "text": "Main spar forging supplier (Alcoa) has confirmed 16-week lead time"
+            " for the 0523001-2 extrusion.  Order must be placed by CDR to avoid"
+            " delaying the first structural test article.",
+     "resolved": False},
+    {"id": "gen-010", "author": "Chief Systems Engineer",
+     "entity_kind": "decisions", "entity_id": "DEC0001",
+     "text": "The G1000 NXi decision also locks us into the Garmin Connext ecosystem"
+            " for future upgrades (GWX 75 weather radar, GFC 700 autopilot)."
+            "  This is a strategic advantage — the alternative (G500 TXi) has a"
+            " narrower upgrade path.",
      "resolved": False},
 ]
 
@@ -1762,7 +1815,15 @@ DECISIONS = [
      "rationale": "The NXi is the current production Garmin platform with the longest"
                  " expected support lifecycle.  WAAS/LPV is essential for the training"
                  " market as more flight schools adopt LPV procedures.",
+     "consequences": "Standardises the training fleet on a single avionics platform,"
+                    " reducing instructor checkout time and spares inventory.  WAAS/LPV"
+                    " capability expands the usable airport set for instrument training"
+                    " routes.  Software updates are field-loadable via SD card, eliminating"
+                    " LRU removal for updates.  The G1000 NXi also commits the programme"
+                    " to the Garmin Connext ecosystem for future upgrades (GWX 75 weather"
+                    " radar, GFC 700 autopilot).",
      "linked_requirements": ["AVNC0000", "AVNC0001"],
+     "linked_components": ["GDU", "GIA", "GDC", "GRS", "GMU", "GEA", "GTX", "GMA"],
      "status": "accepted", "decided_by": "Chief Engineer"},
     {"id": "DEC0002", "title": "Engine Selection",
      "context": "The IO-360-L2A (180 BHP) was compared against the IO-390-A3A6 (210 BHP)"
@@ -1774,7 +1835,14 @@ DECISIONS = [
      "rationale": "The 180 BHP rating is well-matched to the 172 airframe.  210 BHP"
                  " would improve climb but degrade useful load.  The fuel injection"
                  " benefit (no carb ice) is a significant safety differentiator.",
+     "consequences": "Retains the existing type certificate, avoiding a 12-18 month"
+                    " certification programme.  Fuel injection eliminates the carburettor"
+                    " ice threat present in the O-360 alternative.  The established supply"
+                    " chain and 55,000+ unit service history provide predictable spares"
+                    " availability and maintenance procedures.  The IO-390 remains an option"
+                    " for a future higher-power variant (Cessna 172S Performance).",
      "linked_requirements": ["PROP0000", "PROP0001", "PROP0002"],
+     "linked_components": ["ENG", "FISV", "FDIV", "LMAG", "RMAG"],
      "status": "accepted", "decided_by": "Powerplant Lead"},
     {"id": "DEC0003", "title": "Lighting Technology — LED vs Halogen",
      "context": "Exterior lighting (nav, strobe, landing/taxi) currently halogen."
@@ -1786,8 +1854,123 @@ DECISIONS = [
      "rationale": "LEDs reduce electrical load by ~70% (from 12.0 A to 3.5 A for all"
                  " exterior lights) and eliminate the 25-hour bulb replacement interval"
                  " for halogen landing lights.  This is a net safety improvement.",
+     "consequences": "Electrical load reduction from 12.0 A to 3.5 A extends alternator"
+                    " brush life and reduces battery cycling.  LED lamp life of 10,000+"
+                    " hours eliminates the 25-hour halogen bulb replacement interval."
+                    "  Owner-performed maintenance classification reduces shop visits."
+                    "  The LED PARmetheus direct-replacement bulbs (Whelen) are drop-in"
+                    " compatible with the existing mounts and wiring.",
      "linked_requirements": ["SAFE0004", "ELEC0000"],
+     "linked_components": ["NAVL", "TAIL", "BCON", "STRB", "TAXI"],
      "status": "accepted", "decided_by": "Electrical Systems"},
+
+    # ── additional decisions ──────────────────────────────────────────────
+    {"id": "DEC0004", "title": "Fixed Tricycle Landing Gear",
+     "context": "Retractable gear reduces cruise drag but adds weight, complexity,"
+               " and failure modes.  The tricycle configuration (nosewheel + two"
+               " main wheels) was compared against tailwheel (conventional) gear.",
+     "decision": "Retain the fixed tricycle gear configuration.  Retractable gear"
+                " was rejected because the weight penalty (~30 kg for the mechanism"
+                " and hydraulic system) offsets the cruise speed gain (≈ 8 kt) on a"
+                " 120 kt airframe.  Tailwheel was rejected because the 172 is a"
+                " primary trainer — tricycle gear is more forgiving on landing.",
+     "rationale": "Fixed gear eliminates gear-up landings (the #2 insurance claim on"
+                 " retractables), reduces maintenance, and keeps the aircraft insurable"
+                 " at flight-school rates.  Spring steel legs absorb landing energy"
+                 " without oleo strut maintenance.",
+     "consequences": "The fixed gear contributes to the Cessna 172's reputation as"
+                    " the safest training aircraft.  Insurance premiums for fixed-gear"
+                    " aircraft are typically 40% lower than for retractables.  The"
+                    " spring steel main gear design requires only corrosion inspection,"
+                    " with no hydraulic service or uplock mechanism to maintain.",
+     "linked_requirements": ["LNDG0000", "LNDG0001", "LNDG0002"],
+     "linked_components": ["GEAR", "MLEG", "NLEG", "SMDM"],
+     "status": "accepted", "decided_by": "Chief Engineer"},
+    {"id": "DEC0005", "title": "28 V Electrical System Architecture",
+     "context": "Aircraft electrical systems typically use 14 V or 28 V DC.  The"
+               " G1000 NXi suite draws ~12 A continuous — roughly 170 W at 14 V vs"
+               " the same power at half the current on 28 V.",
+     "decision": "Standardise on 28 V DC, negative-ground, single-wire bus.  This"
+                " halves current for the same power, reducing wire gauge and weight"
+                " by ~3.5 kg across the harness.  The 60 A alternator provides ample"
+                " margin even with the full avionics suite and pitot heat.",
+     "rationale": "28 V is standard for turbine and advanced piston aircraft, so the"
+                 " supply chain is mature.  The weight saving from thinner wiring"
+                 " offsets the slight cost premium for 28 V LRUs.  Most avionics OEMs"
+                 " (Garmin, BendixKing) ship 28 V as the default variant.",
+     "consequences": "Lighter harness saves ~3.5 kg on the empty weight, directly"
+                    " increasing useful load.  28 V components have wider availability"
+                    " in the certified-aircraft supply chain.  The essential bus concept"
+                    " (splitting critical and non-critical loads) became feasible because"
+                    " the 60 A alternator provides headroom at 28 V.",
+     "linked_requirements": ["ELEC0000", "ELEC0001", "ELEC0003"],
+     "linked_components": ["ALT", "BATT", "EBUS", "MBUS"],
+     "status": "accepted", "decided_by": "Electrical Systems"},
+    {"id": "DEC0006", "title": "Fuel Capacity — 53 US Gallons",
+     "context": "Endurance requirement drives tank sizing.  The Cessna 172R carried"
+               " 56 US gal (212 L) in integral wing tanks; the 172S reduced this to"
+               " 53 US gal (200 L) usable.  A weight/capacity trade was analysed.",
+     "decision": "Adopt 53 US gal usable capacity split across two integral wing"
+                " tanks, each 26.5 gal (100 L).  The 3-gallon reduction from the"
+                " 172R standard was accepted to stay under the 1157 kg MTOW with"
+                " the heavier IO-360-L2A engine.",
+     "rationale": "53 gal provides ~4.5 hours endurance at 75% power with VFR"
+                 " reserves — ample for any realistic training sortie.  The 3-gallon"
+                 " reduction vs the 172R saves ~8.5 kg of full-fuel weight,"
+                 " preserving 15 kg of payload capacity that would otherwise be lost"
+                 " to the heavier fuel-injected engine.",
+     "consequences": "Endurance is slightly reduced vs the 172R (4.5 h vs 5.0 h) —"
+                    " this is acceptable for the training role where typical sorties"
+                    " are 1.0-2.5 h.  The integral (wet-wing) tank construction"
+                    " eliminates separate bladder weight.  The 2 × 26.5 gal split"
+                    " allows fuel management via the LEFT/RIGHT selector valve.",
+     "linked_requirements": ["PROP0006", "AFRM0006"],
+     "linked_components": ["TANK", "FQSND", "FUEL", "FSEL"],
+     "status": "superseded", "decided_by": "Systems Engineering"},
+    {"id": "DEC0007", "title": "McCauley 1A170/E Fixed-Pitch Propeller",
+     "context": "A 180 BHP engine can drive either a fixed-pitch or constant-speed"
+               " propeller.  Constant-speed props maintain optimal blade angle across"
+               " the speed range, improving both climb and cruise performance.",
+     "decision": "Retain the McCauley 1A170/E 2-blade fixed-pitch propeller (76 in"
+                " diameter, 60 in pitch).  Constant-speed was rejected — it adds"
+                " ~15 kg weight, $6K cost, and requires a propeller governor with"
+                " its own failure modes (loss of oil pressure → fine pitch → overspeed).",
+     "rationale": "Fixed-pitch is simpler, lighter, and cheaper — all priorities for"
+                 " a training/rental aircraft.  The 60-inch pitch is a climb-cruise"
+                 " compromise that gives acceptable takeoff performance (550 lbf static"
+                 " thrust) while cruising at 120 kt at 2400 RPM.",
+     "consequences": "The fixed-pitch prop eliminates propeller governor maintenance"
+                    " (no oil leaks, no cable rigging).  Takeoff roll is longer than"
+                    " a constant-speed equivalent would achieve, but at 960 ft at sea"
+                    " level it remains well within the 1500 ft certification limit."
+                    "  The prop is owner-serviceable (no special tooling needed).",
+     "linked_requirements": ["PROP0005"],
+     "linked_components": ["PRPL", "SPIN"],
+     "status": "accepted", "decided_by": "Powerplant Lead"},
+    {"id": "DEC0008", "title": "High-Wing Configuration",
+     "context": "The aircraft configuration (high-wing vs low-wing) fundamentally"
+               " determines stability, visibility, cabin access, and maintenance"
+               " procedures.  This is the single most defining design choice.",
+     "decision": "Retain the high-wing, strut-braced configuration.  A low-wing"
+                " alternative was considered but rejected: it would require a"
+                " retractable gear (low-wing + fixed gear is aerodynamically"
+                " awkward), a different fuel system (no gravity feed), and would"
+                " eliminate the downward visibility that instructors value for"
+                " ground-reference manoeuvres.",
+     "rationale": "The high wing provides inherent roll stability through the"
+                 " pendulum effect (CG below the centre of lift), protects the cabin"
+                 " from sun and rain on the ramp, and gives the crew exceptional"
+                 " downward visibility.  The strut-braced design allows a thinner,"
+                 " lighter wing than a cantilever could for the same strength.",
+     "consequences": "The high wing defines the Cessna 172's identity.  It enables"
+                    " gravity-feed fuel (no electric boost pump needed in cruise),"
+                    " simplifies pre-flight inspection (fuel sumps at eye level), and"
+                    " provides shade on the ramp — a real comfort benefit at desert"
+                    " flight schools.  The strut adds ~4.1 kg per side in drag and"
+                    " weight, which is more than offset by the wing mass saving.",
+     "linked_requirements": ["AFRM0004"],
+     "linked_components": ["WING", "STRT", "SPAR", "ASPAR"],
+     "status": "accepted", "decided_by": "Chief Engineer"},
 ]
 
 
@@ -2384,13 +2567,112 @@ def seed_demo_project(data_root: Path, force: bool = False) -> bool:
                      "<p>Preliminary Design Review — architecture agreed.</p>",
                      "2026-06-30T14:00:00+00:00")
 
+    # ── Component baselines (§8) ──
+    # Tick components into the same baseline definitions the requirements use,
+    # respecting what would plausibly have existed at each review gate.
+    _COMP_BASELINES: dict[str, list[str]] = {
+        # ── SRR — only the top-level system concept existed ──
+        "C172":  ["SRR", "PDR", "CDR"],
+
+        # ── PDR — major assemblies and subsystems defined by Preliminary Design Review ──
+        "FUSE":  ["PDR", "CDR"],
+        "WING":  ["PDR", "CDR"],
+        "EMP":   ["PDR", "CDR"],
+        "GEAR":  ["PDR", "CDR"],
+        "ENG":   ["PDR", "CDR"],
+        "PRPL":  ["PDR", "CDR"],
+        "FUEL":  ["PDR", "CDR"],
+        "AVIO":  ["PDR", "CDR"],
+        "ELEC":  ["PDR", "CDR"],
+        "FLTC":  ["PDR", "CDR"],
+        "ENVR":  ["PDR", "CDR"],
+        "SAFE":  ["PDR", "CDR"],
+
+        # ── CDR — detailed parts designed and released for build ──
+        "COCK":  ["CDR"],
+        "IPAN":  ["CDR"],
+        "YOKE":  ["CDR"],
+        "PEDL":  ["CDR"],
+        "SEAT":  ["CDR"],
+        "RSEAT": ["CDR"],
+        "HARN":  ["CDR"],
+        "DOOR":  ["CDR"],
+        "SPAR":  ["CDR", "TRR"],
+        "ASPAR": ["CDR"],
+        "TANK":  ["CDR", "TRR"],
+        "FQSND": ["CDR"],
+        "STRT":  ["CDR"],
+        "HSTB":  ["CDR"],
+        "ELEV":  ["CDR", "TRR"],
+        "VFIN":  ["CDR"],
+        "RUDD":  ["CDR", "TRR"],
+        "MLEG":  ["CDR"],
+        "MWHE":  ["CDR"],
+        "BRAK":  ["CDR"],
+        "NLEG":  ["CDR"],
+        "SMDM":  ["CDR"],
+        "EMNT":  ["CDR"],
+        "FISV":  ["CDR"],
+        "FDIV":  ["CDR"],
+        "LMAG":  ["CDR"],
+        "RMAG":  ["CDR"],
+        "MUFF":  ["CDR"],
+        "OILS":  ["CDR"],
+        "SPIN":  ["CDR"],
+        "FSEL":  ["CDR"],
+        "BPMP":  ["CDR"],
+        "EPMP":  ["CDR"],
+        "GCOL":  ["CDR"],
+        "GDU":   ["CDR", "TRR"],
+        "GIA":   ["CDR", "TRR"],
+        "GDC":   ["CDR"],
+        "GRS":   ["CDR"],
+        "GMU":   ["CDR"],
+        "GEA":   ["CDR"],
+        "GTX":   ["CDR", "TRR"],
+        "GMA":   ["CDR"],
+        "ALT":   ["CDR"],
+        "VREG":  ["CDR"],
+        "BATT":  ["CDR"],
+        "MBUS":  ["CDR"],
+        "EBUS":  ["CDR"],
+        "EPOW":  ["CDR"],
+        "AILR":  ["CDR", "TRR"],
+        "ELVC":  ["CDR", "TRR"],
+        "FLAP":  ["CDR"],
+        "FLAPM": ["CDR"],
+        "TRIM":  ["CDR"],
+        "TRSV":  ["CDR"],
+        "SHUD":  ["CDR"],
+        "BVAL":  ["CDR"],
+        "DFRS":  ["CDR"],
+        "AVNT":  ["CDR"],
+        "SWRN":  ["CDR"],
+        "FDTC":  ["CDR"],
+        "ELT":   ["CDR"],
+        "NAVL":  ["CDR"],
+        "TAIL":  ["CDR"],
+        "BCON":  ["CDR"],
+        "STRB":  ["CDR"],
+        "TAXI":  ["CDR"],
+        "CODT":  ["CDR"],
+    }
+
+    _comp_with_baselines = []
+    for comp in COMPONENTS:
+        comp = dict(comp)
+        cid = comp["id"]
+        if cid in _COMP_BASELINES:
+            comp["baselines"] = list(_COMP_BASELINES[cid])
+        _comp_with_baselines.append(comp)
+
     # Write everything to disk
     for r in reqs.values():
         store.create_requirement(r)
     for vc in vcs.values():
         store.create_verification_case(vc)
-    for comp in COMPONENTS:
-        store.create_component(dict(comp))
+    for comp in _comp_with_baselines:
+        store.create_component(comp)
     for spec in SPECIFICATIONS:
         store.create_specification(dict(spec))
 
@@ -2398,23 +2680,28 @@ def seed_demo_project(data_root: Path, force: bool = False) -> bool:
 
     for cr_data in CHANGE_REQUESTS:
         store.create_item("change_requests", {
-            **{k: v for k, v in cr_data.items() if k not in ("status", "submitted_by")},
+            **{k: v for k, v in cr_data.items() if k not in ("status", "submitted_by",
+                                                              "affected_components")},
             "status": cr_data.get("status", "submitted"),
             "submitted_by": cr_data.get("submitted_by", ""),
             "reviewed_by": "",
             "approved_by": "",
+            "affected_components": list(cr_data.get("affected_components", [])),
         })
 
     for risk in RISKS:
         store.create_item("risks", {
             **{k: v for k, v in risk.items()
-               if k not in ("status", "mitigation", "linked_requirements")},
+               if k not in ("status", "mitigation", "linked_requirements",
+                            "linked_components", "mitigating_components")},
             "impact": "",
             "status": risk.get("status", "open"),
             "mitigation": risk.get("mitigation", ""),
             # Was hardcoded to [], which silently discarded whatever the register
             # declared — so every risk in the demo looked untraced.
             "linked_requirements": list(risk.get("linked_requirements", [])),
+            "linked_components": list(risk.get("linked_components", [])),
+            "mitigating_components": list(risk.get("mitigating_components", [])),
         })
 
     for c in COMMENTS:
@@ -2468,30 +2755,35 @@ def seed_demo_project(data_root: Path, force: bool = False) -> bool:
         "id": "avionics-upgrade", "name": "Avionics upgrade (+12 kg)",
         "doc": "Explore the empty-weight budget with a heavier avionics fit.",
         "scope": ["AFRM0000"],
+        "scope_components": ["AVIO"],
         "overrides": {"AFRM0000.empty_mass": 779},
     })
     store.write_item("analysis_cases", "cold-weather-ops", {
         "id": "cold-weather-ops", "name": "Cold weather operations (-35 °C)",
         "doc": "Verify cabin heat meets the arctic clause when OAT drops below design point.",
         "scope": ["ENVR0001"],
+        "scope_components": ["SHUD", "ENVR"],
         "overrides": {"ENVR0001.oat_c": -35},
     })
     store.write_item("analysis_cases", "heavy-config", {
         "id": "heavy-config", "name": "Heavy configuration (793 kg empty)",
         "doc": "Test mass budget when extra equipment pushes empty mass near the 780 kg limit.",
         "scope": ["AFRM0000", "ACFT0000"],
+        "scope_components": ["C172"],
         "overrides": {"AFRM0000.empty_mass": 793},
     })
     store.write_item("analysis_cases", "high-power-avionics", {
         "id": "high-power-avionics", "name": "High-power avionics fit",
         "doc": "Check electrical budget if avionics total draw increases to 22 A.",
         "scope": ["ELEC0001", "AVNC0000"],
+        "scope_components": ["AVIO", "ALT"],
         "overrides": {"AVNC0000.max_current_a": 22},
     })
     store.write_item("analysis_cases", "reduced-power-engine", {
         "id": "reduced-power-engine", "name": "Reduced-power engine (160 hp)",
         "doc": "Impact on propeller torque margin if engine is de-rated to minimum spec.",
         "scope": ["PROP0001", "PROP0005"],
+        "scope_components": ["ENG", "PRPL"],
         "overrides": {"PROP0001.rated_power_hp": 160},
     })
 

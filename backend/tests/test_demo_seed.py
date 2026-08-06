@@ -342,3 +342,141 @@ def test_scores_are_zero_to_five_and_not_all_identical(demo):
     assert len(scores) >= 3, (
         f"demo priority scores are too uniform: only values {sorted(scores)}"
     )
+
+
+# ── Comments: entity_kind/entity_id shape (§9) ───────────────────────────────
+
+
+def test_every_comment_has_entity_kind_and_entity_id_no_requirement_id(demo):
+    """Every seeded comment uses the canonical shape, not the legacy key."""
+    comments = demo.list_items("comments")
+    assert comments, "the demo seeded no comments"
+    for c in comments:
+        assert c.get("entity_kind"), f"{c['id']} has no entity_kind"
+        assert c.get("entity_id"), f"{c['id']} has no entity_id"
+        assert "requirement_id" not in c, (
+            f"{c['id']} still carries the legacy requirement_id key"
+        )
+
+
+def test_comments_on_at_least_four_distinct_entity_kinds(demo):
+    """The 'comments on any entity' feature must be visible in the demo."""
+    comments = demo.list_items("comments")
+    kinds = {c.get("entity_kind") for c in comments}
+    assert len(kinds) >= 4, (
+        f"comments cover only {len(kinds)} entity kinds: {sorted(kinds)}"
+    )
+
+
+def test_comment_entity_ids_resolve(demo):
+    """A comment's entity_id must point to a real record in its entity_kind."""
+    comments = demo.list_items("comments")
+    # Load all known id sets
+    collections = {}
+    for kind in {c["entity_kind"] for c in comments}:
+        collections[kind] = {i["id"] for i in demo.list_items(kind)}
+    for c in comments:
+        kind = c["entity_kind"]
+        eid = c["entity_id"]
+        ids = collections.get(kind, set())
+        assert eid in ids, (
+            f"comment {c['id']} entity_id={eid!r} not found in {kind}"
+        )
+
+
+# ── Component links: every id resolves (§10) ────────────────────────────────
+
+
+def _all_component_ids(demo):
+    return {c["id"] for c in demo.list_components()}
+
+
+def _components_in_field(demo, collection, field):
+    """Every component id in *field* across *collection* records."""
+    ids: set[str] = set()
+    for item in demo.list_items(collection):
+        for cid in (item.get(field) or []):
+            ids.add(cid)
+    return ids
+
+
+def test_all_linked_components_in_risks_resolve(demo):
+    comp_ids = _all_component_ids(demo)
+    for field in ("linked_components", "mitigating_components"):
+        used = _components_in_field(demo, "risks", field)
+        dangling = used - comp_ids
+        assert dangling == set(), (
+            f"risks {field} reference dangling components: {dangling}"
+        )
+
+
+def test_all_affected_components_in_change_requests_resolve(demo):
+    comp_ids = _all_component_ids(demo)
+    used = _components_in_field(demo, "change_requests", "affected_components")
+    dangling = used - comp_ids
+    assert dangling == set(), (
+        f"change_requests affected_components reference dangling: {dangling}"
+    )
+
+
+def test_all_linked_components_in_decisions_resolve(demo):
+    comp_ids = _all_component_ids(demo)
+    used = _components_in_field(demo, "decisions", "linked_components")
+    dangling = used - comp_ids
+    assert dangling == set(), (
+        f"decisions linked_components reference dangling: {dangling}"
+    )
+
+
+def test_all_components_in_specifications_resolve(demo):
+    comp_ids = _all_component_ids(demo)
+    used = _components_in_field(demo, "specifications", "components")
+    dangling = used - comp_ids
+    assert dangling == set(), (
+        f"specifications components reference dangling: {dangling}"
+    )
+
+
+def test_all_scope_components_in_analysis_cases_resolve(demo):
+    comp_ids = _all_component_ids(demo)
+    used = _components_in_field(demo, "analysis_cases", "scope_components")
+    dangling = used - comp_ids
+    assert dangling == set(), (
+        f"analysis_cases scope_components reference dangling: {dangling}"
+    )
+
+
+def test_all_baselines_in_components_resolve(demo):
+    """Every baseline name on a component is defined in project baselines."""
+    meta = demo.read_meta()
+    defined = {b["name"] for b in meta.get("baselines", [])}
+    for c in demo.list_components():
+        for bl in (c.get("baselines") or []):
+            assert bl in defined, f"{c['id']} references undefined baseline {bl!r}"
+
+
+def test_every_decision_has_all_four_adr_fields_non_empty(demo):
+    """A decision with three empty fields demonstrates nothing."""
+    decisions = demo.list_items("decisions")
+    assert decisions, "the demo seeded no decisions"
+    for d in decisions:
+        for field in ("context", "decision", "rationale", "consequences"):
+            val = (d.get(field) or "").strip()
+            assert val, f"{d['id']} has empty {field}"
+
+
+def test_decisions_count_at_least_eight(demo):
+    """The demo should have grown to ~8 decisions."""
+    decisions = demo.list_items("decisions")
+    assert len(decisions) >= 8, (
+        f"only {len(decisions)} decisions seeded (need ≥ 8)"
+    )
+
+
+def test_at_least_one_decision_is_superseded(demo):
+    """Vary status — at least one superseded shows the field is not an enum."""
+    decisions = demo.list_items("decisions")
+    statuses = {d.get("status", "") for d in decisions}
+    assert "superseded" in statuses, (
+        f"no superseded decision found; statuses: {statuses}"
+    )
