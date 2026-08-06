@@ -14,6 +14,7 @@ import { useEntityKinds } from '../components/entityIndex';
 import { HelpTip } from '../components/HelpTip';
 import { HistoryPanel } from '../components/HistoryPanel';
 import { CommentThread } from '../components/CommentThread';
+import { useToasts } from '../components/Toast';
 
 const statusBadges: Record<string, string> = {
   pending: 'border-amber-500/30 bg-amber-500/10 text-amber-400',
@@ -40,6 +41,7 @@ export default function VerificationPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const { verificationCases, setVerificationCases } = useStore();
   const editable = useAuthStore((s) => s.canEdit());
+  const { addToast } = useToasts();
   const [showCreate, setShowCreate] = useState(false);
   const [newVC, setNewVC] = useState({ id: '', name: '', description: '', method: 'test' });
   const [requirements, setRequirements] = useState<Requirement[]>([]);
@@ -111,16 +113,20 @@ export default function VerificationPage() {
       setShowCreate(false);
       setNewVC({ id: '', name: '', description: '', method: 'test' });
       load();
-    } catch {
-      // silently no-op
+    } catch (err) {
+      addToast('error', err instanceof Error ? err.message : 'Failed to create verification case');
     }
   };
 
   const handleDelete = async (vcId: string) => {
     if (!projectId) return;
     if (!confirm(`Delete verification case ${vcId}?`)) return;
-    await api.deleteVerificationCase(projectId, vcId);
-    setVerificationCases(verificationCases.filter((v) => v.id !== vcId));
+    try {
+      await api.deleteVerificationCase(projectId, vcId);
+      setVerificationCases(verificationCases.filter((v) => v.id !== vcId));
+    } catch (err) {
+      addToast('error', err instanceof Error ? err.message : 'Delete failed');
+    }
   };
 
   const handleStatusChange = async (vcId: string, status: string) => {
@@ -163,8 +169,9 @@ export default function VerificationPage() {
       const req = await api.getRequirement(projectId, reqId);
       const vcs = [...(req.verification_cases || []), vcId];
       await api.updateRequirement(projectId, reqId, { verification_cases: vcs });
-    } catch {
+    } catch (err) {
       // requirement may not exist — VC link still saved above
+      addToast('error', err instanceof Error ? err.message : 'Failed to update requirement back-link');
     }
     setLinkInput(vcId, '');
     load();
@@ -181,8 +188,9 @@ export default function VerificationPage() {
       const req = await api.getRequirement(projectId, reqId);
       const vcs = (req.verification_cases || []).filter((v: string) => v !== vcId);
       await api.updateRequirement(projectId, reqId, { verification_cases: vcs });
-    } catch {
+    } catch (err) {
       // requirement may not exist
+      addToast('error', err instanceof Error ? err.message : 'Failed to update requirement back-link');
     }
     load();
   };
@@ -204,7 +212,26 @@ export default function VerificationPage() {
     if (stepIdx < steps.length) {
       steps[stepIdx] = { ...steps[stepIdx], actual_result: actual };
     }
-    await api.updateVerificationCase(projectId, vcId, { steps } as any);
+    await saveVc(vcId, { steps });
+  };
+
+  /**
+   * Patch a verification case and reload, surfacing a refusal.
+   *
+   * Four handlers here previously called `updateVerificationCase` with no
+   * try/catch at all, so a rejected save — a permission failure, a validation
+   * error — vanished as an unhandled rejection and `load()` never ran. The
+   * field kept showing the typed value until something else forced a refetch,
+   * which reads as "saved" and is the most misleading possible outcome for a
+   * test result.
+   */
+  const saveVc = async (vcId: string, patch: Record<string, unknown>) => {
+    if (!projectId) return;
+    try {
+      await api.updateVerificationCase(projectId, vcId, patch as any);
+    } catch (err) {
+      addToast('error', err instanceof Error ? err.message : 'Save failed');
+    }
     load();
   };
 
@@ -217,29 +244,25 @@ export default function VerificationPage() {
     if (!projectId || !draft.parameter.trim() || draft.value.trim() === '') return;
     const vc = verificationCases.find((v) => v.id === vcId);
     if (!vc) return;
-    await api.updateVerificationCase(projectId, vcId, {
+    await saveVc(vcId, {
       measurements: [...(vc.measurements || []), {
         parameter: draft.parameter.trim(), value: Number(draft.value), unit: draft.unit.trim(),
       }],
-    } as any);
+    });
     setNewMeasurement((prev) => ({ ...prev, [vcId]: { parameter: '', value: '', unit: '' } }));
-    load();
   };
 
   const handleRemoveMeasurement = async (vcId: string, idx: number) => {
     if (!projectId) return;
     const vc = verificationCases.find((v) => v.id === vcId);
     if (!vc) return;
-    await api.updateVerificationCase(projectId, vcId, {
+    await saveVc(vcId, {
       measurements: (vc.measurements || []).filter((_, i) => i !== idx),
-    } as any);
-    load();
+    });
   };
 
   const handleUpdateProcedure = async (vcId: string, procedure: string) => {
-    if (!projectId) return;
-    await api.updateVerificationCase(projectId, vcId, { test_procedure: procedure } as any);
-    load();
+    await saveVc(vcId, { test_procedure: procedure });
   };
 
   const handleRunTest = async (vcId: string) => {
@@ -260,8 +283,9 @@ export default function VerificationPage() {
       });
       setRunFeedback(p => ({ ...p, [vcId]: { type: 'success', message: 'Test completed' } }));
       await load();
-    } catch {
-      setRunFeedback(p => ({ ...p, [vcId]: { type: 'error', message: 'Test failed' } }));
+    } catch (err) {
+      setRunFeedback(p => ({ ...p, [vcId]: { type: 'error', message: err instanceof Error ? err.message : 'Test failed' } }));
+      addToast('error', err instanceof Error ? err.message : 'Test failed');
     } finally {
       setRunningVcs(p => { const n = new Set(p); n.delete(vcId); return n; });
       setTimeout(() => setRunFeedback(p => {
@@ -367,7 +391,12 @@ export default function VerificationPage() {
           </select>
           <button
             onClick={async () => {
-              await api.bulkUpdateVerificationCases(projectId!, [...selectedVcs], { status: bulkStatus });
+              try {
+                await api.bulkUpdateVerificationCases(projectId!, [...selectedVcs], { status: bulkStatus });
+              } catch (err) {
+                addToast('error', err instanceof Error ? err.message : 'Bulk update failed');
+                return;
+              }
               setSelectedVcs(new Set());
               load();
             }}

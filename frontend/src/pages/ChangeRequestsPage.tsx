@@ -14,6 +14,7 @@ import { useConfirm } from '../components/ConfirmDialog';
 import { LinkEditor } from '../components/LinkEditor';
 import { HistoryPanel } from '../components/HistoryPanel';
 import { CommentThread } from '../components/CommentThread';
+import { useToasts } from '../components/Toast';
 
 const statusBadges: Record<string, string> = {
   submitted: 'border-blue-500/30 bg-blue-500/10 text-blue-400',
@@ -64,6 +65,7 @@ export default function ChangeRequestsPage() {
   // while the header said VIEWING — the same defect the store's own comment
   // records fixing for canPropose.
   const canMaintain = useAuthStore((s) => s.canEdit());
+  const { addToast } = useToasts();
   const [components, setComponents] = useState<Component[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const dataVersion = useStore((s) => s.dataVersion);
@@ -188,7 +190,7 @@ export default function ChangeRequestsPage() {
     try {
       await api.updateChangeRequest(projectId, crId, { affected_components: linked });
     } catch (err) {
-      console.error(err);
+      addToast('error', err instanceof Error ? err.message : 'Save failed');
       load();
     }
   };
@@ -222,7 +224,16 @@ export default function ChangeRequestsPage() {
     if (!projectId) return;
     const ok = await showConfirm(`Delete ${selectedIds.size} change request(s)?`, 'Delete');
     if (!ok) return;
-    await api.bulkDeleteChangeRequests(projectId, [...selectedIds]);
+    try {
+      await api.bulkDeleteChangeRequests(projectId, [...selectedIds]);
+    } catch (err) {
+      // A bulk delete had no handler at all, so a refusal (the delete guard
+      // 409s on a referenced record) rejected into the void: no message, and
+      // the two lines below never ran, leaving the selection sitting there as
+      // though nothing had been clicked.
+      addToast('error', err instanceof Error ? err.message : 'Bulk delete failed');
+      return;
+    }
     clearCRSelection();
     load();
   };

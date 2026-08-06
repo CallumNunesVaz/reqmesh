@@ -26,6 +26,7 @@ import { useKeyboardShortcuts } from '../components/useKeyboardShortcuts';
 import LoadingSplash from '../components/LoadingSplash';
 import { HistoryPanel } from '../components/HistoryPanel';
 import { CommentThread } from '../components/CommentThread';
+import { useToasts } from '../components/Toast';
 import { statusColors } from '../components/RequirementNode';
 import { REQUIREMENT_TYPE_META, formatReqType, reqTypeColor, typeOptionsFor } from '../lib/requirementTypes';
 const priorityOptions = ['low', 'medium', 'high', 'critical'];
@@ -95,6 +96,7 @@ export default function RequirementDetailPage() {
   // propose-tier (contributor+, no edit-mode gate).
   const editable = useAuthStore((s) => s.canEdit());
   const canPropose = useAuthStore((s) => s.canPropose());
+  const { addToast } = useToasts();
   const showConfirm = useConfirm();
   const [workflow, setWorkflow] = useState<{ states: string[]; transitions: Record<string, string[]> } | null>(null);
   const [qualityResult, setQualityResult] = useState<QualityItem | null>(null);
@@ -189,7 +191,7 @@ export default function RequirementDetailPage() {
     try {
       await api.updateRisk(projectId, riskId, { linked_requirements: next });
     } catch (err) {
-      console.error(err);
+      addToast('error', err instanceof Error ? err.message : 'Save failed');
       api.listRisks(projectId).then((risks) => {
         setAllRisksRaw(risks);
         setLinkedRisks(risks.filter((r) => r.linked_requirements.includes(reqId)));
@@ -211,7 +213,7 @@ export default function RequirementDetailPage() {
     try {
       await api.updateRisk(projectId, riskId, { mitigating_requirements: next });
     } catch (err) {
-      console.error(err);
+      addToast('error', err instanceof Error ? err.message : 'Save failed');
       api.listRisks(projectId).then((risks) => {
         setAllRisksRaw(risks);
         setMitigatingRisks(risks.filter((r) => (r.mitigating_requirements || []).includes(reqId)));
@@ -230,7 +232,7 @@ export default function RequirementDetailPage() {
       setReq((r) => (r ? { ...r, allocated_to: result.allocated_to } : r));
       if (savedRef.current) savedRef.current = { ...savedRef.current, allocated_to: result.allocated_to };
     } catch (err) {
-      console.error(err);
+      addToast('error', err instanceof Error ? err.message : 'Save failed');
     }
   };
   const incomingRelations = useMemo(() => {
@@ -377,6 +379,7 @@ export default function RequirementDetailPage() {
       }
     } catch (err: any) {
       setSaveError(err?.message || 'Save failed');
+      addToast('error', err?.message || 'Save failed');
       setTimeout(() => setSaveError(''), 5000);
     } finally {
       setSaving(false);

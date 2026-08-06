@@ -15,6 +15,7 @@ import { deleteWithReferenceCheck } from '../lib/forceDelete';
 import RichTextEditor from '../components/RichTextEditor';
 import { HistoryPanel } from '../components/HistoryPanel';
 import { CommentThread } from '../components/CommentThread';
+import { useToasts } from '../components/Toast';
 
 const formatLevel = (s: string) => s.replace(/_/g, ' ');
 
@@ -29,6 +30,7 @@ export default function RisksPage() {
   // Bulk operations are maintainer-tier (backend require_maintain), unlike
   // individual create/edit/delete which are propose-tier.
   const canBulk = useAuthStore((s) => s.canEdit());
+  const { addToast } = useToasts();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const dataVersion = useStore((s) => s.dataVersion);
   const entityKinds = useEntityKinds(projectId);
@@ -114,7 +116,7 @@ export default function RisksPage() {
     try {
       await api.updateRisk(projectId, riskId, { linked_requirements: linked });
     } catch (err) {
-      console.error(err);
+      addToast('error', err instanceof Error ? err.message : 'Save failed');
       load();
     }
   };
@@ -125,7 +127,7 @@ export default function RisksPage() {
     try {
       await api.updateRisk(projectId, riskId, { mitigating_requirements: linked });
     } catch (err) {
-      console.error(err);
+      addToast('error', err instanceof Error ? err.message : 'Save failed');
       load();
     }
   };
@@ -136,7 +138,7 @@ export default function RisksPage() {
     try {
       await api.updateRisk(projectId, riskId, { linked_components: linked });
     } catch (err) {
-      console.error(err);
+      addToast('error', err instanceof Error ? err.message : 'Save failed');
       load();
     }
   };
@@ -147,7 +149,7 @@ export default function RisksPage() {
     try {
       await api.updateRisk(projectId, riskId, { mitigating_components: linked });
     } catch (err) {
-      console.error(err);
+      addToast('error', err instanceof Error ? err.message : 'Save failed');
       load();
     }
   };
