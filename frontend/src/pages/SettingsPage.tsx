@@ -204,6 +204,9 @@ function SettingRow({ setting, value, onChange }: {
           <button
             role="switch"
             aria-checked={!!value}
+            // A switch with no text content announces as "switch" alone; the
+            // setting's own label is the only thing that identifies it.
+            aria-label={setting.label || setting.key}
             disabled={locked}
             onClick={() => onChange(!value)}
             className={`relative w-11 h-6 rounded-full transition-colors ${value ? 'bg-primary' : 'bg-muted'} ${locked ? 'opacity-50 cursor-not-allowed' : ''}`}

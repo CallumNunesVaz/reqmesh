@@ -132,7 +132,7 @@ backend/.venv/bin/python seed_cessna.py --force
 
 ### Tests
 
-**Backend** — 624 tests covering API, storage, auth, integrity, quality, tracing, code scan, fingerprint, table I/O, evaluation, what-if impact, and deployment:
+**Backend** — 1238 tests covering API, storage, auth, integrity, quality, tracing, code scan, fingerprint, table I/O, evaluation, what-if impact, and deployment:
 
 ```bash
 cd backend
@@ -140,13 +140,39 @@ cd backend
 .venv/bin/python -m pytest tests/
 ```
 
-**Frontend** — 80 tests covering stores, API client, entities, and auto-linking:
+**Frontend** — 214 unit tests covering stores, API client, entities, and
+auto-linking, plus 88 Playwright end-to-end tests:
 
 ```bash
 cd frontend
 npm test
 npm run typecheck
+npm run build && npx playwright test --project=app
 ```
+
+### Linting
+
+`ruff` (backend, `F` + `E9`) and `oxlint` (frontend) run in CI and fail on
+**errors** only; warnings are visible and do not block:
+
+```bash
+cd backend && .venv/bin/ruff check app tests
+cd frontend && npm run lint
+```
+
+Both are deliberately narrow. Style rules — line length, import order, quote
+style — are off: they produce hundreds of findings and fixing them buries real
+changes in review.
+
+oxlint rather than ESLint because `@typescript-eslint`'s parser does not
+support TypeScript 7 (it declares `>=4.8.4 <6.1.0`), and the compiler is not
+the thing to downgrade to accommodate a linter.
+
+Accessibility rules sit at **warn**. `jsx-a11y/control-has-associated-label`
+in particular reports empty `<th>` spacer cells, `<td>` swatches and datalist
+`<option>` elements alongside genuine unlabelled controls, so it cannot be
+made a gate without either blocking CI on layout markup or adding meaningless
+labels to it. The genuinely unlabelled controls it found have been named.
 
 ## Authentication
 
