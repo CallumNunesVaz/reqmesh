@@ -6,7 +6,7 @@ import {
   Plus, Search, X, Trash2, ChevronRight, ChevronDown, ChevronsDownUp, ChevronsUpDown,
   Inbox, Square, CheckSquare, ArrowUp, SlidersHorizontal,
 } from 'lucide-react';
-import { api, baselineNames, type Requirement, type EvalVerdict } from '../api/client';
+import { api, baselineNames, getTruncationInfo, type Requirement, type EvalVerdict, type TruncationInfo } from '../api/client';
 import { useStore } from '../store';
 import { useAuthStore } from '../store/auth';
 import { useUndoStore } from '../store/undo';
@@ -18,6 +18,7 @@ import { deleteWithReferenceCheck } from '../lib/forceDelete';
 import { REQUIREMENT_TYPES, REQUIREMENT_TYPE_META, reqTypeClass, reqTypeIcon } from '../lib/requirementTypes';
 import BodyPortal from '../components/BodyPortal';
 import { useToasts } from '../components/Toast';
+import TruncationBanner from '../components/TruncationBanner';
 
 const statusStyles: Record<string, { dot: string; text: string }> = {
   proposed: { dot: 'bg-cs-blue', text: 'text-cs-blue' },
@@ -82,11 +83,12 @@ export default function RequirementsPage() {
   // Splash only covers the very first fetch — SSE-triggered background
   // reloads swap the data in place without interrupting the reader.
   const [loading, setLoading] = useState(true);
+  const [truncation, setTruncation] = useState<TruncationInfo | null>(null);
 
   const load = () => {
     if (!projectId) return;
     api.listRequirements(projectId).then(setRequirements).catch(console.error)
-      .finally(() => setLoading(false));
+      .finally(() => { setLoading(false); setTruncation(getTruncationInfo('requirements')); });
     // Constraint verdicts, so a failing parametric bound is visible from the
     // list without opening each requirement.
     api.getEvaluation(projectId)
@@ -290,6 +292,7 @@ export default function RequirementsPage() {
   return (
     <div className="relative max-w-4xl mx-auto px-6 py-6 min-h-[50vh]">
       {loading && requirements.length === 0 && <LoadingSplash label="Loading requirements…" />}
+      {truncation && <TruncationBanner info={truncation} />}
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-2 mb-5">
         <div>
