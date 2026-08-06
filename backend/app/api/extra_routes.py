@@ -571,7 +571,7 @@ def git_test_remote(project_id: str, data: dict, user: dict = Depends(require_ad
     perform a network (or filesystem) operation against a caller-supplied URL,
     which is the same authority as setting the remote and belongs behind the
     same gate. The URL is validated against the shared scheme allowlist here
-    *and* inside `git_service.test_remote`.
+    *and* inside ``git_service.test_remote``.
     """
     from app.services import git_service
 
@@ -583,6 +583,75 @@ def git_test_remote(project_id: str, data: dict, user: dict = Depends(require_ad
 
     store = get_store(project_id)
     return git_service.test_remote(store.root, remote_url)
+
+
+@router.get("/projects/{project_id}/git/status")
+def git_status(project_id: str, user: dict = Depends(require_maintain)):
+    """Return the git repository status for a project.
+
+    Performs no network access — ``ahead`` is computed against the local
+    remote-tracking ref so the call never hangs when the remote is unreachable.
+    ``remote_url`` is redacted before it leaves the server.
+    """
+    from app.services import git_service
+
+    store = get_store(project_id)
+    return git_service.get_status(store.root)
+
+
+@router.post("/projects/{project_id}/git/init", status_code=201)
+def git_init(project_id: str, user: dict = Depends(require_maintain)):
+    """Initialise a git repository in the project directory.
+
+    Returns 409 if the project is already a repository.  Safe to call — the
+    service layer also checks for a parent repo and refuses to nest.
+    """
+    from app.services import git_service
+
+    store = get_store(project_id)
+    if git_service.is_repo(store.root):
+        raise HTTPException(status_code=409, detail="Project is already a git repository")
+    if not git_service.init_repo(store.root, user.get("username", "")):
+        raise HTTPException(status_code=500, detail="Failed to initialise repository — check server logs")
+    return {"initialised": True}
+
+
+@router.post("/projects/{project_id}/git/push")
+def git_push(project_id: str, user: dict = Depends(require_maintain)):
+    """Push commits to the configured remote synchronously.
+
+    Returns the real outcome, including the redacted error on failure.
+    Unlike ``schedule_push``, which runs from a background timer and logs
+    to a file nobody reads, this route makes a broken remote immediately
+    diagnosable.
+    """
+    from app.services import git_service
+
+    store = get_store(project_id)
+    ok = git_service.push_to_remote(store.root)
+    outcome = git_service._push_outcomes.get(store.root.resolve(), {})
+
+    if not ok:
+        error = outcome.get("error", "Push failed — check server logs")
+        logger.warning("Manual push failed for %s: %s", project_id, error)
+        return {"ok": False, "error": error}
+
+    return {"ok": True, "error": None}
+
+
+@router.delete("/projects/{project_id}/git/remote")
+def git_delete_remote(project_id: str, user: dict = Depends(require_admin)):
+    """Remove the git remote *and* clear ``remote_url`` from project settings.
+
+    Admin-only: changing where a project ships its history is the same
+    authority as setting it, and removing a remote is a one-way operation
+    that stops the project from being backed up.
+    """
+    from app.services import git_service
+
+    store = get_store(project_id)
+    git_service.delete_remote(store.root)
+    return {"ok": True}
 
 
 # ── Validation ────────────────────────────────────────────────────────────────

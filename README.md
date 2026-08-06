@@ -227,6 +227,32 @@ If a project directory is a git repository, every mutation is auto-committed wit
 - `POST /api/projects/{id}/hooks/install` — pre-commit hook
 - `GET /api/projects/{id}/history/{item_id}` — field-level change history (works with or without git)
 
+## Git Panel
+
+Project settings carries a git panel that covers the whole lifecycle without a
+shell on the server: initialise a repository for a project that has none, see
+the current state, push on demand, install or remove the pre-commit hook, and
+disconnect the remote.
+
+The state line is the point of it. Pushes happen on a background timer and were
+previously fire-and-forget — a credential expiring or a remote starting to
+reject left the project silently unbacked-up while every screen looked
+completely normal. Push outcomes are now recorded, and a failed last push is
+the loudest thing on the panel, with the error and a **Push now** button beside
+it.
+
+Two deliberate limits. Status performs **no network access** — commits ahead are
+counted against the local tracking ref, because a status call that blocks on an
+unreachable remote would hang the settings page exactly when you most need it to
+load. And there is no button that deletes a repository: removing `.git` would
+destroy every version of every requirement irreversibly. Disconnecting the
+remote is the reversible operation, and it clears both the git remote and the
+stored `remote_url` so the two cannot disagree.
+
+Changing the remote stays admin-only — it decides where the entire project
+history is shipped. Credentials embedded in a remote URL are redacted
+everywhere they could surface, including push error messages.
+
 ## Interchange
 
 Requirements round-trip through **ReqIF 1.2**, **SysML v2**, **CSV**, **TSV**, and **XLSX**:
@@ -557,6 +583,12 @@ Key environment variables:
 | GET | `/api/projects/{id}/presence` | Current project viewers |
 | GET | `/api/projects/{id}/git/log` | Recent commits |
 | POST | `/api/projects/{id}/git/test-remote` | Test connectivity to the configured remote |
+| GET | `/api/projects/{id}/git/status` | Repository state — branch, dirty, commits ahead, last push outcome (no network access) |
+| POST | `/api/projects/{id}/git/init` | Initialise a repository for a project that has none |
+| POST | `/api/projects/{id}/git/push` | Push now, returning the real outcome |
+| DELETE | `/api/projects/{id}/git/remote` | Disconnect the remote (admin only) |
+| POST | `/api/projects/{id}/hooks/install` | Install the pre-commit hook (validates requirements before a commit) |
+| POST | `/api/projects/{id}/hooks/uninstall` | Remove the pre-commit hook |
 | POST | `/auth/login` | Authenticate (rate-limited 5/min) |
 | POST | `/auth/register` | Self-registration |
 | POST | `/auth/forgot-password` | Request password reset email |
