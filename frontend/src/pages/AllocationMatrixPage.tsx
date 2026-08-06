@@ -34,6 +34,7 @@ export default function AllocationMatrixPage() {
   const [data, setData] = useState<AllocationMatrixData | null>(null);
   const [loading, setLoading] = useState(true);
   const [axis, setAxis] = useState<MatrixAxis>('components');
+  const [rows, setRows] = useState<string>('requirements');
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('');
   const [toggling, setToggling] = useState<Set<string>>(new Set());
@@ -45,7 +46,8 @@ export default function AllocationMatrixPage() {
     if (!projectId) return;
     setLoading(true);
     try {
-      const d = await api.getAllocationMatrix(projectId, axis, search, filterType);
+      const d = await api.getAllocationMatrix(projectId, axis, search, filterType,
+        axis === 'baselines' ? rows : undefined);
       setData(d);
       setError('');
     } catch (err: any) {
@@ -53,26 +55,34 @@ export default function AllocationMatrixPage() {
     } finally {
       setLoading(false);
     }
-  }, [projectId, axis, search, filterType]);
+  }, [projectId, axis, search, filterType, rows]);
 
   useEffect(() => { load(); }, [load]);
 
-  const toggleAllocation = async (reqId: string, colId: string, current: boolean) => {
+  const toggleAllocation = async (entityId: string, colId: string, current: boolean,
+                                   rowKind: string = 'requirements') => {
     if (!projectId || !editable) return;
-    const key = `${reqId}:${colId}`;
+    const key = `${entityId}:${colId}`;
     setToggling((prev) => new Set(prev).add(key));
     try {
-      await api.setAllocation(projectId, reqId, colId, !current, axis);
+      await api.setAllocation(projectId, entityId, colId, !current, axis, rowKind, entityId);
       setData((prev) => {
         if (!prev) return prev;
         const newRows = prev.rows.map((r) => {
-          if (r.req_id !== reqId) return r;
+          if ((r.row_id || r.req_id) !== entityId) return r;
           return { ...r, cells: { ...r.cells, [colId]: !current },
                    allocated_to: !current ? (prev.columns.find(c => c.id === colId)?.name ?? colId) : '' };
         });
+        // `total_rows` for both kinds, never `total_requirements`: the latter
+        // counts the whole project, while the rows here are search/filter
+        // narrowed. The server divides by the narrowed count too
+        // (collab_routes.py:385), so picking the project total would make the
+        // optimistic percentage disagree with the server's the moment a filter
+        // is active, and snap back on the next refetch.
+        const totalRows = prev.total_rows;
         const allocated = newRows.filter((r) => Object.values(r.cells).some(Boolean)).length;
-        return { ...prev, rows: newRows, allocated, unallocated: prev.total_requirements - allocated,
-                 allocation_pct: Math.round(allocated / prev.total_requirements * 100 * 10) / 10 };
+        return { ...prev, rows: newRows, allocated, unallocated: totalRows - allocated,
+                 allocation_pct: Math.round(allocated / totalRows * 100 * 10) / 10 };
       });
     } catch (err: any) {
       setError(err.message || 'Toggle failed');
@@ -93,21 +103,22 @@ export default function AllocationMatrixPage() {
     return <div className="p-6 text-center text-muted-foreground">No data available.</div>;
   }
 
-  const rows = transpose ? data.columns : data.rows;
-  const cols = transpose ? data.rows : data.columns;
+  const displayRows = transpose ? data.columns : data.rows;
+  const displayCols = transpose ? data.rows : data.columns;
 
   const colKind = AXES.find((a) => a.key === axis)!.colKind;
+  const rowKind: EntityKind = data.row_kind === 'components' ? 'component' : 'requirement';
 
   const isAllocated = (row: any, col: any): boolean => {
     if (!transpose) return row.cells?.[col.id] ?? false;
-    const origRow = data.rows.find((r) => r.req_id === col.req_id);
+    const origRow = data.rows.find((r) => (r.row_id || r.req_id) === col.row_id);
     return origRow?.cells?.[row.id] ?? false;
   };
 
   const handleToggle = (row: any, col: any) => {
-    const reqId = transpose ? col.req_id : row.req_id;
+    const entityId = transpose ? (col.row_id || col.req_id) : (row.row_id || row.req_id);
     const colId = transpose ? row.id : col.id;
-    toggleAllocation(reqId, colId, isAllocated(row, col));
+    toggleAllocation(entityId, colId, isAllocated(row, col), data.row_kind);
   };
 
   return (
@@ -148,7 +159,10 @@ export default function AllocationMatrixPage() {
               key={a.key}
               role="tab"
               aria-selected={axis === a.key}
-              onClick={() => setAxis(a.key)}
+              onClick={() => {
+                if (axis === 'baselines' && a.key !== 'baselines') setRows('requirements');
+                setAxis(a.key);
+              }}
               className={`px-3 py-1.5 rounded-lg text-xs transition-colors ${
                 axis === a.key
                   ? 'bg-primary/10 text-primary font-medium'
@@ -159,6 +173,37 @@ export default function AllocationMatrixPage() {
             </button>
           ))}
         </div>
+
+        {/* Row source selector — visible only on the baselines tab. */}
+        {axis === 'baselines' && (
+          <div className="flex items-center gap-0.5 mt-2 text-xs" role="radiogroup" aria-label="Rows">
+            <span className="text-muted-foreground mr-1.5">Rows:</span>
+            <button
+              role="radio"
+              aria-checked={rows === 'requirements'}
+              onClick={() => setRows('requirements')}
+              className={`px-2 py-0.5 rounded transition-colors ${
+                rows === 'requirements'
+                  ? 'bg-primary/10 text-primary font-medium'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+              }`}
+            >
+              Requirements
+            </button>
+            <button
+              role="radio"
+              aria-checked={rows === 'components'}
+              onClick={() => setRows('components')}
+              className={`px-2 py-0.5 rounded transition-colors ${
+                rows === 'components'
+                  ? 'bg-primary/10 text-primary font-medium'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+              }`}
+            >
+              Components
+            </button>
+          </div>
+        )}
 
         {/* Filters */}
         <div className="flex gap-2 mt-3">
@@ -213,9 +258,9 @@ export default function AllocationMatrixPage() {
                     tick, so this column would swallow nearly all of it and leave
                     the cells as narrow as they started. */}
                 <th className="sticky top-0 left-0 z-20 bg-card border-b border-r px-3 py-2 text-left font-semibold text-muted-foreground w-[200px] min-w-[140px]">
-                  {transpose ? data.column_label.replace(/s$/, '') : 'Requirement'}
+                  {transpose ? data.column_label.replace(/s$/, '') : (data.row_kind === 'components' ? 'Component' : 'Requirement')}
                 </th>
-                {cols.map((col: any) => {
+                {displayCols.map((col: any) => {
                   const isBaselineColumn = !transpose && axis === 'baselines';
                   if (isBaselineColumn) {
                     const dueDate: string | undefined = col.due_date;
@@ -239,13 +284,13 @@ export default function AllocationMatrixPage() {
                   }
                   return (
                     <th
-                      key={transpose ? col.req_id : col.id}
+                      key={transpose ? (col.row_id || col.req_id) : col.id}
                       className="sticky top-0 z-10 bg-card border-b px-2 py-2 font-semibold text-muted-foreground whitespace-nowrap"
                       style={{ writingMode: 'vertical-rl', textOrientation: 'mixed', maxHeight: 160, minWidth: 32 }}
                     >
                       <EntityLink
-                        kind={transpose ? 'requirement' : colKind as EntityKind}
-                        id={transpose ? col.req_id : col.id}
+                        kind={transpose ? rowKind : colKind as EntityKind}
+                        id={transpose ? (col.row_id || col.req_id) : col.id}
                         subtype={transpose ? undefined : col.kind}
                         className="text-[10px]"
                       />
@@ -255,9 +300,9 @@ export default function AllocationMatrixPage() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((row: any) => (
-                <tr key={transpose ? row.id : row.req_id}>
-                  <td className={`sticky left-0 z-10 bg-card border-r border-b px-3 py-2 ${transpose ? '' : (STATUS_CLASSES[row.req_status] || '')}`}>
+              {displayRows.map((row: any) => (
+                <tr key={transpose ? row.id : (row.row_id || row.req_id)}>
+                  <td className={`sticky left-0 z-10 bg-card border-r border-b px-3 py-2 ${transpose ? '' : (row.req_status ? (STATUS_CLASSES[row.req_status] || '') : '')}`}>
                     <div className="flex flex-col">
                       {transpose && axis === 'baselines' ? (
                         <>
@@ -268,26 +313,31 @@ export default function AllocationMatrixPage() {
                         </>
                       ) : (
                         <>
-                          <EntityLink kind={transpose ? colKind as EntityKind : 'requirement'} id={transpose ? row.id : row.req_id} subtype={transpose ? row.kind : undefined} className="font-mono" />
+                          <EntityLink
+                            kind={transpose ? colKind as EntityKind : rowKind}
+                            id={transpose ? row.id : (row.row_id || row.req_id)}
+                            subtype={transpose ? row.kind : (data.row_kind === 'components' ? row.row_type : undefined)}
+                            className="font-mono"
+                          />
                           <span className="text-[10px] text-muted-foreground truncate max-w-[130px]">
-                            {transpose ? row.name : row.req_name}
+                            {transpose ? row.name : (row.row_name || row.req_name)}
                           </span>
                         </>
                       )}
                     </div>
                   </td>
-                  {cols.map((col: any) => {
+                  {displayCols.map((col: any) => {
                     const allocated = isAllocated(row, col);
-                    const cellKey = `${transpose ? row.id : row.req_id}:${transpose ? col.req_id : col.id}`;
+                    const cellKey = `${transpose ? row.id : (row.row_id || row.req_id)}:${transpose ? (col.row_id || col.req_id) : col.id}`;
                     const isToggling = toggling.has(cellKey);
                     return (
                       <td
-                        key={transpose ? col.req_id : col.id}
+                        key={transpose ? (col.row_id || col.req_id) : col.id}
                         className={`border-b text-center p-0 cursor-pointer transition-colors ${
                           allocated ? 'bg-cs-green/15 hover:bg-cs-green/20' : 'hover:bg-accent/30'
                         }`}
                         onClick={() => handleToggle(row, col)}
-                        title={`${row.req_name || row.name} ${data.verb} ${col.name || col.req_name}`}
+                        title={`${row.row_name || row.req_name || row.name} ${data.verb} ${col.name || (col.row_name || col.req_name)}`}
                       >
                         {isToggling ? (
                           <Loader size={12} className="animate-spin mx-auto text-muted-foreground" />
