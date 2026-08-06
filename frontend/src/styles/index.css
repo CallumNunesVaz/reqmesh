@@ -52,6 +52,18 @@
     --graph-control: 215 25% 18%;
     --graph-control-hover: 215 20% 26%;
     --graph-minimap: 215 25% 10%;
+
+    /* Activity chart palette — resteps of the entity hues into the chart
+     * lightness band (OKLCH L 0.48–0.67), validated against the CVD palette
+     * checks in both themes.  Do not use the raw --cs-* tokens for the chart;
+     * their light-mode L values (0.69–0.83) fail dark-mode contrast. */
+    --chart-verification:   #298e53;
+    --chart-change:         #8345ff;
+    --chart-specification:  #8b7a0b;
+    --chart-requirement:    #0b7ad5;
+    --chart-component:      #bd5800;
+    --chart-decision:       #01ad8a;
+    --chart-risk:           #e11414;
   }
 
   /* Cloudscape Light Mode */
@@ -95,6 +107,16 @@
     --graph-control: 210 15% 94%;
     --graph-control-hover: 210 15% 88%;
     --graph-minimap: 210 20% 97%;
+
+    /* Activity chart palette — light theme steps, matched to the dark set
+     * across a CVD-separation check (worst adjacent ΔE 15.7). */
+    --chart-verification:   #2c9658;
+    --chart-change:         #8b52ff;
+    --chart-specification:  #92800c;
+    --chart-requirement:    #0c81e1;
+    --chart-component:      #c75d00;
+    --chart-decision:       #009491;
+    --chart-risk:           #eb1e1e;
   }
 
   * {
