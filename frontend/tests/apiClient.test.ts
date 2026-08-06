@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { api } from '../src/api/client';
+import { api, getTruncationInfo } from '../src/api/client';
 
 /** Build a fetch stub that always answers with one canned response. */
 function stubFetch(response: { status?: number; statusText?: string; json?: () => Promise<unknown> } = {}) {
@@ -265,5 +265,62 @@ describe('user management', () => {
     const { url, init } = callOf(f);
     expect(url).toBe('/api/auth/users/bob%20smith');
     expect(init.method).toBe('DELETE');
+  });
+});
+
+describe('truncation detection', () => {
+  // listRequirements and listComponents return a bare array for backwards
+  // compatibility; getTruncationInfo exposes the cut-off separately.
+
+  it('marks the collection truncated when total > items.length', async () => {
+    stubFetch({ json: async () => ({ items: [{ id: 'R1' }], total: 5, offset: 0, limit: 2000 }) });
+    await api.listRequirements('demo');
+    const info = getTruncationInfo('requirements');
+    expect(info).not.toBeNull();
+    expect(info!.shown).toBe(1);
+    expect(info!.total).toBe(5);
+    expect(info!.collection).toBe('requirements');
+  });
+
+  it('does NOT mark truncated when total === items.length (small set)', async () => {
+    stubFetch({ json: async () => ({ items: [{ id: 'R1' }, { id: 'R2' }], total: 2, offset: 0, limit: 2000 }) });
+    await api.listRequirements('demo');
+    expect(getTruncationInfo('requirements')).toBeNull();
+  });
+
+  it('does NOT mark truncated when total === items.length at exactly 2000', async () => {
+    const twoThousand = Array.from({ length: 2000 }, (_, i) => ({ id: `R${i + 1}` }));
+    stubFetch({ json: async () => ({ items: twoThousand, total: 2000, offset: 0, limit: 2000 }) });
+    await api.listRequirements('demo');
+    expect(getTruncationInfo('requirements')).toBeNull();
+  });
+
+  it('listRequirements still returns a plain array of items, unchanged', async () => {
+    const items = [{ id: 'R1', name: 'Test' }, { id: 'R2', name: 'Test 2' }];
+    stubFetch({ json: async () => ({ items, total: 10, offset: 0, limit: 2000 }) });
+    const result = await api.listRequirements('demo');
+    expect(result).toEqual(items);
+  });
+
+  it('a second call replaces the recorded metadata rather than accumulating it', async () => {
+    // First call: truncated.
+    stubFetch({ json: async () => ({ items: [{ id: 'R1' }], total: 5, offset: 0, limit: 2000 }) });
+    await api.listRequirements('demo');
+    expect(getTruncationInfo('requirements')!.total).toBe(5);
+
+    // Second call: not truncated.
+    stubFetch({ json: async () => ({ items: [{ id: 'R1' }], total: 1, offset: 0, limit: 2000 }) });
+    await api.listRequirements('demo');
+    expect(getTruncationInfo('requirements')).toBeNull();
+  });
+
+  it('tracks components truncation independently', async () => {
+    // Truncated components.
+    stubFetch({ json: async () => ({ items: [{ id: 'C1' }], total: 5, offset: 0, limit: 2000 }) });
+    await api.listComponents('demo');
+    expect(getTruncationInfo('components')).not.toBeNull();
+
+    // Requirements is independent — not affected by the component call.
+    expect(getTruncationInfo('requirements')).toBeNull();
   });
 });

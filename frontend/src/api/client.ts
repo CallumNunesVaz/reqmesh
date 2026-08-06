@@ -346,6 +346,24 @@ export interface Paged<T> {
   limit: number;
 }
 
+/** Recorded after a list call so pages can render a truncation warning without
+ *  threading a new return type through ~30 call sites that expect a bare array. */
+export interface TruncationInfo {
+  shown: number;
+  total: number;
+  collection: 'requirements' | 'components';
+}
+
+const _lastPageMeta: Record<string, TruncationInfo> = {};
+
+/** Read the truncation info recorded by the last `listRequirements` or
+ *  `listComponents` call.  Returns `null` when the last call was not truncated. */
+export function getTruncationInfo(
+  collection: 'requirements' | 'components',
+): TruncationInfo | null {
+  return _lastPageMeta[collection] ?? null;
+}
+
 /** A typed numeric quantity; `expr` derives it, or a `calc_def` usage does. */
 export interface Parameter {
   name: string;
@@ -1053,6 +1071,13 @@ export const api = {
   listRequirements: async (projectId: string, params?: Record<string, string>) => {
     const qs = '?' + new URLSearchParams({ limit: '2000', ...params }).toString();
     const page = await request<Paged<Requirement>>(`/projects/${projectId}/requirements${qs}`);
+    // Record truncation info so the list page can show a warning without
+    // changing the return signature that ~30 callers depend on.
+    if (page.items.length < page.total) {
+      _lastPageMeta['requirements'] = { shown: page.items.length, total: page.total, collection: 'requirements' };
+    } else {
+      delete _lastPageMeta['requirements'];
+    }
     return page.items;
   },
   listRequirementsPaged: (projectId: string, params?: Record<string, string>) => {
@@ -1067,6 +1092,13 @@ export const api = {
   listComponents: async (projectId: string, params?: Record<string, string>) => {
     const qs = '?' + new URLSearchParams({ limit: '2000', ...params }).toString();
     const page = await request<Paged<Component>>(`/projects/${projectId}/components${qs}`);
+    // Record truncation info so the list page can show a warning without
+    // changing the return signature that ~30 callers depend on.
+    if (page.items.length < page.total) {
+      _lastPageMeta['components'] = { shown: page.items.length, total: page.total, collection: 'components' };
+    } else {
+      delete _lastPageMeta['components'];
+    }
     return page.items;
   },
   listComponentsPaged: (projectId: string, params?: Record<string, string>) => {

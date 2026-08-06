@@ -3,12 +3,13 @@ import { usePersistedState, setCodec } from '../hooks/usePersistedState';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, ChevronRight, Boxes, Square, CheckSquare, Trash2, X, Search, Eye, EyeOff } from 'lucide-react';
-import { api, COMPONENT_TYPES, type Component, type ComponentTreeNode } from '../api/client';
+import { api, COMPONENT_TYPES, getTruncationInfo, type Component, type ComponentTreeNode, type TruncationInfo } from '../api/client';
 import { useStore } from '../store';
 import { useAuthStore } from '../store/auth';
 import { COMPONENT_TYPE_META } from '../components/entities';
 import { HelpTip } from '../components/HelpTip';
 import { useToasts } from '../components/Toast';
+import TruncationBanner from '../components/TruncationBanner';
 import { effectiveHiddenComponents } from '../lib/graphFilters';
 
 const EMPTY_DRAFT = { id: '', name: '', type: 'assembly', parent: '' };
@@ -35,6 +36,7 @@ export default function ComponentsPage() {
   const [filterType, setFilterType] = usePersistedState(pk('filter-type'), '');
   const [draft, setDraft] = useState(EMPTY_DRAFT);
   const [error, setError] = useState('');
+  const [truncation, setTruncation] = useState<TruncationInfo | null>(null);
   const { addToast } = useToasts();
   const [focusedIndex, setFocusedIndex] = useState(-1);
   const treeContainerRef = useRef<HTMLDivElement>(null);
@@ -55,7 +57,7 @@ export default function ComponentsPage() {
   const load = () => {
     if (!projectId) return;
     Promise.all([api.listComponents(projectId), api.getComponentTree(projectId)])
-      .then(([list, t]) => { setComponents(list); setTree(t); })
+      .then(([list, t]) => { setComponents(list); setTree(t); setTruncation(getTruncationInfo('components')); })
       .catch((e) => setError(e.message));
   };
 
@@ -286,6 +288,7 @@ export default function ComponentsPage() {
 
   return (
     <div className="max-w-6xl mx-auto p-8">
+      {truncation && <TruncationBanner info={truncation} />}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Components</h1>
