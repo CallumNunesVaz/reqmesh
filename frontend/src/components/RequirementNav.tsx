@@ -21,6 +21,9 @@ import {
   Grid3X3,
   History,
   Layers,
+  Sigma,
+  Scale,
+  FlaskConical,
 } from 'lucide-react';
 import { api, type RequirementTreeNode } from '../api/client';
 import { useStore } from '../store';
@@ -245,11 +248,14 @@ export function navGroups(projectId: string): NavItem[][] {
       { to: `/project/${projectId}/risks`, label: 'Risks', icon: AlertTriangle },
       { to: `/project/${projectId}/baselines`, label: 'Baselines', icon: History },
       { to: `/project/${projectId}/system-states`, label: 'System States', icon: Layers },
+      { to: `/project/${projectId}/definitions`, label: 'Definitions', icon: Sigma },
     ],
     [
       { to: `/project/${projectId}/change-requests`, label: 'Change Requests', icon: GitPullRequest },
       { to: `/project/${projectId}/allocation`, label: 'Allocation', icon: Grid3X3 },
       { to: `/project/${projectId}/traces`, label: 'Trace Matrix', icon: GitBranch },
+      { to: `/project/${projectId}/decisions`, label: 'Decisions', icon: Scale },
+      { to: `/project/${projectId}/analysis`, label: 'Analysis', icon: FlaskConical },
       { to: `/project/${projectId}/metrics`, label: 'Metrics', icon: BarChart3 },
     ],
   ];
