@@ -226,6 +226,35 @@ function PanelNode({ item, depth, navigate, focusId }: {
   );
 }
 
+export interface NavItem {
+  to: string;
+  label: string;
+  icon: React.ElementType;
+}
+
+export function navGroups(projectId: string): NavItem[][] {
+  return [
+    [
+      { to: `/project/${projectId}`, label: 'Overview', icon: Home },
+    ],
+    [
+      { to: `/project/${projectId}/requirements`, label: 'Requirements', icon: ClipboardList },
+      { to: `/project/${projectId}/specifications`, label: 'Specifications', icon: FileText },
+      { to: `/project/${projectId}/components`, label: 'Components', icon: Boxes },
+      { to: `/project/${projectId}/verification`, label: 'Verification', icon: CheckCircle2 },
+      { to: `/project/${projectId}/risks`, label: 'Risks', icon: AlertTriangle },
+      { to: `/project/${projectId}/baselines`, label: 'Baselines', icon: History },
+      { to: `/project/${projectId}/system-states`, label: 'System States', icon: Layers },
+    ],
+    [
+      { to: `/project/${projectId}/change-requests`, label: 'Change Requests', icon: GitPullRequest },
+      { to: `/project/${projectId}/allocation`, label: 'Allocation', icon: Grid3X3 },
+      { to: `/project/${projectId}/traces`, label: 'Trace Matrix', icon: GitBranch },
+      { to: `/project/${projectId}/metrics`, label: 'Metrics', icon: BarChart3 },
+    ],
+  ];
+}
+
 interface RequirementNavProps {
   width?: number;
   /** Collapse state lives in Layout, which owns the pane's width — the
@@ -348,26 +377,7 @@ export default function RequirementNav({ width = 300, collapsed, onToggleCollaps
     return nodes.reduce((c, n) => c + 1 + countNodes(n.children), 0);
   }
 
-  const navGroups = [
-    [
-      { to: `/project/${projectId}`, label: 'Overview', icon: Home },
-    ],
-    [
-      { to: `/project/${projectId}/requirements`, label: 'Requirements', icon: ClipboardList },
-      { to: `/project/${projectId}/specifications`, label: 'Specifications', icon: FileText },
-      { to: `/project/${projectId}/components`, label: 'Components', icon: Boxes },
-      { to: `/project/${projectId}/verification`, label: 'Verification', icon: CheckCircle2 },
-      { to: `/project/${projectId}/risks`, label: 'Risks', icon: AlertTriangle },
-      { to: `/project/${projectId}/baselines`, label: 'Baselines', icon: History },
-      { to: `/project/${projectId}/system-states`, label: 'System States', icon: Layers },
-    ],
-    [
-      { to: `/project/${projectId}/change-requests`, label: 'Change Requests', icon: GitPullRequest },
-      { to: `/project/${projectId}/allocation`, label: 'Allocation', icon: Grid3X3 },
-      { to: `/project/${projectId}/traces`, label: 'Trace Matrix', icon: GitBranch },
-      { to: `/project/${projectId}/metrics`, label: 'Metrics', icon: BarChart3 },
-    ],
-  ];
+  const groups = navGroups(projectId!);
 
   if (collapsed) {
     return (
@@ -379,7 +389,7 @@ export default function RequirementNav({ width = 300, collapsed, onToggleCollaps
         >
           <PanelLeft size={16} />
         </button>
-        {navGroups.map((group, gi) => (
+        {groups.map((group, gi) => (
           <span key={gi} className="contents">
             {gi > 0 && <span className="w-6 h-px bg-border/60" />}
             {group.map((item) => {
@@ -421,7 +431,7 @@ export default function RequirementNav({ width = 300, collapsed, onToggleCollaps
           </button>
         </div>
 
-        {navGroups.map((group, gi) => (
+        {groups.map((group, gi) => (
           <span key={gi} className="contents">
             {gi > 0 && <div className="my-1.5 border-t border-border/40" />}
             {group.map((item) => {
