@@ -24,6 +24,63 @@ An open-source, web-based requirements management tool with:
 - **Rich text editing** — TipTap editor with image support, paste sanitization, and live word count
 - **Guided mode** — toggleable contextual help for every section of the application
 
+## Screenshots
+
+Every screenshot below is the bundled **Cessna 172S Skyhawk SP** example
+project — 57 requirements with real parametrics, a full physical breakdown, and
+a populated risk register — which ships with the app and seeds on first run.
+
+### Requirements
+
+The tree, the graph canvas and the inspector side by side. Status, priority and
+verification state are visible per requirement without opening anything.
+
+![Requirements](docs/screenshots/requirements.png)
+
+### Requirement detail
+
+Parameters, constraints and their measured verdicts, links in both directions,
+comments and field-level history.
+
+![Requirement detail](docs/screenshots/requirement-detail.png)
+
+### Allocation matrix
+
+Requirements against components, verification cases, risks or baselines — one
+grid, four axes, click a cell to allocate. On the baselines tab the rows can be
+components instead of requirements.
+
+![Allocation matrix](docs/screenshots/allocation.png)
+
+### Metrics
+
+Coverage, quality, gaps and conflicts, plus project activity over time — a
+stacked bar per week coloured by entity kind, drawn from the audit history.
+
+![Metrics](docs/screenshots/metrics.png)
+
+### Trace matrix
+
+Every link in the project, filterable, with orphans and suspect links surfaced
+rather than hidden.
+
+![Trace matrix](docs/screenshots/traces.png)
+
+### Graph
+
+The model as a diagram — requirements, components and their relationships, with
+derivation highlighting and saved views.
+
+![Graph](docs/screenshots/graph.png)
+
+### Version control
+
+Repository state, push outcomes and remote management from the settings page.
+A failed push is the loudest thing on the panel, because a silently unbacked-up
+project looks identical to a healthy one everywhere else.
+
+![Version control](docs/screenshots/git-panel.png)
+
 ## Architecture
 
 ```
