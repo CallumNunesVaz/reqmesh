@@ -8,6 +8,7 @@ import { useStore } from '../store';
 import { useAuthStore } from '../store/auth';
 import { COMPONENT_TYPE_META } from '../components/entities';
 import { HelpTip } from '../components/HelpTip';
+import { useToasts } from '../components/Toast';
 import { effectiveHiddenComponents } from '../lib/graphFilters';
 
 const EMPTY_DRAFT = { id: '', name: '', type: 'assembly', parent: '' };
@@ -34,6 +35,7 @@ export default function ComponentsPage() {
   const [filterType, setFilterType] = usePersistedState(pk('filter-type'), '');
   const [draft, setDraft] = useState(EMPTY_DRAFT);
   const [error, setError] = useState('');
+  const { addToast } = useToasts();
   const [focusedIndex, setFocusedIndex] = useState(-1);
   const treeContainerRef = useRef<HTMLDivElement>(null);
 
@@ -186,9 +188,19 @@ export default function ComponentsPage() {
   const clearComponentSelection = () => setSelectedIds(new Set());
   const selectAllComponents = () => setSelectedIds(new Set(components.map((c) => c.id)));
 
+  // These three bulk handlers had no error handling at all. A reparent that
+  // would create a cycle, or a delete refused because the components are
+  // referenced, rejected as an unhandled promise: no message, and the
+  // selection-clearing and reload below never ran, so the page looked frozen
+  // rather than refused.
   const handleBulkReparent = async () => {
     if (!bulkParent.trim()) return;
-    await api.bulkReparentComponents(projectId!, [...selectedIds], bulkParent.trim());
+    try {
+      await api.bulkReparentComponents(projectId!, [...selectedIds], bulkParent.trim());
+    } catch (err) {
+      addToast('error', err instanceof Error ? err.message : 'Bulk reparent failed');
+      return;
+    }
     clearComponentSelection();
     load();
     setBulkParent('');
@@ -197,7 +209,12 @@ export default function ComponentsPage() {
   const handleBulkDelete = async () => {
     if (!projectId) return;
     if (!confirm(`Delete ${selectedIds.size} component(s)?`)) return;
-    await api.bulkDeleteComponents(projectId, [...selectedIds]);
+    try {
+      await api.bulkDeleteComponents(projectId, [...selectedIds]);
+    } catch (err) {
+      addToast('error', err instanceof Error ? err.message : 'Bulk delete failed');
+      return;
+    }
     clearComponentSelection();
     load();
   };
@@ -288,7 +305,17 @@ export default function ComponentsPage() {
           <span className="text-xs font-medium text-foreground">{selectedIds.size} selected</span>
           <select
             className="select text-xs py-1 w-32"
-            onChange={async (e) => { if (e.target.value) { await api.bulkUpdateComponents(projectId!, [...selectedIds], { type: e.target.value }); clearComponentSelection(); load(); } }}
+            onChange={async (e) => {
+              if (!e.target.value) return;
+              try {
+                await api.bulkUpdateComponents(projectId!, [...selectedIds], { type: e.target.value });
+              } catch (err) {
+                addToast('error', err instanceof Error ? err.message : 'Bulk type change failed');
+                return;
+              }
+              clearComponentSelection();
+              load();
+            }}
             value=""
           >
             <option value="">Set type...</option>

@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { Check, Trash2, X } from 'lucide-react';
 import { api, type Comment } from '../api/client';
 import { useAuthStore } from '../store/auth';
+import { useToasts } from './Toast';
 
 /** Read/write comment thread for any entity.
  *
@@ -19,6 +20,7 @@ export function CommentThread({ entityKind, entityId }: {
   const [newText, setNewText] = useState('');
   const [busy, setBusy] = useState(false);
   const canEdit = useAuthStore((s) => s.canEdit());
+  const { addToast } = useToasts();
 
   const load = () => {
     if (!projectId) return;
@@ -41,7 +43,7 @@ export function CommentThread({ entityKind, entityId }: {
       setNewText('');
       load();
     } catch (err) {
-      console.error(err);
+      addToast('error', err instanceof Error ? err.message : 'Failed to post comment');
     } finally {
       setBusy(false);
     }
@@ -53,7 +55,7 @@ export function CommentThread({ entityKind, entityId }: {
       await api.updateComment(projectId, c.id, { resolved: !c.resolved });
       load();
     } catch (err) {
-      console.error(err);
+      addToast('error', err instanceof Error ? err.message : 'Failed to update comment');
     }
   };
 
@@ -63,7 +65,7 @@ export function CommentThread({ entityKind, entityId }: {
       await api.deleteComment(projectId, c.id);
       load();
     } catch (err) {
-      console.error(err);
+      addToast('error', err instanceof Error ? err.message : 'Failed to delete comment');
     }
   };
 

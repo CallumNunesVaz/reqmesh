@@ -6,6 +6,7 @@ import { Plus, FileText, Trash2, ChevronDown, Square, CheckSquare, X, Search, Ex
 import { api, type Requirement, type Component, type Specification } from '../api/client';
 import { useStore } from '../store';
 import { useAuthStore } from '../store/auth';
+import { useToasts } from '../components/Toast';
 import { CopyLinkButton, EntityLink } from '../components/entities';
 import { useFocusedEntity } from '../components/useFocusedEntity';
 import { AutoLinkText } from '../components/autoLink';
@@ -19,6 +20,7 @@ export default function SpecificationsPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const { specifications, setSpecifications } = useStore();
   const editable = useAuthStore((s) => s.canEdit());
+  const { addToast } = useToasts();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const dataVersion = useStore((s) => s.dataVersion);
   const [showCreate, setShowCreate] = useState(false);
@@ -84,8 +86,8 @@ export default function SpecificationsPage() {
       setEditingId(null);
       setNewSpec({ id: '', name: '', description: '', url: '' });
       load();
-    } catch {
-      // silently no-op when permissions insufficient
+    } catch (err) {
+      addToast('error', err instanceof Error ? err.message : 'Failed to save specification');
     }
   };
 
@@ -106,7 +108,7 @@ export default function SpecificationsPage() {
     try {
       await api.updateSpecification(projectId, specId, { components: linked } as any);
     } catch (err) {
-      console.error(err);
+      addToast('error', err instanceof Error ? err.message : 'Save failed');
       load();
     }
   };

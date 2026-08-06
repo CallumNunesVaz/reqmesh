@@ -5,11 +5,13 @@ import { FolderOpen, Plus, Trash2, WifiOff, RotateCw, LogIn } from 'lucide-react
 import { api, type Project } from '../api/client';
 import { useStore } from '../store';
 import { useAuthStore } from '../store/auth';
+import { useToasts } from '../components/Toast';
 
 export default function ProjectsPage() {
   const navigate = useNavigate();
   const { projects, setProjects } = useStore();
   const editable = useAuthStore((s) => s.canEdit());
+  const { addToast } = useToasts();
   const [showCreate, setShowCreate] = useState(false);
   const [newId, setNewId] = useState('');
   const [newName, setNewName] = useState('');
@@ -50,8 +52,8 @@ export default function ProjectsPage() {
       setNewId('');
       setNewName('');
       navigate(`/project/${project.id}`);
-    } catch {
-      // silently no-op when permissions insufficient
+    } catch (err) {
+      addToast('error', err instanceof Error ? err.message : 'Failed to create project');
     }
   };
 

@@ -144,12 +144,24 @@ export function WhatIfProvider({ projectId, children }: { projectId: string; chi
     // Merge each override into the requirement's *full* parameter list — a bare
     // `{ parameters: [changed] }` update would replace the list and wipe every
     // other parameter (and this param's unit/kind).
-    for (const [reqId, changes] of Object.entries(byReq)) {
-      const req = await api.getRequirement(pid, reqId);
-      const params = (req.parameters ?? []).map((p) =>
-        changes[p.name] !== undefined ? { ...p, value: changes[p.name] } : p
-      );
-      await api.updateRequirement(pid, reqId, { parameters: params });
+    // Reported through this context's own `error`, which WhatIfPanel already
+    // renders, rather than a toast — a provider that draws nothing should not
+    // own a notification. Without it a refused write vanished as an unhandled
+    // rejection partway through the loop, leaving some requirements committed
+    // and others not, with the panel still showing the overrides as pending.
+    try {
+      for (const [reqId, changes] of Object.entries(byReq)) {
+        const req = await api.getRequirement(pid, reqId);
+        const params = (req.parameters ?? []).map((p) =>
+          changes[p.name] !== undefined ? { ...p, value: changes[p.name] } : p
+        );
+        await api.updateRequirement(pid, reqId, { parameters: params });
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not apply the overrides');
+      bumpGraphVersion();
+      bumpDataVersion();
+      return;
     }
     bumpGraphVersion();
     bumpDataVersion();

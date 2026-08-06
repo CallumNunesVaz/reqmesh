@@ -5,6 +5,7 @@ import { useWhatIf } from './WhatIfContext';
 import { VerdictBadge, MarginTag } from './parametrics';
 import { requirementVerdict } from '../lib/whatIfVerdict';
 import { useAuthStore } from '../store/auth';
+import { useToasts } from './Toast';
 import type { ImpactStepParam, ImpactStepConstraint, ConstraintStatus } from '../api/client';
 
 function ParamStep({ step }: { step: ImpactStepParam }) {
@@ -70,6 +71,7 @@ export default function WhatIfPanel(): JSX.Element | null {
   const stepRef = useRef(stepIndex);
   stepRef.current = stepIndex;
   const canEdit = useAuthStore((s) => s.canEdit());
+  const { addToast } = useToasts();
   const cardRef = useRef<HTMLDivElement>(null);
 
   // Bring a new result into view. Inline means the card sits below Parameters &
@@ -295,7 +297,10 @@ export default function WhatIfPanel(): JSX.Element | null {
       <div className="flex items-center gap-2 mt-3 pt-3 border-t">
         {canEdit && (
           <button
-            onClick={() => confirm(projectId!)}
+            onClick={async () => {
+              try { await confirm(projectId!); }
+              catch (err) { addToast('error', err instanceof Error ? err.message : 'Save failed'); }
+            }}
             disabled={pending || overrideCount === 0}
             className="btn-primary flex items-center gap-1.5 text-xs px-3 py-1.5 disabled:opacity-40"
           >

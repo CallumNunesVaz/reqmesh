@@ -17,6 +17,7 @@ import { useConfirm } from '../components/ConfirmDialog';
 import { deleteWithReferenceCheck } from '../lib/forceDelete';
 import { REQUIREMENT_TYPES, REQUIREMENT_TYPE_META, reqTypeClass, reqTypeIcon } from '../lib/requirementTypes';
 import BodyPortal from '../components/BodyPortal';
+import { useToasts } from '../components/Toast';
 
 const statusStyles: Record<string, { dot: string; text: string }> = {
   proposed: { dot: 'bg-cs-blue', text: 'text-cs-blue' },
@@ -52,6 +53,7 @@ export default function RequirementsPage() {
   const bumpDataVersion = useStore((s) => s.bumpDataVersion);
   const editMode = useAuthStore((s) => s.canEdit());
   const showConfirm = useConfirm();
+  const { addToast } = useToasts();
   const { selectedReqId, selectReq } = useSelectedReq();
 
   // Search, filters and the collapsed-tree state persist per project, so
@@ -206,7 +208,7 @@ export default function RequirementsPage() {
       if (selectedReqId === reqId) selectReq(null);
       load();
     } catch (e: any) {
-      console.warn('Delete requirement %s failed: %s', reqId, e?.message || e);
+      addToast('error', e?.message || 'Delete failed');
     }
   };
 
@@ -247,7 +249,7 @@ export default function RequirementsPage() {
       clearSelection();
       load();
     } catch (e: any) {
-      console.warn('Bulk delete failed: %s', e?.message || e);
+      addToast('error', e?.message || 'Bulk delete failed');
     }
   };
 
@@ -258,7 +260,7 @@ export default function RequirementsPage() {
       clearSelection();
       load();
     } catch (e: any) {
-      console.warn('Bulk baseline update failed: %s', e?.message || e);
+      addToast('error', e?.message || 'Bulk baseline update failed');
     }
   };
 
@@ -270,7 +272,7 @@ export default function RequirementsPage() {
       load();
       setBulkParent('');
     } catch (e: any) {
-      console.warn('Bulk reparent failed: %s', e?.message || e);
+      addToast('error', e?.message || 'Bulk reparent failed');
     }
   };
 
@@ -281,7 +283,7 @@ export default function RequirementsPage() {
       setMoveReq(null);
       load();
     } catch (e: any) {
-      console.warn('Single reparent failed: %s', e?.message || e);
+      addToast('error', e?.message || 'Reparent failed');
     }
   };
 
