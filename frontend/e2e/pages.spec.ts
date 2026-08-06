@@ -58,6 +58,20 @@ test('the system states page renders', async ({ app, server }) => {
   await expectNoCrash(app);
 });
 
+for (const [route, heading] of [
+  ['decisions', /decisions/i],
+  ['definitions', /definitions/i],
+  ['analysis', /analysis cases/i],
+] as const) {
+  test(`the ${route} page renders`, async ({ app, server }) => {
+    await signIn(app);
+    await app.goto(`${server.baseURL}/project/${P}/${route}`);
+    await app.waitForSelector('main');
+    await expect(app.getByRole('heading', { name: heading }).first()).toBeVisible();
+    await expectNoCrash(app);
+  });
+}
+
 test('an unknown route redirects to the project list rather than blanking', async ({ app, server }) => {
   await signIn(app);
   await app.goto(`${server.baseURL}/no-such-page`);

@@ -13,6 +13,10 @@ const ROUTES = [
   'requirements', 'requirements/AFRM0001', 'requirements/ACFT0000', 'components', 'components/GDC',
   'specifications', 'verification', 'risks', 'change-requests', 'baselines',
   'traces', 'allocation', 'metrics',
+  // Added with the pages themselves: being absent from this sweep and from
+  // pages.spec.ts is exactly how decisions, definitions and analysis cases
+  // shipped full CRUD with no page and nobody noticed.
+  'decisions', 'definitions', 'analysis',
 ];
 
 // Controls whose label implies they change project data.

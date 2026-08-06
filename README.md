@@ -384,6 +384,38 @@ membership is held by the row entity rather than the column — components carry
 in bulk. The other tabs reject `rows=components`: requirements are always the
 rows there.
 
+## Decisions
+
+Architecture decision records. Each one keeps `context`, `decision`, `rationale`
+and `consequences` as four separate fields rather than one blob — collapsing
+them is what makes an ADR stop being an ADR — and links to the requirements it
+governs and the components it settles.
+
+`status` is a free string, not an enum. Common values are offered
+(`proposed`, `accepted`, `superseded`, `deprecated`, `rejected`) but a stored
+value outside that set still renders and stays selected, because the model does
+not constrain it and silently rewriting it would be data loss.
+
+## Definitions
+
+Reusable SysML v2-style `constraint def` and `calc def`: write a rule once over
+formal parameters, then bind it by name from any requirement's `constraint_def`
+or `calc_def`. The page shows what each one computes, which is the thing a
+requirement binding a definition by name cannot tell you on its own.
+
+Expressions are evaluated server-side only. There is no client-side parser,
+deliberately — one that disagreed with the solver would be worse than none.
+
+## Analysis Cases
+
+Scoped what-if studies: a set of hypothetical parameter overrides
+(`ENTITY.param = value`) plus the requirements and components in scope. Cases
+are stored with the project, so a study is reviewable and reproducible rather
+than a value someone typed once.
+
+Evaluation happens from the parametrics surface, which owns the solver and the
+verdict rendering; this page is where cases are written and scoped.
+
 ## Cross-linking
 
 Every entity reference is a hyperlink to that entity, wherever it appears. Each kind carries its own colour-coded icon.

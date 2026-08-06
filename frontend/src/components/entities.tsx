@@ -5,12 +5,14 @@ import { GuardedLink } from './navGuard';
 import { copyText } from '../lib/clipboard';
 import {
   ClipboardList, CheckCircle2, Boxes, FileText, GitPullRequest, AlertTriangle,
-  Box, Layers, Cog, Binary, Plug, Link2, Check,
+  Box, Layers, Cog, Binary, Plug, Link2, Check, Scale, Sigma, FlaskConical,
 } from 'lucide-react';
 import { loadEntityIndex, type IndexedEntity } from './entityIndex';
 
 /** Everything in a project that can be referenced from somewhere else. */
-export type EntityKind = 'requirement' | 'verification' | 'component' | 'specification' | 'change' | 'risk';
+export type EntityKind =
+  | 'requirement' | 'verification' | 'component' | 'specification' | 'change' | 'risk'
+  | 'decision' | 'definition' | 'analysis';
 
 interface EntityMeta {
   icon: typeof Box;
@@ -61,6 +63,24 @@ export const ENTITY_META: Record<EntityKind, EntityMeta> = {
     cls: 'text-cs-red',
     label: 'Risk',
     path: (p, id) => `/project/${p}/risks?focus=${encodeURIComponent(id)}`,
+  },
+  decision: {
+    icon: Scale,
+    cls: 'text-cs-teal',
+    label: 'Decision',
+    path: (p, id) => `/project/${p}/decisions?focus=${encodeURIComponent(id)}`,
+  },
+  definition: {
+    icon: Sigma,
+    cls: 'text-cs-pink',
+    label: 'Definition',
+    path: (p, id) => `/project/${p}/definitions?focus=${encodeURIComponent(id)}`,
+  },
+  analysis: {
+    icon: FlaskConical,
+    cls: 'text-cs-purple',
+    label: 'Analysis Case',
+    path: (p, id) => `/project/${p}/analysis?focus=${encodeURIComponent(id)}`,
   },
 };
 

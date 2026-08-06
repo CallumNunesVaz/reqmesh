@@ -33,6 +33,16 @@ describe('nav docs gate', () => {
 
     // Every missing label, not just the first — a gate that surfaces one
     // problem per run is a gate people stop running.
+    //
+    // Known limitation: this is a substring match, so a label can be satisfied
+    // incidentally. Adding the Analysis page passed on the strength of the
+    // pre-existing "Analysis & Validation" heading alone. The gate reliably
+    // catches a page documented *nowhere*, which is the case it exists for
+    // (decisions, definitions and analysis cases each shipped full CRUD with no
+    // mention anywhere); it does not prove the mention is about the page.
+    // Tightening it to require a heading was considered and rejected: several
+    // legitimate entries are documented in prose under a differently-worded
+    // heading, so that rule would fail honest documentation.
     const missing = labels.filter((label) => !readmeLower.includes(label.toLowerCase()));
 
     if (missing.length > 0) {

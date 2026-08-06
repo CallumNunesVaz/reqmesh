@@ -19,6 +19,9 @@ const RisksPage = lazy(() => import('./pages/RisksPage'));
 const MetricsPage = lazy(() => import('./pages/MetricsPage'));
 const BaselinesPage = lazy(() => import('./pages/BaselinesPage'));
 const SystemStatesPage = lazy(() => import('./pages/SystemStatesPage'));
+const DecisionsPage = lazy(() => import('./pages/DecisionsPage'));
+const DefinitionsPage = lazy(() => import('./pages/DefinitionsPage'));
+const AnalysisPage = lazy(() => import('./pages/AnalysisPage'));
 const AllocationMatrixPage = lazy(() => import('./pages/AllocationMatrixPage'));
 const PublishPage = lazy(() => import('./pages/PublishPage'));
 const UsersPage = lazy(() => import('./pages/UsersPage'));
@@ -64,6 +67,9 @@ export default function App() {
           <Route path="/project/:projectId/metrics" element={<MetricsPage />} />
           <Route path="/project/:projectId/baselines" element={<BaselinesPage />} />
           <Route path="/project/:projectId/system-states" element={<SystemStatesPage />} />
+          <Route path="/project/:projectId/decisions" element={<DecisionsPage />} />
+          <Route path="/project/:projectId/definitions" element={<DefinitionsPage />} />
+          <Route path="/project/:projectId/analysis" element={<AnalysisPage />} />
           <Route path="/project/:projectId/allocation" element={<AllocationMatrixPage />} />
           <Route path="/project/:projectId/publish" element={<PublishPage />} />
         </Route>
