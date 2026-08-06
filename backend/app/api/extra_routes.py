@@ -10,7 +10,6 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, Depends, File, Form, Request, UploadFile
@@ -27,7 +26,7 @@ from app.services.change_requests import redline as compute_redline
 from app.models.risk import RiskCreate, RiskUpdate, CommentCreate, DecisionRecordCreate, DecisionRecordUpdate
 from app.services.history import record_change
 from app.services.delete_guard import check_deletable
-from app.services.integrity import IntegrityChecker, clear_suspect_links
+from app.services.integrity import IntegrityChecker
 from app.services.git_hooks import install_hook, uninstall_hook
 
 logger = logging.getLogger(__name__)

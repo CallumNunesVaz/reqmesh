@@ -152,6 +152,7 @@ export default function ComponentsPage() {
       const target = document.getElementById(`entity-${flatNodes[next]?.id}`);
       target?.scrollIntoView({ block: 'nearest' });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flatNodes, focusedIndex, collapsed, navigate, projectId]);
 
   const handleCreate = async (e: React.FormEvent) => {

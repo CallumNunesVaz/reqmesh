@@ -4,7 +4,6 @@ single component allocates — zero or many produce no subject clause."""
 
 from pathlib import Path
 
-import pytest
 
 from app.services.sysml_export import export_sysml_v2
 from app.services.yaml_store import YamlStore

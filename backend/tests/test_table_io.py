@@ -1,4 +1,3 @@
-import textwrap
 
 from app.services.table_io import export_table, import_table, _req_to_row, _row_to_req
 
@@ -93,7 +92,7 @@ def test_import_csv_replace(client, project):
     assert len(store.list_requirements()) == 1
 
     csv_data = '"id","type","name","description","status","priority","verification_method","parent","relations","verification_cases","rationale","source","allocated_to","baselines"\n"REQ-NEW","functional","New Only","New desc","proposed","medium","test","","","","","","",""'
-    summary = import_table(store, csv_data, fmt="csv", mode="replace")
+    import_table(store, csv_data, fmt="csv", mode="replace")
     reqs = store.list_requirements()
     assert len(reqs) == 1
     assert reqs[0]["id"] == "REQ-NEW"

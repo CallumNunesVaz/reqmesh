@@ -684,6 +684,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
       });
       return () => cancelAnimationFrame(id);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refocusGraph]);
 
   const effectiveHidden = useMemo(
@@ -712,11 +713,17 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
 
   const distinct = (pick: (r: typeof reqs[number]) => string) =>
     [...new Set(reqs.map(pick).filter(Boolean))].sort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   const availableStatuses = useMemo(() => distinct(r => r.status), [reqs]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const availablePriorities = useMemo(() => distinct(r => r.priority), [reqs]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const availableTypes = useMemo(() => distinct(r => r.type), [reqs]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const availableVerStatuses = useMemo(() => distinct(r => r.verification_status), [reqs]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const availableVerMethods = useMemo(() => distinct(r => r.verification_method), [reqs]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const availableAllocations = useMemo(() => distinct(r => r.allocated_to), [reqs]);
   const availableBaselines = useMemo(() => {
     const set = new Set<string>();
@@ -1088,6 +1095,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
     }
 
     return { initialNodes: nodes, initialEdges: edges };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reqs, filteredReqs, traces, visibleNodeIds, childCounts, collapsed, entranceDone, evaluated, whatIf.impact, whatIf.stepIndex]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
@@ -1207,6 +1215,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
     // Guarantee the layout effect runs (and thus consumes restoreRef) even if
     // the restored config is identical to the current one.
     setLayoutNonce((n) => n + 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [views, layoutMode, projectId, setHopDepthPersist, components, availableBaselines]);
 
   useEffect(() => {
@@ -1487,6 +1496,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
       return () => {
         // Supersede any in-flight ELK result and cancel every pending phase
         // timer so a re-run never gets clobbered by the previous animation.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
         layoutReqIdRef.current++;
         timers.forEach(clearTimeout);
         animatingRef.current = false;
@@ -1525,6 +1535,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
       }, switching ? 40 : 250));
     }
     return () => timers.forEach(clearTimeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialNodes, initialEdges, layoutMode, entranceDone, layoutNonce, gs.nodesep, gs.ranksep, gs.rankdir, gs.margin, gs.maxZoom, setNodes, setEdges]);
 
   // Run "Reset view" once on startup. The layout effect's first-run fit is
@@ -1594,6 +1605,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
       }
     });
     return () => cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedReqId, entranceDone]);
 
   // ── "Show derivation" (triggered from the requirement inspector) ─────────

@@ -119,6 +119,7 @@ export default function CommandPalette({ projectId }: { projectId: string }) {
     if (cursor >= combinedResults.length && combinedResults.length > 0) {
       setCursor(0);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [combinedResults.length]);
 
   // Recent items — shown at top when query is empty

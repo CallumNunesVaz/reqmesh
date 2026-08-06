@@ -5,7 +5,6 @@ criteria (stakeholders) relative to a chosen datum. The datum's own column is
 all zeroes — that is what a datum means.
 """
 
-import pytest
 
 from app.services.stakeholder_value import pugh_matrix
 

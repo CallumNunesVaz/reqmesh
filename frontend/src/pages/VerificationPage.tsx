@@ -83,6 +83,7 @@ export default function VerificationPage() {
     api.listComponents(projectId).then(setComponents).catch(() => {});
   };
 
+ // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, [projectId]);
 
   const filteredVCs = useMemo(() => {
@@ -319,6 +320,7 @@ export default function VerificationPage() {
   // to it, so the reference lands on the thing it pointed at.
   const focusId = useFocusedEntity(
     verificationCases.length > 0,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     useCallback((id: string) => setExpanded((prev) => new Set(prev).add(id)), []),
   );
 

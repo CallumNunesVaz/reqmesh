@@ -5,7 +5,6 @@ import os
 import re
 import subprocess
 import threading
-import time
 from pathlib import Path
 
 logger = logging.getLogger(__name__)

@@ -6,7 +6,6 @@ precisely the input path the API's validators never see.
 """
 
 import io
-import tempfile
 import zipfile
 from pathlib import Path
 

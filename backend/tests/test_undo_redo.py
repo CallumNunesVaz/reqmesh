@@ -15,7 +15,7 @@ class TestUndoRedoStatusChange:
     """Undo/redo of status changes — all transitions are now permissive."""
 
     def test_undo_status_change_works(self, client, project):
-        req = make_req(client, project, "UNDO01", name="Status Undo Test", status="proposed")
+        make_req(client, project, "UNDO01", name="Status Undo Test", status="proposed")
 
         res = client.put(
             f"/api/projects/{project}/requirements/UNDO01",
@@ -32,7 +32,7 @@ class TestUndoRedoStatusChange:
         assert res2.json()["status"] == "proposed"
 
     def test_any_status_transition_allowed(self, client, project):
-        req = make_req(client, project, "UNDO02", name="Any Transition", status="implemented")
+        make_req(client, project, "UNDO02", name="Any Transition", status="implemented")
 
         res = client.put(
             f"/api/projects/{project}/requirements/UNDO02",
@@ -59,7 +59,7 @@ class TestUndoRedoCreateDelete:
     re-create, redo = delete."""
 
     def test_undo_create_is_delete(self, client, project):
-        created = make_req(client, project, "UNDO10", name="Undo Create")
+        make_req(client, project, "UNDO10", name="Undo Create")
 
         # Undo the create: delete the requirement.
         res = client.delete(f"/api/projects/{project}/requirements/UNDO10")
@@ -70,7 +70,7 @@ class TestUndoRedoCreateDelete:
         assert client.get(f"/api/projects/{project}/requirements/UNDO10").status_code == 404
 
     def test_redo_create_is_recreate(self, client, project):
-        created = make_req(client, project, "UNDO11", name="Redo Create Test")
+        make_req(client, project, "UNDO11", name="Redo Create Test")
         client.delete(f"/api/projects/{project}/requirements/UNDO11")
 
         # Redo: re-create with the same data.
@@ -83,7 +83,7 @@ class TestUndoRedoCreateDelete:
         assert res.json()["name"] == "Redo Create Test"
 
     def test_undo_delete_is_recreate(self, client, project):
-        original = make_req(client, project, "UNDO12", name="Undo Delete", priority="high")
+        make_req(client, project, "UNDO12", name="Undo Delete", priority="high")
 
         # Simulate delete.
         client.delete(f"/api/projects/{project}/requirements/UNDO12")
@@ -113,7 +113,7 @@ class TestUndoRedoFieldChanges:
     undo and redo correctly."""
 
     def test_undo_restores_previous_field_values(self, client, project):
-        req = make_req(
+        make_req(
             client, project, "UNDO20",
             name="Original", priority="low", rationale="old rationale",
             source="old source", allocated_to="old component",
@@ -228,8 +228,8 @@ class TestUndoRedoWithRelations:
     """When a requirement has relations, the undo/redo should preserve them."""
 
     def test_undo_delete_restores_relations(self, client, project):
-        parent = make_req(client, project, "UNDO30", name="Parent")
-        child = make_req(client, project, "UNDO31", name="Child")
+        make_req(client, project, "UNDO30", name="Parent")
+        make_req(client, project, "UNDO31", name="Child")
 
         # Add a relation from child to parent.
         client.put(
@@ -259,7 +259,7 @@ class TestUndoDeleteWithFullSnapshot:
     def test_full_get_snapshot_roundtrips(self, client, project):
         """Take the full GET response of a requirement, delete it, then
         POST it back as-is — must succeed (extra fields ignored)."""
-        created = make_req(
+        make_req(
             client, project, "FULL01",
             name="Full Snapshot", priority="critical", status="approved",
             rationale="because", source="src", allocated_to="alloc",

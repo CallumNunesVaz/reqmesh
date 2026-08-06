@@ -1,6 +1,5 @@
 """CI test-result import, project-wide search, and the allocation matrix."""
 
-import json
 
 import pytest
 

@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Git pre-commit hook - validates requirements before committing."""
 
-import sys
 from pathlib import Path
 
 HOOK_CONTENT = r'''#!/bin/bash

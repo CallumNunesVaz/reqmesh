@@ -10,7 +10,6 @@ the delete guard respects the comment link direction so a comment on a risk does
 
 from __future__ import annotations
 
-import pytest
 
 from tests.conftest import make_req
 

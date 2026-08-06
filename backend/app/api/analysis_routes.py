@@ -11,7 +11,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel
 
-from app.core.dependencies import get_store, require_maintain, get_current_user
+from app.core.dependencies import get_store
 from app.core.rate_limit import rate_limit
 
 router = APIRouter()

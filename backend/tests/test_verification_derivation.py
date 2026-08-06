@@ -1,7 +1,6 @@
 """Verify that verification_status, _method, and _methods are derived from the
 owning verification cases on every path that returns a requirement."""
 
-import json
 from pathlib import Path
 
 from app.core.config import settings

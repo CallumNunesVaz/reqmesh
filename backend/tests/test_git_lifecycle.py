@@ -10,11 +10,9 @@ import subprocess
 import time
 from pathlib import Path
 
-import pytest
 
 from app.core import auth
 from app.core.config import settings
-from app.core.dependencies import require_admin, require_edit, require_maintain
 from app.main import app
 from app.services import git_service
 

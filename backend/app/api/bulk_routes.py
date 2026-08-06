@@ -4,7 +4,6 @@ specifications, risks, and change requests. Extracted from ``extra_routes.py``.
 from __future__ import annotations
 
 import re
-from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import ValidationError
@@ -14,7 +13,7 @@ from app.models.requirement import RequirementUpdate
 from app.models.component import ComponentUpdate
 from app.models.risk import RiskUpdate
 from app.models.specification import SpecificationUpdate
-from app.models.verification import VerificationCaseCreate, VerificationCaseUpdate
+from app.models.verification import VerificationCaseUpdate
 from app.models.change_request import ChangeRequestUpdate
 from app.services.history import record_change
 

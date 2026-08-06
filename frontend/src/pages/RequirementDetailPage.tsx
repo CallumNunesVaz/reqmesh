@@ -123,6 +123,7 @@ export default function RequirementDetailPage() {
     const set = new Set(allowed);
     set.add(req.status);
     return Array.from(set);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workflow, req?.status, statusOptions]);
   const refSuggestions = useMemo(() => {
     const reqItems = [...allReqs, req].filter(Boolean).map((r) => ({ id: r!.id, label: r!.name || r!.id }));
@@ -395,6 +396,7 @@ export default function RequirementDetailPage() {
     } finally {
       setSaving(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, reqId, req, editable, dirty, bumpGraphVersion]);
   // Unsaved-changes guard. `dirty` is read through a ref so the registered
   // guard and the beforeunload handler stay stable while always seeing the

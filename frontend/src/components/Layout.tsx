@@ -241,6 +241,7 @@ export default function Layout() {
 
   // Clear undo stack when switching projects
   const clearUndo = useUndoStore((s) => s.clear);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { clearUndo(); }, [projectId]);
 
   // Reset component/baseline visibility when the open project changes.

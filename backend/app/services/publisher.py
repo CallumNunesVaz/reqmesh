@@ -1,13 +1,9 @@
 from __future__ import annotations
 
-import json
 import logging
 import re
-import os
-import tempfile
 from datetime import datetime, timezone
 from html import escape as esc
-from pathlib import Path
 
 from app.core.config import settings as global_settings
 from app.services.sanitize import sanitize_html
@@ -406,7 +402,6 @@ class Publisher:
         type_dist: dict[str, int] = {}
         vc_count = len(self.vcs)
         vc_passed = sum(1 for v in self.vcs if v.get("status") == "passed")
-        vc_failed = sum(1 for v in self.vcs if v.get("status") == "failed")
         specs_count = len(self.specs)
         comps_count = len(self.components)
         risks = self.store.list_items("risks")
@@ -756,17 +751,17 @@ class Publisher:
             html += self._specs_section()
 
         if "verification" in sections:
-            html += f'<h1 id="sec-verification">Verification Cases</h1>'
+            html += '<h1 id="sec-verification">Verification Cases</h1>'
             self._add_toc(1, "Verification Cases", "sec-verification")
             html += self._vc_table()
 
         if "traceability" in sections:
-            html += f'<h1 id="sec-traces">Traceability Matrix</h1>'
+            html += '<h1 id="sec-traces">Traceability Matrix</h1>'
             self._add_toc(1, "Traceability Matrix", "sec-traces")
             html += self._trace_matrix()
 
         if "quality" in sections:
-            html += f'<h1 id="sec-quality">Quality Metrics</h1>'
+            html += '<h1 id="sec-quality">Quality Metrics</h1>'
             self._add_toc(1, "Quality Metrics", "sec-quality")
             html += self._quality_chart()
 
@@ -781,7 +776,7 @@ class Publisher:
                 if issues:
                     gaps.append({"id": r["id"], "name": r.get("name", ""), "issues": issues})
             if gaps:
-                html += f'<h1 id="sec-gaps">Gap Analysis</h1>'
+                html += '<h1 id="sec-gaps">Gap Analysis</h1>'
                 self._add_toc(1, "Gap Analysis", "sec-gaps")
                 html += f'<p style="color:#64748b;font-size:10pt;">{len(gaps)} requirements with issues</p>'
                 html += self._gaps_section(gaps)
@@ -789,7 +784,7 @@ class Publisher:
         if "risks" in sections:
             risks = self.store.list_items("risks")
             if risks:
-                html += f'<h1 id="sec-risks">Risk Register</h1>'
+                html += '<h1 id="sec-risks">Risk Register</h1>'
                 self._add_toc(1, "Risk Register", "sec-risks")
                 html += self._risk_table(risks)
 
@@ -811,7 +806,7 @@ class Publisher:
                     if rel["type"] == "conflicts":
                         conflicts.append({"type": "explicit_conflict", "a": r["id"], "b": rel["target"]})
             if conflicts:
-                html += f'<h1 id="sec-conflicts">Conflicts</h1>'
+                html += '<h1 id="sec-conflicts">Conflicts</h1>'
                 self._add_toc(1, "Conflicts", "sec-conflicts")
                 html += f'<p style="color:#64748b;font-size:10pt;">{len(conflicts)} conflicts detected</p>'
                 html += self._conflicts_section(conflicts)
@@ -912,7 +907,6 @@ class Publisher:
 
     def build_latex(self, sections: list[str] | None = None,
                     changelog_from: str = "", changelog_to: str = "") -> str:
-        import os as _os
         if sections is None:
             sections = self._all_latex_sections
         hdr = self._header_config()
@@ -960,7 +954,6 @@ class Publisher:
             t = r.get("type", "functional")
             type_dist[t] = type_dist.get(t, 0) + 1
         vc_count = len(self.vcs)
-        specs_count = len(self.specs)
         comps_count = len(self.components)
         risks_list = self.store.list_items("risks")
         risk_count = len(risks_list)

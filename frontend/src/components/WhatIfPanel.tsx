@@ -65,6 +65,7 @@ export default function WhatIfPanel(): JSX.Element | null {
     stepIndex, playing, setStepIndex, setPlaying, clear, confirm } = whatIf;
   const steps = impact?.steps ?? [];
   const affected = impact?.affected ?? [];
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const roots = impact?.roots ?? [];
   const overrideCount = Object.keys(overrides).length;
   const timerRef = useRef<ReturnType<typeof setInterval>>();

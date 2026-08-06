@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
 
 from app.services.importer import import_into_store
 from app.services.sysml_export import export_sysml_v2

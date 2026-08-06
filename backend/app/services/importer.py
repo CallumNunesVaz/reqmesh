@@ -177,8 +177,8 @@ def import_into_store(store, parsed: dict, mode: str = "merge") -> dict:
 
 def parse_and_import(store, content: str | bytes, fmt: str = "auto", mode: str = "merge") -> dict:
     """Detect/parse ``content`` and import it. ``fmt`` is auto/reqif/sysml."""
-    from app.services.reqif_import import ReqIFParseError, parse_reqif
-    from app.services.sysml_import import SysMLParseError, parse_sysml
+    from app.services.reqif_import import parse_reqif
+    from app.services.sysml_import import parse_sysml
 
     if isinstance(content, bytes):
         sniff = content.lstrip()[:200].decode("utf-8", errors="replace")

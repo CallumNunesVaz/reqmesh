@@ -1,4 +1,4 @@
-from app.services.tracing import trace_all, shallow_status, _build_coverage_graph
+from app.services.tracing import trace_all
 
 
 def test_shallow_covered_with_needs_met(client, project):

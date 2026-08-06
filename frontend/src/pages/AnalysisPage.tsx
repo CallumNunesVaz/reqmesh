@@ -80,6 +80,7 @@ export default function AnalysisPage() {
 
   const focusId = useFocusedEntity(
     cases.length > 0,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     useCallback((id: string) => setExpanded((prev) => new Set(prev).add(id)), []),
   );
 

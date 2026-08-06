@@ -1,6 +1,4 @@
 """Bound the collection cache to _CACHE_MAX_ENTRIES and verify LRU eviction."""
-import os
-import tempfile
 from pathlib import Path
 
 from app.services import yaml_store

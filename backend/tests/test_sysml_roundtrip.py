@@ -11,7 +11,6 @@ exporter read both, so a desynced project exported a verify relationship the
 requirement no longer claimed.
 """
 
-from pathlib import Path
 
 import pytest
 

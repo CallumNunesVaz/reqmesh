@@ -6,7 +6,6 @@ the re-run behaviour have never executed before.
 """
 import json
 
-import pytest
 from ruamel.yaml import YAML
 
 from app.services.migrations import (

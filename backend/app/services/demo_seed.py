@@ -2525,7 +2525,6 @@ def seed_demo_project(data_root: Path, force: bool = False) -> bool:
     # ── Frozen baselines (§6) ──
     # Freeze SRR and PDR so the baseline diff view has something to show.
     # CDR and TRR stay unfrozen — a project where the future is frozen makes no sense.
-    from datetime import datetime, timezone
 
     def _freeze_baseline(name: str, symbol: str, description: str,
                          frozen_at: str, status_overrides: dict[str, str] | None = None):

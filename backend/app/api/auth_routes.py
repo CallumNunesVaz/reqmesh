@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import re
 import logging
-import time as _time
 
 from fastapi import APIRouter, Depends, HTTPException, Header, Request, Response
 from pydantic import BaseModel
@@ -14,7 +13,6 @@ audit_logger = logging.getLogger("audit")
 
 from app.core.auth import (
     ALLOWED_ROLES,
-    GUEST_USER,
     authenticate,
     count_admins,
     delete_user,

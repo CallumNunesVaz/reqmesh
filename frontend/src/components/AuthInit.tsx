@@ -26,6 +26,7 @@ export default function AuthInit({ children }: { children: React.ReactNode }) {
       // Network error or server unreachable
       setReady(true);
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (!ready) return <div className="h-screen"><LoadingSplash label="Starting reqmesh..." /></div>;
