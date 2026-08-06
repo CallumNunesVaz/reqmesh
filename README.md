@@ -234,6 +234,15 @@ Requirements round-trip through **ReqIF 1.2**, **SysML v2**, **CSV**, **TSV**, a
 - **Export** — from the Export dialog, `POST /api/projects/{id}/publish/download?format=reqif|sysml|csv|tsv|xlsx`, or CLI `export -f reqif`.
 - **Import** — from the Import dialog, `POST /api/projects/{id}/import`, or CLI `import -i <file>`. Format is auto-detected; `mode=merge` (default) creates/updates; `mode=replace` wipes existing first. CSV import supports column aliases (e.g. `"Requirement ID"` → `id`).
 
+## Project Overview
+
+Every project opens to a dashboard that gives a high-level health snapshot:
+clickable stat cards for requirements, specifications, components and
+verification cases, plus distribution charts for status, quality completeness,
+priority, type and verification method. It is the landing page for a project
+and the quickest way to assess coverage, effort distribution and overall
+progress.
+
 ## Components (the synthesised design)
 
 Requirements describe what the system must **do**. Components describe what the system **is** — the design synthesised to meet those requirements. They form a hierarchy (`system → subsystem → assembly → part`, plus `software` and `interface`) and connect to the functional side three ways:
@@ -318,6 +327,22 @@ Configurable per project via `_meta.yaml` (`quality.rules`, `quality.weights`, `
 
 - **`priorities`** — per-stakeholder scores (`{"development": 5, "customers": 8, "safety": 10}`)
 - **Prioritized backlog** — `GET /api/projects/{id}/backlog` returns requirements ordered by combined priority scores
+
+## Allocation Matrix
+
+An interactive cross-reference grid between requirements and the entities
+assigned to satisfy them — components, verification cases, risks or baselines.
+Toggle which entity type sits on the columns, filter the rows, transpose the
+grid, and click cells to allocate or de-allocate a requirement directly. A
+summary bar tracks the count and percentage of allocated versus unallocated
+rows.
+
+On the **baselines** tab the rows themselves can be switched between
+requirements and components (`rows=requirements|components`), because baseline
+membership is held by the row entity rather than the column — components carry
+`baselines` the same way requirements do, and this is the only way to tick them
+in bulk. The other tabs reject `rows=components`: requirements are always the
+rows there.
 
 ## Cross-linking
 

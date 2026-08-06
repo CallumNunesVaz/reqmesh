@@ -1,0 +1,54 @@
+import { describe, it, expect } from 'vitest';
+import { navGroups } from '../src/components/RequirementNav';
+
+/**
+ * The UI counterpart to `backend/tests/test_docs_currency.py`.
+ *
+ * That test walks the live FastAPI route table and fails if an `/api` path is
+ * missing from README.md, which is why the API section has stayed current. The
+ * navigation had no such gate: a page could exist, be routed, sit in the
+ * sidebar and appear nowhere in the docs — which is exactly how decisions,
+ * definitions and analysis cases ended up with full CRUD and no mention.
+ *
+ * It lives here rather than in pytest because `navGroups` is a TypeScript
+ * array. Reading it from Python would mean regexing a .tsx file, and a gate
+ * that reformatting can defeat is not a gate.
+ */
+
+// Node's built-ins are available under vitest but the project tsconfig sets
+// `"types": []` on purpose — this is a browser app, and pulling in Node globals
+// would let server-only APIs type-check inside `src/`. Declaring just the two
+// functions needed keeps that boundary intact while leaving the rest of this
+// file type-checked, which a file-level @ts-nocheck would not: the `navGroups`
+// call below is the part that must fail loudly if the nav's shape changes.
+declare function require(id: string): { readFileSync(p: string, enc: string): string };
+const { readFileSync } = require('fs');
+
+const readme: string = readFileSync(new URL('../../README.md', import.meta.url).pathname, 'utf-8');
+
+describe('nav docs gate', () => {
+  it('every sidebar nav label is documented in README.md', () => {
+    const labels = navGroups('demo').flat().map((item) => item.label);
+    const readmeLower = readme.toLowerCase();
+
+    // Every missing label, not just the first — a gate that surfaces one
+    // problem per run is a gate people stop running.
+    const missing = labels.filter((label) => !readmeLower.includes(label.toLowerCase()));
+
+    if (missing.length > 0) {
+      expect.fail(
+        'The following sidebar navigation labels are missing from README.md:\n'
+        + missing.map((l) => `  - ${l}`).join('\n')
+        + '\nAdd documentation for each one — a sentence or two saying what the page is for.',
+      );
+    }
+  });
+
+  it('reads a non-empty README and a non-empty nav, so a silent pass is impossible', () => {
+    // Without this, an unreadable README or an empty nav array would make the
+    // gate above pass vacuously — the failure mode that makes a green check
+    // worse than no check at all.
+    expect(readme.length).toBeGreaterThan(1000);
+    expect(navGroups('demo').flat().length).toBeGreaterThan(5);
+  });
+});
