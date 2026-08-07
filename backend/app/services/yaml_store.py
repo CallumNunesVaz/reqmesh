@@ -38,7 +38,7 @@ def _round_trip_yaml() -> YAML:
     y = YAML()
     y.indent(mapping=2, sequence=4, offset=2)
     y.preserve_quotes = True
-    y.width = 120
+    y.width = 4096
     return y
 
 # Round-trip mode is what preserves a user's comments and formatting through an
