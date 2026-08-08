@@ -155,7 +155,7 @@ async function launchWeb({ seed, headless, theme }) {
   // default — which is NOT how most users see the app. Drive dark unless a
   // flow explicitly asks otherwise.
   const page = await browser.newPage({
-    viewport: { width: 1600, height: 1000 },
+    viewport: { width: 1920, height: 1080 },
     colorScheme: theme,
   })
   autoAcceptDialogs(page)
