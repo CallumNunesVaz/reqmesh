@@ -57,6 +57,21 @@ async def lifespan(app: FastAPI):
         security_log.warning(
             "Rate limiting is DISABLED — login brute-force and export flooding are unthrottled. "
             "This is intended only for the end-to-end test suite.")
+    if settings.require_auth and settings.rate_limit_enabled:
+        # X-Forwarded-For is only honoured from a trusted peer, but the default
+        # trusts every RFC1918 range. Any host in those ranges that can reach the
+        # app port directly (not only via the intended proxy) can then spoof its
+        # client IP and mint a fresh login rate-limit bucket per request. Pin the
+        # trust list to the proxy's exact address.
+        from app.core.rate_limit import _trusted_proxies
+        non_loopback = [str(n) for n in _trusted_proxies() if not n.is_loopback]
+        if non_loopback:
+            security_log.warning(
+                "X-Forwarded-For is trusted from non-loopback range(s) %s "
+                "(RT_PROXY_TRUSTED_CIDR). A host in those ranges reaching the app "
+                "port directly can spoof its client IP and evade per-IP login "
+                "rate limiting. Narrow this to your reverse proxy's exact address.",
+                ", ".join(non_loopback))
     root = Path(settings.data_root)
     root.mkdir(parents=True, exist_ok=True)
     # Bring existing data forward to the current schema before serving — this is
