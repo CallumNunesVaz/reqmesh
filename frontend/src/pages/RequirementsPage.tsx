@@ -462,7 +462,10 @@ export default function RequirementsPage() {
 
                 {/* min-w-0 (not shrink-0): on a narrow pane the name compresses
                     and truncates instead of pushing the row past the edge. */}
-                <span className={`text-[13px] truncate min-w-0 max-w-[45%] ${childCount > 0 ? 'font-semibold' : 'font-medium'} text-foreground`}>
+                <span
+                  className={`text-[13px] truncate min-w-0 max-w-[55%] ${childCount > 0 ? 'font-semibold' : 'font-medium'} text-foreground`}
+                  title={req.name || 'Untitled'}
+                >
                   {req.name || 'Untitled'}
                 </span>
 
@@ -1013,6 +1016,7 @@ function BulkEditModal({
                   onChange={(html) => setForm({ ...form, description: html })}
                   onBlur={() => {}}
                   disabled={false}
+                  placeholder="Write a requirement description…"
                 />
                 <div className="text-[10px] text-muted-foreground mt-0.5">Overwrites the description on every selected requirement</div>
               </div>

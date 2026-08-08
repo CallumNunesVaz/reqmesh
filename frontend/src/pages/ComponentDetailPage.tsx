@@ -247,6 +247,7 @@ export default function ComponentDetailPage() {
                 // quantity, part_number, supplier). Leaving this a no-op made
                 // description the one field that needed "Save all changes".
                 onBlur={(html) => save({ description: html })}
+                placeholder="Write a component description…"
               />
             ) : (
               <div className="border rounded-lg p-3 min-h-[80px] opacity-90">

@@ -16,6 +16,7 @@ interface RichTextEditorProps {
   onChange: (html: string) => void;
   onBlur: (html: string) => void;
   disabled?: boolean;
+  placeholder?: string;
 }
 
 const ENTITY_LINK_GLOBAL_REGEX = /\[\[([\w\-_.]+)\]\]/g;
@@ -65,7 +66,7 @@ const EntityLinkExtension = Node.create({
   },
 });
 
-export default function RichTextEditor({ content, onChange, onBlur, disabled = false }: RichTextEditorProps) {
+export default function RichTextEditor({ content, onChange, onBlur, disabled = false, placeholder }: RichTextEditorProps) {
   const isInternalChange = useRef(false);
   const navigate = useNavigate();
   const { projectId } = useParams<{ projectId: string }>();
@@ -94,7 +95,7 @@ export default function RichTextEditor({ content, onChange, onBlur, disabled = f
         heading: { levels: [1, 2, 3] },
       }),
       Placeholder.configure({
-        placeholder: 'Write your requirement description...',
+        placeholder: placeholder ?? 'Write a description…',
       }),
       Image.configure({
         inline: true,

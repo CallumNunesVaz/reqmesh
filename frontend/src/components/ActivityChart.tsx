@@ -120,7 +120,7 @@ export default function ActivityChart() {
           Activity
         </h2>
         <div className="h-32 flex items-center justify-center text-sm text-muted-foreground">
-          No activity in this window
+          No activity in the selected window — try a wider range.
         </div>
       </div>
     );

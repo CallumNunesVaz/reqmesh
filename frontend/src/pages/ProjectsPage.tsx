@@ -11,6 +11,13 @@ export default function ProjectsPage() {
   const navigate = useNavigate();
   const { projects, setProjects } = useStore();
   const editable = useAuthStore((s) => s.canEdit());
+  // Creating a project is a maintainer/admin action gated on the server by
+  // require_maintain_global — it does NOT require the per-project edit-mode
+  // toggle (that governs editing entities *inside* a project). Keying the create
+  // affordances on permission, not edit mode, is what makes them discoverable
+  // without first flipping to EDITING (UX-6), while still hiding them from users
+  // who cannot create a project at all.
+  const canCreate = useAuthStore((s) => s.user !== null && (s.user.role === 'maintainer' || s.user.role === 'admin'));
   const { addToast } = useToasts();
   const [showCreate, setShowCreate] = useState(false);
   const [newId, setNewId] = useState('');
@@ -44,7 +51,7 @@ export default function ProjectsPage() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newId.trim() || !editable) return;
+    if (!newId.trim() || !canCreate) return;
     try {
       const project = await api.createProject({ id: newId.trim(), name: newName.trim() || newId.trim() });
       setProjects([...projects, project]);
@@ -70,11 +77,11 @@ export default function ProjectsPage() {
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Projects</h1>
           <p className="text-sm text-muted-foreground mt-1">Select or create a requirements project</p>
         </div>
-        {editable && (
-        <button onClick={() => setShowCreate(!showCreate)} className="btn-primary">
-          <Plus size={16} />
-          New Project
-        </button>
+        {canCreate && (
+          <button onClick={() => setShowCreate(!showCreate)} className="btn-primary">
+            <Plus size={16} />
+            New Project
+          </button>
         )}
       </div>
 
@@ -133,7 +140,15 @@ export default function ProjectsPage() {
         <div className="card p-12 text-center">
           <img src="/reqmesh-logo.svg" alt="reqmesh" className="w-48 mx-auto mb-6 opacity-80" />
           <p className="text-foreground font-medium">No projects yet</p>
-          <p className="text-sm text-muted-foreground mt-1">Create a new project to get started.</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            {canCreate ? 'Create your first project to start managing requirements.' : 'Ask an administrator to create one.'}
+          </p>
+          {canCreate && (
+            <button onClick={() => setShowCreate(true)} className="btn-primary mt-4 inline-flex items-center gap-2">
+              <Plus size={16} />
+              New Project
+            </button>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 @2xl:grid-cols-2 @4xl:grid-cols-3 gap-4">
@@ -171,6 +186,22 @@ export default function ProjectsPage() {
               </div>
             </motion.div>
           ))}
+          {canCreate && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: projects.length * 0.05 }}
+              className="card p-5 border-dashed border-2 border-muted-foreground/25 hover:border-primary/40 hover:shadow-md transition-all cursor-pointer group flex items-center justify-center min-h-[140px]"
+              onClick={() => setShowCreate(true)}
+            >
+              <div className="text-center">
+                <div className="w-10 h-10 mx-auto bg-muted rounded-lg flex items-center justify-center group-hover:bg-primary/10 transition-colors">
+                  <Plus size={20} className="text-muted-foreground group-hover:text-primary" />
+                </div>
+                <p className="text-sm text-muted-foreground mt-2 group-hover:text-primary font-medium">New Project</p>
+              </div>
+            </motion.div>
+          )}
         </div>
       )}
     </div>
