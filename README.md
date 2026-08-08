@@ -777,6 +777,47 @@ cd backend
 .venv/bin/python -m app.cli serve <path>
 ```
 
+## Acknowledgements
+
+reqmesh stands entirely on open source, and is only possible because of the
+people who build and maintain these projects in the open. Thank you.
+
+**Backend** — [FastAPI](https://fastapi.tiangolo.com/),
+[Starlette](https://www.starlette.io/) and [Uvicorn](https://www.uvicorn.org/)
+for the web stack; [Pydantic](https://docs.pydantic.dev/) and pydantic-settings
+for the data model and configuration; [ruamel.yaml](https://yaml.readthedocs.io/)
+for the round-trip YAML that makes the storage git-native;
+[PyJWT](https://pyjwt.readthedocs.io/) and [bcrypt](https://github.com/pyca/bcrypt)
+for authentication; [WeasyPrint](https://weasyprint.org/) and
+[Jinja2](https://jinja.palletsprojects.com/) for report rendering;
+[openpyxl](https://openpyxl.readthedocs.io/) for spreadsheet export;
+[Click](https://click.palletsprojects.com/), python-multipart and slowapi.
+
+**Frontend** — [React](https://react.dev/) and
+[React Router](https://reactrouter.com/); [Vite](https://vitejs.dev/) and
+[TypeScript](https://www.typescriptlang.org/) for the build;
+[Tailwind CSS](https://tailwindcss.com/) for styling;
+[Zustand](https://github.com/pmndrs/zustand) for state;
+[React Flow / @xyflow](https://reactflow.dev/) with
+[elkjs](https://github.com/kieler/elkjs) and
+[d3-force](https://github.com/d3/d3-force) for the graph canvas;
+[TipTap](https://tiptap.dev/) (on [ProseMirror](https://prosemirror.net/)) for
+rich text; [Recharts](https://recharts.org/) for metrics;
+[Framer Motion](https://www.framer.com/motion/) for animation;
+[Lucide](https://lucide.dev/) for icons; and the
+[Inter](https://rsms.me/inter/) and
+[JetBrains Mono](https://www.jetbrains.com/lp/mono/) typefaces.
+
+**Tooling & tests** — [Playwright](https://playwright.dev/),
+[Vitest](https://vitest.dev/), [pytest](https://pytest.org/),
+[Ruff](https://docs.astral.sh/ruff/), [oxlint](https://oxc.rs/),
+[PostCSS](https://postcss.org/) and [Docker](https://www.docker.com/). PDF
+reports can use the [Tectonic](https://tectonic-typesetting.github.io/) LaTeX
+engine.
+
+Bundled/adjacent third-party software and its licensing is listed in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
 ## License
 
 reqmesh is licensed under the **GNU General Public License v3.0 or later**
