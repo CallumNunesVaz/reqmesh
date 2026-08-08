@@ -24,62 +24,9 @@ An open-source, web-based requirements management tool with:
 - **Rich text editing** — TipTap editor with image support, paste sanitization, and live word count
 - **Guided mode** — toggleable contextual help for every section of the application
 
-## Screenshots
-
-Every screenshot below is the bundled **Cessna 172S Skyhawk SP** example
-project — 57 requirements with real parametrics, a full physical breakdown, and
-a populated risk register — which ships with the app and seeds on first run.
-
-### Requirements
-
-The tree, the graph canvas and the inspector side by side. Status, priority and
-verification state are visible per requirement without opening anything.
-
-![Requirements](docs/screenshots/requirements.png)
-
-### Requirement detail
-
-Parameters, constraints and their measured verdicts, links in both directions,
-comments and field-level history.
-
-![Requirement detail](docs/screenshots/requirement-detail.png)
-
-### Allocation matrix
-
-Requirements against components, verification cases, risks or baselines — one
-grid, four axes, click a cell to allocate. On the baselines tab the rows can be
-components instead of requirements.
-
-![Allocation matrix](docs/screenshots/allocation.png)
-
-### Metrics
-
-Coverage, quality, gaps and conflicts, plus project activity over time — a
-stacked bar per week coloured by entity kind, drawn from the audit history.
-
-![Metrics](docs/screenshots/metrics.png)
-
-### Trace matrix
-
-Every link in the project, filterable, with orphans and suspect links surfaced
-rather than hidden.
-
-![Trace matrix](docs/screenshots/traces.png)
-
-### Graph
-
-The model as a diagram — requirements, components and their relationships, with
-derivation highlighting and saved views.
-
-![Graph](docs/screenshots/graph.png)
-
-### Version control
-
-Repository state, push outcomes and remote management from the settings page.
-A failed push is the loudest thing on the panel, because a silently unbacked-up
-project looks identical to a healthy one everywhere else.
-
-![Version control](docs/screenshots/git-panel.png)
+The screenshots throughout this document are the bundled **Cessna 172S Skyhawk
+SP** example — 57 requirements with real parametrics, a full physical breakdown
+and a populated risk register — which ships with the app and seeds on first run.
 
 ## Architecture
 
@@ -91,7 +38,7 @@ reqmesh/                    # THE TOOL (this repo)
 │   ├── app/models/        # Pydantic models for all 10 entity types
 │   ├── app/services/      # YAML store, integrity, tracing, fingerprint, evaluation,
 │   │                      # code_scan, quality, table_io, email, publisher, workflow…
-│   ├── tests/             # 624 integration + unit tests (pytest)
+│   ├── tests/             # 1276 integration + unit tests (pytest)
 │   ├── gen_schemas.py     # JSON Schema generator
 │   └── requirements.txt   # All deps pinned to exact versions
 ├── frontend/              # React 18 + TypeScript + Vite + TailwindCSS
@@ -100,7 +47,7 @@ reqmesh/                    # THE TOOL (this repo)
 │   │   ├── components/    # Layout, nav, graph, editor, parametrics, helpers, palette…
 │   │   ├── pages/         # 20 route pages (projects, requirements, components, metrics…)
 │   │   └── store/         # Zustand state (auth, data, helpers toggle)
-│   └── tests/             # 89 unit tests (vitest)
+│   └── tests/             # 214 unit tests (vitest)
 ├── schemas/               # JSON Schemas for all project YAML formats
 ├── desktop/               # Electron shell for native desktop app
 ├── Dockerfile.prod        # Multi-stage production build
@@ -300,6 +247,8 @@ Administrators get a **Users** page (`/users`) to create accounts, manage roles,
 | PATCH | `/api/auth/users/{username}` | Change `role`, `email`, and/or reset `password` |
 | DELETE | `/api/auth/users/{username}` | Delete a user |
 
+![The Users page: accounts, roles, status and per-row actions](docs/screenshots/users.png)
+
 ## Git Integration
 
 If a project directory is a git repository, every mutation is auto-committed with a descriptive message (`rt: put requirements/SYST0001`). Disable with `RT_GIT_AUTOCOMMIT=false`.
@@ -336,6 +285,8 @@ Changing the remote stays admin-only — it decides where the entire project
 history is shipped. Credentials embedded in a remote URL are redacted
 everywhere they could surface, including push error messages.
 
+![Git integration in project settings: remote configuration and repository lifecycle](docs/screenshots/git-panel.png)
+
 ## Interchange
 
 Requirements round-trip through **ReqIF 1.2**, **SysML v2**, **CSV**, **TSV**, and **XLSX**:
@@ -351,6 +302,17 @@ verification cases, plus distribution charts for status, quality completeness,
 priority, type and verification method. It is the landing page for a project
 and the quickest way to assess coverage, effort distribution and overall
 progress.
+
+The requirements tree, the graph canvas and the inspector sit side by side —
+status, priority and verification state are visible per requirement without
+opening anything.
+
+![The requirements workspace: tree, graph canvas and inspector](docs/screenshots/requirements.png)
+
+The same model as a diagram — requirements, components and their relationships,
+with derivation highlighting and saved views.
+
+![Graph view of the model](docs/screenshots/graph.png)
 
 ## Components (the synthesised design)
 
@@ -384,6 +346,8 @@ constraints:
 
 Evaluate via `GET /api/projects/{id}/evaluation`. In the UI: the **Parameters & Constraints** card on a requirement shows live verdicts and margins; components carry their parameters; verification cases record measurements; a **Parametrics Guide** (togglable via the Guided button) explains everything in plain English.
 
+![A requirement's parameters, constraints and measured verdicts](docs/screenshots/requirement-detail.png)
+
 ### Live what-if preview
 
 In edit mode, each literal parameter carries a **what-if** control: enter a hypothetical value and the change is evaluated ad-hoc — without writing anything — so you can see its blast radius before committing.
@@ -405,6 +369,16 @@ Beyond simple binary coverage, reqmesh implements **shallow** and **deep** cover
 - **Code-to-requirement tags** — `POST /api/projects/{id}/scan` scans source files for `[impl->REQ-ID]` and `@covers REQ-ID` tags, linking them to requirements with SHA-based staleness detection.
 
 See `GET /api/projects/{id}/coverage` and `/trace` (supports `?format=text` for CLI-friendly output). The CLI `trace` command produces an OFT-style plaintext report and exits non-zero on incomplete deep coverage.
+
+Every link in the project, filterable, with orphans and suspect links surfaced
+rather than hidden.
+
+![The traceability matrix](docs/screenshots/traces.png)
+
+Verification cases record the test procedure, steps and measured results, and
+feed those measurements back into the parametric verdicts.
+
+![The verification cases page](docs/screenshots/verification.png)
 
 ## Review & Change Control
 
@@ -451,6 +425,8 @@ than swamping the chart. The window defaults to the last 90 days and is capped
 at 365; entries are skipped by filename before being parsed, so the cost tracks
 the window rather than the project's whole history.
 
+![Coverage, quality, gaps and the activity-over-time chart](docs/screenshots/metrics.png)
+
 ## Allocation Matrix
 
 An interactive cross-reference grid between requirements and the entities
@@ -467,6 +443,8 @@ membership is held by the row entity rather than the column — components carry
 in bulk. The other tabs reject `rows=components`: requirements are always the
 rows there.
 
+![The allocation matrix: requirements against components, click a cell to allocate](docs/screenshots/allocation.png)
+
 ## Decisions
 
 Architecture decision records. Each one keeps `context`, `decision`, `rationale`
@@ -479,6 +457,8 @@ governs and the components it settles.
 value outside that set still renders and stays selected, because the model does
 not constrain it and silently rewriting it would be data loss.
 
+![Architecture decision records](docs/screenshots/decisions.png)
+
 ## Definitions
 
 Reusable SysML v2-style `constraint def` and `calc def`: write a rule once over
@@ -488,6 +468,8 @@ requirement binding a definition by name cannot tell you on its own.
 
 Expressions are evaluated server-side only. There is no client-side parser,
 deliberately — one that disagreed with the solver would be worse than none.
+
+![Reusable constraint and calc definitions](docs/screenshots/definitions.png)
 
 ## Analysis Cases
 
