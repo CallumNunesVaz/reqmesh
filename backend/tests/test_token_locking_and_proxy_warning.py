@@ -29,11 +29,10 @@ def test_reset_token_round_trip(workspace):
 
 def test_expired_reset_token_is_rejected_and_removed(workspace, monkeypatch):
     auth.register_user("bob", "OldPassw0rd!", "contributor")
-    token = auth.create_reset_token("bob")
-    # Force the stored token to be already expired.
+    # Force a stored token to be already expired.
     monkeypatch.setattr(auth, "RESET_TOKEN_TTL", -1)
-    token2 = auth.create_reset_token("bob")
-    assert auth.consume_reset_token(token2, "NewPassw0rd!") is False
+    token = auth.create_reset_token("bob")
+    assert auth.consume_reset_token(token, "NewPassw0rd!") is False
 
 
 def test_no_deadlock_under_concurrent_invite_and_consume(workspace):
