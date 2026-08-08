@@ -804,6 +804,7 @@ export default function RequirementDetailPage() {
                 onChange={(html) => { setReq({ ...req, description: html }); }}
                 onBlur={(html) => save({ description: html })}
                 disabled={false}
+                placeholder="Write a requirement description…"
               />
             ) : (
               // Read mode: render the rich text with entity ids linked and

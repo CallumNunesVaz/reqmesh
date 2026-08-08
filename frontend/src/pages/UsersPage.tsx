@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { copyText } from '../lib/clipboard';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Users, Plus, Trash2, ShieldCheck, User as UserIcon, KeyRound, X, Loader, Search, Filter, Pencil, Check, Clock, Ban, CircleCheck, Unlock, LogOut, UserPlus, Download, Upload, Copy, Lock } from 'lucide-react';
+import { Users, Plus, Trash2, ShieldCheck, User as UserIcon, KeyRound, X, Loader, Search, Filter, Pencil, Check, Clock, Ban, CircleCheck, Unlock, LogOut, UserPlus, Download, Upload, Copy, Lock, MoreHorizontal } from 'lucide-react';
 import { api, type ManagedUser } from '../api/client';
 import { useAuthStore } from '../store/auth';
 import BodyPortal from '../components/BodyPortal';
@@ -95,6 +95,8 @@ export default function UsersPage() {
   const [inviteCopyFailed, setInviteCopyFailed] = useState(false);
   const [importText, setImportText] = useState<string | null>(null);
   const [importResult, setImportResult] = useState<{ created: string[]; skipped: string[]; invites: { username: string; invite_link: string }[] } | null>(null);
+  // Overflow menu for row actions (reset password, disable, unlock, force sign-out)
+  const [menuUser, setMenuUser] = useState<string | null>(null);
 
   const load = () => {
     setLoadError(null);
@@ -105,8 +107,16 @@ export default function UsersPage() {
     }).catch((err) => setLoadError(err.message || 'Failed to load users'));
   };
 
- // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (isAdmin || isAuthenticated) load(); }, [isAdmin, isAuthenticated]);
+
+  // Close the overflow menu on outside click
+  useEffect(() => {
+    if (!menuUser) return;
+    const onMouseDown = () => setMenuUser(null);
+    document.addEventListener('mousedown', onMouseDown);
+    return () => document.removeEventListener('mousedown', onMouseDown);
+  }, [menuUser]);
 
   const toggleSort = (col: typeof sortBy) => {
     if (sortBy === col) setSortAsc(!sortAsc);
@@ -506,24 +516,63 @@ export default function UsersPage() {
                         </td>
                         <td className="px-4 py-2.5 text-[11px] text-muted-foreground hidden @4xl:table-cell">{fmtDate(u.joined)}</td>
                         <td className="px-4 py-2.5">
-                          <div className="flex items-center gap-0.5">
+                          <div className="flex items-center gap-1">
                             {isEditing ? (
                               <>
-                                <button onClick={() => saveEditRow(u.username)} className="p-1 rounded-md text-emerald-400 hover:bg-emerald-500/10" title="Save"><Check size={13} /></button>
-                                <button onClick={() => setEditingRow(null)} className="p-1 rounded-md text-muted-foreground hover:text-foreground" title="Cancel"><X size={13} /></button>
+                                <button onClick={() => saveEditRow(u.username)} className="p-1.5 rounded-md text-emerald-400 hover:bg-emerald-500/10" title="Save"><Check size={14} /></button>
+                                <button onClick={() => setEditingRow(null)} className="p-1.5 rounded-md text-muted-foreground hover:text-foreground" title="Cancel"><X size={14} /></button>
                               </>
                             ) : (
-                              <button onClick={() => startEditRow(u)} className="p-1 rounded-md text-muted-foreground hover:text-foreground" title="Edit name & email"><Pencil size={13} /></button>
+                              <button onClick={() => startEditRow(u)} className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent" title="Edit name & email"><Pencil size={14} /></button>
                             )}
-                            <button onClick={() => { setResetFor(u.username); setResetPassword(''); setError(''); }} className="p-1 rounded-md text-muted-foreground hover:text-foreground" title="Reset password"><KeyRound size={13} /></button>
-                            {u.locked && (
-                              <button onClick={() => handleUnlock(u.username)} className="p-1 rounded-md text-amber-400 hover:bg-amber-500/10" title="Unlock account"><Unlock size={13} /></button>
-                            )}
-                            <button onClick={() => handleDisable(u.username, !u.disabled)} disabled={isSelf} className="p-1 rounded-md text-muted-foreground hover:text-foreground disabled:opacity-30" title={isSelf ? "Can't disable yourself" : u.disabled ? 'Enable account' : 'Disable account'}>
-                              {u.disabled ? <CircleCheck size={13} /> : <Ban size={13} />}
-                            </button>
-                            <button onClick={() => handleForceLogout(u.username)} className="p-1 rounded-md text-muted-foreground hover:text-foreground" title="Force sign-out (revoke sessions)"><LogOut size={13} /></button>
-                            <button onClick={() => handleDelete(u.username)} disabled={isSelf} className="p-1 rounded-md text-muted-foreground hover:text-destructive disabled:opacity-30" title={isSelf ? "Can't delete yourself" : 'Delete'}><Trash2 size={13} /></button>
+                            <button onClick={() => handleDelete(u.username)} disabled={isSelf} className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 disabled:opacity-30" title={isSelf ? "Can't delete yourself" : 'Delete'}><Trash2 size={14} /></button>
+                            <div className="relative">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setMenuUser(menuUser === u.username ? null : u.username); }}
+                                onMouseDown={(e) => e.stopPropagation()}
+                                className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent"
+                                title="More actions"
+                                aria-label="More actions"
+                              >
+                                <MoreHorizontal size={14} />
+                              </button>
+                              {menuUser === u.username && (
+                                <div className="absolute right-0 top-full mt-1 z-50 bg-popover border rounded-lg shadow-xl py-1 min-w-[160px]" onMouseDown={(e) => e.stopPropagation()}>
+                                  <button
+                                    onClick={() => { setResetFor(u.username); setResetPassword(''); setError(''); setMenuUser(null); }}
+                                    className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-popover-foreground hover:bg-accent text-left"
+                                    title="Reset password"
+                                  >
+                                    <KeyRound size={13} /> Reset password
+                                  </button>
+                                  {u.locked && (
+                                    <button
+                                      onClick={() => { handleUnlock(u.username); setMenuUser(null); }}
+                                      className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-amber-400 hover:bg-accent text-left"
+                                      title="Unlock account"
+                                    >
+                                      <Unlock size={13} /> Unlock account
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => { handleDisable(u.username, !u.disabled); setMenuUser(null); }}
+                                    disabled={isSelf}
+                                    className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-popover-foreground hover:bg-accent text-left disabled:opacity-30"
+                                    title={isSelf ? "Can't disable yourself" : u.disabled ? 'Enable account' : 'Disable account'}
+                                  >
+                                    {u.disabled ? <CircleCheck size={13} /> : <Ban size={13} />}
+                                    {u.disabled ? 'Enable account' : 'Disable account'}
+                                  </button>
+                                  <button
+                                    onClick={() => { handleForceLogout(u.username); setMenuUser(null); }}
+                                    className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-popover-foreground hover:bg-accent text-left"
+                                    title="Force sign-out (revoke sessions)"
+                                  >
+                                    <LogOut size={13} /> Force sign-out
+                                  </button>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </td>
                       </tr>

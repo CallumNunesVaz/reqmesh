@@ -328,6 +328,7 @@ export default function RisksPage() {
                 content={form.description}
                 onChange={(html) => setForm({ ...form, description: html })}
                 onBlur={() => {}}
+                placeholder="Write a risk description…"
               />
             </div>
           </motion.form>
@@ -372,8 +373,9 @@ export default function RisksPage() {
                 <div className="flex flex-wrap gap-2 mt-1.5">
                   <label className="flex flex-col gap-0.5 flex-1 min-w-[7rem]">
                     <span className="text-[9px] uppercase tracking-wide text-muted-foreground/70">severity</span>
+                    {editable ? (
                     <select
-                    className="select h-8 py-0 text-[11px] w-full" disabled={!editable}
+                    className="select h-8 py-0 text-[11px] w-full"
                     style={r.rating?.color ? { borderColor: r.rating.color, backgroundColor: r.rating.color + '12' } : undefined}
                     value={r.severity || ''}
                     onChange={(e) => setRiskLevel(r.id, { severity: e.target.value })}
@@ -385,11 +387,15 @@ export default function RisksPage() {
                     )}
                     {(matrix?.severities ?? []).map((sv) => <option key={sv} value={sv}>{formatLevel(sv)}</option>)}
                     </select>
+                    ) : (
+                    <span className="badge bg-muted text-muted-foreground text-[11px] h-8 flex items-center px-2">{r.severity ? formatLevel(r.severity) : '—'}</span>
+                    )}
                   </label>
                   <label className="flex flex-col gap-0.5 flex-1 min-w-[7rem]">
                     <span className="text-[9px] uppercase tracking-wide text-muted-foreground/70">likelihood</span>
+                    {editable ? (
                     <select
-                    className="select h-8 py-0 text-[11px] w-full" disabled={!editable}
+                    className="select h-8 py-0 text-[11px] w-full"
                     value={r.rating?.likelihood ?? r.likelihood ?? ''}
                     onChange={(e) => setRiskLevel(r.id, { likelihood: e.target.value })}
                     aria-label="Likelihood"
@@ -400,11 +406,15 @@ export default function RisksPage() {
                     )}
                     {(matrix?.likelihoods ?? []).map((l) => <option key={l} value={l}>{formatLevel(l)}</option>)}
                     </select>
+                    ) : (
+                    <span className="badge bg-muted text-muted-foreground text-[11px] h-8 flex items-center px-2">{r.rating?.likelihood ?? r.likelihood ? formatLevel(r.rating?.likelihood ?? r.likelihood ?? '') : '—'}</span>
+                    )}
                   </label>
                   <label className="flex flex-col gap-0.5 flex-1 min-w-[7rem]">
                     <span className="text-[9px] uppercase tracking-wide text-muted-foreground/70">status</span>
+                    {editable ? (
                     <select
-                    className="select h-8 py-0 text-[11px] min-w-[5.5rem] flex-1" disabled={!editable}
+                    className="select h-8 py-0 text-[11px] min-w-[5.5rem] flex-1"
                     value={r.status || ''}
                     onChange={(e) => setRiskStatus(r.id, e.target.value)}
                     aria-label="Status"
@@ -415,11 +425,15 @@ export default function RisksPage() {
                     )}
                     {RISK_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
                     </select>
+                    ) : (
+                    <span className="badge bg-muted text-muted-foreground text-[11px] h-8 flex items-center px-2">{r.status || '—'}</span>
+                    )}
                   </label>
                   <label className="flex flex-col gap-0.5 flex-1 min-w-[7rem]">
                     <span className="text-[9px] uppercase tracking-wide text-muted-foreground/70">detection</span>
+                    {editable ? (
                     <select
-                    className="select h-8 py-0 text-[11px] min-w-[5.5rem] flex-1" disabled={!editable}
+                    className="select h-8 py-0 text-[11px] min-w-[5.5rem] flex-1"
                     value={r.detection || ''}
                     onChange={(e) => setRiskDetection(r.id, e.target.value)}
                     aria-label="Detection"
@@ -431,6 +445,9 @@ export default function RisksPage() {
                     )}
                     {(matrix?.detections ?? []).map((d) => <option key={d} value={d}>{formatLevel(d)}</option>)}
                     </select>
+                    ) : (
+                    <span className="badge bg-muted text-muted-foreground text-[11px] h-8 flex items-center px-2">{r.detection ? formatLevel(r.detection) : '—'}</span>
+                    )}
                   </label>
                 </div>
                 {r.description && (

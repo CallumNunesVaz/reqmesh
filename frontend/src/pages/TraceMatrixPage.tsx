@@ -242,13 +242,13 @@ export default function TraceMatrixPage() {
                   transition={{ delay: i * 0.02 }}
                   className="border-b hover:bg-muted/30 transition-colors group"
                 >
-                  <td className="px-4 py-2.5 text-xs text-foreground">
+                  <td className="px-4 py-2.5 text-xs text-foreground min-w-0 truncate" title={`${link.source} ${nameOf(link.source) || ''}`}>
                     <EntityLink kind={kindOf(link.source)} id={link.source} name={nameOf(link.source)} className="hover:text-primary" />
                   </td>
                   <td className="px-4 py-2.5">
                     <span className="badge bg-muted text-muted-foreground">{link.type}</span>
                   </td>
-                  <td className="px-4 py-2.5 text-xs text-foreground">
+                  <td className="px-4 py-2.5 text-xs text-foreground min-w-0 truncate" title={`${link.target} ${nameOf(link.target) || ''}`}>
                     <EntityLink kind={kindOf(link.target)} id={link.target} name={nameOf(link.target)} className="hover:text-primary" />
                   </td>
                   <td className="px-2 py-2.5">

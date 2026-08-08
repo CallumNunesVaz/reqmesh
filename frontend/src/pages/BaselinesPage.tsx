@@ -263,6 +263,7 @@ export default function BaselinesPage() {
                       onChange={setFormDesc}
                       onBlur={() => {}}
                       disabled={formSaving}
+                      placeholder="Write a baseline description…"
                     />
                   ) : (
                     <div className="min-h-[80px] border rounded-lg p-3 text-sm text-muted-foreground">
