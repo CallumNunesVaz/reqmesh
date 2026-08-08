@@ -84,6 +84,15 @@ const SelectedReqCtx = createContext<SelectedReqCtxValue>({
 });
 export function useSelectedReq() { return useContext(SelectedReqCtx); }
 
+// Canvas defaults closed on table/form routes, open on graph-centric routes.
+const CANVAS_CLOSED_DEFAULT = new Set(['allocation', 'traces', 'metrics', 'settings']);
+
+function readCanvasOpen(segment: string): boolean {
+  const stored = localStorage.getItem(`reqmesh.canvasOpen.${segment}`);
+  if (stored !== null) return stored === 'true';
+  return !CANVAS_CLOSED_DEFAULT.has(segment);
+}
+
 const GRAPH_MIN = 320;    // px floor for the canvas column
 const CONTEXT_MIN = 300;  // px floor for the inspector column (form-heavy, size-sensitive)
 const NAV_MIN = 200;
@@ -110,7 +119,12 @@ function PageArea({ children }: { children: React.ReactNode }) {
 export default function Layout() {
   const { projectId } = useParams();
   const isInProject = !!projectId;
-  const [graphOpen, setGraphOpen] = useState(true);
+
+  const location = useLocation();
+  const pageKey = (location.pathname.split('/').filter(Boolean).pop() || 'overview')
+    .replace(/[^a-z0-9-]/gi, '');
+
+  const [graphOpen, setGraphOpen] = useState(() => readCanvasOpen(pageKey));
   const [contextOpen, setContextOpen] = useState(true);
   const [loginOpen, setLoginOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
@@ -134,9 +148,6 @@ export default function Layout() {
   // A page nobody has sized yet falls back to the last split the user chose
   // anywhere, not to a fixed default. Snapping an unvisited page to 0.52 when
   // the user has clearly settled on something wider reads as the app forgetting.
-  const location = useLocation();
-  const pageKey = (location.pathname.split('/').filter(Boolean).pop() || 'overview')
-    .replace(/[^a-z0-9-]/gi, '');
   // A requirement detail page has its own inline WhatIfPanel; the floating bar
   // would duplicate the same state on the same screen.
   const isReqDetail = /\/requirements\/[^/]+$/.test(location.pathname);
@@ -151,6 +162,12 @@ export default function Layout() {
   // persist visually until the next drag.
   useEffect(() => {
     setGraphFrac(readFrac(`rt-graph-frac:${pageKey}`) ?? readFrac('rt-graph-frac') ?? 0.52);
+  }, [pageKey]);
+
+  // Re-resolve canvas open/closed when the route changes, honouring any stored
+  // preference for the new route segment (UX-1).
+  useEffect(() => {
+    setGraphOpen(readCanvasOpen(pageKey));
   }, [pageKey]);
   const [navWidth, setNavWidth] = useState(() => {
     const saved = parseInt(localStorage.getItem('rt-nav-width') || '', 10);
@@ -310,7 +327,11 @@ export default function Layout() {
     };
   }, [isInProject, projectId, username, user?.role, bumpGraphVersion, bumpDataVersion]);
 
-  const toggleGraph = () => setGraphOpen((o) => !o);
+  const toggleGraph = () => setGraphOpen((o) => {
+    const next = !o;
+    localStorage.setItem(`reqmesh.canvasOpen.${pageKey}`, String(next));
+    return next;
+  });
   const toggleEdit = () => setEditMode(!editMode);
 
   useKeyboardShortcuts(projectId, {
@@ -377,7 +398,7 @@ export default function Layout() {
             <button
               onClick={toggleHelpers}
               className={`btn-ghost p-2 rounded-lg gap-1.5 text-xs transition-all ${helpersEnabled ? 'bg-violet-500/15 text-violet-400 border border-violet-500/30' : 'text-muted-foreground'}`}
-              title={helpersEnabled ? 'Helpers ON — click to hide guidance' : 'Helpers OFF — click to show guidance'}
+              title={helpersEnabled ? 'Guided help is on — click to hide' : 'Guided help is off — click to show guidance'}
             >
               <HelpCircle size={15} />
               <span className="hidden 2xl:inline text-[10px]">{helpersEnabled ? 'GUIDED ON' : 'GUIDED OFF'}</span>
@@ -456,6 +477,9 @@ export default function Layout() {
             </button>
           )}
 
+          {/* Divider between project-scoped controls and global controls (UX-5) */}
+          <div className="w-px h-5 bg-border shrink-0" />
+
           {user?.role === 'admin' && (
             <Link
               to="/users"
@@ -491,7 +515,7 @@ export default function Layout() {
 
           {user ? (
             <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground hidden sm:inline">
+              <span className="text-xs text-muted-foreground hidden sm:inline" title={`${user.username}${user.role ? ` (${user.role})` : ''}`}>
                 <User size={12} className="inline mr-1" />
                 <span className="hidden 2xl:inline">{user.username}</span>
                 {editMode && <span className="ml-1 text-amber-400 text-[10px]">edit</span>}
