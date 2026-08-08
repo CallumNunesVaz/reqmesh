@@ -23,8 +23,6 @@ services:
       dockerfile: Dockerfile.prod
     ports:
       - "${RT_BIND:-127.0.0.1}:8000:8000"
-    # tectonic caches its ~300MB TeX bundle on /data so it downloads only
-    # once, on the first LaTeX PDF export.
     environment:
       - RT_STATIC_DIR=/app/frontend/dist
       - RT_UPDATE_CONTROL_DIR=/control
@@ -38,7 +36,13 @@ services:
       # login returned 500, and any account that had been written would have
       # been discarded on the next restart.
       - RT_STATE_DIR=/data/.reqmesh
-      - TECTONIC_CACHE_DIR=/data/.tectonic-cache
+      # TECTONIC_CACHE_DIR is deliberately NOT set. The image ships a pre-warmed
+      # cache at /opt/tectonic-cache (see Dockerfile.prod), so LaTeX rendering
+      # needs no network. Pointing it at /data (the empty bind volume) is what
+      # made fresh installs and upgrades flaky: the baked cache was ignored and
+      # the first export had to download TeX packages inside the compile timeout —
+      # slow, network-dependent, and impossible air-gapped, silently dropping to
+      # the degraded HTML renderer. Mirrors the deploy template.
       - RT_HOST=0.0.0.0
       - RT_PORT=8000
       - "RT_SECRET=${RT_SECRET:?RT_SECRET is required}"
