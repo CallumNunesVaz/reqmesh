@@ -51,7 +51,8 @@ def _send_email(to: str | list[str], subject: str, body_html: str, body_text: st
             msg = MIMEMultipart("alternative")
             msg["From"] = settings.smtp_from
             msg["To"] = ", ".join(recipients)
-            msg["Subject"] = f"[reqmesh] {subject}"
+            normalised = " ".join(str(subject).splitlines())
+            msg["Subject"] = f"[reqmesh] {normalised}"
 
             if body_text:
                 msg.attach(MIMEText(body_text, "plain", "utf-8"))
@@ -93,11 +94,12 @@ def send_test_email(to: str) -> dict:
         msg["Subject"] = "[reqmesh] Test email"
         msg.attach(MIMEText("This is a test email from reqmesh. Your SMTP settings work.", "plain", "utf-8"))
         msg.attach(MIMEText("<p>This is a test email from reqmesh. Your SMTP settings work.</p>", "html", "utf-8"))
+        pw = settings.smtp_password.get_secret_value()
         server = smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=15)
         if settings.smtp_use_tls:
             server.starttls()
-        if settings.smtp_username and settings.smtp_password:
-            server.login(settings.smtp_username, settings.smtp_password)
+        if settings.smtp_username and pw:
+            server.login(settings.smtp_username, pw)
         server.sendmail(settings.smtp_from, [to], msg.as_string())
         server.quit()
         return {"ok": True}
