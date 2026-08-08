@@ -79,12 +79,12 @@
     --secondary: 210 15% 94%;
     --secondary-foreground: 215 25% 16%;
     --muted: 210 15% 94%;
-    --muted-foreground: 215 15% 48%;
+    --muted-foreground: 215 16% 42%;
     --accent: 207 80% 94%;
     --accent-foreground: 215 25% 16%;
     --destructive: 0 84% 55%;
     --destructive-foreground: 0 0% 100%;
-    --border: 210 15% 88%;
+    --border: 210 14% 83%;
     --ring: 207 90% 54%;
     --sidebar: 210 20% 97%;
     --sidebar-foreground: 215 25% 16%;
@@ -101,9 +101,9 @@
     --cs-grey: 195 6% 55%;
 
     --graph-panel-bg: 0 0% 100%;
-    --graph-panel-border: 210 15% 88%;
-    --graph-panel-text: 215 15% 48%;
-    --graph-panel-muted: 210 10% 70%;
+    --graph-panel-border: 210 14% 83%;
+    --graph-panel-text: 215 16% 42%;
+    --graph-panel-muted: 210 12% 52%;
     --graph-control: 210 15% 94%;
     --graph-control-hover: 210 15% 88%;
     --graph-minimap: 210 20% 97%;
