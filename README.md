@@ -136,7 +136,7 @@ backend/.venv/bin/python seed_cessna.py --force
 
 ### Tests
 
-**Backend** — 1238 tests covering API, storage, auth, integrity, quality, tracing, code scan, fingerprint, table I/O, evaluation, what-if impact, and deployment:
+**Backend** — 1276 tests covering API, storage, auth, integrity, quality, tracing, code scan, fingerprint, table I/O, evaluation, what-if impact, and deployment:
 
 ```bash
 cd backend
