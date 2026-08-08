@@ -369,8 +369,9 @@ class Publisher:
         logo = hdr["logo_url"]
         if logo and logo.startswith("data:"):
             logo_html = f'<img class="logo" src="{esc(logo)}" alt="Logo" />'
-        elif logo:
-            logo_html = f'<img class="logo" src="{esc(logo)}" alt="Logo" />'
+        # A non-data: URL is dropped: fetching it server-side during render is an
+        # SSRF / local-file vector (FAB-SEC FAB-4). The Settings UI produces a
+        # data: URI from an uploaded PNG.
 
         company_line = f'<div class="company">{hdr["company"]}</div>' if hdr["company"] else ""
         dept_line = f'<div class="dept">{hdr["dept"]}</div>' if hdr["dept"] else ""
@@ -2017,7 +2018,7 @@ class Publisher:
         from app.services.sanitize import safe_url_fetcher
         WHTML(
             string=self.build_html(),
-            url_fetcher=safe_url_fetcher({getattr(global_settings, "report_logo_url", "")}),
+            url_fetcher=safe_url_fetcher(),
         ).write_pdf(path)
         return path
 
