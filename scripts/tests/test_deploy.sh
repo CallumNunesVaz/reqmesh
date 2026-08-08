@@ -880,10 +880,15 @@ check "the cache is baked into the image, not left on the data volume" \
 check "the runtime user owns the cache" \
       "$(grep -c '/opt/tectonic-cache' "$DF" | head -1)" "2"
 # Compose used to override the image's cache path back onto /data, which undid
-# the baked-in cache entirely.
+# the baked-in cache entirely — every fresh install and upgrade then started
+# cold. Both the generated template AND the repo-root compose (which the README
+# Quick Start invokes) must leave it unset so the baked /opt cache is used.
 TMPL="$REPO/scripts/templates/docker-compose.prod.yml.tmpl"
-check "compose does not override the cache path" \
+check "deploy template does not override the cache path" \
       "$(grep -v '^[[:space:]]*#' "$TMPL" | grep -c 'TECTONIC_CACHE_DIR')" "0"
+COMPOSE="$REPO/docker-compose.prod.yml"
+check "repo-root compose does not override the cache path" \
+      "$(grep -v '^[[:space:]]*#' "$COMPOSE" | grep -c 'TECTONIC_CACHE_DIR')" "0"
 # Bare metal: install the engine, warm the cache, and point the service at it.
 check "the bare-metal install installs tectonic" \
       "$(grep -cE '^[[:space:]]*install_tectonic' "$REPO/scripts/deploy-bare.sh")" "1"
