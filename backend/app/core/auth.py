@@ -58,6 +58,7 @@ def get_secret() -> str:
 
 from ruamel.yaml import YAML
 import threading
+from app.core.filelock import file_lock
 _yaml = YAML()
 _yaml.indent(mapping=2, sequence=4, offset=2)
 # See yaml_store._yaml_lock: a shared ruamel instance is not thread-safe, and
@@ -539,8 +540,14 @@ def clear_auth_cookies(response) -> None:
 def _load_token_store(path: Path) -> dict:
     if not path.exists():
         return {}
+    # The `_yaml` instance is shared across the users file and both token files,
+    # and ruamel keeps parser/emitter state on it — so a token load racing a
+    # users dump corrupts it for both. Hold `_yaml_lock` here exactly as
+    # load_users/save_users do; the per-file lock does not cover the shared
+    # instance because it is keyed on the file, not the parser.
     with open(path) as f:
-        return _yaml.load(f) or {}
+        with _yaml_lock:
+            return _yaml.load(f) or {}
 
 
 def _save_token_store(path: Path, data: dict) -> None:
@@ -549,7 +556,8 @@ def _save_token_store(path: Path, data: dict) -> None:
     fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
     try:
         with os.fdopen(fd, "w") as f:
-            _yaml.dump(data, f)
+            with _yaml_lock:
+                _yaml.dump(data, f)
         os.replace(tmp, path)
     except BaseException:
         try:
@@ -565,26 +573,36 @@ def create_reset_token(username: str) -> str | None:
     if username not in users:
         return None
     token = secrets.token_urlsafe(32)
-    tokens = _load_token_store(RESET_TOKENS_FILE)
-    tokens[token] = {"username": username, "expires": int(time.time()) + RESET_TOKEN_TTL}
     now = time.time()
-    tokens = {k: v for k, v in tokens.items() if v.get("expires", 0) > now}
-    _save_token_store(RESET_TOKENS_FILE, tokens)
+    # Guard the token file's read-modify-write. Inner to users_lock by
+    # convention: this is reached from create_invited_user while it holds
+    # users_lock, so the order is always users → token-file, never the reverse.
+    # Inverting it would deadlock against consume_reset_token.
+    with file_lock(RESET_TOKENS_FILE):
+        tokens = _load_token_store(RESET_TOKENS_FILE)
+        tokens[token] = {"username": username, "expires": int(time.time()) + RESET_TOKEN_TTL}
+        tokens = {k: v for k, v in tokens.items() if v.get("expires", 0) > now}
+        _save_token_store(RESET_TOKENS_FILE, tokens)
     return token
 
 
 def consume_reset_token(token: str, new_password: str) -> bool:
-    tokens = _load_token_store(RESET_TOKENS_FILE)
-    entry = tokens.get(token)
-    if not entry:
-        return False
-    if entry.get("expires", 0) < time.time():
+    # Validate and burn the token under the token-file lock, then release it
+    # *before* calling set_user_password (which takes users_lock). Holding the
+    # token lock across that call would invert the users → token-file order and
+    # deadlock against create_invited_user. The token is single-use, so burning
+    # it before the password write is set is acceptable.
+    with file_lock(RESET_TOKENS_FILE):
+        tokens = _load_token_store(RESET_TOKENS_FILE)
+        entry = tokens.get(token)
+        if not entry:
+            return False
+        expired = entry.get("expires", 0) < time.time()
         del tokens[token]
         _save_token_store(RESET_TOKENS_FILE, tokens)
+    if expired:
         return False
     username = entry["username"]
-    del tokens[token]
-    _save_token_store(RESET_TOKENS_FILE, tokens)
     return set_user_password(username, new_password)
 
 
@@ -598,27 +616,31 @@ def create_verify_token(username: str) -> str | None:
     if username not in users:
         return None
     token = secrets.token_urlsafe(32)
-    tokens = _load_token_store(VERIFY_TOKENS_FILE)
-    tokens[token] = {"username": username, "expires": int(time.time()) + VERIFY_TOKEN_TTL}
     now = time.time()
-    tokens = {k: v for k, v in tokens.items() if v.get("expires", 0) > now}
-    _save_token_store(VERIFY_TOKENS_FILE, tokens)
+    with file_lock(VERIFY_TOKENS_FILE):
+        tokens = _load_token_store(VERIFY_TOKENS_FILE)
+        tokens[token] = {"username": username, "expires": int(time.time()) + VERIFY_TOKEN_TTL}
+        tokens = {k: v for k, v in tokens.items() if v.get("expires", 0) > now}
+        _save_token_store(VERIFY_TOKENS_FILE, tokens)
     return token
 
 
 def verify_email(token: str) -> str | None:
+    # users_lock is the outer lock; the verify-token file lock nests inside it,
+    # preserving the users → token-file order used everywhere else.
     with users_lock():
-        tokens = _load_token_store(VERIFY_TOKENS_FILE)
-        entry = tokens.get(token)
-        if not entry:
-            return None
-        if entry.get("expires", 0) < time.time():
+        with file_lock(VERIFY_TOKENS_FILE):
+            tokens = _load_token_store(VERIFY_TOKENS_FILE)
+            entry = tokens.get(token)
+            if not entry:
+                return None
+            if entry.get("expires", 0) < time.time():
+                del tokens[token]
+                _save_token_store(VERIFY_TOKENS_FILE, tokens)
+                return None
+            username = entry["username"]
             del tokens[token]
             _save_token_store(VERIFY_TOKENS_FILE, tokens)
-            return None
-        username = entry["username"]
-        del tokens[token]
-        _save_token_store(VERIFY_TOKENS_FILE, tokens)
         users = load_users()
         if username in users:
             users[username]["email_verified"] = True
