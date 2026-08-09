@@ -177,3 +177,35 @@ export function filterableComponentIds(
   // Only include hidden ids that correspond to a real component.
   return [...ids].sort();
 }
+
+/**
+ * The explicitly-hidden ancestors of `id`, nearest first.
+ *
+ * A component hidden only because an ancestor is hidden cannot be revealed by
+ * toggling its own flag — nothing about it is set. Un-hiding it means clearing
+ * whichever ancestors are hiding it, which is what this returns.
+ *
+ * Walks upward with a visited set, so a parent cycle or self-parent in
+ * hand-editable YAML terminates rather than hanging.
+ */
+export function hiddenAncestors(
+  components: readonly ComponentNode[],
+  hiddenComponents: readonly string[],
+  id: string,
+): string[] {
+  const parentOf = new Map<string, string>();
+  for (const c of components) {
+    if (c.parent) parentOf.set(c.id, c.parent);
+  }
+  const hiddenSet = new Set(hiddenComponents);
+  const out: string[] = [];
+  const seen = new Set<string>([id]);
+
+  let cur = parentOf.get(id);
+  while (cur && !seen.has(cur)) {
+    seen.add(cur);
+    if (hiddenSet.has(cur)) out.push(cur);
+    cur = parentOf.get(cur);
+  }
+  return out;
+}

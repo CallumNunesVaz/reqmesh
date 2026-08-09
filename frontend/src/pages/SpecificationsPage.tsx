@@ -15,13 +15,13 @@ import { isSafeExternalUrl } from '../lib/safeUrl';
 import { LinkEditor } from '../components/LinkEditor';
 import { HistoryPanel } from '../components/HistoryPanel';
 import { CommentThread } from '../components/CommentThread';
+import { useRangeSelection } from '../hooks/useRangeSelection';
 
 export default function SpecificationsPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const { specifications, setSpecifications } = useStore();
   const editable = useAuthStore((s) => s.canEdit());
   const { addToast } = useToasts();
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const dataVersion = useStore((s) => s.dataVersion);
   const [showCreate, setShowCreate] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -122,7 +122,10 @@ export default function SpecificationsPage() {
     setSpecifications(specifications.filter((s) => s.id !== specId));
   };
 
-  const toggleSpec = (id: string) => setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  // `filteredSpecs` is the list as displayed, which is the only ordering a
+  // Shift range may span.
+  const { selectedIds, select: toggleSpec, setSelectedIds } =
+    useRangeSelection(useMemo(() => filteredSpecs.map((s) => s.id), [filteredSpecs]));
   const clearSpecSelection = () => setSelectedIds(new Set());
   const selectAllSpecs = () => setSelectedIds(new Set(filteredSpecs.map(s => s.id)));
 
@@ -231,9 +234,9 @@ export default function SpecificationsPage() {
                 {editable && (
                   <span className="shrink-0" onClick={(e) => e.stopPropagation()}>
                     {selectedIds.has(spec.id) ? (
-                      <CheckSquare size={14} className="text-primary cursor-pointer" onClick={() => toggleSpec(spec.id)} />
+                      <CheckSquare size={14} className="text-primary cursor-pointer" onClick={(e) => toggleSpec(spec.id, e)} />
                     ) : (
-                      <Square size={14} className="text-muted-foreground/40 cursor-pointer hover:text-muted-foreground" onClick={() => toggleSpec(spec.id)} />
+                      <Square size={14} className="text-muted-foreground/40 cursor-pointer hover:text-muted-foreground" onClick={(e) => toggleSpec(spec.id, e)} />
                     )}
                   </span>
                 )}

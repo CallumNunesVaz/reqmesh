@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  hiddenAncestors,
   effectiveHiddenComponents,
   filterableComponentIds,
   isReqHiddenByComponents,
@@ -388,5 +389,34 @@ describe('pruneUnknownIds', () => {
   it('all ids unknown returns an empty array', () => {
     const result = pruneUnknownIds(['X', 'Y'], ['A', 'B']);
     expect(result).toEqual([]);
+  });
+});
+
+describe('hiddenAncestors', () => {
+  const tree = [
+    { id: 'ROOT' },
+    { id: 'MID', parent: 'ROOT' },
+    { id: 'LEAF', parent: 'MID' },
+  ];
+
+  it('returns the hidden ancestors nearest first', () => {
+    expect(hiddenAncestors(tree, ['ROOT', 'MID'], 'LEAF')).toEqual(['MID', 'ROOT']);
+  });
+
+  it('ignores ancestors that are not hidden', () => {
+    expect(hiddenAncestors(tree, ['ROOT'], 'LEAF')).toEqual(['ROOT']);
+  });
+
+  it('is empty when nothing above is hidden', () => {
+    expect(hiddenAncestors(tree, ['LEAF'], 'LEAF')).toEqual([]);
+  });
+
+  it('terminates on a parent cycle', () => {
+    const cyclic = [{ id: 'A', parent: 'B' }, { id: 'B', parent: 'A' }];
+    expect(hiddenAncestors(cyclic, ['B'], 'A')).toEqual(['B']);
+  });
+
+  it('terminates on a self-parent', () => {
+    expect(hiddenAncestors([{ id: 'S', parent: 'S' }], ['S'], 'S')).toEqual([]);
   });
 });

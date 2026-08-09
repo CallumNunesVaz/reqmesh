@@ -10,7 +10,8 @@ import { COMPONENT_TYPE_META } from '../components/entities';
 import { HelpTip } from '../components/HelpTip';
 import { useToasts } from '../components/Toast';
 import TruncationBanner from '../components/TruncationBanner';
-import { effectiveHiddenComponents } from '../lib/graphFilters';
+import { effectiveHiddenComponents, hiddenAncestors } from '../lib/graphFilters';
+import { useRangeSelection } from '../hooks/useRangeSelection';
 
 const EMPTY_DRAFT = { id: '', name: '', type: 'assembly', parent: '' };
 
@@ -18,11 +19,11 @@ export default function ComponentsPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
   const editable = useAuthStore((s) => s.canEdit());
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkParent, setBulkParent] = useState('');
   const dataVersion = useStore((s) => s.dataVersion);
   const hiddenComponents = useStore((s) => s.hiddenComponents);
   const toggleHiddenComponent = useStore((s) => s.toggleHiddenComponent);
+  const setHiddenComponents = useStore((s) => s.setHiddenComponents);
 
   const [components, setComponents] = useState<Component[]>([]);
   const [tree, setTree] = useState<ComponentTreeNode[]>([]);
@@ -77,6 +78,14 @@ export default function ComponentsPage() {
     }
     return ids;
   }, [components, search, filterType]);
+
+  /** Clear every ancestor hiding `id`, in one update rather than a toggle each. */
+  const revealComponent = (id: string) => {
+    const ancestors = hiddenAncestors(components, hiddenComponents, id);
+    if (ancestors.length === 0) return;
+    const drop = new Set(ancestors);
+    setHiddenComponents(hiddenComponents.filter((h) => !drop.has(h)));
+  };
 
   const effectiveHidden = useMemo(
     () => effectiveHiddenComponents(components, hiddenComponents),
@@ -181,14 +190,10 @@ export default function ComponentsPage() {
       return next;
     });
 
-  const toggleComponent = (id: string) =>
-    setSelectedIds((prev) => {
-      const n = new Set(prev);
-      n.has(id) ? n.delete(id) : n.add(id);
-      return n;
-    });
-
-  const clearComponentSelection = () => setSelectedIds(new Set());
+  // `flatNodes` is the tree as actually displayed — filtered and with collapsed
+  // branches omitted — which is the only ordering a Shift range may span.
+  const { selectedIds, select: toggleComponent, setSelectedIds, clear: clearComponentSelection } =
+    useRangeSelection(useMemo(() => flatNodes.map((n) => n.id), [flatNodes]));
   const selectAllComponents = () => setSelectedIds(new Set(components.map((c) => c.id)));
 
   // These three bulk handlers had no error handling at all. A reparent that
@@ -247,9 +252,9 @@ export default function ComponentsPage() {
           {editable && (
             <span className="shrink-0" onClick={(e) => e.stopPropagation()}>
               {selectedIds.has(node.id) ? (
-                <CheckSquare size={13} className="text-primary cursor-pointer" onClick={() => toggleComponent(node.id)} />
+                <CheckSquare size={13} className="text-primary cursor-pointer" onClick={(e) => { e.stopPropagation(); toggleComponent(node.id, e); }} />
               ) : (
-                <Square size={13} className="text-muted-foreground/40 cursor-pointer hover:text-muted-foreground" onClick={() => toggleComponent(node.id)} />
+                <Square size={13} className="text-muted-foreground/40 cursor-pointer hover:text-muted-foreground" onClick={(e) => { e.stopPropagation(); toggleComponent(node.id, e); }} />
               )}
             </span>
           )}
@@ -273,11 +278,23 @@ export default function ComponentsPage() {
               satisfies {node.satisfies.length}
             </span>
           )}
+          {/* An inherited-hidden node used to render this button disabled, which
+              left no way back: nothing is set on the node itself, so its own
+              toggle is a no-op, and the only control that would reveal it was
+              on an ancestor the user had to go and find. Clicking now clears
+              whichever ancestors are doing the hiding. */}
           <button
-            onClick={(e) => { e.stopPropagation(); toggleHiddenComponent(node.id); }}
-            className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0 disabled:opacity-50 disabled:cursor-default disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
-            disabled={inherited}
-            title={inherited ? 'Hidden by a parent component' : effectiveHidden.has(node.id) ? 'Hidden in graph' : 'Shown in graph'}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (inherited) revealComponent(node.id);
+              else toggleHiddenComponent(node.id);
+            }}
+            className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0"
+            title={
+              inherited
+                ? `Hidden by ${hiddenAncestors(components, hiddenComponents, node.id).join(', ')} — click to show`
+                : effectiveHidden.has(node.id) ? 'Hidden in graph' : 'Shown in graph'
+            }
           >
             {effectiveHidden.has(node.id) ? <EyeOff size={13} /> : <Eye size={13} />}
           </button>

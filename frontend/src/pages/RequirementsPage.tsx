@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePersistedState, setCodec } from '../hooks/usePersistedState';
+import { useRangeSelection } from '../hooks/useRangeSelection';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -72,7 +73,6 @@ export default function RequirementsPage() {
   const [filterAllocated, setFilterAllocated] = usePersistedState(pk('filter-allocated'), '');
   const [collapsed, setCollapsed] = usePersistedState<Set<string>>(pk('collapsed'), new Set(), setCodec<string>());
   const [showCreate, setShowCreate] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [projectBaselines, setProjectBaselines] = useState<string[]>([]);
   const [bulkParent, setBulkParent] = useState('');
   const [moveReq, setMoveReq] = useState<{id: string, target: string} | null>(null);
@@ -215,19 +215,14 @@ export default function RequirementsPage() {
     }
   };
 
-  const toggleSelect = (id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  };
+  // `rows` is the tree as displayed — filtered, and with collapsed branches
+  // omitted — which is the only ordering a Shift range may span.
+  const { selectedIds, select: toggleSelect, setSelectedIds, clear: clearSelection } =
+    useRangeSelection(useMemo(() => rows.map((r) => r.req.id), [rows]));
 
   const selectAllVisible = () => {
     setSelectedIds(new Set(rows.map((r) => r.req.id)));
   };
-
-  const clearSelection = () => setSelectedIds(new Set());
 
   const handleBulkDelete = async () => {
     if (!projectId) return;
@@ -436,9 +431,9 @@ export default function RequirementsPage() {
                 {editMode && (
                   <span className="shrink-0 mr-0.5" onClick={(e) => e.stopPropagation()}>
                     {selectedIds.has(req.id) ? (
-                      <CheckSquare size={13} className="text-primary cursor-pointer" onClick={() => toggleSelect(req.id)} />
+                      <CheckSquare size={13} className="text-primary cursor-pointer" onClick={(e) => { e.stopPropagation(); toggleSelect(req.id, e); }} />
                     ) : (
-                      <Square size={13} className="text-muted-foreground/40 cursor-pointer hover:text-muted-foreground" onClick={() => toggleSelect(req.id)} />
+                      <Square size={13} className="text-muted-foreground/40 cursor-pointer hover:text-muted-foreground" onClick={(e) => { e.stopPropagation(); toggleSelect(req.id, e); }} />
                     )}
                   </span>
                 )}

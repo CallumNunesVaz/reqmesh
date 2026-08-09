@@ -16,6 +16,7 @@ import RichTextEditor from '../components/RichTextEditor';
 import { HistoryPanel } from '../components/HistoryPanel';
 import { CommentThread } from '../components/CommentThread';
 import { useToasts } from '../components/Toast';
+import { useRangeSelection } from '../hooks/useRangeSelection';
 
 const formatLevel = (s: string) => s.replace(/_/g, ' ');
 
@@ -31,7 +32,6 @@ export default function RisksPage() {
   // individual create/edit/delete which are propose-tier.
   const canBulk = useAuthStore((s) => s.canEdit());
   const { addToast } = useToasts();
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const dataVersion = useStore((s) => s.dataVersion);
   const entityKinds = useEntityKinds(projectId);
   // Persisted per project — see RequirementsPage/ComponentsPage for why.
@@ -244,7 +244,10 @@ export default function RisksPage() {
     } catch (err: any) { setError(err.message || 'Failed to delete'); }
   };
 
-  const toggleRisk = (id: string) => setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  // `filteredRisks` is the list as displayed, which is the only ordering a
+  // Shift range may span.
+  const { selectedIds, select: toggleRisk, setSelectedIds } =
+    useRangeSelection(useMemo(() => filteredRisks.map((r) => r.id), [filteredRisks]));
   const clearRiskSelection = () => setSelectedIds(new Set());
   const selectAllRisks = () => setSelectedIds(new Set(filteredRisks.map(r => r.id)));
 
@@ -342,9 +345,9 @@ export default function RisksPage() {
               {canBulk && (
                 <span className="shrink-0 mt-0.5">
                   {selectedIds.has(r.id) ? (
-                    <CheckSquare size={14} className="text-primary cursor-pointer" onClick={() => toggleRisk(r.id)} />
+                    <CheckSquare size={14} className="text-primary cursor-pointer" onClick={(e) => toggleRisk(r.id, e)} />
                   ) : (
-                    <Square size={14} className="text-muted-foreground/40 cursor-pointer hover:text-muted-foreground" onClick={() => toggleRisk(r.id)} />
+                    <Square size={14} className="text-muted-foreground/40 cursor-pointer hover:text-muted-foreground" onClick={(e) => toggleRisk(r.id, e)} />
                   )}
                 </span>
               )}

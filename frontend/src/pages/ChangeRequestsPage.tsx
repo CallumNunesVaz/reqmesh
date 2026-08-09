@@ -15,6 +15,7 @@ import { LinkEditor } from '../components/LinkEditor';
 import { HistoryPanel } from '../components/HistoryPanel';
 import { CommentThread } from '../components/CommentThread';
 import { useToasts } from '../components/Toast';
+import { useRangeSelection } from '../hooks/useRangeSelection';
 
 const statusBadges: Record<string, string> = {
   submitted: 'border-blue-500/30 bg-blue-500/10 text-blue-400',
@@ -67,7 +68,6 @@ export default function ChangeRequestsPage() {
   const canMaintain = useAuthStore((s) => s.canEdit());
   const { addToast } = useToasts();
   const [components, setComponents] = useState<Component[]>([]);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const dataVersion = useStore((s) => s.dataVersion);
   const entityKinds = useEntityKinds(projectId);
   const showConfirm = useConfirm();
@@ -209,7 +209,10 @@ export default function ChangeRequestsPage() {
     } catch (err: any) { setError(err.message || 'Failed to modify'); }
   };
 
-  const toggleCR = (id: string) => setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  // `filteredCRs` is the list as displayed, which is the only ordering a
+  // Shift range may span.
+  const { selectedIds, select: toggleCR, setSelectedIds } =
+    useRangeSelection(useMemo(() => filteredCRs.map((c) => c.id), [filteredCRs]));
   const clearCRSelection = () => setSelectedIds(new Set());
   const selectAllCRs = () => setSelectedIds(new Set(filteredCRs.map(c => c.id)));
 
@@ -322,9 +325,9 @@ export default function ChangeRequestsPage() {
               {canBulk && (
                 <span className="shrink-0">
                   {selectedIds.has(cr.id) ? (
-                    <CheckSquare size={14} className="text-primary cursor-pointer" onClick={() => toggleCR(cr.id)} />
+                    <CheckSquare size={14} className="text-primary cursor-pointer" onClick={(e) => toggleCR(cr.id, e)} />
                   ) : (
-                    <Square size={14} className="text-muted-foreground/40 cursor-pointer hover:text-muted-foreground" onClick={() => toggleCR(cr.id)} />
+                    <Square size={14} className="text-muted-foreground/40 cursor-pointer hover:text-muted-foreground" onClick={(e) => toggleCR(cr.id, e)} />
                   )}
                 </span>
               )}
