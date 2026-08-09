@@ -157,8 +157,26 @@ def _parse_spec_object(obj: Element, def_map: dict[str, str]) -> dict:
 
 
 def _parse_relations(root: Element) -> list[dict]:
+    # Build {identifier: long_name} from every SPEC-RELATION-TYPE.
+    rel_type_map: dict[str, str] = {}
+    for rt in _find_all(root, "SPEC-RELATION-TYPE"):
+        ident = rt.get("IDENTIFIER")
+        long_name = rt.get("LONG-NAME")
+        if ident and long_name:
+            rel_type_map[ident] = long_name
+
     traces: list[dict] = []
     for rel in _find_all(root, "SPEC-RELATION"):
+        # Resolve the relation type from TYPE → SPEC-RELATION-TYPE-REF.
+        rel_type = "traces"
+        type_el = _first_child(rel, "TYPE")
+        if type_el is not None:
+            for child in type_el:
+                if _local(child.tag).endswith("-REF"):
+                    ref_text = (child.text or "").strip()
+                    rel_type = rel_type_map.get(ref_text, "traces")
+                    break
+
         src_el = _first_child(rel, "SOURCE")
         tgt_el = _first_child(rel, "TARGET")
         src_ref = _first_child(src_el, "SPEC-OBJECT-REF") if src_el is not None else None
@@ -166,7 +184,7 @@ def _parse_relations(root: Element) -> list[dict]:
         source = (src_ref.text or "").strip() if src_ref is not None else ""
         target = (tgt_ref.text or "").strip() if tgt_ref is not None else ""
         if source and target:
-            traces.append({"source": source, "target": target, "type": "traces"})
+            traces.append({"source": source, "target": target, "type": rel_type})
     return traces
 
 

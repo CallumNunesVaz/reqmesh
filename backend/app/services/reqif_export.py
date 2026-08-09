@@ -41,10 +41,46 @@ def export_reqif(store) -> str:
     req_type_id = "REQ-TYPE-001"
     spec_type_id = "SPEC-TYPE-001"
 
+    # Datatypes (must precede SPEC-TYPES per ReqIF schema order)
+    datatypes = SubElement(core, _ns_tag("DATATYPES"))
+    SubElement(datatypes, _ns_tag("DATATYPE-DEFINITION-STRING"), {
+        "IDENTIFIER": "DT-STRING",
+        "LONG-NAME": "String",
+        "LAST-CHANGE": now,
+        "MAX-LENGTH": "32000",
+    })
+    SubElement(datatypes, _ns_tag("DATATYPE-DEFINITION-XHTML"), {
+        "IDENTIFIER": "DT-XHTML",
+        "LONG-NAME": "XHTML",
+        "LAST-CHANGE": now,
+    })
+
+    # Collect distinct relation types before emitting SPEC-TYPES
+    traces_data = store.read_traces().get("links", [])
+    rel_types_set: set[str] = set()
+    for t in traces_data:
+        rtype = t.get("type", "")
+        rel_types_set.add(rtype if rtype else "traces")
+    for r in reqs:
+        for rel in r.get("relations") or []:
+            rtype = rel.get("type", "")
+            rel_types_set.add(rtype if rtype else "traces")
+
     # Spec-types
     spec_types = SubElement(core, _ns_tag("SPEC-TYPES"))
     _spec_object_type(spec_types, req_type_id, "Requirement")
-    _spec_object_type(spec_types, spec_type_id, "Specification")
+    SubElement(spec_types, _ns_tag("SPECIFICATION-TYPE"), {
+        "IDENTIFIER": spec_type_id,
+        "LONG-NAME": "Specification",
+        "LAST-CHANGE": now,
+    })
+    for rtype in sorted(rel_types_set):
+        rel_type_id = f"RELTYPE-{rtype.upper().replace('_', '-')}"
+        SubElement(spec_types, _ns_tag("SPEC-RELATION-TYPE"), {
+            "IDENTIFIER": rel_type_id,
+            "LONG-NAME": rtype,
+            "LAST-CHANGE": now,
+        })
 
     # Spec-objects (one per requirement)
     spec_objs = SubElement(core, _ns_tag("SPEC-OBJECTS"))
@@ -59,22 +95,36 @@ def export_reqif(store) -> str:
         "LONG-NAME": project_name,
     })
     spec_type_ref = SubElement(spec, _ns_tag("TYPE"))
-    SubElement(spec_type_ref, _ns_tag("SPEC-OBJECT-TYPE-REF")).text = spec_type_id
+    SubElement(spec_type_ref, _ns_tag("SPECIFICATION-TYPE-REF")).text = spec_type_id
     children = SubElement(spec, _ns_tag("CHILDREN"))
     for r in reqs:
         child = SubElement(children, _ns_tag("SPEC-HIERARCHY"))
         obj_ref = SubElement(child, _ns_tag("OBJECT"))
         SubElement(obj_ref, _ns_tag("SPEC-OBJECT-REF")).text = r["id"]
 
-    # Spec-relations (trace links plus per-requirement relations)
-    traces = store.read_traces().get("links", [])
+    # Spec-relations (trace links plus per-requirement relations).
+    #
+    # Only requirements become SPEC-OBJECTs, so a relation pointing at a
+    # verification case, component or risk has no object to reference. Emitting
+    # it anyway produces a SPEC-OBJECT-REF to an identifier that appears nowhere
+    # in the file, which is invalid ReqIF and is rejected by strict consumers.
+    # The link is dropped rather than dangled; ReqIF has no way to carry it.
+    exported_ids = {r["id"] for r in reqs}
+
+    def _both_ends_exported(source: str, target: str) -> bool:
+        return source in exported_ids and target in exported_ids
+
     rels = SubElement(core, _ns_tag("SPEC-RELATIONS"))
     index = 0
-    for t in traces:
+    for t in traces_data:
+        if not _both_ends_exported(t.get("source", ""), t.get("target", "")):
+            continue
         _spec_relation(rels, t, index)
         index += 1
     for r in reqs:
         for rel in r.get("relations") or []:
+            if not _both_ends_exported(r["id"], rel["target"]):
+                continue
             _spec_relation(rels, {"source": r["id"], "target": rel["target"], "type": rel["type"]}, index)
             index += 1
 
@@ -101,12 +151,14 @@ def _spec_object_type(parent: Element, type_id: str, name: str) -> None:
 
 
 def _add_attribute_def(parent: Element, long_name: str, data_type: str, is_id: bool) -> None:
+    """Emit ATTRIBUTE-DEFINITION-<data_type> referencing DT-<data_type>."""
     attr_id = f"ATTR-{long_name.upper().replace(' ','-')}"
-    attr_def = SubElement(parent, _ns_tag("ATTRIBUTE-DEFINITION-STRING"), {
+    attr_def = SubElement(parent, _ns_tag(f"ATTRIBUTE-DEFINITION-{data_type}"), {
         "IDENTIFIER": attr_id,
         "LONG-NAME": long_name,
     })
-    SubElement(attr_def, _ns_tag("TYPE")).text = data_type
+    type_el = SubElement(attr_def, _ns_tag("TYPE"))
+    SubElement(type_el, _ns_tag(f"DATATYPE-DEFINITION-{data_type}-REF")).text = f"DT-{data_type}"
     if is_id:
         SubElement(attr_def, _ns_tag("IS-IDENTIFIER")).text = "true"
 
@@ -148,9 +200,15 @@ def _attr_value(parent: Element, attr_id: str, value: str) -> None:
 
 
 def _spec_relation(parent: Element, trace: dict, index: int) -> None:
+    rtype = trace.get("type", "")
+    if not rtype:
+        rtype = "traces"
+    rel_type_id = f"RELTYPE-{rtype.upper().replace('_', '-')}"
     rel = SubElement(parent, _ns_tag("SPEC-RELATION"), {
         "IDENTIFIER": f"REL-{trace.get('source','')}-{trace.get('target','')}-{index}",
     })
+    type_el = SubElement(rel, _ns_tag("TYPE"))
+    SubElement(type_el, _ns_tag("SPEC-RELATION-TYPE-REF")).text = rel_type_id
     src = SubElement(rel, _ns_tag("SOURCE"))
     SubElement(src, _ns_tag("SPEC-OBJECT-REF")).text = trace["source"]
     tgt = SubElement(rel, _ns_tag("TARGET"))
