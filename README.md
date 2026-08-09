@@ -38,7 +38,7 @@ reqmesh/                    # THE TOOL (this repo)
 │   ├── app/models/        # Pydantic models for all 10 entity types
 │   ├── app/services/      # YAML store, integrity, tracing, fingerprint, evaluation,
 │   │                      # code_scan, quality, table_io, email, publisher, workflow…
-│   ├── tests/             # 1276 integration + unit tests (pytest)
+│   ├── tests/             # 1342 integration + unit tests (pytest)
 │   ├── gen_schemas.py     # JSON Schema generator
 │   └── requirements.txt   # All deps pinned to exact versions
 ├── frontend/              # React 18 + TypeScript + Vite + TailwindCSS
@@ -47,7 +47,7 @@ reqmesh/                    # THE TOOL (this repo)
 │   │   ├── components/    # Layout, nav, graph, editor, parametrics, helpers, palette…
 │   │   ├── pages/         # 20 route pages (projects, requirements, components, metrics…)
 │   │   └── store/         # Zustand state (auth, data, helpers toggle)
-│   └── tests/             # 214 unit tests (vitest)
+│   └── tests/             # 236 unit tests (vitest)
 ├── schemas/               # JSON Schemas for all project YAML formats
 ├── desktop/               # Electron shell for native desktop app
 ├── Dockerfile.prod        # Multi-stage production build
@@ -136,7 +136,7 @@ backend/.venv/bin/python seed_cessna.py --force
 
 ### Tests
 
-**Backend** — 1276 tests covering API, storage, auth, integrity, quality, tracing, code scan, fingerprint, table I/O, evaluation, what-if impact, and deployment:
+**Backend** — 1342 tests covering API, storage, auth, integrity, quality, tracing, code scan, fingerprint, table I/O, evaluation, what-if impact, and deployment:
 
 ```bash
 cd backend
@@ -144,8 +144,9 @@ cd backend
 .venv/bin/python -m pytest tests/
 ```
 
-**Frontend** — 214 unit tests covering stores, API client, entities, and
-auto-linking, plus 88 Playwright end-to-end tests:
+**Frontend** — 236 unit tests covering stores, API client, entities,
+auto-linking, row selection and graph filters, plus 88 Playwright
+end-to-end tests:
 
 ```bash
 cd frontend
