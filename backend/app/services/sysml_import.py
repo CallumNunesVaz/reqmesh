@@ -7,7 +7,10 @@ which keeps the parser small without pulling in a full KerML grammar.
 
 ``parse_sysml`` returns::
 
-    {"requirements": [...], "verification_cases": [...], "traces": [...]}
+    {"requirements": [...], "components": [...], "verification_cases": [...],
+     "traces": [...],
+     "definitions": [{"id","type","name","parameters","expr","unit","doc"}],
+     "analysis_cases": [{"id","name","doc","scope","scope_components","overrides"}]}
 """
 
 from __future__ import annotations
@@ -18,6 +21,19 @@ _SHORT = r"(?:<\s*'((?:[^'\\]|\\.)*)'\s*>\s*)?"
 _REQ_DEF_RE = re.compile(r"^requirement\s+def\s+" + _SHORT + r"([A-Za-z0-9_]+)\s*\{")
 _REQ_USAGE_RE = re.compile(r"^requirement\s+" + _SHORT + r"([A-Za-z0-9_]+)\s*:\s*([A-Za-z0-9_]+)\s*\{")
 _PART_DEF_RE = re.compile(r"^part\s+def\s+" + _SHORT + r"([A-Za-z0-9_]+)\s*\{")
+# constraint def / calc def / analysis case def — SysML-native entity blocks
+_CONSTRAINT_DEF_RE = re.compile(r"^(constraint|calc)\s+def\s+" + _SHORT + r"([A-Za-z0-9_]+)\s*\{")
+# _CONSTRAINT_DEF_RE groups: 1=constraint|calc, 2=short name, 3=declared name
+_ANALYSIS_DEF_RE = re.compile(r"^analysis\s+case\s+def\s+" + _SHORT + r"([A-Za-z0-9_]+)\s*\{")
+# _ANALYSIS_DEF_RE groups: 1=short name, 2=declared name
+_IN_PARAM_RE = re.compile(r"^in\s+([A-Za-z_]\w*)\s*;")
+_RETURN_RE = re.compile(r"^return\s*(?:\[([^\]]+)\])?\s*(.+?)\s*$")
+# Annotation regexes for @def= / @bind= / @scope / @scope_components / @override
+_DEF_USE_RE = re.compile(r"//.*?@def=([^\s]+)")
+_BIND_RE = re.compile(r"//.*?@bind=([^\s]+)")
+_SCOPE_RE = re.compile(r"//\s*@scope=(\S+)")
+_SCOPE_COMP_RE = re.compile(r"//\s*@scope_components=(\S+)")
+_OVERRIDE_RE = re.compile(r"//\s*@override=(\S+?)=([-\d.eE+]+)\s*$")
 _DOC_RE = re.compile(r"doc\s*/\*(.*?)\*/", re.DOTALL)
 _TEXT_RE = re.compile(r"text\s*/\*\s*\"(.*?)\"\s*\*/", re.DOTALL)
 _ASSIGN_RE = re.compile(r":>>\s*(\w+)\s*=\s*(.+?);")
@@ -29,6 +45,17 @@ _UNIT_RE = re.compile(r"\[([^\]]+)\]\s*$")
 _KIND_RE = re.compile(r"//\s*@kind=([A-Za-z]+)")
 _REL_ANNOT_RE = re.compile(r"//\s*@rel=([A-Za-z_]\w*)\s+([A-Za-z0-9_]+)\s*$")
 _VC_DEF_RE = re.compile(r"^verification\s+case\s+def\s+" + _SHORT + r"([A-Za-z0-9_]+)\s*\{")
+
+
+def _parse_bindings(raw: str) -> dict[str, str]:
+    """Parse ``formal:actual`` pairs from a ``@bind=`` annotation value."""
+    result: dict[str, str] = {}
+    for pair in raw.split(","):
+        if ":" in pair:
+            k, v = pair.split(":", 1)
+            if k and v:
+                result[k] = v
+    return result
 
 
 def _parse_attribute(line: str) -> dict | None:
@@ -52,6 +79,14 @@ def _parse_attribute(line: str) -> dict | None:
     km = _KIND_RE.search(line)
     if km:
         param["kind"] = km.group(1)
+    dm = _DEF_USE_RE.search(line)
+    if dm:
+        param["calc_def"] = dm.group(1)
+    bm = _BIND_RE.search(line)
+    if bm:
+        bindings = _parse_bindings(bm.group(1))
+        if bindings:
+            param["bindings"] = bindings
     return param
 
 # SysML keyword -> reqmesh relation type. ``verify`` is handled separately as a
@@ -83,6 +118,8 @@ def parse_sysml(content: str | bytes) -> dict:
     requirements: list[dict] = []
     components: list[dict] = []
     verification_cases: list[dict] = []
+    definitions: list[dict] = []
+    analysis_cases: list[dict] = []
     traces: list[dict] = []
 
     # declared name -> entity id  (e.g. "REQ_001" -> "REQ-001")
@@ -90,7 +127,8 @@ def parse_sysml(content: str | bytes) -> dict:
 
     # Stack of (kind, dict) for currently-open blocks; the innermost provides the
     # parent for a same-kind block opened inside it (reqs nest in reqs, parts in
-    # parts). ``kind`` is one of "requirement" | "component" | "vc".
+    # parts). ``kind`` is one of "requirement" | "component" | "vc" |
+    # "definition" | "analysis_case".
     stack: list[tuple[str, dict]] = []
     in_vc_section = False
     saw_req = False
@@ -111,11 +149,40 @@ def parse_sysml(content: str | bytes) -> dict:
             continue
 
         # --- block openers ---
+        # A definition's expression is recognised by elimination — it is the body
+        # line that is not `in`, `doc` or `return`. The opener itself also passes
+        # that test, so it has to be excluded explicitly, or a def with no
+        # expression line ends up storing its own `constraint def X {` header as
+        # the expression, which importer.py's empty-expr guard cannot catch.
+        opened_here = False
+        cdm = _CONSTRAINT_DEF_RE.match(line)
+        adm = _ANALYSIS_DEF_RE.match(line)
         vcm = _VC_DEF_RE.match(line)
         rm = _REQ_DEF_RE.match(line)
         rum = _REQ_USAGE_RE.match(line)
         pm = _PART_DEF_RE.match(line)
-        if vcm:
+        if cdm:
+            # groups: 1=constraint|calc, 2=short name, 3=declared name
+            dtype = cdm.group(1)
+            short, declared = cdm.group(2), cdm.group(3)
+            eid = _unescape(short) if short else declared
+            aliases[declared] = eid
+            entry = {"id": eid, "type": dtype, "name": eid, "parameters": [],
+                     "expr": "", "unit": "", "doc": ""}
+            definitions.append(entry)
+            stack.append(("definition", entry))
+            opened_here = True
+        elif adm:
+            # groups: 1=short name, 2=declared name
+            short, declared = adm.group(1), adm.group(2)
+            eid = _unescape(short) if short else declared
+            aliases[declared] = eid
+            entry = {"id": eid, "name": eid, "doc": "",
+                     "scope": [], "scope_components": [], "overrides": {}}
+            analysis_cases.append(entry)
+            stack.append(("analysis_case", entry))
+            opened_here = True
+        elif vcm:
             short, declared = vcm.group(1), vcm.group(2)
             eid = _unescape(short) if short else declared
             aliases[declared] = eid
@@ -173,7 +240,10 @@ def parse_sysml(content: str | bytes) -> dict:
 
         doc = _DOC_RE.search(line)
         if doc and doc.group(1).strip():
-            current["name"] = doc.group(1).strip()
+            if kind in ("definition", "analysis_case"):
+                current["doc"] = doc.group(1).strip()
+            else:
+                current["name"] = doc.group(1).strip()
 
         text = _TEXT_RE.search(line)
         if text and not in_vc_section:
@@ -213,6 +283,14 @@ def parse_sysml(content: str | bytes) -> dict:
                 km = _KIND_RE.search(line)
                 if km:
                     constraint["kind"] = km.group(1)
+                dm = _DEF_USE_RE.search(line)
+                if dm:
+                    constraint["constraint_def"] = dm.group(1)
+                bm = _BIND_RE.search(line)
+                if bm:
+                    bindings = _parse_bindings(bm.group(1))
+                    if bindings:
+                        constraint["bindings"] = bindings
                 current.setdefault("constraints", []).append(constraint)
 
         rel = _REL_RE.match(line)
@@ -239,10 +317,47 @@ def parse_sysml(content: str | bytes) -> dict:
             current.setdefault("relations", []).append({"type": rtype, "target": target})
             traces.append({"source": current["id"], "target": target, "type": rtype})
 
+        # --- definition block internals ---
+        if kind == "definition":
+            inm = _IN_PARAM_RE.match(line)
+            if inm:
+                current.setdefault("parameters", []).append(inm.group(1))
+                continue
+            rtm = _RETURN_RE.match(line)
+            if rtm:
+                current["unit"] = (rtm.group(1) or "").strip()
+                current["expr"] = rtm.group(2).strip()
+                continue
+            # Constraint def expression line (not in/return/doc/comment/close-brace)
+            if (current.get("type") == "constraint"
+                    and not opened_here
+                    and not line.startswith("//")
+                    and not line.startswith("in ")
+                    and not line.startswith("doc ")
+                    and not line.startswith("return ")
+                    and not line.startswith("}")):
+                current["expr"] = line.strip()
+
+        # --- analysis case block internals ---
+        if kind == "analysis_case":
+            scm = _SCOPE_RE.match(line)
+            if scm:
+                current["scope"] = scm.group(1).split(",")
+            sccm = _SCOPE_COMP_RE.match(line)
+            if sccm:
+                current["scope_components"] = sccm.group(1).split(",")
+            ovm = _OVERRIDE_RE.match(line)
+            if ovm:
+                ref = ovm.group(1)
+                try:
+                    current["overrides"][ref] = float(ovm.group(2))
+                except ValueError:
+                    pass
+
         if line.startswith("}") and stack:
             stack.pop()
 
-    if not saw_req:
+    if not saw_req and not definitions and not analysis_cases:
         raise SysMLParseError("No `requirement def` blocks found — is this a SysML v2 model?")
 
     for entry in requirements:
@@ -297,4 +412,6 @@ def parse_sysml(content: str | bytes) -> dict:
         "components": components,
         "verification_cases": verification_cases,
         "traces": traces,
+        "definitions": definitions,
+        "analysis_cases": analysis_cases,
     }

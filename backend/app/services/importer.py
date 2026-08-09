@@ -8,6 +8,8 @@ existing entities, coerce values into the schema's enums, and write them out.
 from __future__ import annotations
 
 from app.core.ids import _ID_RE
+from app.models.analysis import AnalysisCase
+from app.models.definition import Definition
 from app.models.requirement import (
     Priority,
     RequirementStatus,
@@ -115,6 +117,10 @@ def import_into_store(store, parsed: dict, mode: str = "merge") -> dict:
             store.delete_verification_case(vc["id"])
         for c in store.list_components():
             store.delete_component(c["id"])
+        for d in store.list_items("definitions"):
+            store.delete_item("definitions", d["id"])
+        for a in store.list_items("analysis_cases"):
+            store.delete_item("analysis_cases", a["id"])
 
     for req in normalised_reqs:
         if req is None:
@@ -157,6 +163,54 @@ def import_into_store(store, parsed: dict, mode: str = "merge") -> dict:
         else:
             store.create_component(comp)
         summary["components"] = summary.get("components", 0) + 1
+
+    # Definitions (constraint def / calc def)
+    for raw in parsed.get("definitions", []):
+        did = _clean_id(raw.get("id", ""))
+        if did is None:
+            summary["skipped"] += 1
+            continue
+        item = {
+            "id": did,
+            "type": raw.get("type", "constraint"),
+            "name": str(raw.get("name") or did),
+            "parameters": raw.get("parameters") or [],
+            "expr": str(raw.get("expr") or ""),
+            "unit": str(raw.get("unit") or ""),
+            "doc": str(raw.get("doc") or ""),
+        }
+        if not item["expr"]:
+            summary["skipped"] += 1
+            continue
+        try:
+            Definition(**item)
+        except Exception:
+            summary["skipped"] += 1
+            continue
+        store.write_item("definitions", did, item)
+        summary["definitions"] = summary.get("definitions", 0) + 1
+
+    # Analysis cases
+    for raw in parsed.get("analysis_cases", []):
+        aid = _clean_id(raw.get("id", ""))
+        if aid is None:
+            summary["skipped"] += 1
+            continue
+        item = {
+            "id": aid,
+            "name": str(raw.get("name") or aid),
+            "doc": str(raw.get("doc") or ""),
+            "scope": raw.get("scope") or [],
+            "scope_components": raw.get("scope_components") or [],
+            "overrides": raw.get("overrides") or {},
+        }
+        try:
+            AnalysisCase(**item)
+        except Exception:
+            summary["skipped"] += 1
+            continue
+        store.write_item("analysis_cases", aid, item)
+        summary["analysis_cases"] = summary.get("analysis_cases", 0) + 1
 
     # Merge traces, de-duplicating against what's already stored.
     incoming = parsed.get("traces", [])

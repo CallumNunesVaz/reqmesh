@@ -69,6 +69,26 @@ def _fmt_num(v) -> str:
     return str(int(f)) if f.is_integer() else f"{f:g}"
 
 
+def _annotation_suffix(item: dict, def_key: str) -> str:
+    """Build a comment suffix carrying kind, def binding, and formal→actual links.
+
+    ``// @kind=TPM @def=DERATE-1 @bind=p1:mtow,p2:struct_limit``
+    """
+    parts: list[str] = []
+    if item.get("kind"):
+        parts.append(f"@kind={item['kind']}")
+    def_id = item.get(def_key)
+    if def_id:
+        parts.append(f"@def={def_id}")
+    bindings = item.get("bindings")
+    if bindings:
+        bind_str = ",".join(f"{k}:{v}" for k, v in bindings.items())
+        parts.append(f"@bind={bind_str}")
+    if parts:
+        return "  // " + " ".join(parts)
+    return ""
+
+
 def _param_line(p: dict, prefix: str) -> str:
     """One SysML v2 ``attribute`` line for a reqmesh parameter.
 
@@ -86,9 +106,8 @@ def _param_line(p: dict, prefix: str) -> str:
         rhs = _fmt_num(v) if v is not None else "0"
     unit = p.get("unit")
     unit_s = f" [{unit}]" if unit else ""
-    kind = p.get("kind")
-    kind_s = f"  // @kind={kind}" if kind else ""
-    return f"{prefix}attribute {name}{typ} = {rhs}{unit_s};{kind_s}"
+    annot = _annotation_suffix(p, "calc_def")
+    return f"{prefix}attribute {name}{typ} = {rhs}{unit_s};{annot}"
 
 
 def _constraint_lines(c: dict, prefix: str) -> list[str]:
@@ -96,9 +115,8 @@ def _constraint_lines(c: dict, prefix: str) -> list[str]:
     out: list[str] = []
     if c.get("assume"):
         out.append(f"{prefix}assume constraint {{ {c['assume']} }}")
-    kind = c.get("kind")
-    kind_s = f"  // @kind={kind}" if kind else ""
-    out.append(f"{prefix}require constraint {{ {c.get('expr', '')} }}{kind_s}")
+    annot = _annotation_suffix(c, "constraint_def")
+    out.append(f"{prefix}require constraint {{ {c.get('expr', '')} }}{annot}")
     return out
 
 
@@ -121,6 +139,10 @@ def export_sysml_v2(store) -> str:
         defs = {d["id"]: d for d in store.list_items("definitions")}
     except Exception:
         defs = {}
+    try:
+        cases = store.list_items("analysis_cases")
+    except Exception:
+        cases = []
     project_name = meta.get("name", store.root.name)
     safe_name = project_name.replace(" ", "_").replace("-", "_")
 
@@ -261,6 +283,52 @@ def export_sysml_v2(store) -> str:
         lines.append("  // Components")
         for c in comp_by_parent.get(None, []):
             lines.extend(render_part(c))
+
+    # --- Definitions (constraint def / calc def) ---
+    if defs:
+        lines.append("")
+        lines.append("  // Definitions")
+        for did in sorted(defs):
+            d = defs[did]
+            dtype = d.get("type", "constraint")
+            keyword = "constraint def" if dtype == "constraint" else "calc def"
+            lines.append(f"  {_decl(keyword, did)} {{")
+            if d.get("doc"):
+                doc_esc = d["doc"].replace("*/", "* /")
+                lines.append(f"    doc /* {doc_esc} */")
+            for param_name in d.get("parameters", []):
+                lines.append(f"    in {param_name};")
+            if dtype == "calc":
+                unit = d.get("unit", "")
+                if unit:
+                    lines.append(f"    return [{unit}] {d['expr']}")
+                else:
+                    lines.append(f"    return {d['expr']}")
+            else:
+                lines.append(f"    {d['expr']}")
+            lines.append("  }")
+            lines.append("")
+
+    # --- Analysis Cases ---
+    if cases:
+        lines.append("")
+        lines.append("  // Analysis Cases")
+        for case in cases:
+            lines.append(f"  {_decl('analysis case def', case['id'])} {{")
+            if case.get("doc"):
+                doc_esc = case["doc"].replace("*/", "* /")
+                lines.append(f"    doc /* {doc_esc} */")
+            scope = case.get("scope") or []
+            if scope:
+                lines.append(f"    // @scope={','.join(scope)}")
+            scope_comps = case.get("scope_components") or []
+            if scope_comps:
+                lines.append(f"    // @scope_components={','.join(scope_comps)}")
+            overrides = case.get("overrides") or {}
+            for ref, val in overrides.items():
+                lines.append(f"    // @override={ref}={_fmt_num(val)}")
+            lines.append("  }")
+            lines.append("")
 
     # Verification cases as separate defs
     vcs = store.list_verification_cases()
