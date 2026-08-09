@@ -18,6 +18,10 @@ interface Props {
   /** Every candidate in the tree; the moving rows' own branches are filtered out. */
   items: ReparentTarget[];
   movingIds: string[];
+  /** Destination chosen already — a drop names its target, so the dialog
+   *  opens on the confirm step instead of asking again. `undefined` means
+   *  nothing was chosen; `null` means top level. */
+  initialParent?: string | null;
   /** Whether this tree renames ids when the destination prefix differs.
    *  Components never do — only requirements. */
   supportsRePrefix?: boolean;
@@ -39,7 +43,7 @@ interface Props {
  * change before anything is written.
  */
 export default function ReparentDialog({
-  open, onClose, items, movingIds, supportsRePrefix = false, preview, onConfirm,
+  open, onClose, items, movingIds, initialParent, supportsRePrefix = false, preview, onConfirm,
 }: Props) {
   const [query, setQuery] = useState('');
   const [parent, setParent] = useState<string | null>(null);
@@ -65,11 +69,14 @@ export default function ReparentDialog({
 
   useEffect(() => {
     if (!open) return;
-    setQuery(''); setParent(null); setChosen(false);
+    setQuery('');
+    setParent(initialParent === undefined ? null : initialParent);
+    setChosen(initialParent !== undefined);
     setRePrefix(false); setRenames([]); setError(''); setBusy(false);
+    if (initialParent !== undefined) return;
     const t = setTimeout(() => searchRef.current?.focus(), 50);
     return () => clearTimeout(t);
-  }, [open]);
+  }, [open, initialParent]);
 
   // Re-run the preview whenever the destination or the re-prefix choice
   // changes: a stale rename table describing a different move is worse than

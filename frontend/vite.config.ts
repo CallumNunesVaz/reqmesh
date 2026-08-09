@@ -20,6 +20,9 @@ export default defineConfig({
           if (id.includes('recharts')) return 'charts'
           if (id.includes('@tiptap') || id.includes('prosemirror')) return 'editor'
           if (id.includes('framer-motion') || id.includes('lucide-react')) return 'motion'
+          // Before the `react` catch-all: @dnd-kit's paths contain "react",
+          // so it would otherwise land in the critical-path chunk.
+          if (id.includes('@dnd-kit')) return 'dnd'
           if (id.includes('react')) return 'react'
         },
       },

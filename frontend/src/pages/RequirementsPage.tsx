@@ -21,6 +21,9 @@ import BodyPortal from '../components/BodyPortal';
 import { useToasts } from '../components/Toast';
 import TruncationBanner from '../components/TruncationBanner';
 import ReparentDialog from '../components/ReparentDialog';
+import { DndContext, DragOverlay, closestCenter } from '@dnd-kit/core';
+import { useTreeDrag } from '../hooks/useTreeDrag';
+import { DropRow, DragGrip, TopLevelDropZone } from '../components/TreeDragRow';
 
 const statusStyles: Record<string, { dot: string; text: string }> = {
   proposed: { dot: 'bg-cs-blue', text: 'text-cs-blue' },
@@ -297,6 +300,16 @@ export default function RequirementsPage() {
     [projectId, movingIds],
   );
 
+  // A drop opens the same dialog the menu does, rather than moving straight
+  // away: dragging must not be the one path to an id rewrite that skips the
+  // warning. `pendingParent` seeds the dialog with the dropped-on row.
+  const [pendingParent, setPendingParent] = useState<string | null | undefined>(undefined);
+  const { sensors, draggingIds, overId, dropIsValid, isDragging, dndHandlers } = useTreeDrag({
+    items: requirements,
+    selectedIds,
+    onDrop: (ids, parent) => { setMovingIds(ids); setPendingParent(parent); },
+  });
+
   const confirmReparent = async (parent: string | null, rePrefix: boolean) => {
     const ids = movingIds ?? [];
     const res = await api.bulkReparentRequirements(projectId!, ids, parent, rePrefix);
@@ -461,6 +474,12 @@ export default function RequirementsPage() {
                 <span className="text-[11px] text-muted-foreground">Select all</span>
               </div>
             )}
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              {...dndHandlers}
+            >
+            {editMode && <TopLevelDropZone active={isDragging} isOver={overId === '__top_level__'} />}
             {rows.map(({ req, depth, childCount }) => {
             const TypeIcon = reqTypeIcon(req.type);
             const typeCls = reqTypeClass(req.type);
@@ -468,12 +487,19 @@ export default function RequirementsPage() {
             const isCollapsed = collapsed.has(req.id);
             const dimByFilter = matchIds && !matchIds.has(req.id);
             return (
-              <div
+              <DropRow
                 key={req.id}
+                id={req.id}
+                disabled={!editMode}
+                isOver={overId === req.id}
+                valid={dropIsValid}
+              >
+              <div
                 onClick={() => navigate(`/project/${projectId}/requirements/${req.id}`)}
-                className={`group flex items-center gap-2 pr-3 py-[7px] cursor-pointer transition-colors hover:bg-accent/40 ${dimByFilter ? 'opacity-45' : ''}`}
+                className={`group flex items-center gap-2 pr-3 py-[7px] cursor-pointer transition-colors hover:bg-accent/40 ${dimByFilter ? 'opacity-45' : ''} ${draggingIds.includes(req.id) ? 'opacity-40' : ''}`}
                 style={{ paddingLeft: `${12 + depth * 22}px` }}
               >
+                {editMode && <DragGrip id={req.id} label={req.id} />}
                 {/* Selection checkbox */}
                 {editMode && (
                   <span className="shrink-0 mr-0.5" onClick={(e) => e.stopPropagation()}>
@@ -568,8 +594,17 @@ export default function RequirementsPage() {
                   )}
                 </span>
               </div>
+              </DropRow>
             );
           })}
+            <DragOverlay dropAnimation={null}>
+              {draggingIds.length > 0 && (
+                <div className="px-2 py-1 rounded-md bg-card border shadow-lg text-[11px] font-mono text-foreground">
+                  {draggingIds.length === 1 ? draggingIds[0] : `${draggingIds.length} requirements`}
+                </div>
+              )}
+            </DragOverlay>
+            </DndContext>
           </>
         )}
       </div>
@@ -611,9 +646,10 @@ export default function RequirementsPage() {
 
       <ReparentDialog
         open={movingIds !== null}
-        onClose={() => setMovingIds(null)}
+        onClose={() => { setMovingIds(null); setPendingParent(undefined); }}
         items={requirements}
         movingIds={movingIds ?? []}
+        initialParent={pendingParent}
         supportsRePrefix
         preview={previewReparent}
         onConfirm={confirmReparent}

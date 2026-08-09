@@ -15,6 +15,9 @@ import { useRangeSelection } from '../hooks/useRangeSelection';
 import { useBulkActions } from '../hooks/useBulkActions';
 import { useUndoStore } from '../store/undo';
 import ReparentDialog from '../components/ReparentDialog';
+import { DndContext, DragOverlay, closestCenter } from '@dnd-kit/core';
+import { useTreeDrag, TOP_LEVEL_ID } from '../hooks/useTreeDrag';
+import { DropRow, DragGrip, TopLevelDropZone } from '../components/TreeDragRow';
 
 const EMPTY_DRAFT = { id: '', name: '', type: 'assembly', parent: '' };
 
@@ -211,6 +214,13 @@ export default function ComponentsPage() {
   // referenced, rejected as an unhandled promise: no message, and the
   // selection-clearing and reload below never ran, so the page looked frozen
   // rather than refused.
+  const [pendingParent, setPendingParent] = useState<string | null | undefined>(undefined);
+  const { sensors, draggingIds, overId, dropIsValid, isDragging, dndHandlers } = useTreeDrag({
+    items: components,
+    selectedIds,
+    onDrop: (ids, parent) => { setMovingIds(ids); setPendingParent(parent); },
+  });
+
   const confirmReparent = async (parent: string | null) => {
     const ids = movingIds ?? [];
     const before = new Map(components.map((c) => [c.id, c.parent ?? null]));
@@ -275,12 +285,14 @@ export default function ComponentsPage() {
     const isFocused = flatNodes[focusedIndex]?.id === node.id;
     return (
       <div key={node.id}>
+        <DropRow id={node.id} disabled={!editable} isOver={overId === node.id} valid={dropIsValid}>
         <div
           id={`entity-${node.id}`}
           onClick={() => navigate(`/project/${projectId}/components/${node.id}`)}
-          className={`flex items-center gap-2 px-2 py-2 rounded-lg cursor-pointer transition-colors hover:bg-accent ${isFocused ? 'bg-accent ring-1 ring-ring/30' : ''}`}
+          className={`group flex items-center gap-2 px-2 py-2 rounded-lg cursor-pointer transition-colors hover:bg-accent ${isFocused ? 'bg-accent ring-1 ring-ring/30' : ''} ${draggingIds.includes(node.id) ? 'opacity-40' : ''}`}
           style={{ paddingLeft: depth * 20 + 8 }}
         >
+          {editable && <DragGrip id={node.id} label={node.id} />}
           {editable && (
             <span className="shrink-0" onClick={(e) => e.stopPropagation()}>
               {selectedIds.has(node.id) ? (
@@ -331,6 +343,7 @@ export default function ComponentsPage() {
             {effectiveHidden.has(node.id) ? <EyeOff size={13} /> : <Eye size={13} />}
           </button>
         </div>
+        </DropRow>
         {hasKids && !isCollapsed && node.children.map((child) => renderNode(child, depth + 1))}
       </div>
     );
@@ -355,9 +368,10 @@ export default function ComponentsPage() {
 
       <ReparentDialog
         open={movingIds !== null}
-        onClose={() => setMovingIds(null)}
+        onClose={() => { setMovingIds(null); setPendingParent(undefined); }}
         items={components}
         movingIds={movingIds ?? []}
+        initialParent={pendingParent}
         onConfirm={confirmReparent}
       />
 
@@ -460,7 +474,17 @@ export default function ComponentsPage() {
         </div>
       ) : (
         <div className="card p-2 flex-1 min-w-[280px]" tabIndex={0} ref={treeContainerRef} onKeyDown={handleTreeKeyDown}>
-          {tree.map((node) => renderNode(node, 0))}
+          <DndContext sensors={sensors} collisionDetection={closestCenter} {...dndHandlers}>
+            {editable && <TopLevelDropZone active={isDragging} isOver={overId === TOP_LEVEL_ID} />}
+            {tree.map((node) => renderNode(node, 0))}
+            <DragOverlay dropAnimation={null}>
+              {draggingIds.length > 0 && (
+                <div className="px-2 py-1 rounded-md bg-card border shadow-lg text-[11px] font-mono text-foreground">
+                  {draggingIds.length === 1 ? draggingIds[0] : `${draggingIds.length} components`}
+                </div>
+              )}
+            </DragOverlay>
+          </DndContext>
         </div>
       )}
     </div>
