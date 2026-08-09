@@ -838,6 +838,15 @@ export interface MetricsData {
   risks: RiskMetrics;
 }
 
+export interface ReparentResult {
+  updated: number;
+  ids: string[];
+  /** Old id → new id for every requirement the move renames. Empty unless
+   *  `re_prefix` is on. */
+  renames: { from: string; to: string }[];
+  dry_run?: boolean;
+}
+
 export interface ImportSummary {
   created: number;
   updated: number;
@@ -1398,8 +1407,20 @@ export const api = {
     ),
   bulkDeleteRequirements: (projectId: string, ids: string[]) =>
     request<{ deleted: number }>(`/projects/${projectId}/requirements/bulk-delete`, { method: 'POST', body: { ids } }),
-  bulkReparentRequirements: (projectId: string, ids: string[], parent: string | null, rePrefix: boolean = false) =>
-    request<{ updated: number; ids: string[] }>(`/projects/${projectId}/requirements/bulk-reparent`, { method: 'POST', body: { ids, parent, re_prefix: rePrefix } }),
+  /** `dryRun` returns the renames the move would perform without writing. The
+   *  preview shares the planner with the write path, so it cannot drift from
+   *  what actually happens. */
+  bulkReparentRequirements: (
+    projectId: string,
+    ids: string[],
+    parent: string | null,
+    rePrefix: boolean = false,
+    dryRun: boolean = false,
+  ) =>
+    request<ReparentResult>(`/projects/${projectId}/requirements/bulk-reparent`, {
+      method: 'POST',
+      body: { ids, parent, re_prefix: rePrefix, dry_run: dryRun },
+    }),
 
   // Bulk — Components
   bulkUpdateComponents: (projectId: string, ids: string[], updates: Record<string, unknown>) =>

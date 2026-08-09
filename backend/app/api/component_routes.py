@@ -21,6 +21,7 @@ from app.models.component import ComponentCreate, ComponentUpdate
 from app.services.yaml_store import YamlStore
 from app.services.history import record_change
 from app.services.delete_guard import check_deletable
+from app.services.reparent import validate_component_parent
 
 router = APIRouter()
 
@@ -31,22 +32,16 @@ def _validate_parent(store: YamlStore, component_id: str, parent_id: str | None)
     Without the walk a component could be reparented under its own descendant,
     which detaches that whole branch from the tree — the /tree endpoint would
     silently stop returning it.
+
+    The rule itself lives in ``services.reparent`` so the bulk path enforces the
+    identical one; it takes the component list because bulk callers share a
+    single scan across every id.
     """
     if parent_id is None:
         return
-    if parent_id == component_id:
-        raise HTTPException(status_code=400, detail="A component cannot be its own parent")
-    if store.get_component(parent_id) is None:
-        raise HTTPException(status_code=400, detail=f"Parent component not found: {parent_id}")
-
-    by_id = {c["id"]: c for c in store.list_components()}
-    seen = {component_id}
-    cursor = parent_id
-    while cursor is not None:
-        if cursor in seen:
-            raise HTTPException(status_code=400, detail="Circular parent reference")
-        seen.add(cursor)
-        cursor = (by_id.get(cursor) or {}).get("parent")
+    reason = validate_component_parent(store.list_components(), component_id, parent_id)
+    if reason:
+        raise HTTPException(status_code=400, detail=reason)
 
 
 def _validate_links(store: YamlStore, satisfies: list[str] | None, vcs: list[str] | None) -> None:

@@ -3,7 +3,6 @@ specifications, risks, and change requests. Extracted from ``extra_routes.py``.
 """
 from __future__ import annotations
 
-import re
 
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import ValidationError
@@ -17,6 +16,7 @@ from app.models.verification import VerificationCaseUpdate
 from app.models.change_request import ChangeRequestUpdate
 from app.services.history import record_change
 from app.services.baseline_membership import apply_membership, defined_baseline_names
+from app.services.reparent import apply_reparent, plan_reparent, validate_component_parent
 
 router = APIRouter()
 
@@ -173,10 +173,21 @@ def bulk_reparent_components(project_id: str, data: dict, user: dict = Depends(r
     """Assign multiple components to a new parent (set parent=None to detach)."""
     store = get_store(project_id)
     ids = data.get("ids", [])
-    parent = data.get("parent", None)
+    parent = data.get("parent", None) or None
+
+    # The single-item PUT has always refused a cycle; this path did not, so the
+    # move the API rejects one at a time was accepted in a batch — detaching the
+    # branch from /tree, which then silently stopped returning it. One scan is
+    # shared across every id rather than re-read per component.
+    components = store.list_components()
+    for comp_id in ids:
+        reason = validate_component_parent(components, comp_id, parent)
+        if reason:
+            raise HTTPException(status_code=400, detail=reason)
+
     updated = 0
     for comp_id in ids:
-        if store.update_component(comp_id, {"parent": parent or None}):
+        if store.update_component(comp_id, {"parent": parent}):
             updated += 1
     return {"updated": updated}
 
@@ -301,20 +312,6 @@ def bulk_delete_change_requests(project_id: str, data: dict, user: dict = Depend
 
 # ── Bulk reparent + re-prefix for requirements ────────────────────────────────
 
-def _collect_subtree(children_by_parent: dict[str, list[str]], root_id: str) -> list[str]:
-    """Return root_id followed by all transitive descendant ids (pre-order)."""
-    out = [root_id]
-    for child_id in children_by_parent.get(root_id, []):
-        out.extend(_collect_subtree(children_by_parent, child_id))
-    return out
-
-
-def _leading_prefix(item_id: str) -> str:
-    """The leading alphabetic run of an ID, e.g. 'REQ' from 'REQ-0001'."""
-    m = re.match(r"^([A-Za-z]+)", item_id or "")
-    return m.group(1) if m else ""
-
-
 @router.post("/projects/{project_id}/requirements/bulk-reparent")
 def bulk_reparent_requirements(project_id: str, data: dict, user: dict = Depends(require_maintain)):
     """Move selected requirements under a new parent and optionally re-prefix IDs.
@@ -324,98 +321,29 @@ def bulk_reparent_requirements(project_id: str, data: dict, user: dict = Depends
     renamed to the new prefix. Parent pointers and relation targets — both
     inside the subtree and elsewhere in the project — are rewritten to the new
     IDs so nothing is left dangling.
+
+    ``dry_run`` returns the same ``renames`` the real call would perform without
+    writing anything, so the UI can show the rename before the user commits to
+    it. The planning is shared with the write path rather than reimplemented, so
+    the preview cannot drift from what actually happens.
     """
     store = get_store(project_id)
     ids = data.get("ids", [])
     new_parent = data.get("parent", None) or None
     re_prefix = data.get("re_prefix", False)
+    dry_run = bool(data.get("dry_run", False))
 
-    # Snapshot the hierarchy before any mutation so subtree collection is stable.
-    children_by_parent: dict[str, list[str]] = {}
-    for r in store.list_requirements():
-        children_by_parent.setdefault(r.get("parent"), []).append(r["id"])
+    plan = plan_reparent(store.list_requirements(), ids, new_parent, re_prefix)
 
-    new_prefix = _leading_prefix(new_parent) if new_parent else ""
+    if plan.rejected:
+        raise HTTPException(status_code=400, detail=plan.rejected[0][1])
 
-    # Pre-scan all requirements once to build the used-numbers set for the
-    # destination prefix.  The per-id rescan in the old code was O(n·m) with
-    # a regex per pair; moving 200 requirements in a 5000-requirement project
-    # was a million regex matches.  This single scan feeds a live set that
-    # each group updates with its own allocations, matching the old rescan
-    # result exactly.
-    used_nums_by_prefix: dict[str, set[int]] = {}
-    if new_prefix and re_prefix:
-        for r in store.list_requirements():
-            mm = re.match(r"^" + re.escape(new_prefix) + r"\D*(\d+)$", r["id"])
-            if mm:
-                used_nums_by_prefix.setdefault(new_prefix, set()).add(int(mm.group(1)))
+    if dry_run:
+        return {
+            "dry_run": True,
+            "updated": plan.affected_count,
+            "ids": [],
+            "renames": plan.renames,
+        }
 
-    updated: list[str] = []
-    id_map: dict[str, str] = {}  # old_id -> new_id, across every moved subtree
-
-    for req_id in ids:
-        req = store.get_requirement(req_id)
-        if req is None:
-            continue
-        old_prefix = _leading_prefix(req_id)
-        if re_prefix and new_parent and new_prefix and old_prefix and old_prefix != new_prefix:
-            subtree = _collect_subtree(children_by_parent, req_id)
-            # Mirror the new parent's ID shape (separator + zero-padded width)
-            # so re-prefixed IDs match the destination namespace's convention.
-            pm = re.match(r"^[A-Za-z]+(\D*)(\d+)$", new_parent)
-            sep, width = (pm.group(1), len(pm.group(2))) if pm else ("", 4)
-            # Use the pre-scanned used-numbers set, warmed by allocations from
-            # earlier groups.  Exclude any subtree node that already bears the
-            # new prefix — the old per-id scan did the same, and changing it
-            # would shift the allocation.
-            live_nums = used_nums_by_prefix.setdefault(new_prefix, set())
-            subtree_new_nums = {int(mm.group(1)) for old_id in subtree
-                                if (mm := re.match(r"^" + re.escape(new_prefix) + r"\D*(\d+)$", old_id))}
-            effective_used = live_nums - subtree_new_nums
-            next_num = (max(effective_used) + 1) if effective_used else 1
-            # Only nodes that share the moved group's prefix are renamed; other
-            # descendants keep their ID but still get their parent pointer fixed.
-            local_map = {old_id: old_id for old_id in subtree}
-            for old_id in subtree:
-                if old_id.startswith(old_prefix):
-                    local_map[old_id] = f"{new_prefix}{sep}{str(next_num).zfill(width)}"
-                    live_nums.add(next_num)
-                    next_num += 1
-            for old_id in subtree:
-                node = store.get_requirement(old_id)
-                if node is None:
-                    continue
-                node = dict(node)
-                node["id"] = local_map[old_id]
-                if old_id == req_id:
-                    node["parent"] = new_parent
-                else:
-                    node["parent"] = local_map.get(node.get("parent"), node.get("parent"))
-                for rel in node.get("relations", []):
-                    if rel.get("target") in local_map:
-                        rel["target"] = local_map[rel["target"]]
-                store.delete_requirement(old_id)
-                store.create_requirement(node)
-                updated.append(node["id"])
-            id_map.update({k: v for k, v in local_map.items() if k != v})
-            continue
-        if store.update_requirement(req_id, {"parent": new_parent}):
-            updated.append(req_id)
-
-    # Rewrite relation targets that point at renamed IDs from outside the moves.
-    if id_map:
-        renamed_new_ids = set(id_map.values())
-        for r in store.list_requirements():
-            if r["id"] in renamed_new_ids:
-                continue  # its internal relations were already remapped above
-            rels = r.get("relations", [])
-            changed = False
-            for rel in rels:
-                tgt = rel.get("target")
-                if tgt in id_map:
-                    rel["target"] = id_map[tgt]
-                    changed = True
-            if changed:
-                store.update_requirement(r["id"], {"relations": rels})
-
-    return {"updated": len(updated), "ids": updated}
+    return apply_reparent(store, plan, user.get("username", ""))
