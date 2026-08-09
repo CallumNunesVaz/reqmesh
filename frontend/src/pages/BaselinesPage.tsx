@@ -16,6 +16,43 @@ import { useSortable, SortableContext, verticalListSortingStrategy } from '@dnd-
 import type { CSSProperties } from 'react';
 import { moveInSequence, moveToIndex } from '../lib/reorder';
 
+/**
+ * One draggable row.
+ *
+ * This has to be a component rather than a callback inside the map: `useSortable`
+ * is a hook, and calling it in a loop makes the hook count depend on how many
+ * baselines exist. Creating or deleting one then changes that count between
+ * renders and React throws, taking the whole page down — which is exactly what
+ * happened to the two allocation-matrix tests that create a baseline first.
+ */
+function SortableBaselineRow({ name, children }: { name: string; children: React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: name });
+  const style: CSSProperties = {
+    transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
+    transition,
+    opacity: isDragging ? 0.4 : undefined,
+    position: 'relative',
+    zIndex: isDragging ? 10 : undefined,
+  };
+  return (
+    <div ref={setNodeRef} style={style}>
+      <div className="flex items-start gap-1">
+        <div className="pt-3">
+          <button
+            {...attributes}
+            {...listeners}
+            className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-grab active:cursor-grabbing"
+            title="Drag to reorder"
+          >
+            <GripVertical size={14} />
+          </button>
+        </div>
+        <div className="flex-1 min-w-0">{children}</div>
+      </div>
+    </div>
+  );
+}
+
 export default function BaselinesPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const [baselines, setBaselines] = useState<BaselineInfo[]>([]);
@@ -547,35 +584,11 @@ export default function BaselinesPage() {
               <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
                 <SortableContext items={inSequence.map((b) => b.name)} strategy={verticalListSortingStrategy}>
                   <div className="space-y-3">
-                    {inSequence.map((b) => {
-                      const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: b.name });
-                      const style: CSSProperties = {
-                        transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
-                        transition,
-                        opacity: isDragging ? 0.4 : undefined,
-                        position: 'relative',
-                        zIndex: isDragging ? 10 : undefined,
-                      };
-                      return (
-                        <div key={b.name} ref={setNodeRef} style={style}>
-                          <div className="flex items-start gap-1">
-                            <div className="pt-3">
-                              <button
-                                {...attributes}
-                                {...listeners}
-                                className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-grab active:cursor-grabbing"
-                                title="Drag to reorder"
-                              >
-                                <GripVertical size={14} />
-                              </button>
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              {renderRow(b)}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
+                    {inSequence.map((b) => (
+                      <SortableBaselineRow key={b.name} name={b.name}>
+                        {renderRow(b)}
+                      </SortableBaselineRow>
+                    ))}
                   </div>
                 </SortableContext>
                 <DragOverlay>
