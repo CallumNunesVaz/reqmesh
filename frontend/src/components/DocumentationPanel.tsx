@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { REQUIREMENT_TYPES, REQUIREMENT_TYPE_META, reqTypeClass } from '../lib/requirementTypes';
-import { X, BookOpen, Boxes, FileText, CheckCircle2, GitBranch, Sigma, Sparkles, ShieldCheck, TrendingUp, Keyboard, Terminal, Globe, Search, Info, AlertTriangle, Lightbulb, ArrowUpCircle, Calendar, GitPullRequest } from 'lucide-react';
+import { X, BookOpen, Boxes, FileText, CheckCircle2, GitBranch, Sigma, Sparkles, ShieldCheck, TrendingUp, Keyboard, Terminal, Globe, Search, Info, AlertTriangle, Lightbulb, ArrowUpCircle, Calendar, GitPullRequest, Link2 } from 'lucide-react';
 
 type DocSection = { id: string; icon: typeof BookOpen; title: string; keywords: string; render: () => ReactNode };
 
@@ -206,12 +206,46 @@ const DOCS: DocSection[] = [
           <KeyRow keys={<Kbd>Escape</Kbd>} action="Clear selection" />
         </KeyTable>
 
+        <H3>Selecting Rows</H3>
+        <KeyTable>
+          <KeyRow keys={<>Click</>} action="Tick or untick one row — other selections are kept" />
+          <KeyRow keys={<><Kbd>Ctrl</Kbd> or <Kbd>Cmd</Kbd> + click</>} action="Same as a plain click: tick or untick one row" />
+          <KeyRow keys={<><Kbd>Shift</Kbd> + click</>} action="Apply that row's new state across the range from the last row you clicked" />
+        </KeyTable>
+        <P>Shift ranges span the rows <em>as displayed</em>, so filtering or collapsing a branch changes what a range covers. Because the clicked row decides the range's new state, Shift+click clears a block as readily as it selects one.</P>
+
         <H3>Detail Pages</H3>
         <KeyTable>
           <KeyRow keys={<Kbd>Ctrl+S</Kbd>} action="Save changes" />
           <KeyRow keys={<Kbd>Escape</Kbd>} action="Back to list" />
           <KeyRow keys={<Kbd>Delete</Kbd>} action="Delete this item" />
         </KeyTable>
+      </>
+    ),
+  },
+  {
+    id: 'cross-linking', icon: Link2, title: 'Cross-linking & Mentions',
+    keywords: 'mention at sign @ link cross-link reference entity picker autocomplete icon backlink hover preview command palette',
+    render: () => (
+      <>
+        <H2>Cross-linking &amp; Mentions</H2>
+        <P>Any entity can be referenced from any text field. References render as links carrying that entity kind's icon and colour, with a hover preview and a copyable deep link.</P>
+
+        <H3>Linking as you type</H3>
+        <P>Type <Kbd>@</Kbd> in any description or notes field to open the entity picker. Keep typing to filter — the search is fuzzy and tolerates missing spaces, so <InlineCode>@fuelpump</InlineCode> finds <em>Fuel Pump</em>. Pick with <Kbd>Enter</Kbd> or <Kbd>Tab</Kbd>, move with <Kbd>↑</Kbd> <Kbd>↓</Kbd>, dismiss with <Kbd>Escape</Kbd>.</P>
+        <P>The <Kbd>@</Kbd> must start a word, so an email address never triggers the picker.</P>
+
+        <H3>What gets stored</H3>
+        <UL>
+          <LI><strong className="text-card-foreground">Rich-text fields</strong> (requirement, component, risk and baseline descriptions) store the reference as <InlineCode>[[ID]]</InlineCode> and show it as a chip with the entity's icon while you edit.</LI>
+          <LI><strong className="text-card-foreground">Plain-text fields</strong> (decision records, verification procedures) store the <strong className="text-card-foreground">bare id</strong>. It is linked on read like any other mention.</LI>
+        </UL>
+        <P>Both forms are plain text in the YAML, so a reference stays readable in a git diff and survives export.</P>
+
+        <H3>Referencing without the picker</H3>
+        <P>You do not have to use <Kbd>@</Kbd>. Any known entity id written in prose is linked automatically wherever it appears — the picker just saves you remembering the id.</P>
+
+        <Callout variant="tip">A reference to an entity that is later deleted keeps rendering as plain text rather than a broken link, so nothing silently disappears from your prose.</Callout>
       </>
     ),
   },

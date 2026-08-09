@@ -485,12 +485,52 @@ verdict rendering; this page is where cases are written and scoped.
 
 Every entity reference is a hyperlink to that entity, wherever it appears. Each kind carries its own colour-coded icon.
 
+- **`@` mentions** — type `@` in any description or notes field to open a floating entity picker; keep typing to filter, `↑`/`↓` to move, `Enter` or `Tab` to insert, `Escape` to dismiss
 - **Ctrl/Cmd+K command palette** — word-based fuzzy search across every entity; tolerates missing spaces (e.g. `fuelpump` matches `Fuel Pump`)
 - **Hover previews** — pause on any reference to see a peek card with kind, status, and description
 - **Copy link** — copies an absolute deep-link URL for commits, chat, or tickets
 - **Backlinks** — relations render in both directions
 - **Breadcrumbs** — ancestor chain with "Show in graph" shortcut
 - **Auto-linking** — entity IDs in descriptions become links automatically in both read and edit modes
+
+### Mentions
+
+The picker uses the same fuzzy index as the command palette, and the `@` must
+start a word — so an email address never triggers it.
+
+What is inserted depends on the field, and both forms stay plain text so a
+reference is readable in a `git diff` and survives export:
+
+| Field | Stored as | While editing |
+|---|---|---|
+| Rich text — requirement, component, risk, baseline descriptions | `[[ID]]` | an inline chip with the entity's icon |
+| Plain text — decision records, verification procedures | the bare id | plain text (a `textarea` can only hold text) |
+
+Rich-text descriptions are sanitised server-side against a tag allowlist that
+does not include `<span>`, so the bracket token — not the editor's markup — is
+what actually persists. Both forms render on read as a link carrying the entity
+kind's icon, with the brackets consumed.
+
+A reference whose entity is later deleted renders as plain text rather than a
+broken link, so nothing silently vanishes from your prose.
+
+## Selecting & Bulk Editing
+
+Lists with checkboxes — requirements, components, specifications, risks and
+change requests — support range selection:
+
+| Gesture | Effect |
+|---|---|
+| Click | Tick or untick one row; other selections are kept |
+| `Ctrl`/`Cmd` + click | Same as a plain click |
+| `Shift` + click | Apply that row's new state across the range from the last row clicked |
+
+Plain click stays a toggle rather than replacing the selection, because these
+are checkboxes — clicking a ticked box to silently clear everything else is not
+what a checkbox promises. A Shift range spans the rows **as displayed**, so
+filtering or collapsing a branch changes what it covers, and because the clicked
+row decides the range's state, Shift+click clears a block as readily as it
+selects one.
 
 ## Guided Mode (Helpers)
 
