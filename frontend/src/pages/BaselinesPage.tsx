@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { usePersistedState, setCodec } from '../hooks/usePersistedState';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Trash2, Edit3, Check, X, Snowflake, History, GitBranch, Clock, Layers, ArrowRight, ChevronDown, ChevronUp, ChevronRight, Loader, Eye, EyeOff, Calendar } from 'lucide-react';
+import { Plus, Trash2, Edit3, Check, X, Snowflake, History, GitBranch, Clock, Layers, ArrowRight, ChevronDown, ChevronUp, ChevronRight, Loader, Eye, EyeOff, Calendar, GripVertical } from 'lucide-react';
 import { api, type BaselineInfo, type BaselineDiff } from '../api/client';
 import { EntityLink } from '../components/entities';
 import RichTextEditor from '../components/RichTextEditor';
@@ -11,6 +11,10 @@ import { useEntityKinds } from '../components/entityIndex';
 import { HelpTip } from '../components/HelpTip';
 import { useAuthStore } from '../store/auth';
 import { useStore } from '../store';
+import { DndContext, DragOverlay, closestCenter, PointerSensor, KeyboardSensor, useSensor, useSensors, type DragStartEvent, type DragEndEvent } from '@dnd-kit/core';
+import { useSortable, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import type { CSSProperties } from 'react';
+import { moveInSequence, moveToIndex } from '../lib/reorder';
 
 export default function BaselinesPage() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -22,6 +26,11 @@ export default function BaselinesPage() {
   const bumpGraph = useStore((s) => s.bumpGraphVersion);
   const hiddenBaselines = useStore((s) => s.hiddenBaselines);
   const toggleHiddenBaseline = useStore((s) => s.toggleHiddenBaseline);
+  const [activeDragName, setActiveDragName] = useState<string | null>(null);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor),
+  );
 
   // Create / edit form state
   const [showForm, setShowForm] = useState(false);
@@ -135,6 +144,29 @@ export default function BaselinesPage() {
     }
   };
 
+  const commitReorder = async (newOrder: string[]) => {
+    if (!projectId || !editable) return;
+    const prev = baselines;
+    setBaselines((current) =>
+      current.map((b) => {
+        const idx = newOrder.indexOf(b.name);
+        return idx === -1 ? b : { ...b, order: idx + 1 };
+      }),
+    );
+    try {
+      const result = await api.reorderBaselines(projectId, newOrder);
+      setBaselines((current) =>
+        current.map((b) => {
+          const updated = result.baselines.find((def) => def.name === b.name);
+          return updated ? { ...b, order: updated.order } : b;
+        }),
+      );
+    } catch (err: any) {
+      setBaselines(prev);
+      setError(err.message || 'Reorder failed');
+    }
+  };
+
   const handleReorder = async (name: string, direction: 'up' | 'down') => {
     if (!projectId || !editable) return;
     setError('');
@@ -142,27 +174,29 @@ export default function BaselinesPage() {
       .filter((b) => b.order > 0)
       .sort((a, b) => a.order - b.order)
       .map((b) => b.name);
-    const idx = inSequence.indexOf(name);
-    if (idx === -1) return;
-    const newOrder = [...inSequence];
-    if (direction === 'up' && idx > 0) {
-      [newOrder[idx - 1], newOrder[idx]] = [newOrder[idx], newOrder[idx - 1]];
-    } else if (direction === 'down' && idx < newOrder.length - 1) {
-      [newOrder[idx], newOrder[idx + 1]] = [newOrder[idx + 1], newOrder[idx]];
-    } else {
-      return;
-    }
-    try {
-      const result = await api.reorderBaselines(projectId, newOrder);
-      setBaselines((prev) =>
-        prev.map((b) => {
-          const updated = result.baselines.find((def) => def.name === b.name);
-          return updated ? { ...b, order: updated.order } : b;
-        }),
-      );
-    } catch (err: any) {
-      setError(err.message || 'Reorder failed');
-    }
+    const newOrder = moveInSequence(inSequence, name, direction);
+    if (!newOrder) return;
+    await commitReorder(newOrder);
+  };
+
+  const handleDragStart = (e: DragStartEvent) => {
+    setActiveDragName(String(e.active.id));
+  };
+
+  const handleDragEnd = (e: DragEndEvent) => {
+    setActiveDragName(null);
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+
+    const inSequence = baselines
+      .filter((b) => b.order > 0)
+      .sort((a, b) => a.order - b.order)
+      .map((b) => b.name);
+    const fromIdx = inSequence.indexOf(String(active.id));
+    const toIdx = inSequence.indexOf(String(over.id));
+    if (fromIdx === -1 || toIdx === -1) return;
+
+    commitReorder(moveToIndex(inSequence, fromIdx, toIdx));
   };
 
   const toggleExpand = (name: string) => {
@@ -180,6 +214,208 @@ export default function BaselinesPage() {
       </div>
     );
   }
+
+  const renderRow = (b: BaselineInfo) => (
+    <motion.div
+      key={b.name}
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="card p-4"
+    >
+      {/* Row header */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            {b.symbol && (
+              <span className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-cs-blue/10 text-cs-blue font-mono font-bold text-xs border border-cs-blue/25">
+                {b.symbol}
+              </span>
+            )}
+            <h3 className="font-semibold text-card-foreground font-mono">{b.name}</h3>
+            {b.frozen && (
+              <span className="badge bg-cs-green/10 text-cs-green text-[10px] gap-1">
+                <Snowflake size={10} /> Frozen
+              </span>
+            )}
+          </div>
+          {b.description && (
+            <div
+              className="text-sm text-muted-foreground mt-1 prose prose-sm dark:prose-invert max-w-none line-clamp-2 opacity-80"
+              dangerouslySetInnerHTML={{ __html: b.description }}
+            />
+          )}
+          <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <GitBranch size={12} />
+              {b.frozen ? `${b.frozen_count} frozen` : ''} {b.count} requirement{b.count !== 1 ? 's' : ''}
+            </span>
+            <span className="flex items-center gap-1">
+              <Layers size={12} />
+              {b.component_count} component{b.component_count !== 1 ? 's' : ''}
+            </span>
+            {b.frozen_at && (
+              <span className="flex items-center gap-1">
+                <Clock size={12} />
+                {new Date(b.frozen_at).toLocaleDateString()}
+              </span>
+            )}
+            {b.due_date && (
+              <span className="flex items-center gap-1">
+                <Calendar size={12} />
+                {b.due_date}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            onClick={() => { toggleHiddenBaseline(b.name); bumpGraph(); }}
+            className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            title={hiddenBaselines.includes(b.name) ? 'Hidden in graph' : 'Shown in graph'}
+          >
+            {hiddenBaselines.includes(b.name) ? <EyeOff size={14} /> : <Eye size={14} />}
+          </button>
+          {editable && (
+            <>
+              {b.order > 0 && (
+                <>
+                  <button
+                    onClick={() => handleReorder(b.name, 'up')}
+                    className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                    title="Move up"
+                    disabled={b.name === firstSeqName}
+                  >
+                    <ChevronUp size={14} />
+                  </button>
+                  <button
+                    onClick={() => handleReorder(b.name, 'down')}
+                    className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                    title="Move down"
+                    disabled={b.name === lastSeqName}
+                  >
+                    <ChevronDown size={14} />
+                  </button>
+                </>
+              )}
+              <button
+                onClick={() => openEdit(b)}
+                className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                title="Edit baseline"
+              >
+                <Edit3 size={14} />
+              </button>
+              <button
+                onClick={() => handleFreeze(b.name)}
+                className="p-1.5 rounded-md text-muted-foreground hover:text-cs-teal hover:bg-cs-teal/10 transition-colors"
+                title="Freeze snapshot"
+                disabled={freezing === b.name}
+              >
+                {freezing === b.name ? <Loader size={14} className="animate-spin" /> : <Snowflake size={14} />}
+              </button>
+              {b.frozen && (
+                <button
+                  onClick={() => handleDiff(b.name)}
+                  className="p-1.5 rounded-md text-muted-foreground hover:text-cs-purple hover:bg-cs-purple/10 transition-colors"
+                  title="Diff against current"
+                  disabled={diffing === b.name}
+                >
+                  {diffing === b.name ? <Loader size={14} className="animate-spin" /> : <GitBranch size={14} />}
+                </button>
+              )}
+              <button
+                onClick={() => handleDelete(b.name)}
+                className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                title="Delete baseline"
+              >
+                <Trash2 size={14} />
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Requirements list */}
+      {b.requirements.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-border/50">
+          <button
+            onClick={() => toggleExpand(b.name)}
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {expanded.has(b.name) ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            Requirements ({b.count})
+          </button>
+          <AnimatePresence>
+            {expanded.has(b.name) && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {b.requirements.map((rid) => (
+                    <EntityLink
+                      key={rid}
+                      kind="requirement"
+                      id={rid}
+                      className="badge bg-muted text-muted-foreground hover:text-foreground transition-colors text-xs"
+                      showIcon
+                    />
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      )}
+      {/* Components list */}
+      {b.components.length > 0 && (
+        <div className={`${b.requirements.length > 0 ? 'pt-2' : 'mt-3 pt-3 border-t border-border/50'}`}>
+          {/* Show a toggle only when there are no requirements — otherwise
+              the requirements toggle above also reveals this section. */}
+          {b.requirements.length === 0 && (
+            <button
+              onClick={() => toggleExpand(b.name)}
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {expanded.has(b.name) ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              Components ({b.component_count})
+            </button>
+          )}
+          <AnimatePresence>
+            {expanded.has(b.name) && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {b.components.map((cid) => (
+                    <EntityLink
+                      key={cid}
+                      kind="component"
+                      id={cid}
+                      className="badge bg-muted text-muted-foreground hover:text-foreground transition-colors text-xs"
+                      showIcon
+                    />
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      )}
+    </motion.div>
+  );
+
+  const inSequence = baselines.filter((b) => b.order > 0).sort((a, b) => a.order - b.order);
+  const orphans = baselines.filter((b) => b.order === 0);
+  const firstSeqName = inSequence.length > 0 ? inSequence[0].name : null;
+  const lastSeqName = inSequence.length > 0 ? inSequence[inSequence.length - 1].name : null;
+  const activeDrag = activeDragName ? baselines.find((b) => b.name === activeDragName) ?? null : null;
 
   return (
     <div className="flex flex-col h-full overflow-y-auto">
@@ -306,208 +542,69 @@ export default function BaselinesPage() {
             )}
           </div>
         ) : (
-          <div className="space-y-3">
-            {(() => {
-              const seq = baselines.filter((b) => b.order > 0).sort((a, b) => a.order - b.order);
-              const firstSeqName = seq.length > 0 ? seq[0].name : null;
-              const lastSeqName = seq.length > 0 ? seq[seq.length - 1].name : null;
-              return baselines.map((b) => (
-              <motion.div
-                key={b.name}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="card p-4"
-              >
-                {/* Row header */}
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      {b.symbol && (
-                        <span className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-cs-blue/10 text-cs-blue font-mono font-bold text-xs border border-cs-blue/25">
-                          {b.symbol}
-                        </span>
-                      )}
-                      <h3 className="font-semibold text-card-foreground font-mono">{b.name}</h3>
-                      {b.frozen && (
-                        <span className="badge bg-cs-green/10 text-cs-green text-[10px] gap-1">
-                          <Snowflake size={10} /> Frozen
-                        </span>
-                      )}
-                    </div>
-                    {b.description && (
-                      <div
-                        className="text-sm text-muted-foreground mt-1 prose prose-sm dark:prose-invert max-w-none line-clamp-2 opacity-80"
-                        dangerouslySetInnerHTML={{ __html: b.description }}
-                      />
-                    )}
-                    <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <GitBranch size={12} />
-                        {b.frozen ? `${b.frozen_count} frozen` : ''} {b.count} requirement{b.count !== 1 ? 's' : ''}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Layers size={12} />
-                        {b.component_count} component{b.component_count !== 1 ? 's' : ''}
-                      </span>
-                      {b.frozen_at && (
-                        <span className="flex items-center gap-1">
-                          <Clock size={12} />
-                          {new Date(b.frozen_at).toLocaleDateString()}
-                        </span>
-                      )}
-                      {b.due_date && (
-                        <span className="flex items-center gap-1">
-                          <Calendar size={12} />
-                          {b.due_date}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      onClick={() => { toggleHiddenBaseline(b.name); bumpGraph(); }}
-                      className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                      title={hiddenBaselines.includes(b.name) ? 'Hidden in graph' : 'Shown in graph'}
-                    >
-                      {hiddenBaselines.includes(b.name) ? <EyeOff size={14} /> : <Eye size={14} />}
-                    </button>
-                    {editable && (
-                      <>
-                        {b.order > 0 && (
-                          <>
-                            <button
-                              onClick={() => handleReorder(b.name, 'up')}
-                              className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                              title="Move up"
-                              disabled={b.name === firstSeqName}
-                            >
-                              <ChevronUp size={14} />
-                            </button>
-                            <button
-                              onClick={() => handleReorder(b.name, 'down')}
-                              className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                              title="Move down"
-                              disabled={b.name === lastSeqName}
-                            >
-                              <ChevronDown size={14} />
-                            </button>
-                          </>
-                        )}
-                        <button
-                          onClick={() => openEdit(b)}
-                          className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                          title="Edit baseline"
-                        >
-                          <Edit3 size={14} />
-                        </button>
-                        <button
-                          onClick={() => handleFreeze(b.name)}
-                          className="p-1.5 rounded-md text-muted-foreground hover:text-cs-teal hover:bg-cs-teal/10 transition-colors"
-                          title="Freeze snapshot"
-                          disabled={freezing === b.name}
-                        >
-                          {freezing === b.name ? <Loader size={14} className="animate-spin" /> : <Snowflake size={14} />}
-                        </button>
-                        {b.frozen && (
-                          <button
-                            onClick={() => handleDiff(b.name)}
-                            className="p-1.5 rounded-md text-muted-foreground hover:text-cs-purple hover:bg-cs-purple/10 transition-colors"
-                            title="Diff against current"
-                            disabled={diffing === b.name}
-                          >
-                            {diffing === b.name ? <Loader size={14} className="animate-spin" /> : <GitBranch size={14} />}
-                          </button>
-                        )}
-                        <button
-                          onClick={() => handleDelete(b.name)}
-                          className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                          title="Delete baseline"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                {/* Requirements list */}
-                {b.requirements.length > 0 && (
-                  <div className="mt-3 pt-3 border-t border-border/50">
-                    <button
-                      onClick={() => toggleExpand(b.name)}
-                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                      {expanded.has(b.name) ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                      Requirements ({b.count})
-                    </button>
-                    <AnimatePresence>
-                      {expanded.has(b.name) && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          exit={{ opacity: 0, height: 0 }}
-                          className="overflow-hidden"
-                        >
-                          <div className="flex flex-wrap gap-1.5 mt-2">
-                            {b.requirements.map((rid) => (
-                              <EntityLink
-                                key={rid}
-                                kind="requirement"
-                                id={rid}
-                                className="badge bg-muted text-muted-foreground hover:text-foreground transition-colors text-xs"
-                                showIcon
-                              />
-                            ))}
+          <>
+            {inSequence.length > 0 && (
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+                <SortableContext items={inSequence.map((b) => b.name)} strategy={verticalListSortingStrategy}>
+                  <div className="space-y-3">
+                    {inSequence.map((b) => {
+                      const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: b.name });
+                      const style: CSSProperties = {
+                        transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
+                        transition,
+                        opacity: isDragging ? 0.4 : undefined,
+                        position: 'relative',
+                        zIndex: isDragging ? 10 : undefined,
+                      };
+                      return (
+                        <div key={b.name} ref={setNodeRef} style={style}>
+                          <div className="flex items-start gap-1">
+                            <div className="pt-3">
+                              <button
+                                {...attributes}
+                                {...listeners}
+                                className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-grab active:cursor-grabbing"
+                                title="Drag to reorder"
+                              >
+                                <GripVertical size={14} />
+                              </button>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              {renderRow(b)}
+                            </div>
                           </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
+                        </div>
+                      );
+                    })}
                   </div>
+                </SortableContext>
+                <DragOverlay>
+                  {activeDrag && (
+                    <div className="flex items-start gap-1">
+                      <div className="pt-3">
+                        <button className="p-1 rounded-md text-muted-foreground bg-muted/40 cursor-grabbing" title="Drag to reorder">
+                          <GripVertical size={14} />
+                        </button>
+                      </div>
+                      <div className="flex-1 min-w-0 opacity-90">
+                        {renderRow(activeDrag)}
+                      </div>
+                    </div>
+                  )}
+                </DragOverlay>
+              </DndContext>
+            )}
+            {orphans.length > 0 && (
+              <div className={inSequence.length > 0 ? 'space-y-3 mt-3' : 'space-y-3'}>
+                {inSequence.length > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    These baselines are referenced by requirements but not part of the sequence — define them under Project Settings to include them in ordering.
+                  </p>
                 )}
-                {/* Components list */}
-                {b.components.length > 0 && (
-                  <div className={`${b.requirements.length > 0 ? 'pt-2' : 'mt-3 pt-3 border-t border-border/50'}`}>
-                    {/* Show a toggle only when there are no requirements — otherwise
-                        the requirements toggle above also reveals this section. */}
-                    {b.requirements.length === 0 && (
-                      <button
-                        onClick={() => toggleExpand(b.name)}
-                        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        {expanded.has(b.name) ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                        Components ({b.component_count})
-                      </button>
-                    )}
-                    <AnimatePresence>
-                      {expanded.has(b.name) && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          exit={{ opacity: 0, height: 0 }}
-                          className="overflow-hidden"
-                        >
-                          <div className="flex flex-wrap gap-1.5 mt-2">
-                            {b.components.map((cid) => (
-                              <EntityLink
-                                key={cid}
-                                kind="component"
-                                id={cid}
-                                className="badge bg-muted text-muted-foreground hover:text-foreground transition-colors text-xs"
-                                showIcon
-                              />
-                            ))}
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-                )}
-              </motion.div>
-              ));
-            })()}
-          </div>
+                {orphans.map((b) => renderRow(b))}
+              </div>
+            )}
+          </>
         )}
 
         {/* Diff result */}
