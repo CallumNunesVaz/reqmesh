@@ -1383,6 +1383,19 @@ export const api = {
   // Bulk — Requirements
   bulkUpdateRequirements: (projectId: string, ids: string[], updates: Record<string, unknown>) =>
     request<{ updated: number; ids: string[] }>(`/projects/${projectId}/requirements/bulk`, { method: 'POST', body: { ids, updates } }),
+  /** Add and/or remove baselines without disturbing the rest of each row's list.
+   *  `updates.baselines` replaces the list; this does not. Returns the ids that
+   *  actually changed, so an undo built from it cannot strip a baseline a row
+   *  already carried. */
+  setRequirementBaselines: (
+    projectId: string,
+    ids: string[],
+    change: { add?: string[]; remove?: string[] },
+  ) =>
+    request<{ updated: number; ids: string[]; added: string[]; removed: string[] }>(
+      `/projects/${projectId}/requirements/bulk`,
+      { method: 'POST', body: { ids, baselines_add: change.add ?? [], baselines_remove: change.remove ?? [] } },
+    ),
   bulkDeleteRequirements: (projectId: string, ids: string[]) =>
     request<{ deleted: number }>(`/projects/${projectId}/requirements/bulk-delete`, { method: 'POST', body: { ids } }),
   bulkReparentRequirements: (projectId: string, ids: string[], parent: string | null, rePrefix: boolean = false) =>

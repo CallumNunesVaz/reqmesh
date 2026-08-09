@@ -251,10 +251,34 @@ export default function RequirementsPage() {
     }
   };
 
-  const handleBulkBaseline = async (baseline: string) => {
+  // Add or remove one baseline across the selection, leaving every other
+  // baseline those rows carry alone. This used to send `{ baselines: [name] }`,
+  // which replaced the whole list — ticking twenty rows and picking "PDR"
+  // silently dropped their other milestones, with no undo entry to get them back.
+  const handleBulkBaseline = async (baseline: string, op: 'add' | 'remove') => {
     if (!projectId) return;
+    const ids = [...selectedIds];
     try {
-      await api.bulkUpdateRequirements(projectId, [...selectedIds], { baselines: [baseline] });
+      const res = await api.setRequirementBaselines(projectId, ids, op === 'add' ? { add: [baseline] } : { remove: [baseline] });
+      if (res.updated === 0) {
+        addToast('success', op === 'add'
+          ? `All ${ids.length} already in ${baseline}`
+          : `None of the ${ids.length} were in ${baseline}`);
+      } else {
+        // Invert over the ids that actually changed, so undo cannot strip the
+        // baseline from a row that already had it before this ran.
+        const touched = res.ids;
+        useUndoStore.getState().push({
+          description: `${op === 'add' ? 'Add' : 'Remove'} ${baseline} on ${touched.length} requirement(s)`,
+          undo: async () => {
+            await api.setRequirementBaselines(projectId, touched, op === 'add' ? { remove: [baseline] } : { add: [baseline] });
+          },
+          redo: async () => {
+            await api.setRequirementBaselines(projectId, touched, op === 'add' ? { add: [baseline] } : { remove: [baseline] });
+          },
+        });
+      }
+      bumpDataVersion();
       clearSelection();
       load();
     } catch (e: any) {
@@ -403,12 +427,20 @@ export default function RequirementsPage() {
         ) : (
           <>
             {editMode && rows.length > 0 && (
-              <div className="flex items-center gap-2 px-3 py-2 border-b border-border/60 bg-muted/30">
-                <span className="shrink-0 mr-0.5 cursor-pointer" onClick={() => selectedIds.size === rows.length ? clearSelection() : selectAllVisible()}>
+              // The whole row toggles, not just the 13px icon — the label sat
+              // next to a checkbox and looked clickable while doing nothing.
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => selectedIds.size === rows.length ? clearSelection() : selectAllVisible()}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectedIds.size === rows.length ? clearSelection() : selectAllVisible(); } }}
+                className="flex items-center gap-2 px-3 py-2 border-b border-border/60 bg-muted/30 cursor-pointer hover:bg-muted/50"
+              >
+                <span className="shrink-0 mr-0.5">
                   {selectedIds.size === rows.length && rows.length > 0 ? (
                     <CheckSquare size={13} className="text-primary" />
                   ) : (
-                    <Square size={13} className="text-muted-foreground/40 hover:text-muted-foreground" />
+                    <Square size={13} className="text-muted-foreground/40" />
                   )}
                 </span>
                 <span className="text-[11px] text-muted-foreground">Select all</span>
@@ -547,11 +579,21 @@ export default function RequirementsPage() {
             <SlidersHorizontal size={13} /> Bulk Edit
           </button>
           <select
-            className="select text-xs py-1 w-32"
-            onChange={(e) => { if (e.target.value) { handleBulkBaseline(e.target.value); e.target.value = ''; } }}
+            className="select text-xs py-1 w-36"
+            title="Adds this baseline to the selection, leaving their other baselines in place"
+            onChange={(e) => { if (e.target.value) { handleBulkBaseline(e.target.value, 'add'); e.target.value = ''; } }}
             value=""
           >
-            <option value="">Set baseline...</option>
+            <option value="">Add to baseline...</option>
+            {projectBaselines.map(b => <option key={b} value={b}>{b}</option>)}
+          </select>
+          <select
+            className="select text-xs py-1 w-40"
+            title="Removes only this baseline from the selection"
+            onChange={(e) => { if (e.target.value) { handleBulkBaseline(e.target.value, 'remove'); e.target.value = ''; } }}
+            value=""
+          >
+            <option value="">Remove from baseline...</option>
             {projectBaselines.map(b => <option key={b} value={b}>{b}</option>)}
           </select>
           <input className="input text-xs w-20" placeholder="Parent ID" value={bulkParent} onChange={(e) => setBulkParent(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleBulkReparent(); }} />

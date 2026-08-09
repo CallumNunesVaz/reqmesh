@@ -16,6 +16,7 @@ from app.models.specification import SpecificationUpdate
 from app.models.verification import VerificationCaseUpdate
 from app.models.change_request import ChangeRequestUpdate
 from app.services.history import record_change
+from app.services.baseline_membership import apply_membership, defined_baseline_names
 
 router = APIRouter()
 
@@ -51,6 +52,29 @@ def _bulk_update(store, ids: list[str], updates: dict, update_fn, username: str 
 def bulk_update_requirements(project_id: str, data: dict, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     ids = data.get("ids", [])
+
+    # Additive baseline membership. `updates.baselines` replaces the list, which
+    # is right for the edit modal (it says so) but wrong for the one-click bulk
+    # bar, where it silently dropped every other baseline a row carried.
+    add = data.get("baselines_add") or []
+    remove = data.get("baselines_remove") or []
+    if add or remove:
+        if not ids:
+            raise HTTPException(status_code=400, detail="ids required")
+        if "baselines" in (data.get("updates") or {}):
+            raise HTTPException(
+                status_code=409,
+                detail="baselines_add/baselines_remove cannot be combined with updates.baselines",
+            )
+        defined = defined_baseline_names(store.read_meta())
+        unknown = sorted({b for b in [*add, *remove] if b not in defined})
+        if unknown:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Baseline not defined in this project: {', '.join(unknown)}",
+            )
+        return apply_membership(store, ids, add, remove, user.get("username", ""))
+
     try:
         updates = RequirementUpdate.model_validate(data.get("updates", {})).model_dump(mode="json", exclude_unset=True)
     except ValidationError as exc:
