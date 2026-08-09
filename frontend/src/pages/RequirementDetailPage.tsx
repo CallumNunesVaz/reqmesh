@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { GuardedLink as Link } from '../components/navGuard';
 import { motion } from 'framer-motion';
-import { Trash2, ArrowLeft, Plus, X, ArrowRight, ArrowLeftRight, Sparkles, ShieldCheck, ExternalLink, ChevronRight, Waypoints, AlertTriangle, CheckCircle2, GitFork, Loader, Save, Undo2, GitPullRequest, Ban } from 'lucide-react';
+import { Trash2, ArrowLeft, Plus, X, ArrowRight, ArrowLeftRight, Sparkles, ShieldCheck, ExternalLink, ChevronRight, Waypoints, AlertTriangle, CheckCircle2, GitFork, Loader, Save, Undo2, GitPullRequest, Ban, Tag } from 'lucide-react';
 import { api, baselineNames, CR_URGENCIES, type StakeholderDef, type SystemStateDef, type RequirementValue, type Requirement, type VerificationCase, type QualityItem, type Component, type Specification, type ChangeRequest, type Risk, type EvaluatedRequirement, type Definition, type DecisionRecord, type Backlinks } from '../api/client';
 import { ParametricsCard } from '../components/parametrics';
 import WhatIfPanel from '../components/WhatIfPanel';
@@ -17,6 +17,7 @@ import { useStore } from '../store';
 import { useUndoStore } from '../store/undo';
 import { useGraphPane, useSelectedReq } from '../components/Layout';
 import { HelpTip } from '../components/HelpTip';
+import RenameDialog from '../components/RenameDialog';
 import { useConfirm } from '../components/ConfirmDialog';
 import { deleteWithReferenceCheck } from '../lib/forceDelete';
 import DescriptionHelper from '../components/DescriptionHelper';
@@ -479,6 +480,35 @@ export default function RequirementDetailPage() {
       setCrSaving(false);
     }
   };
+  const [renaming, setRenaming] = useState(false);
+
+  const suggestNewId = useCallback(
+    async () => (await api.suggestRequirementId(projectId!, reqId!)).suggested,
+    [projectId, reqId],
+  );
+
+  const [renamedTo, setRenamedTo] = useState<string | null>(null);
+
+  const doRename = async (newId: string) => {
+    const res = await api.renameRequirement(projectId!, reqId!, newId);
+    bumpGraphVersion();
+    bumpDataVersion();
+    // Navigating here would change `currentId` under the dialog, retriggering
+    // its reset effect and wiping the result it is about to show. Follow the
+    // record once the dialog closes instead.
+    setRenamedTo(res.id);
+    return res;
+  };
+
+  const closeRename = () => {
+    setRenaming(false);
+    if (renamedTo) {
+      const target = renamedTo;
+      setRenamedTo(null);
+      navigate(`/project/${projectId}/requirements/${target}`, { replace: true });
+    }
+  };
+
   const handleDelete = async () => {
     if (!projectId || !reqId || !req) return;
     const ok = await showConfirm('Delete this requirement?', 'Delete Requirement');
@@ -694,6 +724,11 @@ export default function RequirementDetailPage() {
               <Undo2 size={14} />
             </button>
           </>
+        )}
+        {editable && (
+        <button onClick={() => setRenaming(true)} className="btn-secondary text-xs p-2" title="Rename (change the id)">
+          <Tag size={14} />
+        </button>
         )}
         {editable && (
         <button onClick={handleDelete} className="btn-danger" title="Delete">
@@ -1528,6 +1563,14 @@ export default function RequirementDetailPage() {
           </div>
         </div>
       </div>
+
+      <RenameDialog
+        open={renaming}
+        onClose={closeRename}
+        currentId={reqId!}
+        suggest={suggestNewId}
+        onRename={doRename}
+      />
     </div>
   );
 }

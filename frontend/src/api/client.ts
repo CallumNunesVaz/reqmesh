@@ -1405,6 +1405,17 @@ export const api = {
       `/projects/${projectId}/requirements/bulk`,
       { method: 'POST', body: { ids, baselines_add: change.add ?? [], baselines_remove: change.remove ?? [] } },
     ),
+  /** Suggest a new id for a requirement — the parent's prefix plus the next
+   *  free slot, following the project's naming scheme. */
+  suggestRequirementId: (projectId: string, reqId: string) =>
+    request<{ suggested: string }>(`/projects/${projectId}/requirements/${reqId}/rename`, { method: 'POST', body: {} }),
+  /** Rename a requirement, repointing its children and every relation that
+   *  targeted it. Returns what else moved. */
+  renameRequirement: (projectId: string, reqId: string, newId: string) =>
+    request<{ id: string; children: string[]; relinked: string[] }>(
+      `/projects/${projectId}/requirements/${reqId}/rename`,
+      { method: 'POST', body: { new_id: newId } },
+    ),
   bulkDeleteRequirements: (projectId: string, ids: string[]) =>
     request<{ deleted: number }>(`/projects/${projectId}/requirements/bulk-delete`, { method: 'POST', body: { ids } }),
   /** `dryRun` returns the renames the move would perform without writing. The

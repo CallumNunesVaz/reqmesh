@@ -70,3 +70,13 @@ def test_contributor_cannot_dry_run_an_import(project, contributor_client):
         files={"file": ("t.csv", io.BytesIO(csv_bytes), "text/csv")},
     )
     assert r.status_code == 403, f"contributor previewed an import: {r.status_code}"
+
+
+def test_contributor_cannot_rename_a_requirement(project, maintainer_client, contributor_client):
+    """Renaming rewrites ids project-wide, so it sits at the maintainer tier."""
+    maintainer_client.post(f"/api/projects/{project}/requirements",
+                           json={"id": "R9", "name": "x"})
+
+    r = contributor_client.post(f"/api/projects/{project}/requirements/R9/rename",
+                                json={"new_id": "R10"})
+    assert r.status_code == 403, f"contributor renamed a requirement: {r.status_code}"

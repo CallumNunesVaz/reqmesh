@@ -18,6 +18,7 @@ from app.core.tree_utils import build_flat_tree
 from app.models.baseline import DUE_DATE_RE
 from app.models.requirement import RequirementCreate, RequirementUpdate
 from app.services.load_guard import is_safe_id, validate_on_load
+from app.services.rename import matches_scheme, rename_requirement, suggest_id
 from app.services.sanitize import sanitize_html
 from app.api._utils import paginate
 from app.models.specification import SpecificationCreate, SpecificationUpdate
@@ -478,6 +479,41 @@ def get_requirement_tree(project_id: str):
         "status": r.get("status", "proposed"),
         "priority": r.get("priority", "medium"),
     })
+
+
+@router.post("/projects/{project_id}/requirements/{req_id}/rename")
+def rename_requirement_route(project_id: str, req_id: str, data: dict,
+                             user: dict = Depends(require_maintain)):
+    """Rename a requirement, repointing children and relations project-wide.
+
+    Registered before the ``/{req_id}`` catch-all for the same reason next-uid
+    is: otherwise "rename" is swallowed as a requirement id.
+
+    Without ``new_id`` this only *suggests* one — the parent's prefix and the
+    next free slot — so the dialog can prefill without a second endpoint.
+    """
+    store = get_store(project_id)
+    req = store.get_requirement(safe_id(req_id, "requirement id"))
+    if req is None:
+        raise HTTPException(status_code=404, detail="Requirement not found")
+
+    meta = store.read_meta()
+    reqs = store.list_requirements()
+
+    new_id = (data.get("new_id") or "").strip()
+    if not new_id:
+        return {"suggested": suggest_id(reqs, meta, req.get("parent"))}
+
+    new_id = safe_id(new_id, "requirement id")
+    reason = matches_scheme(new_id, meta)
+    if reason:
+        raise HTTPException(status_code=400, detail=reason)
+
+    try:
+        result = rename_requirement(store, req["id"], new_id, user.get("username", ""))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return result
 
 
 @router.get("/projects/{project_id}/requirements/next-uid")

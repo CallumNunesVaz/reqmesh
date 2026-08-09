@@ -628,6 +628,7 @@ Key environment variables:
 | GET/PUT/DELETE | `/api/projects/{id}/requirements/{req_id}` | Get/update/delete requirement |
 | GET | `/api/projects/{id}/requirements/tree` | Requirement hierarchy |
 | GET | `/api/projects/{id}/requirements/next-uid` | Next free UID |
+| POST | `/api/projects/{id}/requirements/{req_id}/rename` | Rename a requirement, repointing children and relations (omit `new_id` to just get a suggestion) |
 | POST | `/api/projects/{id}/requirements/{req_id}/cascade` | Cascade to children |
 | POST | `/api/projects/{id}/requirements/{req_id}/break-cascade` | Break cascade link |
 | GET/POST | `/api/projects/{id}/specifications` | List/create specifications |
