@@ -845,6 +845,7 @@ export interface ImportSummary {
   traces_added: number;
   verification_cases: number;
   format: string;
+  ignored: { lines: number; constructs: Record<string, number> };
 }
 
 export interface PresenceUser {

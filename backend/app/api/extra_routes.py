@@ -832,17 +832,28 @@ def import_project(
     content = read_upload_capped(file, settings.max_upload_size_mb)
     from app.services.table_io import import_table as table_import
 
+    def _with_ignored(summary: dict) -> dict:
+        """Guarantee the `ignored` fidelity report on every format's summary.
+
+        Only the SysML parser can report dropped constructs, but the client
+        reads `ignored.lines` unconditionally — so the spreadsheet paths, which
+        never touch import_into_store, have to carry the zero default or the
+        import dialog throws on an otherwise successful CSV import.
+        """
+        summary.setdefault("ignored", {"lines": 0, "constructs": {}})
+        return summary
+
     if format in ("csv", "tsv"):
         try:
-            return table_import(store, content.decode("utf-8", errors="replace"),
-                                fmt=format, mode=mode)
+            return _with_ignored(table_import(store, content.decode("utf-8", errors="replace"),
+                                              fmt=format, mode=mode))
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=f"Import failed: {exc}") from exc
 
     if format == "xlsx":
         from app.services.table_io import import_xlsx
         try:
-            return import_xlsx(store, content, mode=mode)
+            return _with_ignored(import_xlsx(store, content, mode=mode))
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=f"Import failed: {exc}") from exc
 
@@ -854,4 +865,4 @@ def import_project(
         summary = parse_and_import(store, content, fmt=format, mode=mode)
     except (ReqIFParseError, SysMLParseError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=f"Import failed: {exc}") from exc
-    return summary
+    return _with_ignored(summary)

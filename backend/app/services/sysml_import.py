@@ -10,7 +10,8 @@ which keeps the parser small without pulling in a full KerML grammar.
     {"requirements": [...], "components": [...], "verification_cases": [...],
      "traces": [...],
      "definitions": [{"id","type","name","parameters","expr","unit","doc"}],
-     "analysis_cases": [{"id","name","doc","scope","scope_components","overrides"}]}
+     "analysis_cases": [{"id","name","doc","scope","scope_components","overrides"}],
+     "ignored": {"lines": int, "constructs": dict[str, int]}}
 """
 
 from __future__ import annotations
@@ -45,6 +46,23 @@ _UNIT_RE = re.compile(r"\[([^\]]+)\]\s*$")
 _KIND_RE = re.compile(r"//\s*@kind=([A-Za-z]+)")
 _REL_ANNOT_RE = re.compile(r"//\s*@rel=([A-Za-z_]\w*)\s+([A-Za-z0-9_]+)\s*$")
 _VC_DEF_RE = re.compile(r"^verification\s+case\s+def\s+" + _SHORT + r"([A-Za-z0-9_]+)\s*\{")
+# `part def` is matched by _PART_DEF_RE; this is the usage form. The negative
+# lookahead is what keeps the two from colliding.
+_PART_USAGE_RE = re.compile(r"^part\s+(?!def\b)" + _SHORT + r"([A-Za-z0-9_]+)\s*(?::\s*([A-Za-z0-9_]+)\s*)?\{")
+# package Name { — transparent wrapper that reqmesh emits around every export.
+# Recognised so the round-trip is clean (ignored.lines == 0), but no entity is
+# created — packages are out of scope.
+_PACKAGE_RE = re.compile(r"^package\s+([A-Za-z0-9_]+)\s*\{")
+
+# Keywords the parser does not import.  Lines whose first word matches one of
+# these (when not already handled) are counted in the "ignored" report so the
+# user knows exactly what was dropped.
+_IGNORED_KEYWORDS = (
+    "port", "connect", "interface", "flow", "binding", "state", "transition",
+    "entry", "exit", "do", "action", "succession", "perform", "package",
+    "import", "enum", "occurrence", "view", "viewpoint", "render", "allocate",
+    "item", "metadata", "ref", "snapshot", "timeslice", "individual",
+)
 
 
 def _parse_bindings(raw: str) -> dict[str, str]:
@@ -110,6 +128,15 @@ def _unescape(s: str) -> str:
     return s.replace("\\'", "'")
 
 
+def _check_ignored(line: str, constructs: dict[str, int]) -> None:
+    """If *line*'s first word matches an :data:`_IGNORED_KEYWORDS` entry
+    (followed by whitespace, ``{`` or ``;``), increment its count."""
+    for kw in _IGNORED_KEYWORDS:
+        if line.startswith(kw) and (len(line) == len(kw) or line[len(kw)] in (' ', '\t', '{', ';')):
+            constructs[kw] = constructs.get(kw, 0) + 1
+            return
+
+
 def parse_sysml(content: str | bytes) -> dict:
     if isinstance(content, bytes):
         content = content.decode("utf-8", errors="replace")
@@ -131,7 +158,7 @@ def parse_sysml(content: str | bytes) -> dict:
     # "definition" | "analysis_case".
     stack: list[tuple[str, dict]] = []
     in_vc_section = False
-    saw_req = False
+    ignored_constructs: dict[str, int] = {}
 
     def nearest(kind: str) -> str | None:
         for k, entry in reversed(stack):
@@ -143,9 +170,11 @@ def parse_sysml(content: str | bytes) -> dict:
         line = raw.strip()
         if not line:
             continue
+        recognized = False
 
         if "Verification Cases" in line:
             in_vc_section = True
+            recognized = True
             continue
 
         # --- block openers ---
@@ -161,6 +190,8 @@ def parse_sysml(content: str | bytes) -> dict:
         rm = _REQ_DEF_RE.match(line)
         rum = _REQ_USAGE_RE.match(line)
         pm = _PART_DEF_RE.match(line)
+        pum = _PART_USAGE_RE.match(line)
+        pkgm = _PACKAGE_RE.match(line)
         if cdm:
             # groups: 1=constraint|calc, 2=short name, 3=declared name
             dtype = cdm.group(1)
@@ -172,6 +203,7 @@ def parse_sysml(content: str | bytes) -> dict:
             definitions.append(entry)
             stack.append(("definition", entry))
             opened_here = True
+            recognized = True
         elif adm:
             # groups: 1=short name, 2=declared name
             short, declared = adm.group(1), adm.group(2)
@@ -182,6 +214,7 @@ def parse_sysml(content: str | bytes) -> dict:
             analysis_cases.append(entry)
             stack.append(("analysis_case", entry))
             opened_here = True
+            recognized = True
         elif vcm:
             short, declared = vcm.group(1), vcm.group(2)
             eid = _unescape(short) if short else declared
@@ -189,8 +222,8 @@ def parse_sysml(content: str | bytes) -> dict:
             entry = {"id": eid, "name": eid, "verified_requirements": []}
             verification_cases.append(entry)
             stack.append(("vc", entry))
+            recognized = True
         elif rum:
-            saw_req = True
             short, declared, type_id = rum.group(1), rum.group(2), rum.group(3)
             eid = _unescape(short) if short else declared
             aliases[declared] = eid
@@ -206,8 +239,8 @@ def parse_sysml(content: str | bytes) -> dict:
                     entry["parent"] = parent
                 requirements.append(entry)
                 stack.append(("requirement", entry))
+            recognized = True
         elif rm:
-            saw_req = True
             short, declared = rm.group(1), rm.group(2)
             eid = _unescape(short) if short else declared
             aliases[declared] = eid
@@ -223,6 +256,7 @@ def parse_sysml(content: str | bytes) -> dict:
                     entry["parent"] = parent
                 requirements.append(entry)
                 stack.append(("requirement", entry))
+            recognized = True
         elif pm:
             short, declared = pm.group(1), pm.group(2)
             eid = _unescape(short) if short else declared
@@ -233,13 +267,37 @@ def parse_sysml(content: str | bytes) -> dict:
                 entry["parent"] = parent
             components.append(entry)
             stack.append(("component", entry))
+            recognized = True
+        elif pum:
+            short, declared = pum.group(1), pum.group(2)
+            eid = _unescape(short) if short else declared
+            aliases[declared] = eid
+            if pum.group(3):
+                ignored_constructs["part_typing"] = ignored_constructs.get("part_typing", 0) + 1
+            entry = {"id": eid, "name": eid, "parameters": [], "satisfies": []}
+            parent = nearest("component")
+            if parent:
+                entry["parent"] = parent
+            components.append(entry)
+            stack.append(("component", entry))
+            recognized = True
+        elif pkgm:
+            # Transparent wrapper — recognised so it isn't counted as ignored,
+            # but no entity is created.  Pushing a sentinel keeps brace-matching
+            # correct for nested blocks.
+            stack.append(("package", {}))
+            recognized = True
 
         if not stack:
+            # Ignored-keyword lines at top level (outside any block).
+            if not recognized and not line.startswith("//") and not line.startswith("}"):
+                _check_ignored(line, ignored_constructs)
             continue
         kind, current = stack[-1]
 
         doc = _DOC_RE.search(line)
         if doc and doc.group(1).strip():
+            recognized = True
             if kind in ("definition", "analysis_case"):
                 current["doc"] = doc.group(1).strip()
             else:
@@ -247,12 +305,14 @@ def parse_sysml(content: str | bytes) -> dict:
 
         text = _TEXT_RE.search(line)
         if text and not in_vc_section:
+            recognized = True
             desc = _unquote(text.group(1))
             if desc:
                 current["description"] = desc
 
         assign = _ASSIGN_RE.search(line)
         if assign:
+            recognized = True
             key, value = assign.group(1), _unquote(assign.group(2))
             if key == "verificationMethod":
                 current["verification_method"] = value
@@ -261,11 +321,13 @@ def parse_sysml(content: str | bytes) -> dict:
 
         sm = _SUBJECT_RE.match(line)
         if sm and kind == "requirement":
+            recognized = True
             current["subject"] = sm.group(1)
 
         if line.startswith("attribute"):
             attr = _parse_attribute(line)
             if attr:
+                recognized = True
                 if kind == "component" and attr["name"] == "quantity" and "value" in attr:
                     current["quantity"] = int(attr["value"])
                 else:
@@ -273,6 +335,7 @@ def parse_sysml(content: str | bytes) -> dict:
 
         cm = _CONSTRAINT_RE.match(line)
         if cm:
+            recognized = True
             kw, expr = cm.group(1), cm.group(2).strip()
             if kw == "assume":
                 current["_pending_assume"] = expr
@@ -295,6 +358,7 @@ def parse_sysml(content: str | bytes) -> dict:
 
         rel = _REL_RE.match(line)
         if rel:
+            recognized = True
             kw, target = rel.group(1), rel.group(2)
             if kw == "verify":
                 if in_vc_section:
@@ -312,6 +376,7 @@ def parse_sysml(content: str | bytes) -> dict:
 
         rel_annot = _REL_ANNOT_RE.search(line)
         if rel_annot and kind == "requirement":
+            recognized = True
             rtype = rel_annot.group(1)
             target = rel_annot.group(2)
             current.setdefault("relations", []).append({"type": rtype, "target": target})
@@ -321,10 +386,12 @@ def parse_sysml(content: str | bytes) -> dict:
         if kind == "definition":
             inm = _IN_PARAM_RE.match(line)
             if inm:
+                recognized = True
                 current.setdefault("parameters", []).append(inm.group(1))
                 continue
             rtm = _RETURN_RE.match(line)
             if rtm:
+                recognized = True
                 current["unit"] = (rtm.group(1) or "").strip()
                 current["expr"] = rtm.group(2).strip()
                 continue
@@ -336,18 +403,22 @@ def parse_sysml(content: str | bytes) -> dict:
                     and not line.startswith("doc ")
                     and not line.startswith("return ")
                     and not line.startswith("}")):
+                recognized = True
                 current["expr"] = line.strip()
 
         # --- analysis case block internals ---
         if kind == "analysis_case":
             scm = _SCOPE_RE.match(line)
             if scm:
+                recognized = True
                 current["scope"] = scm.group(1).split(",")
             sccm = _SCOPE_COMP_RE.match(line)
             if sccm:
+                recognized = True
                 current["scope_components"] = sccm.group(1).split(",")
             ovm = _OVERRIDE_RE.match(line)
             if ovm:
+                recognized = True
                 ref = ovm.group(1)
                 try:
                     current["overrides"][ref] = float(ovm.group(2))
@@ -355,10 +426,14 @@ def parse_sysml(content: str | bytes) -> dict:
                     pass
 
         if line.startswith("}") and stack:
+            recognized = True
             stack.pop()
 
-    if not saw_req and not definitions and not analysis_cases:
-        raise SysMLParseError("No `requirement def` blocks found — is this a SysML v2 model?")
+        if not recognized and not line.startswith("//") and not line.startswith("}"):
+            _check_ignored(line, ignored_constructs)
+
+    if not (requirements or components or verification_cases or definitions or analysis_cases):
+        raise SysMLParseError("No SysML v2 entities found — is this a SysML v2 model?")
 
     for entry in requirements:
         entry.pop("_pending_assume", None)
@@ -414,4 +489,8 @@ def parse_sysml(content: str | bytes) -> dict:
         "traces": traces,
         "definitions": definitions,
         "analysis_cases": analysis_cases,
+        "ignored": {
+            "lines": sum(ignored_constructs.values()),
+            "constructs": ignored_constructs,
+        },
     }

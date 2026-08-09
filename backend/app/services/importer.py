@@ -99,6 +99,7 @@ def import_into_store(store, parsed: dict, mode: str = "merge") -> dict:
     """
     store.ensure_dirs()
     summary = {"created": 0, "updated": 0, "skipped": 0, "traces_added": 0, "verification_cases": 0}
+    summary["ignored"] = parsed.get("ignored") or {"lines": 0, "constructs": {}}
 
     # Normalise everything before touching the store. A malformed field (e.g.
     # a non-numeric component `quantity`) used to raise *after* replace mode

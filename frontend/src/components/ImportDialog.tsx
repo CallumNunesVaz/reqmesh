@@ -162,14 +162,30 @@ export default function ImportDialog({ open, onClose, projectId }: ImportDialogP
               )}
 
               {result && (
-                <div className="flex items-start gap-2 text-xs text-cs-green bg-cs-green/10 rounded-lg p-3">
-                  <CheckCircle2 size={14} className="shrink-0 mt-0.5" />
-                  <span>
-                    Imported <b>{result.format}</b>: {result.created} created, {result.updated} updated,{' '}
-                    {result.verification_cases} verification cases, {result.traces_added} traces
-                    {result.skipped > 0 && <>, {result.skipped} skipped</>}.
-                  </span>
-                </div>
+                <>
+                  <div className="flex items-start gap-2 text-xs text-cs-green bg-cs-green/10 rounded-lg p-3">
+                    <CheckCircle2 size={14} className="shrink-0 mt-0.5" />
+                    <span>
+                      Imported <b>{result.format}</b>: {result.created} created, {result.updated} updated,{' '}
+                      {result.verification_cases} verification cases, {result.traces_added} traces
+                      {result.skipped > 0 && <>, {result.skipped} skipped</>}.
+                    </span>
+                  </div>
+                  {result.ignored.lines > 0 && (
+                    <div className="flex items-start gap-2 text-xs text-cs-orange bg-cs-orange/10 rounded-lg p-3">
+                      <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+                      <span>
+                        {result.ignored.lines} lines were not imported:{' '}
+                        {Object.entries(result.ignored.constructs)
+                          .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+                          .slice(0, 5)
+                          .map(([name, count]) => `${name} (${count})`)
+                          .join(', ')}
+                        {Object.keys(result.ignored.constructs).length > 5 && '\u2026'}
+                      </span>
+                    </div>
+                  )}
+                </>
               )}
 
               <div className="flex gap-2 pt-2 border-t">

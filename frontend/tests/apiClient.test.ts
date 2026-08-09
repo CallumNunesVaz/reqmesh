@@ -247,6 +247,31 @@ describe('importProject', () => {
     expect(fd.get('format')).toBe('auto');
     expect(fd.get('mode')).toBe('merge');
   });
+
+  it('returns an ImportSummary that always has an ignored field', async () => {
+    const summary = {
+      created: 3, updated: 0, skipped: 0, traces_added: 1,
+      verification_cases: 0, format: 'sysml',
+      ignored: { lines: 0, constructs: {} },
+    };
+    stubFetch({ json: async () => summary });
+    const file = new File(['part WING {}'], 'model.sysml');
+    const result = await api.importProject('demo', file, 'sysml', 'merge');
+    expect(result.ignored).toEqual({ lines: 0, constructs: {} });
+  });
+
+  it('returns ignored.lines > 0 when constructs were dropped', async () => {
+    const summary = {
+      created: 1, updated: 0, skipped: 0, traces_added: 0,
+      verification_cases: 0, format: 'sysml',
+      ignored: { lines: 7, constructs: { port: 4, connect: 3 } },
+    };
+    stubFetch({ json: async () => summary });
+    const file = new File(['part WING { port p1; }'], 'model.sysml');
+    const result = await api.importProject('demo', file, 'sysml', 'merge');
+    expect(result.ignored.lines).toBe(7);
+    expect(result.ignored.constructs).toEqual({ port: 4, connect: 3 });
+  });
 });
 
 describe('user management', () => {
