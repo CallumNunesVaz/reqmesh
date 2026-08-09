@@ -10,6 +10,7 @@ import AutocompleteInput from '../components/AutocompleteInput';
 import { CopyLinkButton, EntityLink } from '../components/entities';
 import { useFocusedEntity } from '../components/useFocusedEntity';
 import { AutoLinkText } from '../components/autoLink';
+import MentionTextarea from '../components/MentionTextarea';
 import { useEntityKinds } from '../components/entityIndex';
 import { HelpTip } from '../components/HelpTip';
 import { HistoryPanel } from '../components/HistoryPanel';
@@ -701,11 +702,11 @@ export default function VerificationPage() {
                             <ClipboardList size={12} /> Test Procedure
                           </h4>
                           {editable ? (
-                            <textarea
+                            <MentionTextarea
                               className="input min-h-[60px] text-xs resize-y"
                               placeholder="Describe the test procedure..."
                               value={vc.test_procedure || ''}
-                              onChange={(e) => { e.stopPropagation(); handleUpdateProcedure(vc.id, e.target.value); }}
+                              onChange={(v) => handleUpdateProcedure(vc.id, v)}
                             />
                           ) : (
                             <p className="text-xs text-muted-foreground">{vc.test_procedure || 'No procedure defined.'}</p>

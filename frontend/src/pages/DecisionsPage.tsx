@@ -8,6 +8,7 @@ import { useAuthStore } from '../store/auth';
 import { CopyLinkButton } from '../components/entities';
 import { useFocusedEntity } from '../components/useFocusedEntity';
 import { AutoLinkText } from '../components/autoLink';
+import MentionTextarea from '../components/MentionTextarea';
 import { useEntityKinds } from '../components/entityIndex';
 import { usePersistedState, setCodec } from '../hooks/usePersistedState';
 import { LinkEditor } from '../components/LinkEditor';
@@ -231,11 +232,11 @@ export default function DecisionsPage() {
             ] as const).map(([field, label, hint]) => (
               <div key={field}>
                 <label className="label">{label}</label>
-                <textarea
+                <MentionTextarea
                   className="input text-sm h-20 resize-y"
                   placeholder={hint}
                   value={draft[field]}
-                  onChange={(e) => setDraft({ ...draft, [field]: e.target.value })}
+                  onChange={(v) => setDraft({ ...draft, [field]: v })}
                 />
               </div>
             ))}

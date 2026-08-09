@@ -47,4 +47,32 @@ describe('autoLinkParts', () => {
     expect(autoLinkParts('nothing to link', [])).toEqual([{ text: 'nothing to link' }]);
     expect(autoLinkParts('', ids)).toEqual([]);
   });
+
+  // The `@` picker inserts an entity as `[[ID]]`. The server strips the
+  // editor's <span> wrapper (span is not in its allowlist), so this bracket
+  // token is the form that actually persists — and the brackets must not leak
+  // into the rendered output, which is what read mode used to show.
+  it('links the [[ID]] form and consumes the brackets', () => {
+    expect(autoLinkParts('see [[AFRM0000]] now', ids)).toEqual([
+      { text: 'see ' },
+      { id: 'AFRM0000' },
+      { text: ' now' },
+    ]);
+  });
+
+  it('links a bracketed id at the very start and end', () => {
+    expect(autoLinkParts('[[VC-001]]', ids)).toEqual([{ id: 'VC-001' }]);
+  });
+
+  it('still links bare ids alongside bracketed ones', () => {
+    expect(autoLinkParts('[[VC-001]] and AFRM0000', ids)).toEqual([
+      { id: 'VC-001' },
+      { text: ' and ' },
+      { id: 'AFRM0000' },
+    ]);
+  });
+
+  it('leaves brackets around an unknown id alone', () => {
+    expect(autoLinkParts('[[NOPE-9]] here', ids)).toEqual([{ text: '[[NOPE-9]] here' }]);
+  });
 });
