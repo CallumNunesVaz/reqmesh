@@ -17,6 +17,8 @@ import { HistoryPanel } from '../components/HistoryPanel';
 import { CommentThread } from '../components/CommentThread';
 import { useToasts } from '../components/Toast';
 import { useRangeSelection } from '../hooks/useRangeSelection';
+import { useConfirm } from '../components/ConfirmDialog';
+import { useBulkActions } from '../hooks/useBulkActions';
 
 const formatLevel = (s: string) => s.replace(/_/g, ' ');
 
@@ -234,11 +236,13 @@ export default function RisksPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!projectId || !confirm('Delete this risk?')) return;
+    if (!projectId) return;
+    const ok = await showConfirm('Delete this risk?', 'Delete Risk');
+    if (!ok) return;
     try {
       const done = await deleteWithReferenceCheck(
         (force) => api.deleteRisk(projectId, id, force),
-        (msg) => window.confirm(msg),
+        (msg) => showConfirm(msg),
       );
       if (done) setRisks(risks.filter(r => r.id !== id));
     } catch (err: any) { setError(err.message || 'Failed to delete'); }
@@ -251,19 +255,41 @@ export default function RisksPage() {
   const clearRiskSelection = () => setSelectedIds(new Set());
   const selectAllRisks = () => setSelectedIds(new Set(filteredRisks.map(r => r.id)));
 
+  const showConfirm = useConfirm();
+
+  const { runBulkDelete, runBulkUpdate } = useBulkActions({
+    clearSelection: clearRiskSelection,
+    reload: load,
+  });
+
   const handleBulkRiskStatus = async (status: string) => {
     if (!projectId) return;
-    await api.bulkUpdateRisks(projectId, [...selectedIds], { status });
-    clearRiskSelection();
-    load();
+    const ids = [...selectedIds];
+    const before = Object.fromEntries(
+      risks.filter((r) => selectedIds.has(r.id)).map((r) => [r.id, { status: r.status }]),
+    );
+    await runBulkUpdate({
+      label: `${status} on ${ids.length} risks`,
+      ids,
+      before,
+      updates: { status },
+      apply: (updateIds, updatePayload) => api.bulkUpdateRisks(projectId, updateIds, updatePayload),
+      applyOne: (id, updatePayload) => api.updateRisk(projectId, id, updatePayload),
+    });
   };
 
   const handleBulkRiskDelete = async () => {
     if (!projectId) return;
-    if (!confirm(`Delete ${selectedIds.size} risk(s)?`)) return;
-    await api.bulkDeleteRisks(projectId, [...selectedIds]);
-    clearRiskSelection();
-    load();
+    const ids = [...selectedIds];
+    const saved = risks.filter((r) => selectedIds.has(r.id)).map((r) => ({ ...r }));
+    await runBulkDelete({
+      noun: 'risk',
+      ids,
+      saved,
+      idOf: (r) => r.id,
+      remove: (idsToRemove) => api.bulkDeleteRisks(projectId, idsToRemove),
+      recreate: (item) => api.createRisk(projectId, item),
+    });
   };
 
   return (
