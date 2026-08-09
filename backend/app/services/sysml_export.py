@@ -9,7 +9,20 @@ from __future__ import annotations
 
 import re
 
+from app.services.table_io import _strip_html
 from app.services.verification_links import attach as attach_verification_cases
+
+
+# Block-level boundaries carry meaning. Descriptions are TipTap rich text, so
+# multi-paragraph and bulleted content is normal, and stripping the tags without
+# putting a separator back welds the last word of one block onto the first word
+# of the next ("Para onePara two").
+_BLOCK_BREAK = re.compile(r"(?i)</(?:p|div|li|h[1-6]|tr)\s*>|<br\s*/?>")
+
+
+def _plain_text(html: str) -> str:
+    """Rich text as plain text, keeping block boundaries as newlines."""
+    return _strip_html(_BLOCK_BREAK.sub("\n", html or ""))
 
 
 def _safe_name(entity_id: str) -> str:
@@ -133,8 +146,8 @@ def export_sysml_v2(store) -> str:
         prefix = "  " * indent_level
 
         name = r.get("name", rid) or rid
-        # Escape quotes in name
-        name_escaped = name.replace('"', '\\"')
+        # Escape quotes in name and protect block comments
+        name_escaped = name.replace('"', '\\"').replace("*/", "* /")
 
         # Cascaded requirements become usages typed by their master, so the
         # cascade link survives a round-trip through SysML v2 (definition/usage
@@ -150,27 +163,32 @@ def export_sysml_v2(store) -> str:
         body.append(f"{prefix}  :>> priority = {r.get('priority', 'medium')};")
         body.append(f"{prefix}  :>> verificationMethod = {r.get('verification_method', 'test')};")
 
-        desc = r.get("description", "").replace("<p>", "").replace("</p>", "").replace("<br>", "\n")
+        desc = _plain_text(r.get("description", ""))
         if desc.strip():
-            desc_escaped = desc.replace('"', '\\"').replace("\n", "\\n")
-            body.append(f"{prefix}  text /* \"{desc_escaped[:500]}\" */")
+            desc_escaped = desc.replace('"', '\\"').replace("\n", "\\n").replace("*/", "* /")
+            body.append(f"{prefix}  text /* \"{desc_escaped}\" */")
+        # Newlines are escaped here too: these are single-line `:>> x = "…";`
+        # assignments, and a literal newline would split them in two for the
+        # line-oriented parser on the way back in.
         if r.get("rationale"):
-            rat_escaped = r["rationale"].replace('"', '\\"')
-            body.append(f"{prefix}  :>> rationale = \"{rat_escaped[:500]}\";")
+            rat_escaped = _plain_text(r["rationale"]).replace('"', '\\"').replace("\n", "\\n")
+            body.append(f"{prefix}  :>> rationale = \"{rat_escaped}\";")
         if r.get("source"):
-            src_escaped = r["source"].replace('"', '\\"')
-            body.append(f"{prefix}  :>> source = \"{src_escaped[:300]}\";")
+            src_escaped = _plain_text(r["source"]).replace('"', '\\"').replace("\n", "\\n")
+            body.append(f"{prefix}  :>> source = \"{src_escaped}\";")
 
         # Relations
         for rel in r.get("relations") or []:
             tgt = _safe_name(rel["target"])
             rel_type = rel["type"]
-            if rel_type in ("refines",):
+            if rel_type == "refines":
                 body.append(f"{prefix}  refine requirement {tgt};")
-            elif rel_type in ("satisfies", "verified_by"):
+            elif rel_type == "satisfies":
                 body.append(f"{prefix}  satisfy requirement {tgt};")
             elif rel_type == "derives":
                 body.append(f"{prefix}  derive requirement {tgt};")
+            else:
+                body.append(f"{prefix}  // @rel={rel_type} {tgt}")
 
         # The verify relationship is emitted from the verification case that
         # owns it (see the "Verification Cases" section below), not from here.
@@ -251,8 +269,8 @@ def export_sysml_v2(store) -> str:
         lines.append("  // Verification Cases")
         for vc in vcs:
             vcid = _safe_name(vc["id"])
-            lines.append(f"  {_decl('requirement def', vc['id'])} {{")
-            lines.append(f"    doc /* {vc.get('name', vcid)} */")
+            lines.append(f"  {_decl('verification case def', vc['id'])} {{")
+            lines.append(f"    doc /* {(vc.get('name', vcid)).replace('*/', '* /')} */")
             lines.append(f"    :>> status = {vc.get('status', 'pending')};")
             lines.append(f"    :>> method = {vc.get('method', 'test')};")
             for req_id in vc.get("verified_requirements", []):

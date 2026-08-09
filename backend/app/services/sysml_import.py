@@ -27,6 +27,8 @@ _CONSTRAINT_RE = re.compile(r"^(assume|require)\s+constraint\s*\{\s*(.*?)\s*\}")
 _SUBJECT_RE = re.compile(r"^subject\s+([A-Za-z0-9_]+)\s*;")
 _UNIT_RE = re.compile(r"\[([^\]]+)\]\s*$")
 _KIND_RE = re.compile(r"//\s*@kind=([A-Za-z]+)")
+_REL_ANNOT_RE = re.compile(r"//\s*@rel=([A-Za-z_]\w*)\s+([A-Za-z0-9_]+)\s*$")
+_VC_DEF_RE = re.compile(r"^verification\s+case\s+def\s+" + _SHORT + r"([A-Za-z0-9_]+)\s*\{")
 
 
 def _parse_attribute(line: str) -> dict | None:
@@ -109,10 +111,18 @@ def parse_sysml(content: str | bytes) -> dict:
             continue
 
         # --- block openers ---
+        vcm = _VC_DEF_RE.match(line)
         rm = _REQ_DEF_RE.match(line)
         rum = _REQ_USAGE_RE.match(line)
         pm = _PART_DEF_RE.match(line)
-        if rum:
+        if vcm:
+            short, declared = vcm.group(1), vcm.group(2)
+            eid = _unescape(short) if short else declared
+            aliases[declared] = eid
+            entry = {"id": eid, "name": eid, "verified_requirements": []}
+            verification_cases.append(entry)
+            stack.append(("vc", entry))
+        elif rum:
             saw_req = True
             short, declared, type_id = rum.group(1), rum.group(2), rum.group(3)
             eid = _unescape(short) if short else declared
@@ -169,7 +179,7 @@ def parse_sysml(content: str | bytes) -> dict:
         if text and not in_vc_section:
             desc = _unquote(text.group(1))
             if desc:
-                current["description"] = f"<p>{desc}</p>"
+                current["description"] = desc
 
         assign = _ASSIGN_RE.search(line)
         if assign:
@@ -221,6 +231,13 @@ def parse_sysml(content: str | bytes) -> dict:
                 rtype = _REL_KEYWORDS[kw]
                 current.setdefault("relations", []).append({"type": rtype, "target": target})
                 traces.append({"source": current["id"], "target": target, "type": rtype})
+
+        rel_annot = _REL_ANNOT_RE.search(line)
+        if rel_annot and kind == "requirement":
+            rtype = rel_annot.group(1)
+            target = rel_annot.group(2)
+            current.setdefault("relations", []).append({"type": rtype, "target": target})
+            traces.append({"source": current["id"], "target": target, "type": rtype})
 
         if line.startswith("}") and stack:
             stack.pop()
