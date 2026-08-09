@@ -14,9 +14,10 @@ from __future__ import annotations
 
 import re
 
-_REQ_DEF_RE = re.compile(r"^requirement\s+def\s+([A-Za-z0-9_]+)\s*\{")
-_REQ_USAGE_RE = re.compile(r"^requirement\s+([A-Za-z0-9_]+)\s*:\s*([A-Za-z0-9_]+)\s*\{")
-_PART_DEF_RE = re.compile(r"^part\s+def\s+([A-Za-z0-9_]+)\s*\{")
+_SHORT = r"(?:<\s*'((?:[^'\\]|\\.)*)'\s*>\s*)?"
+_REQ_DEF_RE = re.compile(r"^requirement\s+def\s+" + _SHORT + r"([A-Za-z0-9_]+)\s*\{")
+_REQ_USAGE_RE = re.compile(r"^requirement\s+" + _SHORT + r"([A-Za-z0-9_]+)\s*:\s*([A-Za-z0-9_]+)\s*\{")
+_PART_DEF_RE = re.compile(r"^part\s+def\s+" + _SHORT + r"([A-Za-z0-9_]+)\s*\{")
 _DOC_RE = re.compile(r"doc\s*/\*(.*?)\*/", re.DOTALL)
 _TEXT_RE = re.compile(r"text\s*/\*\s*\"(.*?)\"\s*\*/", re.DOTALL)
 _ASSIGN_RE = re.compile(r":>>\s*(\w+)\s*=\s*(.+?);")
@@ -67,6 +68,11 @@ def _unquote(value: str) -> str:
     return value.replace('\\"', '"').replace("\\n", "\n")
 
 
+def _unescape(s: str) -> str:
+    """Turn ``\'`` back into ``'``."""
+    return s.replace("\\'", "'")
+
+
 def parse_sysml(content: str | bytes) -> dict:
     if isinstance(content, bytes):
         content = content.decode("utf-8", errors="replace")
@@ -76,6 +82,9 @@ def parse_sysml(content: str | bytes) -> dict:
     components: list[dict] = []
     verification_cases: list[dict] = []
     traces: list[dict] = []
+
+    # declared name -> entity id  (e.g. "REQ_001" -> "REQ-001")
+    aliases: dict[str, str] = {}
 
     # Stack of (kind, dict) for currently-open blocks; the innermost provides the
     # parent for a same-kind block opened inside it (reqs nest in reqs, parts in
@@ -105,13 +114,15 @@ def parse_sysml(content: str | bytes) -> dict:
         pm = _PART_DEF_RE.match(line)
         if rum:
             saw_req = True
-            rid, type_id = rum.group(1), rum.group(2)
+            short, declared, type_id = rum.group(1), rum.group(2), rum.group(3)
+            eid = _unescape(short) if short else declared
+            aliases[declared] = eid
             if in_vc_section:
-                entry = {"id": rid, "name": rid, "cascade_from": type_id, "verified_requirements": []}
+                entry = {"id": eid, "name": eid, "cascade_from": type_id, "verified_requirements": []}
                 verification_cases.append(entry)
                 stack.append(("vc", entry))
             else:
-                entry = {"id": rid, "name": rid, "cascade_from": type_id, "attributes": [],
+                entry = {"id": eid, "name": eid, "cascade_from": type_id, "attributes": [],
                          "relations": [], "verification_cases": [], "parameters": [], "constraints": []}
                 parent = nearest("requirement")
                 if parent:
@@ -120,13 +131,15 @@ def parse_sysml(content: str | bytes) -> dict:
                 stack.append(("requirement", entry))
         elif rm:
             saw_req = True
-            rid = rm.group(1)
+            short, declared = rm.group(1), rm.group(2)
+            eid = _unescape(short) if short else declared
+            aliases[declared] = eid
             if in_vc_section:
-                entry = {"id": rid, "name": rid, "verified_requirements": []}
+                entry = {"id": eid, "name": eid, "verified_requirements": []}
                 verification_cases.append(entry)
                 stack.append(("vc", entry))
             else:
-                entry = {"id": rid, "name": rid, "attributes": [], "relations": [],
+                entry = {"id": eid, "name": eid, "attributes": [], "relations": [],
                          "verification_cases": [], "parameters": [], "constraints": []}
                 parent = nearest("requirement")
                 if parent:
@@ -134,8 +147,10 @@ def parse_sysml(content: str | bytes) -> dict:
                 requirements.append(entry)
                 stack.append(("requirement", entry))
         elif pm:
-            cid = pm.group(1)
-            entry = {"id": cid, "name": cid, "parameters": [], "satisfies": []}
+            short, declared = pm.group(1), pm.group(2)
+            eid = _unescape(short) if short else declared
+            aliases[declared] = eid
+            entry = {"id": eid, "name": eid, "parameters": [], "satisfies": []}
             parent = nearest("component")
             if parent:
                 entry["parent"] = parent
@@ -215,6 +230,42 @@ def parse_sysml(content: str | bytes) -> dict:
 
     for entry in requirements:
         entry.pop("_pending_assume", None)
+
+    # --- alias resolution (post-pass) ---
+    def _remap(value: str) -> str:
+        return aliases.get(value, value)
+
+    # Resolve in-entity references.  A name absent from the alias map is left
+    # as-is — it names an entity outside this file.
+    for req in requirements:
+        for rel in req.get("relations", []):
+            rel["target"] = _remap(rel["target"])
+        if req.get("parent"):
+            req["parent"] = _remap(req["parent"])
+        if req.get("cascade_from"):
+            req["cascade_from"] = _remap(req["cascade_from"])
+        if req.get("subject"):
+            req["subject"] = _remap(req["subject"])
+        for i, vid in enumerate(list(req.get("verification_cases", []))):
+            req["verification_cases"][i] = _remap(vid)
+
+    for comp in components:
+        for i, rid in enumerate(list(comp.get("satisfies", []))):
+            comp["satisfies"][i] = _remap(rid)
+        if comp.get("parent"):
+            comp["parent"] = _remap(comp["parent"])
+
+    for vc in verification_cases:
+        for i, rid in enumerate(list(vc.get("verified_requirements", []))):
+            vc["verified_requirements"][i] = _remap(rid)
+        if vc.get("cascade_from"):
+            vc["cascade_from"] = _remap(vc["cascade_from"])
+
+    for trace in traces:
+        if trace.get("source"):
+            trace["source"] = _remap(trace["source"])
+        if trace.get("target"):
+            trace["target"] = _remap(trace["target"])
 
     # Clear cascade_from when the type reference does not resolve to a
     # requirement in this file — a dangling link is worse than a lost one.

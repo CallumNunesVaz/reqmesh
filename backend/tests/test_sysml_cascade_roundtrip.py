@@ -73,14 +73,16 @@ def test_cascaded_child_exports_as_usage_typed_by_master(tmp_path):
 
 def test_cascaded_child_with_sanitised_ids(tmp_path):
     """Ids containing dashes and dots are sanitised to underscores in the
-    SysML text, including the master reference."""
+    SysML text, including the master reference — and the original id rides
+    along as a short name so the round-trip can restore it."""
     store = _store(tmp_path)
     _req(store, id="REQ-SOURCE", name="Source")
     _req(store, id="REQ-COPY.X", name="Copy", cascade_from="REQ-SOURCE")
 
     out = export_sysml_v2(store)
 
-    assert "requirement REQ_COPY_X : REQ_SOURCE {" in out
+    assert "REQ_COPY_X : REQ_SOURCE {" in out
+    assert "<'REQ-COPY.X'>" in out
 
 
 def test_derive_relation_still_emitted_alongside_cascade(tmp_path):

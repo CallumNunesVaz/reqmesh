@@ -12,6 +12,26 @@ import re
 from app.services.verification_links import attach as attach_verification_cases
 
 
+def _safe_name(entity_id: str) -> str:
+    """The SysML declared name for a reqmesh id (dots and hyphens are illegal)."""
+    return entity_id.replace("-", "_").replace(".", "_")
+
+
+def _decl(keyword: str, entity_id: str, suffix: str = "") -> str:
+    """A block opener carrying a short name when the id was mangled.
+
+    _decl("requirement def", "REQ-001")        -> "requirement def <'REQ-001'> REQ_001"
+    _decl("requirement", "R-2", " : R_1")      -> "requirement <'R-2'> R_2 : R_1"
+    _decl("part def", "WING")                  -> "part def WING"
+    """
+    safe = _safe_name(entity_id)
+    if safe != entity_id:
+        escaped = entity_id.replace("'", "\\'")
+        return f"{keyword} <'{escaped}'> {safe}{suffix}"
+    else:
+        return f"{keyword} {safe}{suffix}"
+
+
 def _subst_bindings(expr: str, bindings: dict) -> str:
     """Substitute a definition's formal names with their bound actual refs, so a
     reusable constraint/calc usage exports as a concrete (round-trippable) expr."""
@@ -108,7 +128,7 @@ def export_sysml_v2(store) -> str:
 
     # Render requirements as SysML requirement definitions.
     def render_req(r: dict, indent_level: int = 2) -> list[str]:
-        rid = r["id"].replace("-", "_").replace(".", "_")
+        rid = _safe_name(r["id"])
         body: list[str] = []
         prefix = "  " * indent_level
 
@@ -121,10 +141,10 @@ def export_sysml_v2(store) -> str:
         # is the SysML v2 idiom that maps onto cascade).
         cascade_from = r.get("cascade_from")
         if cascade_from and cascade_from in all_exported_ids:
-            master_safe = cascade_from.replace("-", "_").replace(".", "_")
-            body.append(f"{prefix}requirement {rid} : {master_safe} {{")
+            master_safe = _safe_name(cascade_from)
+            body.append(f"{prefix}{_decl('requirement', r['id'], f' : {master_safe}')} {{")
         else:
-            body.append(f"{prefix}requirement def {rid} {{")
+            body.append(f"{prefix}{_decl('requirement def', r['id'])} {{")
         body.append(f"{prefix}  doc /* {name_escaped} */")
         body.append(f"{prefix}  :>> status = {r.get('status', 'proposed')};")
         body.append(f"{prefix}  :>> priority = {r.get('priority', 'medium')};")
@@ -143,7 +163,7 @@ def export_sysml_v2(store) -> str:
 
         # Relations
         for rel in r.get("relations") or []:
-            tgt = rel["target"].replace("-", "_").replace(".", "_")
+            tgt = _safe_name(rel["target"])
             rel_type = rel["type"]
             if rel_type in ("refines",):
                 body.append(f"{prefix}  refine requirement {tgt};")
@@ -168,12 +188,12 @@ def export_sysml_v2(store) -> str:
         # single allocating component when there is exactly one.
         explicit = r.get("subject")
         if explicit:
-            subj = explicit.replace("-", "_").replace(".", "_")
+            subj = _safe_name(explicit)
             body.append(f"{prefix}  subject {subj};")
         else:
             allocs = req_to_components.get(r["id"], [])
             if len(allocs) == 1:
-                subj = allocs[0].replace("-", "_").replace(".", "_")
+                subj = _safe_name(allocs[0])
                 body.append(f"{prefix}  subject {subj};")
         for p in r.get("parameters") or []:
             body.append(_param_line(_effective(p, "calc_def", defs), f"{prefix}  "))
@@ -202,16 +222,16 @@ def export_sysml_v2(store) -> str:
             comp_by_parent.setdefault(pid, []).append(c)
 
         def render_part(c: dict, indent_level: int = 1) -> list[str]:
-            cid = c["id"].replace("-", "_").replace(".", "_")
+            cid = _safe_name(c["id"])
             prefix = "  " * indent_level
-            body = [f"{prefix}part def {cid} {{"]
+            body = [f"{prefix}{_decl('part def', c['id'])} {{"]
             body.append(f"{prefix}  doc /* {(c.get('name') or cid)} */")
             if c.get("quantity", 1) not in (1, None):
                 body.append(f"{prefix}  attribute quantity = {int(c['quantity'])};")
             for p in c.get("parameters") or []:
                 body.append(_param_line(_effective(p, "calc_def", defs), f"{prefix}  "))
             for rid in c.get("satisfies") or []:
-                body.append(f"{prefix}  satisfy requirement {rid.replace('-', '_').replace('.', '_')};")
+                body.append(f"{prefix}  satisfy requirement {_safe_name(rid)};")
             for child in comp_by_parent.get(c["id"], []):
                 body.extend(render_part(child, indent_level + 1))
             body.append(f"{prefix}}}")
@@ -230,13 +250,13 @@ def export_sysml_v2(store) -> str:
         lines.append("")
         lines.append("  // Verification Cases")
         for vc in vcs:
-            vcid = vc["id"].replace("-", "_").replace(".", "_")
-            lines.append(f"  requirement def {vcid} {{")
+            vcid = _safe_name(vc["id"])
+            lines.append(f"  {_decl('requirement def', vc['id'])} {{")
             lines.append(f"    doc /* {vc.get('name', vcid)} */")
             lines.append(f"    :>> status = {vc.get('status', 'pending')};")
             lines.append(f"    :>> method = {vc.get('method', 'test')};")
             for req_id in vc.get("verified_requirements", []):
-                rid_safe = req_id.replace("-", "_").replace(".", "_")
+                rid_safe = _safe_name(req_id)
                 lines.append(f"    verify requirement {rid_safe};")
             lines.append("  }")
             lines.append("")
