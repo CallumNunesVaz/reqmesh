@@ -846,6 +846,13 @@ export interface ImportSummary {
   verification_cases: number;
   format: string;
   ignored: { lines: number; constructs: Record<string, number> };
+  /** Preview fields. The server defaults these on every format, so they are
+   *  always present — no branching on which parser produced the summary. */
+  dry_run: boolean;
+  would_create: number;
+  would_update: number;
+  would_delete: number;
+  rows: number;
 }
 
 export interface PresenceUser {
@@ -1446,11 +1453,12 @@ export const api = {
     request<{ installed: boolean }>(`/projects/${projectId}/hooks/uninstall`, { method: 'POST' }),
 
   // Import (ReqIF / SysML)
-  importProject: (projectId: string, file: File, format: string, mode: string) => {
+  importProject: (projectId: string, file: File, format: string, mode: string, dryRun = false) => {
     const fd = new FormData();
     fd.append('file', file);
     fd.append('format', format);
     fd.append('mode', mode);
+    fd.append('dry_run', String(dryRun));
     return request<ImportSummary>(`/projects/${projectId}/import`, { method: 'POST', body: fd });
   },
 

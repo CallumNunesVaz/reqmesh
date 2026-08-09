@@ -816,44 +816,65 @@ def import_project(
     file: UploadFile = File(...),
     format: str = Form("auto"),
     mode: str = Form("merge"),
+    dry_run: bool = Form(False),
     user: dict = Depends(require_maintain),
 ):
-    """Import requirements from a ReqIF 1.2 or SysML v2 file.
+    """Import requirements from a ReqIF 1.2, SysML v2 or spreadsheet file.
 
-    ``format`` is ``auto`` (sniff from content), ``reqif`` or ``sysml``.
+    ``format`` is ``auto`` (sniff from content), ``reqif``, ``sysml``, ``csv``,
+    ``tsv`` or ``xlsx``.
     ``mode`` is ``merge`` (create/update) or ``replace`` (wipe existing first).
+    ``dry_run`` previews the change without writing, and is available for the
+    table formats only.
     """
     store = get_store(project_id)
     if format not in ("auto", "reqif", "sysml", "csv", "tsv", "xlsx"):
         raise HTTPException(status_code=400, detail=f"Unknown format: {format}")
     if mode not in ("merge", "replace"):
         raise HTTPException(status_code=400, detail=f"Unknown mode: {mode}")
+    # parse_and_import has no dry-run path, so honouring the flag for those
+    # formats would mean performing a real import behind a button labelled
+    # "Preview". `auto` is refused too: the format is not known until the
+    # content has been sniffed, which happens inside parse_and_import.
+    if dry_run and format not in ("csv", "tsv", "xlsx"):
+        raise HTTPException(
+            status_code=400,
+            detail="Dry run is only available for csv, tsv and xlsx",
+        )
 
     content = read_upload_capped(file, settings.max_upload_size_mb)
     from app.services.table_io import import_table as table_import
 
-    def _with_ignored(summary: dict) -> dict:
-        """Guarantee the `ignored` fidelity report on every format's summary.
+    def _normalise_summary(summary: dict) -> dict:
+        """Give every format's summary the same key set.
 
-        Only the SysML parser can report dropped constructs, but the client
-        reads `ignored.lines` unconditionally — so the spreadsheet paths, which
-        never touch import_into_store, have to carry the zero default or the
-        import dialog throws on an otherwise successful CSV import.
+        `ignored` is the fidelity report: only the SysML parser can name dropped
+        constructs, but the client reads `ignored.lines` unconditionally — so the
+        spreadsheet paths, which never touch import_into_store, have to carry the
+        zero default or the import dialog throws on an otherwise successful CSV
+        import. The `dry_run`/`would_*`/`rows` defaults do the same job for the
+        preview fields, so the TypeScript type can declare them required and no
+        caller has to branch on which format produced the summary.
         """
         summary.setdefault("ignored", {"lines": 0, "constructs": {}})
+        summary.setdefault("dry_run", False)
+        summary.setdefault("would_create", 0)
+        summary.setdefault("would_update", 0)
+        summary.setdefault("would_delete", 0)
+        summary.setdefault("rows", 0)
         return summary
 
     if format in ("csv", "tsv"):
         try:
-            return _with_ignored(table_import(store, content.decode("utf-8", errors="replace"),
-                                              fmt=format, mode=mode))
+            return _normalise_summary(table_import(store, content.decode("utf-8", errors="replace"),
+                                                   fmt=format, mode=mode, dry_run=dry_run))
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=f"Import failed: {exc}") from exc
 
     if format == "xlsx":
         from app.services.table_io import import_xlsx
         try:
-            return _with_ignored(import_xlsx(store, content, mode=mode))
+            return _normalise_summary(import_xlsx(store, content, mode=mode, dry_run=dry_run))
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=f"Import failed: {exc}") from exc
 
@@ -865,4 +886,4 @@ def import_project(
         summary = parse_and_import(store, content, fmt=format, mode=mode)
     except (ReqIFParseError, SysMLParseError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=f"Import failed: {exc}") from exc
-    return _with_ignored(summary)
+    return _normalise_summary(summary)

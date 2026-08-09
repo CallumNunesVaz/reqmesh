@@ -662,7 +662,7 @@ const DOCS: DocSection[] = [
         <div className="space-y-2 mb-4">
           <Callout variant="info"><strong className="text-card-foreground">ReqIF 1.2</strong> — Standard requirements interchange format used by DOORS, Polarion, and Jama. Both import and export preserve types, attributes, relations, and verification links.</Callout>
           <Callout variant="info"><strong className="text-card-foreground">SysML v2</strong> — Textual MBSE notation. Import and export preserve the requirement hierarchy and constraints.</Callout>
-          <Callout variant="tip"><strong className="text-card-foreground">CSV / TSV / XLSX</strong> — Spreadsheet formats for stakeholder review. Export creates a flat table with all fields. Import maps common header names (e.g. "Requirement ID" → id). XLSX export includes styled headers. Dry-run mode previews changes before applying.</Callout>
+          <Callout variant="tip"><strong className="text-card-foreground">CSV / TSV / XLSX</strong> — Spreadsheet formats for stakeholder review. Export creates a flat table with all fields. Import maps common header names (e.g. "Requirement ID" → id). XLSX export includes styled headers. Tick <strong className="text-card-foreground">Dry run</strong> in the import dialog to preview exactly what would be created, updated and deleted before committing — available for CSV, TSV and XLSX only, since the ReqIF and SysML parsers cannot preview.</Callout>
         </div>
 
         <H3>Import Modes</H3>

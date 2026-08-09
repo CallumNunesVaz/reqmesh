@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, FileUp, UploadCloud, Loader, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { X, FileUp, UploadCloud, Loader, CheckCircle2, AlertTriangle, Eye } from 'lucide-react';
 import { api, type ImportSummary } from '../api/client';
 import { useStore } from '../store';
 
@@ -16,12 +16,24 @@ const formats = [
   { id: 'sysml', label: 'SysML v2', desc: 'SysML v2 textual notation (.sysml)' },
   { id: 'csv', label: 'CSV', desc: 'Comma-separated values spreadsheet' },
   { id: 'tsv', label: 'TSV', desc: 'Tab-separated values spreadsheet' },
+  { id: 'xlsx', label: 'Excel (XLSX)', desc: 'Microsoft Excel worksheet' },
 ];
+
+/** Only the table parsers can preview: parse_and_import has no dry-run path,
+ *  and `auto` does not know its format until the content has been sniffed. */
+const PREVIEWABLE = new Set(['csv', 'tsv', 'xlsx']);
+
+const ACCEPT = [
+  '.xml', '.reqif', '.sysml', '.txt', '.csv', '.tsv', '.xlsx',
+  'application/xml', 'text/xml', 'text/csv', 'text/tab-separated-values',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+].join(',');
 
 export default function ImportDialog({ open, onClose, projectId }: ImportDialogProps) {
   const [format, setFormat] = useState('auto');
   const [mode, setMode] = useState<'merge' | 'replace'>('merge');
   const [file, setFile] = useState<File | null>(null);
+  const [dryRun, setDryRun] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -29,11 +41,26 @@ export default function ImportDialog({ open, onClose, projectId }: ImportDialogP
   const inputRef = useRef<HTMLInputElement>(null);
   const bumpGraphVersion = useStore((s) => s.bumpGraphVersion);
 
+  const canPreview = PREVIEWABLE.has(format);
+  const previewing = dryRun && canPreview;
+
   const reset = () => {
     setFile(null); setError(''); setResult(null); setBusy(false);
   };
 
   const close = () => { reset(); onClose(); };
+
+  // A preview describing a different file, format or mode is worse than none.
+  const clearResult = () => { setError(''); setResult(null); };
+
+  const chooseFormat = (id: string) => {
+    setFormat(id);
+    clearResult();
+    // A disabled-but-still-ticked box would submit a request the route 400s.
+    if (!PREVIEWABLE.has(id)) setDryRun(false);
+  };
+
+  const chooseMode = (m: 'merge' | 'replace') => { setMode(m); clearResult(); };
 
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -42,13 +69,14 @@ export default function ImportDialog({ open, onClose, projectId }: ImportDialogP
     if (f) { setFile(f); setError(''); setResult(null); }
   }, []);
 
-  const handleImport = async () => {
+  const runImport = async (preview: boolean) => {
     if (!file) return;
     setBusy(true); setError(''); setResult(null);
     try {
-      const summary = await api.importProject(projectId, file, format, mode);
+      const summary = await api.importProject(projectId, file, format, mode, preview);
       setResult(summary);
-      bumpGraphVersion();
+      // Nothing changed on a preview, so nothing downstream needs invalidating.
+      if (!summary.dry_run) bumpGraphVersion();
     } catch (err: any) {
       setError(err.message || 'Import failed');
     } finally {
@@ -77,7 +105,7 @@ export default function ImportDialog({ open, onClose, projectId }: ImportDialogP
             <h2 className="text-lg font-bold text-foreground mb-1 flex items-center gap-2">
               <FileUp size={18} /> Import Requirements
             </h2>
-            <p className="text-xs text-muted-foreground mb-5">Load a ReqIF 1.2 or SysML v2 file into this project</p>
+            <p className="text-xs text-muted-foreground mb-5">Load a ReqIF, SysML v2 or spreadsheet file into this project</p>
 
             <div className="space-y-5">
               <div>
@@ -88,7 +116,7 @@ export default function ImportDialog({ open, onClose, projectId }: ImportDialogP
                     return (
                       <button
                         key={f.id}
-                        onClick={() => setFormat(f.id)}
+                        onClick={() => chooseFormat(f.id)}
                         title={f.desc}
                         className={`p-2.5 rounded-lg border text-xs transition-all ${
                           active ? 'border-primary bg-primary/5 text-primary' : 'border bg-card text-muted-foreground hover:border-ring/30'
@@ -105,7 +133,7 @@ export default function ImportDialog({ open, onClose, projectId }: ImportDialogP
                 <label className="label">Mode</label>
                 <div className="grid grid-cols-2 gap-2 mt-1">
                   <button
-                    onClick={() => setMode('merge')}
+                    onClick={() => chooseMode('merge')}
                     className={`p-2.5 rounded-lg border text-xs text-left transition-all ${
                       mode === 'merge' ? 'border-primary bg-primary/5 text-primary' : 'border bg-card text-muted-foreground hover:border-ring/30'
                     }`}
@@ -114,7 +142,7 @@ export default function ImportDialog({ open, onClose, projectId }: ImportDialogP
                     <span className="block opacity-70 text-[10px] mt-0.5">Create new, update matching IDs</span>
                   </button>
                   <button
-                    onClick={() => setMode('replace')}
+                    onClick={() => chooseMode('replace')}
                     className={`p-2.5 rounded-lg border text-xs text-left transition-all ${
                       mode === 'replace' ? 'border-cs-red bg-cs-red/5 text-cs-red' : 'border bg-card text-muted-foreground hover:border-ring/30'
                     }`}
@@ -140,13 +168,13 @@ export default function ImportDialog({ open, onClose, projectId }: ImportDialogP
                 ) : (
                   <>
                     <span className="text-sm text-muted-foreground">Drop a file here, or click to browse</span>
-                    <span className="text-[10px] text-muted-foreground">.xml (ReqIF) · .sysml (SysML v2)</span>
+                    <span className="text-[10px] text-muted-foreground">.xml (ReqIF) · .sysml (SysML v2) · .csv · .tsv · .xlsx</span>
                   </>
                 )}
                 <input
                   ref={inputRef}
                   type="file"
-                  accept=".xml,.reqif,.sysml,.txt,application/xml,text/xml"
+                  accept={ACCEPT}
                   className="hidden"
                   onChange={(e) => {
                     const f = e.target.files?.[0];
@@ -155,13 +183,57 @@ export default function ImportDialog({ open, onClose, projectId }: ImportDialogP
                 />
               </div>
 
+              <label
+                className={`flex items-center gap-2 text-xs ${canPreview ? 'text-muted-foreground cursor-pointer' : 'text-muted-foreground/50 cursor-not-allowed'}`}
+                title={canPreview ? undefined : 'Dry run is only available for CSV, TSV and XLSX'}
+              >
+                <input
+                  type="checkbox"
+                  checked={previewing}
+                  disabled={!canPreview}
+                  onChange={(e) => { setDryRun(e.target.checked); clearResult(); }}
+                  className="rounded border-border"
+                />
+                Dry run (preview only, no changes)
+              </label>
+
               {error && (
                 <div className="flex items-start gap-2 text-xs text-destructive bg-destructive/10 rounded-lg p-3">
                   <AlertTriangle size={14} className="shrink-0 mt-0.5" /> {error}
                 </div>
               )}
 
-              {result && (
+              {result?.dry_run && (
+                <div className="text-xs bg-muted/50 border rounded-lg p-3 space-y-2">
+                  <div className="flex items-start gap-2 text-foreground">
+                    <Eye size={14} className="shrink-0 mt-0.5" />
+                    <span className="font-medium">Nothing has been changed yet.</span>
+                  </div>
+                  <div className="text-muted-foreground">
+                    <b className="text-foreground">{result.would_create}</b> to create ·{' '}
+                    <b className="text-foreground">{result.would_update}</b> to update
+                    {result.skipped > 0 && <> · {result.skipped} skipped</>}
+                    {' '}out of {result.rows} row{result.rows === 1 ? '' : 's'}.
+                  </div>
+                  {result.would_delete > 0 && (
+                    <div className="flex items-start gap-2 text-destructive">
+                      <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+                      <span>
+                        <b>{result.would_delete}</b> existing requirement{result.would_delete === 1 ? '' : 's'} will be deleted first.
+                      </span>
+                    </div>
+                  )}
+                  <button
+                    onClick={() => runImport(false)}
+                    disabled={busy}
+                    className="btn-primary w-full justify-center disabled:opacity-50 mt-1"
+                  >
+                    <FileUp size={14} /> Import for real
+                  </button>
+                </div>
+              )}
+
+              {result && !result.dry_run && (
                 <>
                   <div className="flex items-start gap-2 text-xs text-cs-green bg-cs-green/10 rounded-lg p-3">
                     <CheckCircle2 size={14} className="shrink-0 mt-0.5" />
@@ -190,11 +262,15 @@ export default function ImportDialog({ open, onClose, projectId }: ImportDialogP
 
               <div className="flex gap-2 pt-2 border-t">
                 <button
-                  onClick={handleImport}
+                  onClick={() => runImport(previewing)}
                   disabled={!file || busy}
                   className="btn-primary flex-1 justify-center disabled:opacity-50"
                 >
-                  {busy ? (<><Loader size={14} className="animate-spin" /> Importing...</>) : (<><FileUp size={14} /> Import</>)}
+                  {busy
+                    ? (<><Loader size={14} className="animate-spin" /> {previewing ? 'Previewing...' : 'Importing...'}</>)
+                    : previewing
+                      ? (<><Eye size={14} /> Preview</>)
+                      : (<><FileUp size={14} /> Import</>)}
                 </button>
                 <button onClick={close} className="btn-secondary justify-center">Close</button>
               </div>

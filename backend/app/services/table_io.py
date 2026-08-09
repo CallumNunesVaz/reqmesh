@@ -173,6 +173,69 @@ def export_table(store, fmt: str) -> str:
     return out.getvalue()
 
 
+def _require_id_column(ids: list[str], rows: int) -> None:
+    """Refuse to wipe the project for a file we got no usable ids out of.
+
+    An unrecognised id column would otherwise delete everything and report a
+    cheerful ``{"created": 0}``. This runs on dry runs too: a preview that says
+    "57 will be deleted" for a file the real import rejects is worse than no
+    preview, because it is the preview that talks the user into committing.
+    """
+    if rows and not any(ids):
+        raise ValueError(
+            "No 'id' column recognised in the table — refusing to replace "
+            "the project. Check the header row."
+        )
+
+
+def _dry_run_counts(store, ids: list[str], mode: str) -> tuple[int, int, int, int]:
+    """``(would_create, would_update, would_delete, skipped)`` for a preview.
+
+    Walks the rows in order rather than counting set membership, so a file that
+    repeats an id reports one create and one update — which is what the real
+    import does on the second row, since the first has already landed by then.
+    """
+    would_delete = len(store.list_requirements()) if mode == "replace" else 0
+    seen: set[str] = set()
+    would_create = would_update = skipped = 0
+    for rid in ids:
+        if not rid:
+            skipped += 1
+            continue
+        # In replace mode the store is emptied first, so nothing already in it
+        # counts as an update — only a repeat within the file does.
+        exists = rid in seen or (mode != "replace" and store.get_requirement(rid) is not None)
+        if exists:
+            would_update += 1
+        else:
+            would_create += 1
+        seen.add(rid)
+    return would_create, would_update, would_delete, skipped
+
+
+def _dry_run_summary(store, ids: list[str], fmt: str, mode: str, rows: int) -> dict:
+    """The one dry-run shape every table format returns.
+
+    csv/tsv and xlsx used to disagree — xlsx put its counts in ``created``/
+    ``updated`` while csv used ``would_create``/``would_update`` and zeroed the
+    others — so a caller reading one was silently wrong about the other.
+    """
+    would_create, would_update, would_delete, skipped = _dry_run_counts(store, ids, mode)
+    return {
+        "created": 0,
+        "updated": 0,
+        "skipped": skipped,
+        "traces_added": 0,
+        "verification_cases": 0,
+        "format": fmt,
+        "dry_run": True,
+        "would_create": would_create,
+        "would_update": would_update,
+        "would_delete": would_delete,
+        "rows": rows,
+    }
+
+
 def import_table(store, content: str, fmt: str = "csv", mode: str = "merge", dry_run: bool = False) -> dict:
     if fmt not in ("csv", "tsv"):
         raise ValueError(f"Unknown table format: {fmt}")
@@ -195,39 +258,17 @@ def import_table(store, content: str, fmt: str = "csv", mode: str = "merge", dry
     except Exception as exc:
         raise ValueError(f"Could not parse the table (nothing was changed): {exc}") from exc
 
+    row_ids = [r.get("id", "").strip() for r in parsed_rows]
+
     if mode == "replace":
-        if dry_run:
-            return {"created": 0, "updated": 0, "skipped": 0, "traces_added": 0,
-                    "verification_cases": 0, "format": fmt,
-                    "dry_run": True, "would_delete": len(store.list_requirements()),
-                    "rows": len(rows)}
-        # Refuse to wipe the project for a file we got no usable ids out of —
-        # an unrecognised id column would otherwise delete everything and
-        # report a cheerful {"created": 0}.
-        if rows and not any(r.get("id", "").strip() for r in parsed_rows):
-            raise ValueError(
-                "No 'id' column recognised in the table — refusing to replace "
-                "the project. Check the header row."
-            )
-        for req in store.list_requirements():
-            store.delete_requirement(req["id"])
+        _require_id_column(row_ids, len(rows))
 
     if dry_run:
-        would_create = 0
-        would_update = 0
-        for req_data in parsed_rows:
-            rid = req_data.get("id", "").strip()
-            if not rid:
-                skipped += 1
-                continue
-            if store.get_requirement(rid):
-                would_update += 1
-            else:
-                would_create += 1
-        return {"created": 0, "updated": 0, "skipped": skipped, "traces_added": 0,
-                "verification_cases": 0, "format": fmt,
-                "dry_run": True, "would_create": would_create, "would_update": would_update,
-                "rows": len(rows)}
+        return _dry_run_summary(store, row_ids, fmt, mode, len(rows))
+
+    if mode == "replace":
+        for req in store.list_requirements():
+            store.delete_requirement(req["id"])
 
     for req_data in parsed_rows:
         rid = req_data.get("id", "").strip()
@@ -365,44 +406,50 @@ def import_xlsx(store, content: bytes, mode: str = "merge", dry_run: bool = Fals
     updated = 0
     skipped = 0
 
+    # Read and parse the whole sheet before touching the store, for the reason
+    # import_table already does: replace mode used to delete every requirement
+    # and only then start parsing, so an unreadable sheet — or one whose header
+    # row we do not recognise — emptied the project and imported nothing.
+    # The row budget is capped by _count_xlsx_rows above, so holding the parsed
+    # rows is bounded.
+    try:
+        parsed_rows = []
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            if not any(v is not None for v in row):
+                continue
+            row_dict = {headers[i]: str(v) if v is not None else ""
+                        for i, v in enumerate(row) if i < len(headers)}
+            parsed_rows.append(_row_to_req(row_dict))
+    except Exception as exc:
+        raise ValueError(f"Could not parse the worksheet (nothing was changed): {exc}") from exc
+    finally:
+        wb.close()
+
+    row_count = len(parsed_rows)
+    row_ids = [r.get("id", "").strip() for r in parsed_rows]
+
     if mode == "replace":
-        if dry_run:
-            wb.close()
-            return {"created": 0, "updated": 0, "skipped": 0, "traces_added": 0,
-                    "verification_cases": 0, "format": "xlsx",
-                    "dry_run": True, "would_delete": len(store.list_requirements()),
-                    "rows": ws.max_row - 1 if ws.max_row else 0}
+        _require_id_column(row_ids, row_count)
+
+    if dry_run:
+        return _dry_run_summary(store, row_ids, "xlsx", mode, row_count)
+
+    if mode == "replace":
         for req in store.list_requirements():
             store.delete_requirement(req["id"])
 
-    row_count = 0
-    for row in ws.iter_rows(min_row=2, values_only=True):
-        if not any(v is not None for v in row):
-            continue
-        row_count += 1
-        row_dict = {headers[i]: str(v) if v is not None else "" for i, v in enumerate(row) if i < len(headers)}
-        req_data = _row_to_req(row_dict)
-        rid = req_data.get("id", "").strip()
+    for req_data, rid in zip(parsed_rows, row_ids):
         if not rid:
             skipped += 1
             continue
-        if dry_run:
-            if store.get_requirement(rid):
-                updated += 1
-            else:
-                created += 1
+        if store.get_requirement(rid):
+            store.update_requirement(rid, req_data)
+            updated += 1
         else:
-            existing = store.get_requirement(rid)
-            if existing:
-                store.update_requirement(rid, req_data)
-                updated += 1
-            else:
-                store.create_requirement(req_data)
-                created += 1
+            store.create_requirement(req_data)
+            created += 1
 
-    wb.close()
     return {
         "created": created, "updated": updated, "skipped": skipped,
         "traces_added": 0, "verification_cases": 0, "format": "xlsx",
-        **({"dry_run": True, "rows": row_count} if dry_run else {}),
     }

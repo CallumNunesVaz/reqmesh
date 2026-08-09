@@ -38,7 +38,7 @@ reqmesh/                    # THE TOOL (this repo)
 │   ├── app/models/        # Pydantic models for all 10 entity types
 │   ├── app/services/      # YAML store, integrity, tracing, fingerprint, evaluation,
 │   │                      # code_scan, quality, table_io, email, publisher, workflow…
-│   ├── tests/             # 1342 integration + unit tests (pytest)
+│   ├── tests/             # 1363 integration + unit tests (pytest)
 │   ├── gen_schemas.py     # JSON Schema generator
 │   └── requirements.txt   # All deps pinned to exact versions
 ├── frontend/              # React 18 + TypeScript + Vite + TailwindCSS
@@ -47,7 +47,7 @@ reqmesh/                    # THE TOOL (this repo)
 │   │   ├── components/    # Layout, nav, graph, editor, parametrics, helpers, palette…
 │   │   ├── pages/         # 20 route pages (projects, requirements, components, metrics…)
 │   │   └── store/         # Zustand state (auth, data, helpers toggle)
-│   └── tests/             # 236 unit tests (vitest)
+│   └── tests/             # 238 unit tests (vitest)
 ├── schemas/               # JSON Schemas for all project YAML formats
 ├── desktop/               # Electron shell for native desktop app
 ├── Dockerfile.prod        # Multi-stage production build
@@ -136,7 +136,7 @@ backend/.venv/bin/python seed_cessna.py --force
 
 ### Tests
 
-**Backend** — 1342 tests covering API, storage, auth, integrity, quality, tracing, code scan, fingerprint, table I/O, evaluation, what-if impact, and deployment:
+**Backend** — 1363 tests covering API, storage, auth, integrity, quality, tracing, code scan, fingerprint, table I/O, evaluation, what-if impact, and deployment:
 
 ```bash
 cd backend
@@ -144,8 +144,8 @@ cd backend
 .venv/bin/python -m pytest tests/
 ```
 
-**Frontend** — 236 unit tests covering stores, API client, entities,
-auto-linking, row selection and graph filters, plus 88 Playwright
+**Frontend** — 238 unit tests covering stores, API client, entities,
+auto-linking, row selection and graph filters, plus 94 Playwright
 end-to-end tests:
 
 ```bash
@@ -293,7 +293,7 @@ everywhere they could surface, including push error messages.
 Requirements round-trip through **ReqIF 1.2**, **SysML v2**, **CSV**, **TSV**, and **XLSX**:
 
 - **Export** — from the Export dialog, `POST /api/projects/{id}/publish/download?format=reqif|sysml|csv|tsv|xlsx`, or CLI `export -f reqif`.
-- **Import** — from the Import dialog, `POST /api/projects/{id}/import`, or CLI `import -i <file>`. Format is auto-detected; `mode=merge` (default) creates/updates; `mode=replace` wipes existing first. CSV import supports column aliases (e.g. `"Requirement ID"` → `id`).
+- **Import** — from the Import dialog, `POST /api/projects/{id}/import`, or CLI `import -i <file>`. Format is auto-detected; `mode=merge` (default) creates/updates; `mode=replace` wipes existing first. CSV import supports column aliases (e.g. `"Requirement ID"` → `id`). Add `dry_run=true` (CSV, TSV and XLSX only) to preview the change — the response reports `would_create`, `would_update` and `would_delete` without writing anything.
 
 ## Project Overview
 
@@ -709,7 +709,7 @@ Key environment variables:
 |--------|----------|-------------|
 | POST | `/api/projects/{id}/publish` | Generate report (html, md, latex, pdf, csv, tsv, xlsx) |
 | GET | `/api/projects/{id}/publish/download` | Download report or export file |
-| POST | `/api/projects/{id}/import` | Import ReqIF, SysML, CSV, TSV, or XLSX (`mode=merge/replace`) |
+| POST | `/api/projects/{id}/import` | Import ReqIF, SysML, CSV, TSV, or XLSX (`mode=merge/replace`, `dry_run=true` to preview) |
 | POST | `/api/projects/{id}/baselines/{name}/freeze` | Freeze a baseline snapshot |
 | GET | `/api/projects/{id}/baselines/{name}/diff` | Diff current state against baseline |
 

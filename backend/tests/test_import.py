@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import io
 
+import pytest
+
 from app.services.reqif_import import ReqIFParseError, parse_reqif
 from app.services.sysml_import import SysMLParseError, parse_sysml
 
@@ -155,3 +157,123 @@ def Path_data_root(project_id: str):
     from pathlib import Path
     from app.core.config import settings
     return Path(settings.data_root) / project_id
+
+
+# ── Dry-run over the HTTP route ──────────────────────────────────────────────
+
+_CSV_HEADER = ('"id","type","name","description","status","priority",'
+               '"verification_method","parent","relations","verification_cases",'
+               '"rationale","source","allocated_to","baselines"')
+
+
+def _csv_bytes(*ids: str) -> bytes:
+    rows = [f'"{rid}","functional","Name {rid}","Desc","proposed","medium","test","","","","","","",""'
+            for rid in ids]
+    return "\n".join([_CSV_HEADER, *rows]).encode("utf-8")
+
+
+def _xlsx_bytes(*ids: str) -> bytes:
+    import openpyxl
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.append(["id", "type", "name", "description"])
+    for rid in ids:
+        ws.append([rid, "functional", f"Name {rid}", "Desc"])
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def _count(client, project) -> int:
+    return client.get(f"/api/projects/{project}/requirements").json()["total"]
+
+
+def test_import_dry_run_csv_changes_nothing(client, project):
+    make_req(client, project, "REQ-EX", name="Existing")
+    before = _count(client, project)
+
+    res = client.post(
+        f"/api/projects/{project}/import",
+        data={"format": "csv", "mode": "merge", "dry_run": "true"},
+        files={"file": ("t.csv", io.BytesIO(_csv_bytes("REQ-EX", "REQ-NEW")), "text/csv")},
+    )
+
+    assert res.status_code == 200, res.text
+    data = res.json()
+    assert data["dry_run"] is True
+    assert data["would_create"] == 1
+    assert data["would_update"] == 1
+    assert data["created"] == 0 and data["updated"] == 0
+    assert _count(client, project) == before
+
+
+def test_import_dry_run_xlsx_changes_nothing(client, project):
+    make_req(client, project, "REQ-EX", name="Existing")
+    before = _count(client, project)
+
+    res = client.post(
+        f"/api/projects/{project}/import",
+        data={"format": "xlsx", "mode": "merge", "dry_run": "true"},
+        files={"file": ("t.xlsx", io.BytesIO(_xlsx_bytes("REQ-EX", "REQ-NEW")),
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+    )
+
+    assert res.status_code == 200, res.text
+    data = res.json()
+    assert data["dry_run"] is True
+    assert data["would_create"] == 1
+    assert data["would_update"] == 1
+    assert _count(client, project) == before
+
+
+@pytest.mark.parametrize("fmt", ["reqif", "sysml", "auto"])
+def test_import_dry_run_rejected_for_non_table_formats(client, project, fmt):
+    """parse_and_import has no dry-run path, so honouring the flag would mean a
+    real import behind a button labelled "Preview"."""
+    res = client.post(
+        f"/api/projects/{project}/import",
+        data={"format": fmt, "mode": "merge", "dry_run": "true"},
+        files={"file": ("t.csv", io.BytesIO(_csv_bytes("REQ-X")), "text/csv")},
+    )
+
+    assert res.status_code == 400
+    assert res.json()["detail"] == "Dry run is only available for csv, tsv and xlsx"
+
+
+def test_real_csv_import_reports_dry_run_false_and_zeroed_would_keys(client, project):
+    res = client.post(
+        f"/api/projects/{project}/import",
+        data={"format": "csv", "mode": "merge"},
+        files={"file": ("t.csv", io.BytesIO(_csv_bytes("REQ-REAL")), "text/csv")},
+    )
+
+    assert res.status_code == 200, res.text
+    data = res.json()
+    assert data["created"] == 1
+    assert data["dry_run"] is False
+    assert data["would_create"] == 0
+    assert data["would_update"] == 0
+    assert data["would_delete"] == 0
+    assert data["rows"] == 0
+
+
+def test_sysml_import_still_carries_the_preview_defaults(client, project):
+    """Every format returns the same key set, so the TypeScript type can declare
+    the preview fields required and no caller branches on format."""
+    res = client.post(
+        f"/api/projects/{project}/import",
+        data={"format": "sysml", "mode": "merge"},
+        files={"file": ("t.sysml", io.BytesIO(
+            "package P {\n"
+            "  requirement def SYST0009 {\n"
+            "    doc /* Preview defaults */\n"
+            "  }\n"
+            "}\n".encode("utf-8")), "text/plain")},
+    )
+
+    assert res.status_code == 200, res.text
+    data = res.json()
+    for key in ("dry_run", "would_create", "would_update", "would_delete", "rows", "ignored"):
+        assert key in data, f"missing {key}"
+    assert data["dry_run"] is False

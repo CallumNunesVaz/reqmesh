@@ -349,3 +349,24 @@ describe('truncation detection', () => {
     expect(getTruncationInfo('requirements')).toBeNull();
   });
 });
+
+describe('importProject', () => {
+  const file = () => new File(['id,name\nR1,x'], 'reqs.csv', { type: 'text/csv' });
+
+  it('sends dry_run=false by default so existing call sites keep their meaning', async () => {
+    const f = stubFetch({ json: async () => ({}) });
+    await api.importProject('demo', file(), 'csv', 'merge');
+    const body = callOf(f).init.body as FormData;
+    expect(body.get('dry_run')).toBe('false');
+    expect(body.get('format')).toBe('csv');
+    expect(body.get('mode')).toBe('merge');
+  });
+
+  it('sends dry_run=true when previewing', async () => {
+    const f = stubFetch({ json: async () => ({}) });
+    await api.importProject('demo', file(), 'xlsx', 'replace', true);
+    const body = callOf(f).init.body as FormData;
+    expect(body.get('dry_run')).toBe('true');
+    expect(body.get('format')).toBe('xlsx');
+  });
+});

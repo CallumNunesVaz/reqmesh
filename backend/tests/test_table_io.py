@@ -1,4 +1,6 @@
 
+import pytest
+
 from app.services.table_io import export_table, import_table, _req_to_row, _row_to_req
 
 
@@ -135,3 +137,220 @@ def test_api_download_csv(client, project):
     content = res.content.decode("utf-8")
     assert "REQ-DL" in content
     assert content.startswith('"id"')
+
+
+# ── Dry-run previews ─────────────────────────────────────────────────────────
+#
+# Both table formats must return one shape. They used to disagree: csv reported
+# would_create/would_update and zeroed created/updated, while xlsx put the same
+# counts in created/updated and omitted the would_* keys entirely — so a caller
+# reading one was silently wrong about the other.
+
+HEADER = ('"id","type","name","description","status","priority",'
+          '"verification_method","parent","relations","verification_cases",'
+          '"rationale","source","allocated_to","baselines"')
+
+DRY_RUN_KEYS = {
+    "created", "updated", "skipped", "traces_added", "verification_cases",
+    "format", "dry_run", "would_create", "would_update", "would_delete", "rows",
+}
+
+
+def _store(project):
+    from app.services.yaml_store import YamlStore
+    from app.core.config import settings
+    from pathlib import Path
+
+    return YamlStore(Path(settings.data_root) / project)
+
+
+def _csv(*ids: str) -> str:
+    rows = [f'"{rid}","functional","Name {rid}","Desc","proposed","medium","test","","","","","","",""'
+            for rid in ids]
+    return "\n".join([HEADER, *rows])
+
+
+def _xlsx(*ids: str) -> bytes:
+    import io as _io
+    import openpyxl
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.append(["id", "type", "name", "description"])
+    for rid in ids:
+        ws.append([rid, "functional", f"Name {rid}", "Desc"])
+    buf = _io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def _snapshot(store):
+    return sorted((r["id"], r.get("name")) for r in store.list_requirements())
+
+
+def test_dry_run_merge_reports_creates_and_updates(client, project):
+    store = _store(project)
+    store.create_requirement({"id": "REQ-EX", "name": "Existing"})
+
+    summary = import_table(store, _csv("REQ-EX", "REQ-NEW"), fmt="csv",
+                           mode="merge", dry_run=True)
+
+    assert set(summary) == DRY_RUN_KEYS
+    assert summary["dry_run"] is True
+    assert summary["created"] == 0 and summary["updated"] == 0
+    assert summary["would_create"] == 1
+    assert summary["would_update"] == 1
+    assert summary["would_delete"] == 0
+    assert summary["rows"] == 2
+
+
+def test_dry_run_replace_reports_creates_as_well_as_deletes(client, project):
+    """Replace mode used to return early and report only would_delete, so the
+    preview said nothing about what the file would add."""
+    store = _store(project)
+    store.create_requirement({"id": "REQ-OLD-1", "name": "Old one"})
+    store.create_requirement({"id": "REQ-OLD-2", "name": "Old two"})
+
+    summary = import_table(store, _csv("REQ-A", "REQ-B", "REQ-C"), fmt="csv",
+                           mode="replace", dry_run=True)
+
+    assert summary["would_delete"] == 2
+    # Everything is wiped first, so every id'd row is a create — matching against
+    # the current store would be a lie.
+    assert summary["would_create"] == 3
+    assert summary["would_update"] == 0
+    assert summary["rows"] == 3
+
+
+def test_dry_run_replace_counts_an_overwritten_id_as_a_create(client, project):
+    """An id present in both the store and the file is still a create in replace
+    mode, because the store copy is deleted before the file is read."""
+    store = _store(project)
+    store.create_requirement({"id": "REQ-SAME", "name": "Old"})
+
+    summary = import_table(store, _csv("REQ-SAME"), fmt="csv",
+                           mode="replace", dry_run=True)
+
+    assert summary["would_create"] == 1
+    assert summary["would_update"] == 0
+    assert summary["would_delete"] == 1
+
+
+def test_dry_run_repeated_id_in_file_is_create_then_update(client, project):
+    store = _store(project)
+
+    summary = import_table(store, _csv("REQ-DUP", "REQ-DUP"), fmt="csv",
+                           mode="merge", dry_run=True)
+
+    assert summary["would_create"] == 1
+    assert summary["would_update"] == 1
+
+
+def test_dry_run_skips_blank_ids_without_counting_them_as_creates(client, project):
+    store = _store(project)
+
+    summary = import_table(store, _csv("REQ-OK", ""), fmt="csv",
+                           mode="merge", dry_run=True)
+
+    assert summary["skipped"] == 1
+    assert summary["would_create"] == 1
+    assert summary["rows"] == 2
+
+
+@pytest.mark.parametrize("mode", ["merge", "replace"])
+def test_dry_run_csv_mutates_nothing(client, project, mode):
+    store = _store(project)
+    store.create_requirement({"id": "REQ-KEEP", "name": "Keep me"})
+    before = _snapshot(store)
+
+    import_table(store, _csv("REQ-KEEP", "REQ-NEW"), fmt="csv",
+                 mode=mode, dry_run=True)
+
+    assert _snapshot(store) == before
+
+
+@pytest.mark.parametrize("mode", ["merge", "replace"])
+def test_dry_run_xlsx_mutates_nothing(client, project, mode):
+    from app.services.table_io import import_xlsx
+
+    store = _store(project)
+    store.create_requirement({"id": "REQ-KEEP", "name": "Keep me"})
+    before = _snapshot(store)
+
+    import_xlsx(store, _xlsx("REQ-KEEP", "REQ-NEW"), mode=mode, dry_run=True)
+
+    assert _snapshot(store) == before
+
+
+def test_dry_run_xlsx_uses_the_would_keys_not_created_updated(client, project):
+    """The behaviour change: xlsx reported its counts in created/updated."""
+    from app.services.table_io import import_xlsx
+
+    store = _store(project)
+    store.create_requirement({"id": "REQ-EX", "name": "Existing"})
+
+    summary = import_xlsx(store, _xlsx("REQ-EX", "REQ-NEW"), mode="merge", dry_run=True)
+
+    assert set(summary) == DRY_RUN_KEYS
+    assert summary["created"] == 0 and summary["updated"] == 0
+    assert summary["would_update"] == 1
+    assert summary["would_create"] == 1
+    assert summary["format"] == "xlsx"
+
+
+def test_dry_run_xlsx_rows_excludes_header_and_blank_rows(client, project):
+    import io as _io
+    import openpyxl
+    from app.services.table_io import import_xlsx
+
+    store = _store(project)
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.append(["id", "type", "name", "description"])
+    ws.append(["REQ-1", "functional", "One", "d"])
+    ws.append([None, None, None, None])
+    ws.append(["REQ-2", "functional", "Two", "d"])
+    buf = _io.BytesIO()
+    wb.save(buf)
+
+    summary = import_xlsx(store, buf.getvalue(), mode="merge", dry_run=True)
+
+    assert summary["rows"] == 2
+    assert summary["would_create"] == 2
+
+
+def test_dry_run_replace_refuses_a_file_with_no_id_column(client, project):
+    """A preview promising `would_delete: N` for a file the real import rejects
+    is worse than no preview — it is what talks the user into committing."""
+    store = _store(project)
+    store.create_requirement({"id": "REQ-OLD", "name": "Old"})
+
+    bad = '"name","description"\n"No id here","desc"'
+    with pytest.raises(ValueError, match="No 'id' column recognised"):
+        import_table(store, bad, fmt="csv", mode="replace", dry_run=True)
+
+    assert len(store.list_requirements()) == 1
+
+
+def test_xlsx_replace_refuses_a_file_with_no_id_column(client, project):
+    """xlsx had no such guard at all: replace mode deleted every requirement
+    before reading a single data row, so an unrecognised header emptied the
+    project and imported nothing."""
+    import io as _io
+    import openpyxl
+    from app.services.table_io import import_xlsx
+
+    store = _store(project)
+    store.create_requirement({"id": "REQ-OLD", "name": "Old"})
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.append(["name", "description"])
+    ws.append(["No id here", "desc"])
+    buf = _io.BytesIO()
+    wb.save(buf)
+
+    with pytest.raises(ValueError, match="No 'id' column recognised"):
+        import_xlsx(store, buf.getvalue(), mode="replace", dry_run=False)
+
+    assert len(store.list_requirements()) == 1

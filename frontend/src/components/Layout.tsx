@@ -434,7 +434,7 @@ export default function Layout() {
             <button
               onClick={() => setImportOpen(true)}
               className="btn-ghost p-2 rounded-lg gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-              title="Import ReqIF / SysML"
+              title="Import ReqIF / SysML / spreadsheet"
             >
               <FileUp size={15} />
               <span className="hidden 2xl:inline">Import</span>

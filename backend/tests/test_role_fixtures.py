@@ -53,3 +53,20 @@ def test_maintainer_is_not_an_admin(maintainer_client):
 def test_contributor_cannot_create_a_project(contributor_client):
     r = contributor_client.post("/api/projects", json={"id": "nope", "name": "N"})
     assert r.status_code == 403
+
+
+def test_contributor_cannot_dry_run_an_import(project, contributor_client):
+    """A preview still reads the whole project and is one checkbox away from a
+    real import — it is not a read-only escape hatch around require_maintain."""
+    import io
+
+    csv_bytes = (
+        '"id","type","name","description"\n'
+        '"R3","functional","x","d"'
+    ).encode("utf-8")
+    r = contributor_client.post(
+        f"/api/projects/{project}/import",
+        data={"format": "csv", "mode": "merge", "dry_run": "true"},
+        files={"file": ("t.csv", io.BytesIO(csv_bytes), "text/csv")},
+    )
+    assert r.status_code == 403, f"contributor previewed an import: {r.status_code}"
