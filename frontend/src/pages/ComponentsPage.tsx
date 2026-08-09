@@ -13,6 +13,8 @@ import TruncationBanner from '../components/TruncationBanner';
 import { effectiveHiddenComponents, hiddenAncestors } from '../lib/graphFilters';
 import { useRangeSelection } from '../hooks/useRangeSelection';
 import { useBulkActions } from '../hooks/useBulkActions';
+import { useUndoStore } from '../store/undo';
+import ReparentDialog from '../components/ReparentDialog';
 
 const EMPTY_DRAFT = { id: '', name: '', type: 'assembly', parent: '' };
 
@@ -20,7 +22,9 @@ export default function ComponentsPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
   const editable = useAuthStore((s) => s.canEdit());
-  const [bulkParent, setBulkParent] = useState('');
+  // Rows the reparent dialog is moving. Components are never renamed, so
+  // there is no re-prefix step — only the cycle-safe parent choice.
+  const [movingIds, setMovingIds] = useState<string[] | null>(null);
   const dataVersion = useStore((s) => s.dataVersion);
   const hiddenComponents = useStore((s) => s.hiddenComponents);
   const toggleHiddenComponent = useStore((s) => s.toggleHiddenComponent);
@@ -207,17 +211,22 @@ export default function ComponentsPage() {
   // referenced, rejected as an unhandled promise: no message, and the
   // selection-clearing and reload below never ran, so the page looked frozen
   // rather than refused.
-  const handleBulkReparent = async () => {
-    if (!bulkParent.trim()) return;
-    try {
-      await api.bulkReparentComponents(projectId!, [...selectedIds], bulkParent.trim());
-    } catch (err) {
-      addToast('error', err instanceof Error ? err.message : 'Bulk reparent failed');
-      return;
-    }
+  const confirmReparent = async (parent: string | null) => {
+    const ids = movingIds ?? [];
+    const before = new Map(components.map((c) => [c.id, c.parent ?? null]));
+    await api.bulkReparentComponents(projectId!, ids, parent);
+    useUndoStore.getState().push({
+      description: `Move ${ids.length} component(s)`,
+      undo: async () => {
+        // Per id: they may not have shared a parent before the move.
+        for (const id of ids) {
+          await api.bulkReparentComponents(projectId!, [id], before.get(id) ?? null);
+        }
+      },
+      redo: async () => { await api.bulkReparentComponents(projectId!, ids, parent); },
+    });
     clearComponentSelection();
     load();
-    setBulkParent('');
   };
 
   const handleBulkDelete = async () => {
@@ -344,6 +353,14 @@ export default function ComponentsPage() {
           </button>
       )}
 
+      <ReparentDialog
+        open={movingIds !== null}
+        onClose={() => setMovingIds(null)}
+        items={components}
+        movingIds={movingIds ?? []}
+        onConfirm={confirmReparent}
+      />
+
       {selectedIds.size > 0 && editable && (
         <div className="sticky bottom-6 z-40 mx-auto w-fit max-w-full flex flex-wrap items-center justify-center gap-3 bg-card border rounded-xl shadow-2xl px-4 py-3">
           <span className="text-xs font-medium text-foreground">{selectedIds.size} selected</span>
@@ -355,8 +372,7 @@ export default function ComponentsPage() {
             <option value="">Set type...</option>
             {COMPONENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
           </select>
-          <input className="input text-xs w-20" placeholder="Parent ID" value={bulkParent} onChange={(e) => setBulkParent(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleBulkReparent(); }} />
-          <button onClick={handleBulkReparent} className="btn-secondary text-xs" disabled={!bulkParent.trim()}>Move</button>
+          <button onClick={() => setMovingIds([...selectedIds])} className="btn-secondary text-xs">Move to...</button>
           <button onClick={handleBulkDelete} className="btn-danger text-xs"><Trash2 size={13} /> Delete</button>
           <button onClick={selectAllComponents} className="text-[10px] text-muted-foreground hover:text-foreground">Select all</button>
           <button onClick={clearComponentSelection} className="text-[10px] text-muted-foreground hover:text-foreground"><X size={13} /></button>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePersistedState, setCodec } from '../hooks/usePersistedState';
 import { useRangeSelection } from '../hooks/useRangeSelection';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -20,6 +20,7 @@ import { REQUIREMENT_TYPES, REQUIREMENT_TYPE_META, reqTypeClass, reqTypeIcon } f
 import BodyPortal from '../components/BodyPortal';
 import { useToasts } from '../components/Toast';
 import TruncationBanner from '../components/TruncationBanner';
+import ReparentDialog from '../components/ReparentDialog';
 
 const statusStyles: Record<string, { dot: string; text: string }> = {
   proposed: { dot: 'bg-cs-blue', text: 'text-cs-blue' },
@@ -74,8 +75,10 @@ export default function RequirementsPage() {
   const [collapsed, setCollapsed] = usePersistedState<Set<string>>(pk('collapsed'), new Set(), setCodec<string>());
   const [showCreate, setShowCreate] = useState(false);
   const [projectBaselines, setProjectBaselines] = useState<string[]>([]);
-  const [bulkParent, setBulkParent] = useState('');
-  const [moveReq, setMoveReq] = useState<{id: string, target: string} | null>(null);
+  // Which rows the reparent dialog is currently moving. Replaces two
+  // free-text "Parent ID" boxes that accepted any string, including a
+  // descendant (a cycle) or a typo (an orphan).
+  const [movingIds, setMovingIds] = useState<string[] | null>(null);
   const [showBulkEdit, setShowBulkEdit] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -286,27 +289,39 @@ export default function RequirementsPage() {
     }
   };
 
-  const handleBulkReparent = async () => {
-    if (!bulkParent.trim()) return;
-    try {
-      await api.bulkReparentRequirements(projectId!, [...selectedIds], bulkParent.trim(), true);
-      clearSelection();
-      load();
-      setBulkParent('');
-    } catch (e: any) {
-      addToast('error', e?.message || 'Bulk reparent failed');
-    }
-  };
+  const previewReparent = useCallback(
+    async (parent: string | null, rePrefix: boolean) => {
+      const res = await api.bulkReparentRequirements(projectId!, movingIds ?? [], parent, rePrefix, true);
+      return res.renames ?? [];
+    },
+    [projectId, movingIds],
+  );
 
-  const handleSingleReparent = async () => {
-    if (!moveReq || !moveReq.target.trim()) return;
-    try {
-      await api.bulkReparentRequirements(projectId!, [moveReq.id], moveReq.target.trim(), true);
-      setMoveReq(null);
-      load();
-    } catch (e: any) {
-      addToast('error', e?.message || 'Reparent failed');
-    }
+  const confirmReparent = async (parent: string | null, rePrefix: boolean) => {
+    const ids = movingIds ?? [];
+    const res = await api.bulkReparentRequirements(projectId!, ids, parent, rePrefix);
+    // A re-prefixed move cannot be undone: there is no rename endpoint, so the
+    // old ids are gone. Undo the parentage only, and say so in the label.
+    const renamed = (res.renames ?? []).length > 0;
+    useUndoStore.getState().push({
+      description: renamed
+        ? `Move ${ids.length} requirement(s) (ids not restorable)`
+        : `Move ${ids.length} requirement(s)`,
+      undo: async () => {
+        const byId = new Map(requirements.map((r) => [r.id, r]));
+        for (const id of res.ids) {
+          const original = byId.get(id);
+          await api.bulkReparentRequirements(projectId!, [id], original?.parent ?? null, false);
+        }
+      },
+      redo: async () => {
+        await api.bulkReparentRequirements(projectId!, res.ids, parent, false);
+      },
+    });
+    bumpGraphVersion();
+    bumpDataVersion();
+    clearSelection();
+    load();
   };
 
   return (
@@ -533,22 +548,9 @@ export default function RequirementsPage() {
                   )}
                   {editMode && (
                     <>
-                      {moveReq?.id === req.id ? (
-                        <span className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                          <input
-                            className="input text-[11px] w-20 h-6"
-                            placeholder="Parent ID"
-                            value={moveReq.target}
-                            onChange={(e) => setMoveReq({ ...moveReq, target: e.target.value })}
-                            onKeyDown={(e) => { if (e.key === 'Enter') handleSingleReparent(); if (e.key === 'Escape') setMoveReq(null); }}
-                            autoFocus
-                          />
-                          <button onClick={handleSingleReparent} className="btn-secondary text-[10px] px-1.5 py-0.5" disabled={!moveReq.target.trim()}>Move</button>
-                          <button onClick={() => setMoveReq(null)} className="p-1 rounded hover:bg-accent text-muted-foreground"><X size={11} /></button>
-                        </span>
-                      ) : (
+                      {(
                         <button
-                          onClick={(e) => { e.stopPropagation(); setMoveReq({ id: req.id, target: '' }); }}
+                          onClick={(e) => { e.stopPropagation(); setMovingIds([req.id]); }}
                           className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
                           title="Move to parent"
                         >
@@ -596,8 +598,7 @@ export default function RequirementsPage() {
             <option value="">Remove from baseline...</option>
             {projectBaselines.map(b => <option key={b} value={b}>{b}</option>)}
           </select>
-          <input className="input text-xs w-20" placeholder="Parent ID" value={bulkParent} onChange={(e) => setBulkParent(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleBulkReparent(); }} />
-          <button onClick={handleBulkReparent} className="btn-secondary text-xs" disabled={!bulkParent.trim()}>Move</button>
+          <button onClick={() => setMovingIds([...selectedIds])} className="btn-secondary text-xs">Move to...</button>
           <button onClick={handleBulkDelete} className="btn-danger text-xs">
             <Trash2 size={13} /> Delete
           </button>
@@ -607,6 +608,16 @@ export default function RequirementsPage() {
           </button>
         </div>
       )}
+
+      <ReparentDialog
+        open={movingIds !== null}
+        onClose={() => setMovingIds(null)}
+        items={requirements}
+        movingIds={movingIds ?? []}
+        supportsRePrefix
+        preview={previewReparent}
+        onConfirm={confirmReparent}
+      />
 
       <BulkEditModal
         open={showBulkEdit}
