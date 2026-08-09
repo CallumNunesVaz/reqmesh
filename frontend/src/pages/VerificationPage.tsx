@@ -16,6 +16,7 @@ import { HelpTip } from '../components/HelpTip';
 import { HistoryPanel } from '../components/HistoryPanel';
 import { CommentThread } from '../components/CommentThread';
 import { useToasts } from '../components/Toast';
+import { useBulkActions } from '../hooks/useBulkActions';
 
 const statusBadges: Record<string, string> = {
   pending: 'border-amber-500/30 bg-amber-500/10 text-amber-400',
@@ -325,6 +326,27 @@ export default function VerificationPage() {
     useCallback((id: string) => setExpanded((prev) => new Set(prev).add(id)), []),
   );
 
+  const { runBulkUpdate } = useBulkActions({
+    clearSelection: () => setSelectedVcs(new Set()),
+    reload: load,
+  });
+
+  const handleBulkStatus = async (status: string) => {
+    if (!projectId) return;
+    const ids = [...selectedVcs];
+    const before = Object.fromEntries(
+      verificationCases.filter((vc) => selectedVcs.has(vc.id)).map((vc) => [vc.id, { status: vc.status }]),
+    );
+    await runBulkUpdate({
+      label: `${status} on ${ids.length} verification cases`,
+      ids,
+      before,
+      updates: { status },
+      apply: (updateIds, updatePayload) => api.bulkUpdateVerificationCases(projectId, updateIds, updatePayload),
+      applyOne: (id, updatePayload) => api.updateVerificationCase(projectId, id, updatePayload),
+    });
+  };
+
   return (
     <div className="max-w-5xl mx-auto p-8">
       <div className="flex items-center justify-between mb-6">
@@ -393,16 +415,7 @@ export default function VerificationPage() {
             <option value="failed">failed</option>
           </select>
           <button
-            onClick={async () => {
-              try {
-                await api.bulkUpdateVerificationCases(projectId!, [...selectedVcs], { status: bulkStatus });
-              } catch (err) {
-                addToast('error', err instanceof Error ? err.message : 'Bulk update failed');
-                return;
-              }
-              setSelectedVcs(new Set());
-              load();
-            }}
+            onClick={() => handleBulkStatus(bulkStatus)}
             className="btn-primary text-xs px-3 py-1"
           >
             Apply

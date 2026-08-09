@@ -16,6 +16,7 @@ import { HistoryPanel } from '../components/HistoryPanel';
 import { CommentThread } from '../components/CommentThread';
 import { useToasts } from '../components/Toast';
 import { useRangeSelection } from '../hooks/useRangeSelection';
+import { useBulkActions } from '../hooks/useBulkActions';
 
 const statusBadges: Record<string, string> = {
   submitted: 'border-blue-500/30 bg-blue-500/10 text-blue-400',
@@ -216,29 +217,39 @@ export default function ChangeRequestsPage() {
   const clearCRSelection = () => setSelectedIds(new Set());
   const selectAllCRs = () => setSelectedIds(new Set(filteredCRs.map(c => c.id)));
 
+  const { runBulkDelete, runBulkUpdate } = useBulkActions({
+    clearSelection: clearCRSelection,
+    reload: load,
+  });
+
   const handleBulkCRStatus = async (status: string) => {
     if (!projectId) return;
-    await api.bulkUpdateChangeRequests(projectId, [...selectedIds], { status });
-    clearCRSelection();
-    load();
+    const ids = [...selectedIds];
+    const before = Object.fromEntries(
+      crs.filter((c) => selectedIds.has(c.id)).map((c) => [c.id, { status: c.status }]),
+    );
+    await runBulkUpdate({
+      label: `${status} on ${ids.length} change requests`,
+      ids,
+      before,
+      updates: { status },
+      apply: (updateIds, updatePayload) => api.bulkUpdateChangeRequests(projectId, updateIds, updatePayload),
+      applyOne: (id, updatePayload) => api.updateChangeRequest(projectId, id, updatePayload),
+    });
   };
 
   const handleBulkCRDelete = async () => {
     if (!projectId) return;
-    const ok = await showConfirm(`Delete ${selectedIds.size} change request(s)?`, 'Delete');
-    if (!ok) return;
-    try {
-      await api.bulkDeleteChangeRequests(projectId, [...selectedIds]);
-    } catch (err) {
-      // A bulk delete had no handler at all, so a refusal (the delete guard
-      // 409s on a referenced record) rejected into the void: no message, and
-      // the two lines below never ran, leaving the selection sitting there as
-      // though nothing had been clicked.
-      addToast('error', err instanceof Error ? err.message : 'Bulk delete failed');
-      return;
-    }
-    clearCRSelection();
-    load();
+    const ids = [...selectedIds];
+    const saved = crs.filter((c) => selectedIds.has(c.id)).map((c) => ({ ...c }));
+    await runBulkDelete({
+      noun: 'change request',
+      ids,
+      saved,
+      idOf: (c) => c.id,
+      remove: (idsToRemove) => api.bulkDeleteChangeRequests(projectId, idsToRemove),
+      recreate: (item) => api.createChangeRequest(projectId, item),
+    });
   };
 
   return (

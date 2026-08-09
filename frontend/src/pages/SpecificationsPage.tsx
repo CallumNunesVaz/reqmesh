@@ -16,6 +16,8 @@ import { LinkEditor } from '../components/LinkEditor';
 import { HistoryPanel } from '../components/HistoryPanel';
 import { CommentThread } from '../components/CommentThread';
 import { useRangeSelection } from '../hooks/useRangeSelection';
+import { useConfirm } from '../components/ConfirmDialog';
+import { useBulkActions } from '../hooks/useBulkActions';
 
 export default function SpecificationsPage() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -115,9 +117,12 @@ export default function SpecificationsPage() {
     }
   };
 
+  const showConfirm = useConfirm();
+
   const handleDelete = async (specId: string) => {
     if (!projectId) return;
-    if (!confirm(`Delete specification ${specId}?`)) return;
+    const ok = await showConfirm(`Delete specification ${specId}?`, 'Delete Specification');
+    if (!ok) return;
     await api.deleteSpecification(projectId, specId);
     setSpecifications(specifications.filter((s) => s.id !== specId));
   };
@@ -127,14 +132,25 @@ export default function SpecificationsPage() {
   const { selectedIds, select: toggleSpec, setSelectedIds } =
     useRangeSelection(useMemo(() => filteredSpecs.map((s) => s.id), [filteredSpecs]));
   const clearSpecSelection = () => setSelectedIds(new Set());
+
+  const { runBulkDelete } = useBulkActions({
+    clearSelection: clearSpecSelection,
+    reload: load,
+  });
   const selectAllSpecs = () => setSelectedIds(new Set(filteredSpecs.map(s => s.id)));
 
   const handleBulkSpecDelete = async () => {
     if (!projectId) return;
-    if (!confirm(`Delete ${selectedIds.size} specification(s)?`)) return;
-    await api.bulkDeleteSpecifications(projectId, [...selectedIds]);
-    clearSpecSelection();
-    load();
+    const ids = [...selectedIds];
+    const saved = specifications.filter((s) => selectedIds.has(s.id)).map((s) => ({ ...s }));
+    await runBulkDelete({
+      noun: 'specification',
+      ids,
+      saved,
+      idOf: (s) => s.id,
+      remove: (idsToRemove) => api.bulkDeleteSpecifications(projectId, idsToRemove),
+      recreate: (item) => api.createSpecification(projectId, item),
+    });
   };
 
   return (

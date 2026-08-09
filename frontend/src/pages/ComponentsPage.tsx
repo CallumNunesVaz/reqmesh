@@ -12,6 +12,7 @@ import { useToasts } from '../components/Toast';
 import TruncationBanner from '../components/TruncationBanner';
 import { effectiveHiddenComponents, hiddenAncestors } from '../lib/graphFilters';
 import { useRangeSelection } from '../hooks/useRangeSelection';
+import { useBulkActions } from '../hooks/useBulkActions';
 
 const EMPTY_DRAFT = { id: '', name: '', type: 'assembly', parent: '' };
 
@@ -196,6 +197,11 @@ export default function ComponentsPage() {
     useRangeSelection(useMemo(() => flatNodes.map((n) => n.id), [flatNodes]));
   const selectAllComponents = () => setSelectedIds(new Set(components.map((c) => c.id)));
 
+  const { runBulkDelete, runBulkUpdate } = useBulkActions({
+    clearSelection: clearComponentSelection,
+    reload: load,
+  });
+
   // These three bulk handlers had no error handling at all. A reparent that
   // would create a cycle, or a delete refused because the components are
   // referenced, rejected as an unhandled promise: no message, and the
@@ -216,15 +222,32 @@ export default function ComponentsPage() {
 
   const handleBulkDelete = async () => {
     if (!projectId) return;
-    if (!confirm(`Delete ${selectedIds.size} component(s)?`)) return;
-    try {
-      await api.bulkDeleteComponents(projectId, [...selectedIds]);
-    } catch (err) {
-      addToast('error', err instanceof Error ? err.message : 'Bulk delete failed');
-      return;
-    }
-    clearComponentSelection();
-    load();
+    const ids = [...selectedIds];
+    const saved = components.filter((c) => selectedIds.has(c.id)).map((c) => ({ ...c }));
+    await runBulkDelete({
+      noun: 'component',
+      ids,
+      saved,
+      idOf: (c) => c.id,
+      remove: (idsToRemove) => api.bulkDeleteComponents(projectId, idsToRemove),
+      recreate: (item) => api.createComponent(projectId, item),
+    });
+  };
+
+  const handleBulkSetType = async (type: string) => {
+    if (!projectId) return;
+    const ids = [...selectedIds];
+    const before = Object.fromEntries(
+      components.filter((c) => selectedIds.has(c.id)).map((c) => [c.id, { type: c.type }]),
+    );
+    await runBulkUpdate({
+      label: `${type} on ${ids.length} components`,
+      ids,
+      before,
+      updates: { type },
+      apply: (updateIds, updates) => api.bulkUpdateComponents(projectId, updateIds, updates),
+      applyOne: (id, updates) => api.updateComponent(projectId, id, updates),
+    });
   };
 
   const renderNode = (node: ComponentTreeNode, depth: number): React.ReactNode => {
@@ -326,17 +349,7 @@ export default function ComponentsPage() {
           <span className="text-xs font-medium text-foreground">{selectedIds.size} selected</span>
           <select
             className="select text-xs py-1 w-32"
-            onChange={async (e) => {
-              if (!e.target.value) return;
-              try {
-                await api.bulkUpdateComponents(projectId!, [...selectedIds], { type: e.target.value });
-              } catch (err) {
-                addToast('error', err instanceof Error ? err.message : 'Bulk type change failed');
-                return;
-              }
-              clearComponentSelection();
-              load();
-            }}
+            onChange={(e) => { if (e.target.value) { handleBulkSetType(e.target.value); e.target.value = ''; } }}
             value=""
           >
             <option value="">Set type...</option>
