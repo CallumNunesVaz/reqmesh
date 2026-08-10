@@ -51,7 +51,11 @@ test('re-prefixing is off by default and warns that it cannot be undone', async 
   await expect(box).not.toBeChecked();
 
   await box.check();
-  await expect(app.getByText(/cannot be undone/)).toBeVisible({ timeout: 15000 });
+  // Target the rename warning specifically. "cannot be undone" also appears in
+  // the checkbox's own help text, which is present the moment the checkbox is —
+  // so matching on that phrase passed without the preview ever arriving, and
+  // started failing as a strict-mode violation once both rendered in time.
+  await expect(app.getByText(/\d+ ids? will be renamed/)).toBeVisible({ timeout: 15000 });
 });
 
 test('choosing top level reports that no ids change', async ({ app, server }) => {
