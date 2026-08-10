@@ -13,6 +13,7 @@ except ImportError:
     HAS_OPENPYXL = False
 
 from app.services.verification_links import attach as attach_verification_cases
+from app.services.history import record_change
 
 
 _HTML_TAG = re.compile(r"<[^>]*>")
@@ -236,7 +237,8 @@ def _dry_run_summary(store, ids: list[str], fmt: str, mode: str, rows: int) -> d
     }
 
 
-def import_table(store, content: str, fmt: str = "csv", mode: str = "merge", dry_run: bool = False) -> dict:
+def import_table(store, content: str, fmt: str = "csv", mode: str = "merge",
+                 dry_run: bool = False, *, username: str = "") -> dict:
     if fmt not in ("csv", "tsv"):
         raise ValueError(f"Unknown table format: {fmt}")
     if mode not in ("merge", "replace"):
@@ -268,6 +270,7 @@ def import_table(store, content: str, fmt: str = "csv", mode: str = "merge", dry
 
     if mode == "replace":
         for req in store.list_requirements():
+            record_change(store, req["id"], "delete", req, None, username)
             store.delete_requirement(req["id"])
 
     for req_data in parsed_rows:
@@ -280,9 +283,11 @@ def import_table(store, content: str, fmt: str = "csv", mode: str = "merge", dry
         if existing:
             store.update_requirement(rid, req_data)
             updated += 1
+            record_change(store, rid, "update", existing, store.get_requirement(rid), username)
         else:
             store.create_requirement(req_data)
             created += 1
+            record_change(store, rid, "create", None, req_data, username)
 
     return {
         "created": created,

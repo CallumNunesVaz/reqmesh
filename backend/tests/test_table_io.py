@@ -354,3 +354,67 @@ def test_xlsx_replace_refuses_a_file_with_no_id_column(client, project):
         import_xlsx(store, buf.getvalue(), mode="replace", dry_run=False)
 
     assert len(store.list_requirements()) == 1
+
+
+# ── Import history ────────────────────────────────────────────────────────────
+
+def _csv_body(*ids: str) -> str:
+    rows = [f'"{rid}","functional","Name {rid}","Desc","proposed","medium","test","","","","","","",""'
+            for rid in ids]
+    return "\n".join([HEADER, *rows])
+
+
+def _history_ids(store, item_id: str) -> list[str]:
+    entries = store.list_history(item_id)
+    return [e["action"] for e in entries]
+
+
+def test_import_merge_writes_create_history(client, project):
+    store = _store(project)
+
+    import_table(store, _csv_body("REQ-H1"), fmt="csv", mode="merge", username="importer")
+
+    assert _history_ids(store, "REQ-H1") == ["create"]
+
+
+def test_import_merge_writes_update_history(client, project):
+    store = _store(project)
+    store.create_requirement({"id": "REQ-H2", "name": "Old Name"})
+
+    import_table(store, _csv_body("REQ-H2"), fmt="csv", mode="merge", username="importer")
+
+    actions = _history_ids(store, "REQ-H2")
+    assert "update" in actions
+
+
+def test_import_replace_writes_delete_history(client, project):
+    store = _store(project)
+    store.create_requirement({"id": "REQ-OLD", "name": "Old"})
+
+    import_table(store, _csv_body("REQ-NEW"), fmt="csv", mode="replace", username="importer")
+
+    actions = _history_ids(store, "REQ-OLD")
+    assert actions == ["delete"]
+
+
+def test_import_dry_run_writes_no_history(client, project):
+    store = _store(project)
+    store.create_requirement({"id": "REQ-DRY", "name": "Dry"})
+
+    import_table(store, _csv_body("REQ-DRY", "REQ-NEW"), fmt="csv", mode="merge",
+                 dry_run=True, username="importer")
+
+    # History should be empty — dry run writes nothing.
+    assert _history_ids(store, "REQ-DRY") == []
+
+
+def test_reimport_identical_rows_adds_no_new_update_entries(client, project):
+    store = _store(project)
+
+    import_table(store, _csv_body("REQ-SAME"), fmt="csv", mode="merge", username="importer")
+    first_actions = len(store.list_history("REQ-SAME"))
+
+    import_table(store, _csv_body("REQ-SAME"), fmt="csv", mode="merge", username="importer")
+    second_actions = len(store.list_history("REQ-SAME"))
+
+    assert second_actions == first_actions

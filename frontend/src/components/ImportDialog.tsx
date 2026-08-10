@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, FileUp, UploadCloud, Loader, CheckCircle2, AlertTriangle, Eye } from 'lucide-react';
+import { X, FileUp, UploadCloud, Loader, CheckCircle2, AlertTriangle, Eye, Clipboard } from 'lucide-react';
 import { api, type ImportSummary } from '../api/client';
 import { useStore } from '../store';
 
@@ -23,6 +23,9 @@ const formats = [
  *  and `auto` does not know its format until the content has been sniffed. */
 const PREVIEWABLE = new Set(['csv', 'tsv', 'xlsx']);
 
+/** Formats that the paste path accepts: xlsx is binary, ReqIF/SysML are out of scope. */
+const PASTEABLE = new Set(['auto', 'csv', 'tsv']);
+
 const ACCEPT = [
   '.xml', '.reqif', '.sysml', '.txt', '.csv', '.tsv', '.xlsx',
   'application/xml', 'text/xml', 'text/csv', 'text/tab-separated-values',
@@ -33,6 +36,8 @@ export default function ImportDialog({ open, onClose, projectId }: ImportDialogP
   const [format, setFormat] = useState('auto');
   const [mode, setMode] = useState<'merge' | 'replace'>('merge');
   const [file, setFile] = useState<File | null>(null);
+  const [pasteText, setPasteText] = useState('');
+  const [source, setSource] = useState<'file' | 'paste'>('file');
   const [dryRun, setDryRun] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -41,11 +46,13 @@ export default function ImportDialog({ open, onClose, projectId }: ImportDialogP
   const inputRef = useRef<HTMLInputElement>(null);
   const bumpGraphVersion = useStore((s) => s.bumpGraphVersion);
 
-  const canPreview = PREVIEWABLE.has(format);
+  const canPreview = source === 'file'
+    ? PREVIEWABLE.has(format)
+    : PREVIEWABLE.has(format) && format !== 'xlsx';
   const previewing = dryRun && canPreview;
 
   const reset = () => {
-    setFile(null); setError(''); setResult(null); setBusy(false);
+    setFile(null); setPasteText(''); setError(''); setResult(null); setBusy(false);
   };
 
   const close = () => { reset(); onClose(); };
@@ -56,11 +63,19 @@ export default function ImportDialog({ open, onClose, projectId }: ImportDialogP
   const chooseFormat = (id: string) => {
     setFormat(id);
     clearResult();
-    // A disabled-but-still-ticked box would submit a request the route 400s.
     if (!PREVIEWABLE.has(id)) setDryRun(false);
   };
 
   const chooseMode = (m: 'merge' | 'replace') => { setMode(m); clearResult(); };
+
+  const chooseSource = (s: 'file' | 'paste') => {
+    setSource(s);
+    clearResult();
+    if (s === 'paste' && !PASTEABLE.has(format)) {
+      setFormat('auto');
+      setDryRun(false);
+    }
+  };
 
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -69,13 +84,19 @@ export default function ImportDialog({ open, onClose, projectId }: ImportDialogP
     if (f) { setFile(f); setError(''); setResult(null); }
   }, []);
 
+  const isEmpty = source === 'file' ? !file : !pasteText.trim();
+
   const runImport = async (preview: boolean) => {
-    if (!file) return;
+    if (isEmpty) return;
     setBusy(true); setError(''); setResult(null);
     try {
-      const summary = await api.importProject(projectId, file, format, mode, preview);
+      let summary: ImportSummary;
+      if (source === 'file') {
+        summary = await api.importProject(projectId, file!, format, mode, preview);
+      } else {
+        summary = await api.importPastedText(projectId, pasteText, format, mode, preview);
+      }
       setResult(summary);
-      // Nothing changed on a preview, so nothing downstream needs invalidating.
       if (!summary.dry_run) bumpGraphVersion();
     } catch (err: any) {
       setError(err.message || 'Import failed');
@@ -105,20 +126,45 @@ export default function ImportDialog({ open, onClose, projectId }: ImportDialogP
             <h2 className="text-lg font-bold text-foreground mb-1 flex items-center gap-2">
               <FileUp size={18} /> Import Requirements
             </h2>
-            <p className="text-xs text-muted-foreground mb-5">Load a ReqIF, SysML v2 or spreadsheet file into this project</p>
+            <p className="text-xs text-muted-foreground mb-5">Load a ReqIF, SysML v2 or spreadsheet into this project</p>
 
             <div className="space-y-5">
+              <div>
+                <label className="label">Source</label>
+                <div className="grid grid-cols-2 gap-2 mt-1">
+                  <button
+                    onClick={() => chooseSource('file')}
+                    className={`p-2.5 rounded-lg border text-xs font-medium transition-all ${
+                      source === 'file' ? 'border-primary bg-primary/5 text-primary' : 'border bg-card text-muted-foreground hover:border-ring/30'
+                    }`}
+                  >
+                    <UploadCloud size={14} className="inline mr-1.5" /> File
+                  </button>
+                  <button
+                    onClick={() => chooseSource('paste')}
+                    className={`p-2.5 rounded-lg border text-xs font-medium transition-all ${
+                      source === 'paste' ? 'border-primary bg-primary/5 text-primary' : 'border bg-card text-muted-foreground hover:border-ring/30'
+                    }`}
+                  >
+                    <Clipboard size={14} className="inline mr-1.5" /> Paste data
+                  </button>
+                </div>
+              </div>
+
               <div>
                 <label className="label">Format</label>
                 <div className="grid grid-cols-3 gap-2 mt-1">
                   {formats.map((f) => {
                     const active = format === f.id;
+                    const disabled = source === 'paste' && !PASTEABLE.has(f.id);
                     return (
                       <button
                         key={f.id}
-                        onClick={() => chooseFormat(f.id)}
-                        title={f.desc}
+                        onClick={() => { if (!disabled) chooseFormat(f.id); }}
+                        title={disabled ? 'Pasted text only supports csv and tsv' : f.desc}
+                        disabled={disabled}
                         className={`p-2.5 rounded-lg border text-xs transition-all ${
+                          disabled ? 'bg-muted/50 text-muted-foreground/40 cursor-not-allowed border-border/50' :
                           active ? 'border-primary bg-primary/5 text-primary' : 'border bg-card text-muted-foreground hover:border-ring/30'
                         }`}
                       >
@@ -153,39 +199,49 @@ export default function ImportDialog({ open, onClose, projectId }: ImportDialogP
                 </div>
               </div>
 
-              <div
-                onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-                onDragLeave={() => setDragging(false)}
-                onDrop={onDrop}
-                onClick={() => inputRef.current?.click()}
-                className={`flex flex-col items-center justify-center gap-2 py-8 rounded-lg border-2 border-dashed cursor-pointer transition-colors ${
-                  dragging ? 'border-primary bg-primary/5' : 'border-border hover:border-ring/40'
-                }`}
-              >
-                <UploadCloud size={28} className="text-muted-foreground" />
-                {file ? (
-                  <span className="text-sm text-foreground font-medium">{file.name}</span>
-                ) : (
-                  <>
-                    <span className="text-sm text-muted-foreground">Drop a file here, or click to browse</span>
-                    <span className="text-[10px] text-muted-foreground">.xml (ReqIF) · .sysml (SysML v2) · .csv · .tsv · .xlsx</span>
-                  </>
-                )}
-                <input
-                  ref={inputRef}
-                  type="file"
-                  accept={ACCEPT}
-                  className="hidden"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) { setFile(f); setError(''); setResult(null); }
-                  }}
+              {source === 'file' ? (
+                <div
+                  onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+                  onDragLeave={() => setDragging(false)}
+                  onDrop={onDrop}
+                  onClick={() => inputRef.current?.click()}
+                  className={`flex flex-col items-center justify-center gap-2 py-8 rounded-lg border-2 border-dashed cursor-pointer transition-colors ${
+                    dragging ? 'border-primary bg-primary/5' : 'border-border hover:border-ring/40'
+                  }`}
+                >
+                  <UploadCloud size={28} className="text-muted-foreground" />
+                  {file ? (
+                    <span className="text-sm text-foreground font-medium">{file.name}</span>
+                  ) : (
+                    <>
+                      <span className="text-sm text-muted-foreground">Drop a file here, or click to browse</span>
+                      <span className="text-[10px] text-muted-foreground">.xml (ReqIF) · .sysml (SysML v2) · .csv · .tsv · .xlsx</span>
+                    </>
+                  )}
+                  <input
+                    ref={inputRef}
+                    type="file"
+                    accept={ACCEPT}
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) { setFile(f); setError(''); setResult(null); }
+                    }}
+                  />
+                </div>
+              ) : (
+                <textarea
+                  placeholder='"id","type","name","description","status","priority","verification_method","parent","relations","verification_cases","rationale","source","allocated_to","baselines"'
+                  value={pasteText}
+                  onChange={(e) => { setPasteText(e.target.value); setError(''); setResult(null); }}
+                  rows={8}
+                  className="w-full rounded-lg border bg-card p-3 text-xs text-foreground font-mono resize-y focus:outline-none focus:ring-1 focus:ring-primary"
                 />
-              </div>
+              )}
 
               <label
                 className={`flex items-center gap-2 text-xs ${canPreview ? 'text-muted-foreground cursor-pointer' : 'text-muted-foreground/50 cursor-not-allowed'}`}
-                title={canPreview ? undefined : 'Dry run is only available for CSV, TSV and XLSX'}
+                title={canPreview ? undefined : 'Dry run is only available for CSV and TSV'}
               >
                 <input
                   type="checkbox"
@@ -263,7 +319,7 @@ export default function ImportDialog({ open, onClose, projectId }: ImportDialogP
               <div className="flex gap-2 pt-2 border-t">
                 <button
                   onClick={() => runImport(previewing)}
-                  disabled={!file || busy}
+                  disabled={isEmpty || busy}
                   className="btn-primary flex-1 justify-center disabled:opacity-50"
                 >
                   {busy

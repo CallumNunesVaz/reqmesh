@@ -277,3 +277,97 @@ def test_sysml_import_still_carries_the_preview_defaults(client, project):
     for key in ("dry_run", "would_create", "would_update", "would_delete", "rows", "ignored"):
         assert key in data, f"missing {key}"
     assert data["dry_run"] is False
+
+
+# ── Paste import ──────────────────────────────────────────────────────────────
+
+def test_paste_csv_creates_requirements(client, project):
+    csv_text = '"id","type","name","description","status","priority","verification_method","parent","relations","verification_cases","rationale","source","allocated_to","baselines"\n"REQ-PASTE","functional","Paste Test","Desc","proposed","medium","test","","","","","","",""'
+    res = client.post(
+        f"/api/projects/{project}/import",
+        data={"text": csv_text, "format": "csv", "mode": "merge"},
+    )
+    assert res.status_code == 200, res.text
+    assert res.json()["created"] == 1
+    req = client.get(f"/api/projects/{project}/requirements/REQ-PASTE").json()
+    assert req["name"] == "Paste Test"
+
+
+def test_paste_csv_dry_run_writes_no_history(client, project):
+    from app.services.yaml_store import YamlStore
+    from pathlib import Path
+    store = YamlStore(Path_data_root(project))
+    csv_text = _csv_bytes("REQ-DRY-P").decode()
+    history_dir = store.root / "history"
+    store.ensure_dirs()
+    before = sorted([f.name for f in history_dir.iterdir()]) if history_dir.exists() else []
+
+    res = client.post(
+        f"/api/projects/{project}/import",
+        data={"text": csv_text, "format": "csv", "mode": "merge", "dry_run": "true"},
+    )
+    assert res.status_code == 200, res.text
+    assert res.json()["dry_run"] is True
+
+    after = sorted([f.name for f in history_dir.iterdir()]) if history_dir.exists() else []
+    assert after == before
+
+
+def test_paste_tsv_creates_requirements(client, project):
+    tsv_text = '"id"\t"type"\t"name"\t"description"\t"status"\t"priority"\t"verification_method"\t"parent"\t"relations"\t"verification_cases"\t"rationale"\t"source"\t"allocated_to"\t"baselines"\n"REQ-TSV"\t"functional"\t"TSV Test"\t"Desc"\t"proposed"\t"medium"\t"test"\t""\t""\t""\t""\t""\t""\t""'
+    res = client.post(
+        f"/api/projects/{project}/import",
+        data={"text": tsv_text, "format": "tsv", "mode": "merge"},
+    )
+    assert res.status_code == 200, res.text
+    assert res.json()["created"] == 1
+
+
+def test_paste_auto_sniffs_tab_as_tsv(client, project):
+    tsv_text = 'id\tname\tdescription\nREQ-SNIFF\tSniff Test\tDesc'
+    res = client.post(
+        f"/api/projects/{project}/import",
+        data={"text": tsv_text, "format": "auto", "mode": "merge"},
+    )
+    assert res.status_code == 200, res.text
+    req = client.get(f"/api/projects/{project}/requirements/REQ-SNIFF").json()
+    assert req["name"] == "Sniff Test"
+
+
+def test_paste_both_file_and_text_is_400(client, project):
+    csv_text = '"id","name"\n"R1","One"'
+    res = client.post(
+        f"/api/projects/{project}/import",
+        data={"text": csv_text, "format": "csv", "mode": "merge"},
+        files={"file": ("t.csv", io.BytesIO(_csv_bytes("R2")), "text/csv")},
+    )
+    assert res.status_code == 400, res.text
+    assert "either" in res.json()["detail"].lower()
+
+
+def test_paste_neither_file_nor_text_is_400(client, project):
+    res = client.post(
+        f"/api/projects/{project}/import",
+        data={"format": "csv", "mode": "merge"},
+    )
+    assert res.status_code == 400, res.text
+    assert "either" in res.json()["detail"].lower()
+
+
+def test_paste_xlsx_is_400(client, project):
+    res = client.post(
+        f"/api/projects/{project}/import",
+        data={"text": "some,text", "format": "xlsx", "mode": "merge"},
+    )
+    assert res.status_code == 400, res.text
+    assert "pasted" in res.json()["detail"].lower()
+
+
+def test_paste_oversized_text_is_rejected(client, project, monkeypatch):
+    from app.core.config import settings
+    monkeypatch.setattr(settings, "max_upload_size_mb", 1)
+    res = client.post(
+        f"/api/projects/{project}/import",
+        data={"text": "x" * (2 * 1024 * 1024), "format": "csv", "mode": "merge"},
+    )
+    assert res.status_code in (400, 413), res.text

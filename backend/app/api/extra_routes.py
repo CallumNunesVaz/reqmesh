@@ -813,7 +813,8 @@ def diff_baseline(project_id: str, name: str):
 @router.post("/projects/{project_id}/import")
 def import_project(
     project_id: str,
-    file: UploadFile = File(...),
+    file: UploadFile | None = File(None),
+    text: str | None = Form(None),
     format: str = Form("auto"),
     mode: str = Form("merge"),
     dry_run: bool = Form(False),
@@ -826,12 +827,22 @@ def import_project(
     ``mode`` is ``merge`` (create/update) or ``replace`` (wipe existing first).
     ``dry_run`` previews the change without writing, and is available for the
     table formats only.
+
+    Supply exactly one of ``file`` (uploaded file) or ``text`` (pasted content).
+    Pasting is supported for csv, tsv and auto only.
     """
     store = get_store(project_id)
     if format not in ("auto", "reqif", "sysml", "csv", "tsv", "xlsx"):
         raise HTTPException(status_code=400, detail=f"Unknown format: {format}")
     if mode not in ("merge", "replace"):
         raise HTTPException(status_code=400, detail=f"Unknown mode: {mode}")
+
+    if (file is not None) == (text is not None):
+        raise HTTPException(status_code=400, detail="Provide either a file or pasted text")
+
+    if text is not None and format not in ("auto", "csv", "tsv"):
+        raise HTTPException(status_code=400, detail="Pasted text is only supported for csv and tsv")
+
     # parse_and_import has no dry-run path, so honouring the flag for those
     # formats would mean performing a real import behind a button labelled
     # "Preview". `auto` is refused too: the format is not known until the
@@ -842,8 +853,7 @@ def import_project(
             detail="Dry run is only available for csv, tsv and xlsx",
         )
 
-    content = read_upload_capped(file, settings.max_upload_size_mb)
-    from app.services.table_io import import_table as table_import
+    username = user.get("username", "")
 
     def _normalise_summary(summary: dict) -> dict:
         """Give every format's summary the same key set.
@@ -864,10 +874,36 @@ def import_project(
         summary.setdefault("rows", 0)
         return summary
 
+    if text is not None:
+        limit = max(1, settings.max_upload_size_mb) * 1024 * 1024
+        if len(text.encode("utf-8")) > limit:
+            raise HTTPException(status_code=413, detail=f"Upload exceeds {settings.max_upload_size_mb} MB limit.")
+
+        if format == "auto":
+            fmt = "tsv" if "\t" in text.split("\n")[0] else "csv"
+        else:
+            fmt = format
+
+        if dry_run and fmt not in ("csv", "tsv"):
+            raise HTTPException(
+                status_code=400,
+                detail="Dry run is only available for csv, tsv and xlsx",
+            )
+
+        from app.services.table_io import import_table as table_import
+        try:
+            return _normalise_summary(table_import(store, text, fmt=fmt, mode=mode,
+                                                   dry_run=dry_run, username=username))
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=f"Import failed: {exc}") from exc
+
+    content = read_upload_capped(file, settings.max_upload_size_mb)
+
     if format in ("csv", "tsv"):
+        from app.services.table_io import import_table as table_import
         try:
             return _normalise_summary(table_import(store, content.decode("utf-8", errors="replace"),
-                                                   fmt=format, mode=mode, dry_run=dry_run))
+                                                   fmt=format, mode=mode, dry_run=dry_run, username=username))
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=f"Import failed: {exc}") from exc
 

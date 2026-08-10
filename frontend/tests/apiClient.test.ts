@@ -370,3 +370,28 @@ describe('importProject', () => {
     expect(body.get('format')).toBe('xlsx');
   });
 });
+
+describe('importPastedText', () => {
+  it('sends text instead of file in the form body', async () => {
+    const f = stubFetch({ json: async () => ({}) });
+    await api.importPastedText('demo', 'id,name\nR1,One', 'csv', 'merge');
+    const { url, init } = callOf(f);
+    expect(url).toBe('/api/projects/demo/import');
+    expect(init.method).toBe('POST');
+
+    const body = init.body as FormData;
+    expect(body.get('file')).toBeNull();
+    expect(body.get('text')).toBe('id,name\nR1,One');
+    expect(body.get('format')).toBe('csv');
+    expect(body.get('mode')).toBe('merge');
+    expect(body.get('dry_run')).toBe('false');
+  });
+
+  it('sends dry_run=true when previewing', async () => {
+    const f = stubFetch({ json: async () => ({}) });
+    await api.importPastedText('demo', 'id\tname\nR1\tOne', 'tsv', 'merge', true);
+    const body = callOf(f).init.body as FormData;
+    expect(body.get('dry_run')).toBe('true');
+    expect(body.get('text')).toBe('id\tname\nR1\tOne');
+  });
+});
