@@ -143,6 +143,15 @@ def execute_change_request(
         proposed = changes.get(target_id, {})
         if not proposed:
             continue
+
+        if target.get("creates"):
+            safe_id(target_id)
+            new_req = {**proposed, "id": target_id}
+            store.create_requirement(new_req)
+            record_change(store, target_id, "create", None, new_req, user.get("username", ""))
+            updated_count += 1
+            continue
+
         before = store.get_requirement(target_id)
         if before is None:
             continue

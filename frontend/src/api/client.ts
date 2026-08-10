@@ -578,6 +578,8 @@ export interface CRRedline {
     /** True when the target has moved since the request was raised, so
      *  executing would overwrite edits the requester never saw. */
     stale: boolean;
+    /** True when the target is a proposed new requirement rather than an edit. */
+    creates: boolean;
   }>;
   /** True when any target is stale; execute is refused while this holds. */
   blocked: boolean;
@@ -595,9 +597,11 @@ export interface ChangeRequest {
   affected_components: string[];
   /** Target id -> {field: proposed value}. */
   changes: Record<string, Record<string, unknown>>;
-  /** Target id -> fingerprint when raised; the staleness guard for execute. */
-  base_fingerprints: Record<string, string>;
-  status: string;
+    /** Target id -> fingerprint when raised; the staleness guard for execute. */
+    base_fingerprints: Record<string, string>;
+    /** Ids in `changes` that this request proposes to *create* rather than modify. */
+    creates: string[];
+    status: string;
   /** The requester. There is deliberately no separate `requester` field. */
   submitted_by: string;
   reviewed_by: string;

@@ -8,24 +8,36 @@ def redline(store, cr: dict) -> dict:
     """Compute a before/after redline for a change request.
 
     Returns a dict matching the CRRedline shape:
-        {id, targets: [{id, name, diffs, stale}], blocked}
+        {id, targets: [{id, name, diffs, stale, creates}], blocked}
     """
     targets = []
     blocked = False
+    creates_list = cr.get("creates", [])
 
     for target_id in cr.get("changes", {}):
         proposed = cr["changes"][target_id]
         current_req = store.get_requirement(target_id)
 
         if current_req is None:
-            # Target no longer exists.
-            targets.append({
-                "id": target_id,
-                "name": target_id,
-                "diffs": {},
-                "stale": True,
-            })
-            blocked = True
+            creates = target_id in creates_list
+            if creates:
+                targets.append({
+                    "id": target_id,
+                    "name": proposed.get("name", target_id),
+                    "diffs": {f: {"before": None, "after": v} for f, v in proposed.items()},
+                    "stale": False,
+                    "creates": True,
+                })
+            else:
+                # Target no longer exists and is not being proposed — deleted.
+                targets.append({
+                    "id": target_id,
+                    "name": target_id,
+                    "diffs": {},
+                    "stale": True,
+                    "creates": False,
+                })
+                blocked = True
             continue
 
         # Build the "after" state: current overlaid with proposal.
@@ -55,11 +67,17 @@ def redline(store, cr: dict) -> dict:
         if stale:
             blocked = True
 
+        # Collision: target exists but CR also lists it in creates.
+        if target_id in creates_list:
+            stale = True
+            blocked = True
+
         targets.append({
             "id": target_id,
             "name": current_req.get("name", target_id),
             "diffs": diffs,
             "stale": stale,
+            "creates": target_id in creates_list,
         })
 
     return {
