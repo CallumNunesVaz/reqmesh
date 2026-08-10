@@ -145,7 +145,7 @@ cd backend
 ```
 
 **Frontend** — 284 unit tests covering stores, API client, entities,
-auto-linking, row selection and graph filters, plus 135 Playwright
+auto-linking, row selection and graph filters, plus 141 Playwright
 end-to-end tests:
 
 ```bash
