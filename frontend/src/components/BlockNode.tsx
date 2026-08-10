@@ -1,9 +1,10 @@
 import { memo, useState } from 'react';
 import { Handle, Position, useStore, type NodeProps } from '@xyflow/react';
-import { ChevronDown, ChevronRight, ChevronUp, Minus, ChevronsDown, ChevronsUp, FlaskConical, Sigma, AlertTriangle } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronUp, Minus, ChevronsDown, ChevronsUp, FlaskConical, Sigma, AlertTriangle, Plus } from 'lucide-react';
 import { useGraphSelection } from './GraphPane';
 import { statusColors } from './RequirementNode';
 import { glow } from './graphColors';
+import { useAuthStore } from '../store/auth';
 import { zoomLevel, labelScale, type ZoomLevel } from './semanticZoom';
 
 // UML/SysML block node for the diagram canvas. What it renders depends on the
@@ -54,6 +55,7 @@ export interface BlockNodeData {
   onExpandGroups?: () => void;
   onToggleDescendants?: () => void;
   onSelect?: () => void;
+  onAddChild?: () => void;
   hasMissingInfo?: boolean;
   elkHeight?: number;
   params: BlockParam[];
@@ -76,6 +78,7 @@ export const STACK_OVERHANG = 11;
 function BlockNode({ data }: NodeProps) {
   const d = data as unknown as BlockNodeData;
   const [hover, setHover] = useState(false);
+  const canEdit = useAuthStore((s) => s.canEdit());
   const { connectedIds, selectedReqId, hasSelection } = useGraphSelection();
   // Selector returns the bucketed level, so nodes re-render only when the
   // zoom crosses a threshold — not on every wheel tick.
@@ -141,7 +144,11 @@ function BlockNode({ data }: NodeProps) {
   );
 
   const frame = (children: React.ReactNode, clip = true) => (
-    <div style={{ position: 'relative', width: BLOCK_W }}>
+    <div
+      style={{ position: 'relative', width: BLOCK_W }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+    >
       {showStack && (
         <>
           {stackCard(STACK_OVERHANG, 0.5)}
@@ -149,8 +156,6 @@ function BlockNode({ data }: NodeProps) {
         </>
       )}
       <div
-        onMouseEnter={() => setHover(true)}
-        onMouseLeave={() => setHover(false)}
         className={`relative rounded-md border bg-card ${clip ? 'overflow-hidden' : ''} ${pulseClass}`}
         style={{
           width: BLOCK_W,
@@ -166,6 +171,18 @@ function BlockNode({ data }: NodeProps) {
         {handles}
         {children}
       </div>
+      {canEdit && hover && level >= 3 && (
+        <button
+          className="absolute z-40 flex items-center justify-center rounded-full border bg-card shadow-sm hover:bg-accent hover:border-foreground/40 transition-colors"
+          style={{ top: -9, left: -9, width: 18, height: 18, borderColor: 'hsl(var(--border))', lineHeight: 1 }}
+          title="Add child requirement"
+          onClick={(e) => { e.stopPropagation(); d.onAddChild?.(); }}
+          onDoubleClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <Plus size={11} className="text-muted-foreground" />
+        </button>
+      )}
     </div>
   );
 

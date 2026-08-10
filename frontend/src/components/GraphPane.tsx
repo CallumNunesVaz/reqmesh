@@ -974,6 +974,10 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
           childCount: childCounts.get(req.id) || 0,
           subgroupCount: subgroupCounts.get(req.id) || 0,
           onSelect: () => selectReq(req.id),
+          onAddChild: () => {
+            selectReq(req.id);
+            navigate(`/project/${projectId}/requirements?new=1&parent=${req.id}`);
+          },
           // Simple one-level toggle (all direct children) — used by the force
           // layout node and double-click. Collapsing re-frames the selection.
           onExpandCollapse: () => {
