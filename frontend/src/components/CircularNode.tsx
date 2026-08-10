@@ -1,9 +1,10 @@
 import { memo, useState } from 'react';
 import { Handle, Position, useStore, type NodeProps } from '@xyflow/react';
-import { Copy, Sigma, ChevronRight, ChevronDown } from 'lucide-react';
+import { Copy, Plus, Sigma, ChevronRight, ChevronDown } from 'lucide-react';
 import { useGraphSelection } from './GraphPane';
 import { glow, shiftLightness } from './graphColors';
 import { zoomLevel, labelScale, type ZoomLevel } from './semanticZoom';
+import { useAuthStore } from '../store/auth';
 
 const statusFillColors: Record<string, string> = {
   proposed: 'hsl(207,90%,64%)',
@@ -37,6 +38,7 @@ interface CircularNodeData {
   collapsed?: boolean;
   onExpandCollapse?: () => void;
   onSelect?: () => void;
+  onAddChild?: () => void;
 }
 
 const verdictColors: Record<string, string> = {
@@ -49,6 +51,7 @@ const verdictColors: Record<string, string> = {
 function CircularNode({ data, selected }: NodeProps) {
   const nodeData = data as unknown as CircularNodeData;
   const [hover, setHover] = useState(false);
+  const canEdit = useAuthStore((s) => s.canEdit());
   const { connectedIds, selectedReqId, hasSelection } = useGraphSelection();
   // Semantic zoom: far out only the hub (parent) nodes keep their names, as
   // scaled map labels; close in every node reveals id, status and parametrics.
@@ -156,6 +159,19 @@ function CircularNode({ data, selected }: NodeProps) {
           {nodeData.collapsed && childCount > 0 && (
             <span className="text-[8px] font-mono text-muted-foreground pr-0.5">{childCount}</span>
           )}
+        </button>
+      )}
+
+      {canEdit && hover && level >= 3 && (
+        <button
+          className="absolute z-40 flex items-center justify-center rounded-full border bg-card shadow-sm hover:bg-accent hover:border-foreground/40 transition-colors"
+          style={{ left: -7, top: -7, width: 16, height: 16, borderColor: 'hsl(var(--border))', lineHeight: 1 }}
+          title="Add child requirement"
+          onClick={(e) => { e.stopPropagation(); nodeData.onAddChild?.(); }}
+          onDoubleClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <Plus size={11} className="text-muted-foreground" />
         </button>
       )}
 
