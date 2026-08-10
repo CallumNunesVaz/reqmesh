@@ -293,7 +293,7 @@ everywhere they could surface, including push error messages.
 Requirements round-trip through **ReqIF 1.2**, **SysML v2**, **CSV**, **TSV**, and **XLSX**:
 
 - **Export** — from the Export dialog, `POST /api/projects/{id}/publish/download?format=reqif|sysml|csv|tsv|xlsx`, or CLI `export -f reqif`.
-- **Import** — from the Import dialog, `POST /api/projects/{id}/import`, or CLI `import -i <file>`. Format is auto-detected; `mode=merge` (default) creates/updates; `mode=replace` wipes existing first. CSV import supports column aliases (e.g. `"Requirement ID"` → `id`). Add `dry_run=true` (CSV, TSV and XLSX only) to preview the change — the response reports `would_create`, `would_update` and `would_delete` without writing anything.
+- **Import** — from the Import dialog (file upload or paste), `POST /api/projects/{id}/import`, or CLI `import -i <file>`. Format is auto-detected; `mode=merge` (default) creates/updates; `mode=replace` wipes existing first. CSV import supports column aliases (e.g. `"Requirement ID"` → `id`). Add `dry_run=true` (CSV, TSV and XLSX only) to preview the change — the response reports `would_create`, `would_update` and `would_delete` without writing anything.
 
 ## Project Overview
 

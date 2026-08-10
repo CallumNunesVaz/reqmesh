@@ -1507,6 +1507,15 @@ export const api = {
     return request<ImportSummary>(`/projects/${projectId}/import`, { method: 'POST', body: fd });
   },
 
+  importPastedText: (projectId: string, text: string, format: string, mode: string, dryRun = false) => {
+    const fd = new FormData();
+    fd.append('text', text);
+    fd.append('format', format);
+    fd.append('mode', mode);
+    fd.append('dry_run', String(dryRun));
+    return request<ImportSummary>(`/projects/${projectId}/import`, { method: 'POST', body: fd });
+  },
+
   // Presence (real-time collaboration)
   getPresence: (projectId: string) =>
     request<{ users: PresenceUser[]; count: number }>(`/projects/${projectId}/presence`),
