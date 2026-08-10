@@ -68,10 +68,18 @@
     },
     "changes": {
       "additionalProperties": {
+        "additionalProperties": true,
         "type": "object"
       },
       "title": "Changes",
       "type": "object"
+    },
+    "creates": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Creates",
+      "type": "array"
     },
     "base_fingerprints": {
       "additionalProperties": {

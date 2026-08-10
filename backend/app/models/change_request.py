@@ -49,6 +49,10 @@ class ChangeRequest(BaseModel):
     #: a change request names what it touches and never what it would do, which
     #: leaves nothing to redline and nothing to execute.
     changes: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    #: Ids in `changes` that this request proposes to *create* rather than modify.
+    #: Without it a target that is absent is indistinguishable from one that was
+    #: deleted, and the redline has to assume the pessimistic case.
+    creates: list[str] = Field(default_factory=list)
     #: Target id -> `compute_fingerprint` of that requirement when the request
     #: was raised.
     #:
@@ -76,6 +80,7 @@ class ChangeRequestCreate(BaseModel):
     urgency: CRUrgency = CRUrgency.NORMAL
     affected_requirements: list[str] = Field(default_factory=list)
     changes: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    creates: list[str] = Field(default_factory=list)
 
 
 class ChangeRequestUpdate(BaseModel):
@@ -85,6 +90,7 @@ class ChangeRequestUpdate(BaseModel):
     urgency: Optional[CRUrgency] = None
     rationale: Optional[str] = None
     changes: Optional[dict[str, dict[str, Any]]] = None
+    creates: Optional[list[str]] = None
     affected_requirements: Optional[list[str]] = None
     affected_components: Optional[list[str]] = None
     submitted_by: Optional[str] = None

@@ -36,7 +36,7 @@ const urgencyBadges: Record<string, string> = {
 
 /** Render a single diff field: before strikethrough, after marked. */
 function DiffField({ field, before, after }: { field: string; before: unknown; after: unknown }) {
-  const beforeStr = String(before ?? '');
+  const beforeStr = before === null || before === undefined ? '\u2014' : String(before);
   const afterStr = String(after ?? '');
   return (
     <div className="text-xs py-0.5">
@@ -382,7 +382,7 @@ export default function ChangeRequestsPage() {
                   <div className="mt-2 pt-2 border-t border-border text-xs">
                     {rl.targets.map((t) => {
                       const diffKeys = Object.keys(t.diffs);
-                      if (t.stale && diffKeys.length === 0 && rl.targets.length === 1) {
+                      if (t.stale && diffKeys.length === 0 && !t.creates && rl.targets.length === 1) {
                         return <span key={t.id} className="text-amber-400">Target {t.id} no longer exists</span>;
                       }
                       return (
@@ -390,6 +390,7 @@ export default function ChangeRequestsPage() {
                           <span className="font-mono text-muted-foreground">
                             <EntityLink kind="requirement" id={t.id} name={t.name} className="hover:text-primary" />
                           </span>
+                          {t.creates && <span className="ml-1 badge border border-blue-500/30 bg-blue-500/10 text-blue-400">New requirement</span>}
                           {t.stale && <span className="ml-1 text-amber-400 italic">(stale)</span>}
                           {diffKeys.length > 0 && (
                             <div className="ml-2 mt-0.5 space-y-0">
