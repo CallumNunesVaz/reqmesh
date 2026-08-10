@@ -38,9 +38,13 @@ test('?new=1&parent=<id> opens child form with parent selected', async ({ app, s
 
 test('bogus parent falls back to blank form', async ({ app, server }) => {
   await signIn(app);
-  await app.goto(`${server.baseURL}/project/${P}/requirements?new=1&parent=INVALID123`);
+  // Edit mode first: the link opens the modal on load, and its overlay would
+  // cover the edit toggle.
+  await app.goto(`${server.baseURL}/project/${P}/requirements`);
   await app.waitForSelector('main');
   await setEditMode(app);
+  await app.goto(`${server.baseURL}/project/${P}/requirements?new=1&parent=INVALID123`);
+  await app.waitForSelector('main');
 
   await expect(app.getByRole('heading', { name: 'New Requirement' })).toBeVisible();
 
@@ -127,4 +131,18 @@ test('n does nothing in viewing mode', async ({ app, server }) => {
   await app.keyboard.press('n');
 
   await expect(app.getByRole('heading', { name: 'New Requirement' })).toHaveCount(0);
+});
+
+test('the deep link does nothing for a user who cannot edit', async ({ app, server }) => {
+  // Not signed in: a cold load resolves to the guest/viewer role. The gate is
+  // the *role*, not the edit-mode toggle — an admin arriving on this link is
+  // opting into editing, and having it silently do nothing for them would make
+  // the link useless on a cold load, since the toggle defaults off.
+  await app.goto(`${server.baseURL}/project/${P}/requirements?new=1`);
+  await app.waitForSelector('main');
+  await app.waitForTimeout(1500);
+
+  await expect(app.getByRole('heading', { name: 'New Requirement' })).toHaveCount(0);
+  // The stale param is still cleared, so a reload cannot resurrect it.
+  expect(app.url()).not.toContain('new=1');
 });

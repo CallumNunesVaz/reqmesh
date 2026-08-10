@@ -60,6 +60,9 @@ export default function RequirementsPage() {
   const bumpGraphVersion = useStore((s) => s.bumpGraphVersion);
   const bumpDataVersion = useStore((s) => s.bumpDataVersion);
   const editMode = useAuthStore((s) => s.canEdit());
+  // Role alone, without the edit-mode toggle — see the deep-link effect below.
+  const canEditRole = useAuthStore((s) => s.user?.role === 'maintainer' || s.user?.role === 'admin');
+  const setEditMode = useAuthStore((s) => s.setEditMode);
   const showConfirm = useConfirm();
   const { addToast } = useToasts();
   const { selectedReqId, selectReq } = useSelectedReq();
@@ -126,6 +129,15 @@ export default function RequirementsPage() {
     const newParam = searchParams.get('new');
     if (newParam !== '1') return;
     if (requirements.length === 0) return;
+    // Gate on the *role*, not canEdit(). canEdit() is role AND the edit-mode
+    // toggle, and that toggle defaults off and does not survive a page load —
+    // so gating on it would make every cold-loaded link a no-op, which is the
+    // one case these links exist for. A viewer still gets nothing: the form
+    // would be unsubmittable, and its overlay covers the edit toggle they would
+    // need. The params are cleared either way so a reload cannot resurrect it.
+    if (!canEditRole) { setSearchParams({}, { replace: true }); return; }
+    // Following a create link is an explicit intent to edit.
+    if (!editMode) setEditMode(true);
 
     const parentParam = searchParams.get('parent');
     let intent: CreateIntent = { mode: 'blank' };
@@ -139,7 +151,7 @@ export default function RequirementsPage() {
 
     setCreateIntent(intent);
     setSearchParams({}, { replace: true });
-  }, [searchParams, requirements, setSearchParams]);
+  }, [searchParams, requirements, setSearchParams, editMode, canEditRole, setEditMode]);
 
   // 'n' shortcut opens create form (edit mode only)
   useEffect(() => {

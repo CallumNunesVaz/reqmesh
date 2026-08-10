@@ -270,8 +270,11 @@ def import_table(store, content: str, fmt: str = "csv", mode: str = "merge",
 
     if mode == "replace":
         for req in store.list_requirements():
-            record_change(store, req["id"], "delete", req, None, username)
-            store.delete_requirement(req["id"])
+            # Record after the delete succeeds, matching bulk_routes: logging
+            # first would leave a delete entry for a record still present if the
+            # write failed.
+            if store.delete_requirement(req["id"]):
+                record_change(store, req["id"], "delete", req, None, username)
 
     for req_data in parsed_rows:
         rid = req_data.get("id", "").strip()
