@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { GuardedLink as Link } from '../components/navGuard';
 import { motion } from 'framer-motion';
-import { Trash2, ArrowLeft, Plus, X, ArrowRight, ArrowLeftRight, Sparkles, ShieldCheck, ExternalLink, ChevronRight, Waypoints, AlertTriangle, CheckCircle2, GitFork, Loader, Save, Undo2, GitPullRequest, Ban, Tag } from 'lucide-react';
+import { Trash2, ArrowLeft, Plus, X, ArrowRight, ArrowLeftRight, Sparkles, ShieldCheck, ExternalLink, ChevronRight, Waypoints, AlertTriangle, CheckCircle2, GitFork, Loader, Save, Undo2, GitPullRequest, Ban, Tag, Copy } from 'lucide-react';
 import { api, baselineNames, CR_URGENCIES, type StakeholderDef, type SystemStateDef, type RequirementValue, type Requirement, type VerificationCase, type QualityItem, type Component, type Specification, type ChangeRequest, type Risk, type EvaluatedRequirement, type Definition, type DecisionRecord, type Backlinks } from '../api/client';
 import { ParametricsCard } from '../components/parametrics';
 import WhatIfPanel from '../components/WhatIfPanel';
@@ -18,6 +18,7 @@ import { useUndoStore } from '../store/undo';
 import { useGraphPane, useSelectedReq } from '../components/Layout';
 import { HelpTip } from '../components/HelpTip';
 import RenameDialog from '../components/RenameDialog';
+import CreateRequirementModal from '../components/CreateRequirementModal';
 import { useConfirm } from '../components/ConfirmDialog';
 import { deleteWithReferenceCheck } from '../lib/forceDelete';
 import DescriptionHelper from '../components/DescriptionHelper';
@@ -112,6 +113,7 @@ export default function RequirementDetailPage() {
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const savedRef = useRef<Requirement | null>(null);
+  const [createIntent, setCreateIntent] = useState<{ mode: 'child'; parent: string } | { mode: 'duplicate'; source: Requirement } | null>(null);
   const [projectBaselines, setProjectBaselines] = useState<string[]>([]);
   const [projectSystemStates, setProjectSystemStates] = useState<SystemStateDef[]>([]);
   const statusOptions = workflow?.states || ['proposed', 'approved', 'implemented', 'verified', 'rejected', 'deprecated'];
@@ -724,6 +726,16 @@ export default function RequirementDetailPage() {
               <Undo2 size={14} />
             </button>
           </>
+        )}
+        {editable && (
+          <button onClick={() => setCreateIntent({ mode: 'child', parent: reqId! })} className="btn-secondary text-xs p-2" title="Add child requirement">
+            <Plus size={14} />
+          </button>
+        )}
+        {editable && (
+          <button onClick={() => { if (req) setCreateIntent({ mode: 'duplicate', source: req }); }} className="btn-secondary text-xs p-2" title="Duplicate requirement">
+            <Copy size={14} />
+          </button>
         )}
         {editable && (
         <button onClick={() => setRenaming(true)} className="btn-secondary text-xs p-2" title="Rename (change the id)">
@@ -1563,6 +1575,18 @@ export default function RequirementDetailPage() {
           </div>
         </div>
       </div>
+
+      <CreateRequirementModal
+        open={createIntent !== null}
+        onClose={() => setCreateIntent(null)}
+        projectId={projectId!}
+        requirements={allReqs}
+        intent={createIntent ?? undefined}
+        onCreated={(created) => {
+          setCreateIntent(null);
+          if (created) navigate(`/project/${projectId}/requirements/${created.id}`);
+        }}
+      />
 
       <RenameDialog
         open={renaming}
