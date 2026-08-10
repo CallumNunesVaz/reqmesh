@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useGuardedNavigate } from './navGuard';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search } from 'lucide-react';
+import { Plus, Search } from 'lucide-react';
 import { ENTITY_META } from './entities';
 import { loadEntityIndex, searchEntities, recordEntityVisit, type IndexedEntity } from './entityIndex';
 import { useStore } from '../store';
@@ -114,6 +114,15 @@ export default function CommandPalette({ projectId }: { projectId: string }) {
     return combined;
   }, [localResults, showBackend, mergedBackend]);
 
+  const trimmed = query.trim();
+  const showCreateAction = trimmed === '' ||
+    ['new', 'create', 'requirement', 'add'].includes(trimmed.toLowerCase());
+
+  const pickCreate = useCallback(() => {
+    setOpen(false);
+    navigate(`/project/${projectId}/requirements?new=1`);
+  }, [navigate, projectId]);
+
   // Fix cursor bounds when results change
   useEffect(() => {
     if (cursor >= combinedResults.length && combinedResults.length > 0) {
@@ -157,9 +166,14 @@ export default function CommandPalette({ projectId }: { projectId: string }) {
 
   const onInputKey = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') { setOpen(false); return; }
-    if (e.key === 'ArrowDown') { e.preventDefault(); setCursor((c) => Math.min(c + 1, combinedResults.length - 1)); }
+    if (e.key === 'ArrowDown') { e.preventDefault(); setCursor((c) => Math.min(c + 1, Math.max(showCreateAction ? combinedResults.length : combinedResults.length - 1, 0))); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); setCursor((c) => Math.max(c - 1, 0)); }
-    else if (e.key === 'Enter' && combinedResults[cursor]) { e.preventDefault(); pick(combinedResults[cursor]); }
+    else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (showCreateAction && cursor === 0) { pickCreate(); return; }
+      const idx = showCreateAction ? cursor - 1 : cursor;
+      if (combinedResults[idx]) pick(combinedResults[idx]);
+    }
     else return;
     requestAnimationFrame(() => {
       listRef.current?.querySelector('[data-active="true"]')?.scrollIntoView({ block: 'nearest' });
@@ -212,7 +226,25 @@ export default function CommandPalette({ projectId }: { projectId: string }) {
                   <div className="border-t my-1 mx-1" />
                 </>
               )}
-              {combinedResults.length === 0 ? (
+              {showCreateAction && (
+                <>
+                  <button
+                    key="action-create"
+                    data-active={cursor === 0 ? 'true' : undefined}
+                    onClick={pickCreate}
+                    onMouseMove={() => setCursor(0)}
+                    className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left transition-colors ${
+                      cursor === 0 ? 'bg-accent' : ''
+                    }`}
+                  >
+                    <Plus size={14} className="text-muted-foreground shrink-0" />
+                    <span className="text-sm text-card-foreground">New requirement</span>
+                    <span className="ml-auto text-[10px] text-muted-foreground shrink-0">Action</span>
+                  </button>
+                  <div className="border-t my-1 mx-1" />
+                </>
+              )}
+              {combinedResults.length === 0 && !showCreateAction ? (
                 <p className="text-sm text-muted-foreground text-center py-8">
                   {backendLoading ? 'Searching…' : 'No matches.'}
                 </p>
@@ -226,11 +258,11 @@ export default function CommandPalette({ projectId }: { projectId: string }) {
                     return (
                       <button
                         key={`b-${sr.kind}-${sr.id}`}
-                        data-active={i === cursor}
+                        data-active={i + (showCreateAction ? 1 : 0) === cursor}
                         onClick={() => pick(sr)}
-                        onMouseMove={() => setCursor(i)}
+                        onMouseMove={() => setCursor(i + (showCreateAction ? 1 : 0))}
                         className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left transition-colors ${
-                          i === cursor ? 'bg-accent' : ''
+                          i + (showCreateAction ? 1 : 0) === cursor ? 'bg-accent' : ''
                         }`}
                       >
                         <Icon size={14} className={`${meta?.cls ?? 'text-muted-foreground'} shrink-0`} />
@@ -249,11 +281,11 @@ export default function CommandPalette({ projectId }: { projectId: string }) {
                   return (
                     <button
                       key={`${entity.kind}-${entity.id}`}
-                      data-active={i === cursor}
+                      data-active={i + (showCreateAction ? 1 : 0) === cursor}
                       onClick={() => pick(entity)}
-                      onMouseMove={() => setCursor(i)}
+                      onMouseMove={() => setCursor(i + (showCreateAction ? 1 : 0))}
                       className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left transition-colors ${
-                        i === cursor ? 'bg-accent' : ''
+                        i + (showCreateAction ? 1 : 0) === cursor ? 'bg-accent' : ''
                       }`}
                     >
                       <Icon size={14} className={`${meta.cls} shrink-0`} />
