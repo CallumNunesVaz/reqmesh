@@ -16,6 +16,7 @@
     },
     "snapshot": {
       "additionalProperties": {
+        "additionalProperties": true,
         "type": "object"
       },
       "title": "Snapshot",

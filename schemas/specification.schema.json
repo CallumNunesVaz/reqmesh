@@ -26,6 +26,13 @@
       "title": "Requirements",
       "type": "array"
     },
+    "components": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Components",
+      "type": "array"
+    },
     "children": {
       "items": {
         "type": "string"
