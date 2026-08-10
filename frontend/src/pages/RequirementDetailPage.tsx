@@ -489,6 +489,66 @@ export default function RequirementDetailPage() {
     [projectId, reqId],
   );
 
+  // This page's loader is an effect keyed on [projectId, reqId], so bumping
+  // dataVersion does not bring it back — cascade actions re-read explicitly.
+  const refreshAfterCascade = async () => {
+    if (!projectId || !reqId) return;
+    const [fresh, all] = await Promise.all([
+      api.getRequirement(projectId, reqId),
+      api.listRequirements(projectId),
+    ]);
+    setReq(fresh);
+    savedRef.current = fresh;
+    setDirty(false);
+    setAllReqs(all);
+  };
+
+  const [cascadeBusy, setCascadeBusy] = useState(false);
+
+  // Child groups are the direct children that are not themselves copies —
+  // exactly what the cascade endpoint will push a copy into.
+  const cascadeTargets = allReqs.filter((r) => r.parent === reqId && !r.cascade_from);
+
+  const doCascade = async () => {
+    if (!projectId || !reqId) return;
+    const ok = await showConfirm(
+      `Push a copy of ${reqId} into ${cascadeTargets.length} child group(s)? ` +
+      `Each copy stays tied to this requirement — editing this one will overwrite them.`,
+      'Cascade to child groups',
+    );
+    if (!ok) return;
+    setCascadeBusy(true);
+    try {
+      const res = await api.cascadeRequirement(projectId, reqId);
+      addToast('success', `Created ${res.created.length} cascaded cop${res.created.length === 1 ? 'y' : 'ies'}`);
+      bumpGraphVersion();
+      bumpDataVersion();
+      await refreshAfterCascade();
+    } catch (e: any) {
+      addToast('error', e?.message || 'Cascade failed');
+    } finally {
+      setCascadeBusy(false);
+    }
+  };
+
+  const doBreakCascade = async () => {
+    if (!projectId || !reqId || !req?.cascade_from) return;
+    const ok = await showConfirm(
+      `Detach ${reqId} from ${req.cascade_from}? It keeps its current content but ` +
+      `stops being overwritten when ${req.cascade_from} changes.`,
+      'Break cascade',
+    );
+    if (!ok) return;
+    try {
+      await api.breakCascade(projectId, reqId);
+      addToast('success', `${reqId} detached from ${req.cascade_from}`);
+      bumpDataVersion();
+      await refreshAfterCascade();
+    } catch (e: any) {
+      addToast('error', e?.message || 'Could not break the cascade');
+    }
+  };
+
   const [renamedTo, setRenamedTo] = useState<string | null>(null);
 
   const doRename = async (newId: string) => {
@@ -639,6 +699,18 @@ export default function RequirementDetailPage() {
           <CheckCircle2 size={14} /> Saved
         </div>
       )}
+      {req?.cascade_from && (
+        <div className="mb-4 px-4 py-2 rounded-lg bg-cs-orange/10 border border-cs-orange/25 text-cs-orange text-sm flex items-center gap-2 flex-wrap">
+          <GitFork size={14} className="shrink-0" />
+          <span>
+            Cascaded copy of <b className="font-mono">{req.cascade_from}</b> — its name, description,
+            priority, status and type overwrite this one whenever it changes.
+          </span>
+          {editable && (
+            <button onClick={doBreakCascade} className="btn-secondary text-xs ml-auto">Break cascade</button>
+          )}
+        </div>
+      )}
       <div className="flex flex-wrap items-center gap-3 mb-6">
         <button onClick={async () => { if (await confirmLeave()) navigate(`/project/${projectId}/requirements`); }} className="btn-secondary p-2">
           <ArrowLeft size={16} />
@@ -726,6 +798,16 @@ export default function RequirementDetailPage() {
               <Undo2 size={14} />
             </button>
           </>
+        )}
+        {editable && !req?.cascade_from && cascadeTargets.length > 0 && (
+          <button
+            onClick={doCascade}
+            disabled={cascadeBusy}
+            className="btn-secondary text-xs p-2 disabled:opacity-50"
+            title={`Cascade a copy into ${cascadeTargets.length} child group(s)`}
+          >
+            <GitFork size={14} />
+          </button>
         )}
         {editable && (
           <button onClick={() => setCreateIntent({ mode: 'child', parent: reqId! })} className="btn-secondary text-xs p-2" title="Add child requirement">
