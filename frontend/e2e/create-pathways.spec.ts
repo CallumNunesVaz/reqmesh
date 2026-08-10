@@ -153,3 +153,25 @@ test('detail page add child and duplicate buttons invisible in viewing mode', as
   await expect(app.locator('[title="Add child requirement"]')).toHaveCount(0);
   await expect(app.locator('[title="Duplicate requirement"]')).toHaveCount(0);
 });
+
+test('cancelling a duplicate does not leak its values into the next blank form', async ({ app, server }) => {
+  // The form is only cleared after a *successful* create, so a cancelled
+  // duplicate used to leave its name and description sitting in the fields the
+  // next time the blank "New Requirement" form was opened.
+  await signIn(app);
+  await app.goto(`${server.baseURL}/project/${P}/requirements`);
+  await app.waitForSelector('main');
+  await setEditMode(app);
+
+  await app.locator('[title="Duplicate requirement"]').first().click({ force: true });
+  await expect(app.getByRole('heading', { name: /^Duplicate / })).toBeVisible();
+  const dupName = await app.getByPlaceholder('Requirement name').inputValue();
+  expect(dupName).toContain('(copy)');
+  await app.locator('[title="Close"], button:has-text("Cancel")').first().click();
+  await expect(app.getByRole('heading', { name: /^Duplicate / })).toHaveCount(0);
+
+  await app.getByRole('button', { name: 'New Requirement' }).first().click();
+  await expect(app.getByRole('heading', { name: 'New Requirement' })).toBeVisible();
+  const blankName = await app.getByPlaceholder('Requirement name').inputValue();
+  expect(blankName).toBe('');
+});

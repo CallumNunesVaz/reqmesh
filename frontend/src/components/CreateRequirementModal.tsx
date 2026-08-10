@@ -31,37 +31,34 @@ export default function CreateRequirementModal({
     if (!open) return;
     setError('');
 
-    if (intent?.mode === 'child') {
-      const parent = intent.parent;
-      setForm((f) => ({ ...f, parent }));
-      api.getNextUid(projectId, parent)
-        .then((uid) => setForm((f) => ({ ...f, id: uid.next_id, parent })))
-        .catch(() => {});
-      return;
-    }
+    // Build the whole form from the intent rather than spreading over whatever
+    // was left behind. The form is only cleared after a *successful* create, so
+    // spreading meant cancelling a duplicate and then opening a blank form left
+    // the previous name and description sitting in the fields.
+    const base = { id: '', name: '', type: 'functional', priority: 'medium', parent: '', description: '' };
 
     if (intent?.mode === 'duplicate') {
       const source = intent.source;
       const parent = source.parent || '';
-      setForm((f) => ({
-        ...f,
+      setForm({
+        ...base,
         name: `${source.name} (copy)`,
         type: source.type,
         priority: source.priority,
         description: source.description || '',
         parent,
-      }));
-      api.getNextUid(projectId, source.parent || undefined)
-        .then((uid) => setForm((f) => ({ ...f, id: uid.next_id, parent })))
+      });
+      api.getNextUid(projectId, parent || undefined)
+        .then((uid) => setForm((f) => ({ ...f, id: uid.next_id })))
         .catch(() => {});
       return;
     }
 
-    const parent = selectedReqId || '';
-    setForm((f) => ({ ...f, parent }));
-    const parentParam = parent || undefined;
-    api.getNextUid(projectId, parentParam)
-      .then((uid) => setForm((f) => ({ ...f, id: uid.next_id, parent })))
+    // An explicit child intent wins over the ambient selection.
+    const parent = intent?.mode === 'child' ? intent.parent : (selectedReqId || '');
+    setForm({ ...base, parent });
+    api.getNextUid(projectId, parent || undefined)
+      .then((uid) => setForm((f) => ({ ...f, id: uid.next_id })))
       .catch(() => {});
   }, [open, projectId, selectedReqId, intent]);
 
