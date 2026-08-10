@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import CreateRequirementModal, { type CreateIntent } from '../components/CreateRequirementModal';
 import { usePersistedState, setCodec } from '../hooks/usePersistedState';
 import { useRangeSelection } from '../hooks/useRangeSelection';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus, Search, X, Trash2, ChevronRight, ChevronDown, ChevronsDownUp, ChevronsUpDown,
@@ -54,6 +54,7 @@ const stripHtml = (s: string) => s.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')
 export default function RequirementsPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { requirements, setRequirements } = useStore();
   const dataVersion = useStore((s) => s.dataVersion);
   const bumpGraphVersion = useStore((s) => s.bumpGraphVersion);
@@ -119,6 +120,41 @@ export default function RequirementsPage() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
+
+  // Open create form from ?new=1[&parent=<id>] after requirements are loaded
+  useEffect(() => {
+    const newParam = searchParams.get('new');
+    if (newParam !== '1') return;
+    if (requirements.length === 0) return;
+
+    const parentParam = searchParams.get('parent');
+    let intent: CreateIntent = { mode: 'blank' };
+
+    if (parentParam) {
+      const parentExists = requirements.some((r) => r.id === parentParam);
+      if (parentExists) {
+        intent = { mode: 'child', parent: parentParam };
+      }
+    }
+
+    setCreateIntent(intent);
+    setSearchParams({}, { replace: true });
+  }, [searchParams, requirements, setSearchParams]);
+
+  // 'n' shortcut opens create form (edit mode only)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'n') return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement).tagName)) return;
+      if (!editMode) return;
+      if (createIntent !== null) return;
+      e.preventDefault();
+      navigate(`/project/${projectId}/requirements?new=1`);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [editMode, createIntent, navigate, projectId]);
 
   const byParent = useMemo(() => {
     const ids = new Set(requirements.map((r) => r.id));
