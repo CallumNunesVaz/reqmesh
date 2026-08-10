@@ -6,7 +6,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus, Search, X, Trash2, ChevronRight, ChevronDown, ChevronsDownUp, ChevronsUpDown,
-  Inbox, Square, CheckSquare, ArrowUp, SlidersHorizontal, Copy,
+  Inbox, Square, CheckSquare, ArrowUp, SlidersHorizontal, Copy, AlertTriangle,
 } from 'lucide-react';
 import { api, baselineNames, getTruncationInfo, type Requirement, type EvalVerdict, type TruncationInfo } from '../api/client';
 import { useStore } from '../store';
@@ -757,7 +757,11 @@ function BulkEditModal({
       }
       if (Object.keys(prio).length > 0) updates.priorities = prio;
     }
-    if (form.cascade_from) updates.cascade_from = form.cascade_from;
+    // '' means "leave unchanged"; the sentinel clears the field, which the old
+    // free-text box could not express at all — you could opt into a cascade but
+    // never out of one.
+    if (form.cascade_from === '__none__') updates.cascade_from = null;
+    else if (form.cascade_from) updates.cascade_from = form.cascade_from;
     if (form.description) updates.description = form.description;
     return updates;
   };
@@ -895,10 +899,35 @@ function BulkEditModal({
                 </div>
                 <div>
                   <label className="label">Cascade From</label>
-                  <input className="input font-mono text-xs" placeholder="Parent requirement ID..." value={form.cascade_from}
-                    onChange={(e) => setForm({ ...form, cascade_from: e.target.value })} />
-                </div>                  
+                  {/* Was a free-text id box. Setting this is not a label: the
+                      master's name, description, priority, status and type
+                      overwrite this requirement's on every future edit of the
+                      master. A typo silently pointed at nothing; picking from
+                      the list cannot. */}
+                  <select
+                    className="select font-mono text-xs"
+                    value={form.cascade_from}
+                    onChange={(e) => setForm({ ...form, cascade_from: e.target.value })}
+                  >
+                    <option value="">Leave unchanged</option>
+                    <option value="__none__">None — break the cascade</option>
+                    {allReqs
+                      .filter((r) => !selectedIds.includes(r.id))
+                      .map((r) => <option key={r.id} value={r.id}>{r.id} — {r.name}</option>)}
+                  </select>
+                </div>
               </div>
+
+              {form.cascade_from && form.cascade_from !== '__none__' && (
+                <div className="flex items-start gap-2 text-xs text-cs-orange bg-cs-orange/10 rounded-lg p-3">
+                  <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+                  <span>
+                    The {selectedIds.length} selected requirement{selectedIds.length === 1 ? '' : 's'} will
+                    be overwritten by <b className="font-mono">{form.cascade_from}</b> — its name, description,
+                    priority, status and type replace theirs now and again every time it is edited.
+                  </span>
+                </div>
+              )}
 
               {/* Row 5: System States / Coverage Needs */}
               <div className="grid grid-cols-2 gap-3">

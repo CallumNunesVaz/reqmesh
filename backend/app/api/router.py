@@ -4,7 +4,6 @@ import datetime
 import logging
 import re
 import string
-import uuid
 from pathlib import Path
 from typing import Optional
 
@@ -792,13 +791,23 @@ def cascade_requirement(project_id: str, req_id: str, user: dict = Depends(requi
         raise HTTPException(status_code=404, detail="Requirement not found")
 
     all_reqs = store.list_requirements()
+    meta = store.read_meta()
     # See the note on propagated_fields: verification is derived per requirement.
     cascade_fields = ["name", "description", "priority", "status", "type"]
+
+    # `known` grows as copies are allocated so the next suggestion sees the
+    # previous one — suggest_id picks the next free slot by scanning the list,
+    # and cascading to several child groups allocates several ids in one pass.
+    known = list(all_reqs)
 
     created = []
     for child in all_reqs:
         if child.get("parent") == req_id and child.get("cascade_from") is None:
-            new_id = f"{req_id}-C-{uuid.uuid4().hex[:6].upper()}"
+            # Follow the project's naming scheme rather than a synthetic
+            # `{source}-C-{hex}`: a cascaded copy is an ordinary requirement in
+            # its group, and the old shape also sanitised into a noisier SysML
+            # name on export.
+            new_id = suggest_id(known, meta, child["id"])
             new_req = {k: source[k] for k in cascade_fields}
             new_req["id"] = new_id
             new_req["parent"] = child["id"]
@@ -809,6 +818,7 @@ def cascade_requirement(project_id: str, req_id: str, user: dict = Depends(requi
             new_req["verification_status"] = "pending"
             store.create_requirement(new_req)
             record_change(store, new_id, "create", None, new_req, user.get("username", ""))
+            known.append(new_req)
             created.append(new_id)
 
     if not created:

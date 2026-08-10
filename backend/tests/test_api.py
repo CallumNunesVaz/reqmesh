@@ -496,3 +496,48 @@ def test_version_endpoints_report_version(client):
     health = client.get("/health")
     assert health.status_code == 200
     assert health.json()["version"] == ver
+
+
+def test_cascade_ids_follow_the_project_naming_scheme(client, project):
+    """Cascaded copies used to get a synthetic `{source}-C-{hex}` id, which sat
+    outside the project's scheme and sanitised into a noisier SysML name."""
+    make_req(client, project, "SYST0001", name="System req")
+    make_req(client, project, "PROP0001", name="Propulsion group", parent="SYST0001")
+
+    created = client.post(f"/api/projects/{project}/requirements/SYST0001/cascade").json()["created"]
+
+    assert len(created) == 1
+    assert "-C-" not in created[0], f"synthetic id leaked: {created[0]}"
+    # The copy lives under PROP0001, so it takes that group's prefix.
+    assert created[0].startswith("PROP"), created[0]
+
+
+def test_cascade_to_several_groups_allocates_distinct_ids(client, project):
+    """Each copy must see the previous allocation — a per-child scan of the
+    unmodified list would hand every group the same next-free slot."""
+    make_req(client, project, "SYST0001", name="System req")
+    make_req(client, project, "GRP0001", name="Group one", parent="SYST0001")
+    make_req(client, project, "GRP0002", name="Group two", parent="SYST0001")
+
+    created = client.post(f"/api/projects/{project}/requirements/SYST0001/cascade").json()["created"]
+
+    assert len(created) == 2
+    assert len(set(created)) == 2, f"ids collided: {created}"
+    for cid in created:
+        assert client.get(f"/api/projects/{project}/requirements/{cid}").status_code == 200
+
+
+def test_bulk_update_can_clear_cascade_from(client, project):
+    """The old free-text field could opt a requirement *into* a cascade but
+    never out of one: an empty box was falsy and simply omitted from the
+    payload. Clearing has to travel as an explicit null."""
+    make_req(client, project, "SYST0001", name="Master")
+    make_req(client, project, "COPY0001", name="Copy")
+    client.post(f"/api/projects/{project}/requirements/bulk",
+                json={"ids": ["COPY0001"], "updates": {"cascade_from": "SYST0001"}})
+    assert client.get(f"/api/projects/{project}/requirements/COPY0001").json()["cascade_from"] == "SYST0001"
+
+    r = client.post(f"/api/projects/{project}/requirements/bulk",
+                    json={"ids": ["COPY0001"], "updates": {"cascade_from": None}})
+    assert r.status_code == 200, r.text
+    assert client.get(f"/api/projects/{project}/requirements/COPY0001").json()["cascade_from"] is None
