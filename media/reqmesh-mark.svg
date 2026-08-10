@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="70 30 120 120" width="120" height="120" role="img" aria-label="reqmesh">
+<line x1="169.84" y1="113.00" x2="130.00" y2="136.00" stroke="#D3D6E2" stroke-width="1.6" stroke-linecap="round"/>
+<line x1="130.00" y1="136.00" x2="90.16" y2="113.00" stroke="#D3D6E2" stroke-width="1.6" stroke-linecap="round"/>
+<line x1="90.16" y1="67.00" x2="130.00" y2="44.00" stroke="#D3D6E2" stroke-width="1.6" stroke-linecap="round"/>
+<line x1="130.00" y1="90.00" x2="90.16" y2="113.00" stroke="#D3D6E2" stroke-width="1.6" stroke-linecap="round"/>
+<line x1="130.00" y1="44.00" x2="169.84" y2="67.00" stroke="#4F46E5" stroke-width="4.2" stroke-linecap="round"/>
+<line x1="130.00" y1="44.00" x2="130.00" y2="90.00" stroke="#4F46E5" stroke-width="4.2" stroke-linecap="round"/>
+<line x1="169.84" y1="67.00" x2="130.00" y2="90.00" stroke="#9536AE" stroke-width="4.2" stroke-linecap="round"/>
+<line x1="130.00" y1="90.00" x2="169.84" y2="113.00" stroke="#4F46E5" stroke-width="4.2" stroke-linecap="round"/>
+<line x1="130.00" y1="90.00" x2="130.00" y2="136.00" stroke="#4F46E5" stroke-width="4.2" stroke-linecap="round"/>
+<line x1="90.16" y1="113.00" x2="90.16" y2="67.00" stroke="#DB2777" stroke-width="4.2" stroke-linecap="round"/>
+<line x1="90.16" y1="67.00" x2="130.00" y2="90.00" stroke="#DB2777" stroke-width="4.2" stroke-linecap="round"/>
+<line x1="130.00" y1="90.00" x2="169.84" y2="67.00" stroke="#9536AE" stroke-width="4.2" stroke-linecap="round"/>
+<line x1="169.84" y1="67.00" x2="169.84" y2="113.00" stroke="#DB2777" stroke-width="4.2" stroke-linecap="round"/>
+<circle cx="130.00" cy="44.00" r="9" fill="#4F46E5"/>
+<circle cx="169.84" cy="67.00" r="9" fill="#9536AE"/>
+<circle cx="90.16" cy="67.00" r="9" fill="#DB2777"/>
+<circle cx="90.16" cy="113.00" r="9" fill="#DB2777"/>
+<circle cx="169.84" cy="113.00" r="9" fill="#9536AE"/>
+<circle cx="130.00" cy="136.00" r="9" fill="#4F46E5"/>
+<circle cx="130.00" cy="90.00" r="12" fill="#9536AE"/>
+</svg>
