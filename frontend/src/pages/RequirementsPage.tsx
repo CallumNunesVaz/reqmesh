@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import CreateRequirementModal, { type CreateIntent } from '../components/CreateRequirementModal';
 import { usePersistedState, setCodec } from '../hooks/usePersistedState';
 import { useRangeSelection } from '../hooks/useRangeSelection';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus, Search, X, Trash2, ChevronRight, ChevronDown, ChevronsDownUp, ChevronsUpDown,
-  Inbox, Square, CheckSquare, ArrowUp, SlidersHorizontal,
+  Inbox, Square, CheckSquare, ArrowUp, SlidersHorizontal, Copy,
 } from 'lucide-react';
 import { api, baselineNames, getTruncationInfo, type Requirement, type EvalVerdict, type TruncationInfo } from '../api/client';
 import { useStore } from '../store';
@@ -76,7 +77,7 @@ export default function RequirementsPage() {
   const [filterVerStatus, setFilterVerStatus] = usePersistedState(pk('filter-verstatus'), '');
   const [filterAllocated, setFilterAllocated] = usePersistedState(pk('filter-allocated'), '');
   const [collapsed, setCollapsed] = usePersistedState<Set<string>>(pk('collapsed'), new Set(), setCodec<string>());
-  const [showCreate, setShowCreate] = useState(false);
+  const [createIntent, setCreateIntent] = useState<CreateIntent | null>(null);
   const [projectBaselines, setProjectBaselines] = useState<string[]>([]);
   // Which rows the reparent dialog is currently moving. Replaces two
   // free-text "Parent ID" boxes that accepted any string, including a
@@ -350,7 +351,7 @@ export default function RequirementsPage() {
           </p>
         </div>
         {editMode && (
-          <button onClick={() => setShowCreate(true)} className="btn-primary">
+          <button onClick={() => setCreateIntent({ mode: 'blank' })} className="btn-primary">
             <Plus size={15} />
             <span className="hidden @sm:inline">New Requirement</span>
             <span className="@sm:hidden">New</span>
@@ -447,7 +448,7 @@ export default function RequirementsPage() {
                 Clear filters
               </button>
             ) : editMode && (
-              <button className="text-xs text-primary hover:underline mt-2" onClick={() => setShowCreate(true)}>
+              <button className="text-xs text-primary hover:underline mt-2" onClick={() => setCreateIntent({ mode: 'blank' })}>
                 Create the first one
               </button>
             )}
@@ -574,6 +575,20 @@ export default function RequirementsPage() {
                   )}
                   {editMode && (
                     <>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setCreateIntent({ mode: 'child', parent: req.id }); }}
+                        className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="Add child requirement"
+                      >
+                        <Plus size={13} />
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setCreateIntent({ mode: 'duplicate', source: req }); }}
+                        className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="Duplicate requirement"
+                      >
+                        <Copy size={13} />
+                      </button>
                       {(
                         <button
                           onClick={(e) => { e.stopPropagation(); setMovingIds([req.id]); }}
@@ -666,193 +681,14 @@ export default function RequirementsPage() {
       />
 
       <CreateRequirementModal
-        open={showCreate}
-        onClose={() => setShowCreate(false)}
+        open={createIntent !== null}
+        onClose={() => setCreateIntent(null)}
         projectId={projectId!}
         requirements={requirements}
+        intent={createIntent ?? undefined}
         onCreated={load}
       />
     </div>
-  );
-}
-
-function CreateRequirementModal({
-  open, onClose, projectId, requirements, onCreated,
-}: {
-  open: boolean;
-  onClose: () => void;
-  projectId: string;
-  requirements: Requirement[];
-  onCreated: () => void;
-}) {
-  const [form, setForm] = useState({ id: '', name: '', type: 'functional', priority: 'medium', parent: '', description: '' });
-  const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
-  const { selectedReqId, selectReq } = useSelectedReq();
-
-  useEffect(() => {
-    if (!open) return;
-    setError('');
-    const parent = selectedReqId || '';
-    setForm((f) => ({ ...f, parent }));
-    const parentParam = parent || undefined;
-    api.getNextUid(projectId, parentParam)
-      .then((uid) => setForm((f) => ({ ...f, id: uid.next_id, parent })))
-      .catch(() => {});
-  }, [open, projectId, selectedReqId]);
-
-  const jumpToParent = () => {
-    if (!form.parent) return;
-    const parentReq = requirements.find(r => r.id === form.parent);
-    if (parentReq?.parent) {
-      setForm((f) => ({ ...f, parent: parentReq.parent! }));
-      api.getNextUid(projectId, parentReq.parent)
-        .then((uid) => setForm((f) => ({ ...f, id: uid.next_id })))
-        .catch(() => {});
-    } else {
-      setForm((f) => ({ ...f, parent: '' }));
-      api.getNextUid(projectId)
-        .then((uid) => setForm((f) => ({ ...f, id: uid.next_id })))
-        .catch(() => {});
-    }
-  };
-
-  const handleParentChange = (parentId: string) => {
-    setForm((f) => ({ ...f, parent: parentId }));
-    api.getNextUid(projectId, parentId || undefined)
-      .then((uid) => setForm((f) => ({ ...f, id: uid.next_id })))
-      .catch(() => {});
-  };
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.id.trim()) return;
-    setBusy(true);
-    setError('');
-    try {
-      const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-      const createData = {
-        ...form,
-        description: form.description ? `<p>${esc(form.description)}</p>` : '',
-        parent: form.parent || undefined,
-      };
-      const created = await api.createRequirement(projectId, createData);
-      const createdId = created.id;
-      useUndoStore.getState().push({
-        description: `Create ${createdId}`,
-        undo: async () => { await api.deleteRequirement(projectId, createdId); },
-        redo: async () => { await api.createRequirement(projectId, createData); },
-      });
-      setForm({ id: '', name: '', type: 'functional', priority: 'medium', parent: '', description: '' });
-      onClose();
-      onCreated();
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const parentOptions = [...requirements].sort((a, b) => a.id.localeCompare(b.id));
-
-  return (
-    <BodyPortal>
-    <AnimatePresence>
-      {open && (
-        <motion.div
-          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-[2px] flex items-start justify-center pt-[12vh] px-4"
-          onClick={onClose}
-        >
-          <motion.form
-            initial={{ opacity: 0, y: 12, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 8, scale: 0.98 }}
-            transition={{ duration: 0.15 }}
-            onSubmit={submit}
-            onClick={(e) => e.stopPropagation()}
-            className="card w-full max-w-lg p-5 shadow-xl"
-          >
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-semibold text-foreground">New Requirement</h2>
-              <button type="button" onClick={onClose} className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent">
-                <X size={15} />
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              <div>
-                <label className="label">Parent</label>
-                <div className="flex gap-1.5">
-                  <select className="select flex-1" value={form.parent} onChange={(e) => handleParentChange(e.target.value)}>
-                    <option value="">None (top level)</option>
-                    {parentOptions.map((r) => (
-                      <option key={r.id} value={r.id}>{r.id} — {r.name || 'Untitled'}</option>
-                    ))}
-                  </select>
-                  <button type="button" onClick={jumpToParent}
-                    className="p-2 rounded-md border text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-                    title="Jump to parent group"
-                    disabled={!form.parent || !requirements.find(r => r.id === form.parent)}>
-                    <ArrowUp size={14} />
-                  </button>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-[8rem_1fr] gap-3">
-                <div>
-                  <label className="label">ID</label>
-                  <input className="input font-mono" value={form.id} onChange={(e) => setForm({ ...form, id: e.target.value })} />
-                </div>
-                <div>
-                  <label className="label">Name</label>
-                  <input className="input" placeholder="Requirement name" value={form.name} autoFocus
-                    onChange={(e) => setForm({ ...form, name: e.target.value })} />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="label">Type</label>
-                  <select className="select" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
-                    {REQUIREMENT_TYPES.map((k) => <option key={k} value={k}>{REQUIREMENT_TYPE_META[k].label}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="label">Priority</label>
-                  <select className="select" value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })}>
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                    <option value="critical">Critical</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="label">Description <span className="normal-case font-normal">(optional)</span></label>
-                <textarea
-                  className="input min-h-[72px] resize-y"
-                  placeholder="Describe the requirement…"
-                  value={form.description}
-                  onChange={(e) => setForm({ ...form, description: e.target.value })}
-                />
-              </div>
-
-              {error && <p className="text-xs text-destructive">{error}</p>}
-            </div>
-
-            <div className="flex justify-end gap-2 mt-5">
-              <button type="button" onClick={onClose} className="btn-secondary">Cancel</button>
-              <button type="submit" disabled={busy || !form.id.trim()} className="btn-primary">
-                {busy ? 'Creating…' : 'Create requirement'}
-              </button>
-            </div>
-          </motion.form>
-        </motion.div>
-      )}
-    </AnimatePresence>
-    </BodyPortal>
   );
 }
 
