@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import csv
+import io
+
 import pytest
 
 from tests.conftest import make_req
@@ -260,3 +263,41 @@ def test_clean_project_has_no_component_issues(client, wired):
 
     issues = client.get(f"/api/projects/{wired}/validate").json()["issues"]
     assert [i for i in issues if i["type"].startswith("component_")] == []
+
+
+# ── BOM export ───────────────────────────────────────────────────────────────
+
+def test_bom_export_with_hierarchy(client, project):
+    make_component(client, project, "SYS", type="system", name="Avionics System", part_number="PN-001", quantity=1)
+    make_component(client, project, "SUB", type="subsystem", name="Power Supply", part_number="PN-002", parent="SYS", quantity=2)
+    make_component(client, project, "PART", type="part", name="Capacitor", part_number="PN-003", parent="SUB", quantity=10)
+
+    res = client.get(f"/api/projects/{project}/components/export/bom")
+    assert res.status_code == 200
+    assert res.headers["content-type"] == "text/csv; charset=utf-8"
+    assert f"{project}-bom.csv" in res.headers["content-disposition"]
+
+    reader = csv.reader(io.StringIO(res.text))
+    rows = list(reader)
+    assert rows[0] == ["ID", "Name", "Type", "Part Number", "Quantity", "Parent"]
+    # Parent-before-child; indentation is two spaces per level
+    assert rows[1][0] == "SYS"
+    assert rows[2][0] == "  SUB"
+    assert rows[3][0] == "    PART"
+
+
+def test_bom_export_empty_project(client, project):
+    res = client.get(f"/api/projects/{project}/components/export/bom")
+    assert res.status_code == 200
+    assert res.text.strip() == "ID,Name,Type,Part Number,Quantity,Parent"
+
+
+def test_bom_export_csv_quoting(client, project):
+    make_component(client, project, "C-001", name='Pump, Fuel (primary), model "A-1"')
+
+    res = client.get(f"/api/projects/{project}/components/export/bom")
+    reader = csv.reader(io.StringIO(res.text))
+    rows = list(reader)
+    assert rows[0] == ["ID", "Name", "Type", "Part Number", "Quantity", "Parent"]
+    assert rows[1][0] == "C-001"
+    assert rows[1][1] == 'Pump, Fuel (primary), model "A-1"'

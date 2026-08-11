@@ -1110,6 +1110,7 @@ export const api = {
   importUsersCsv: (csv: string) =>
     request<{ created: string[]; skipped: string[]; invites: { username: string; invite_link: string }[] }>('/auth/users/import', { method: 'POST', body: { csv } }),
   exportUsersCsvUrl: '/api/auth/users/export',
+  exportBom: (projectId: string) => `${BASE}/projects/${projectId}/components/export/bom`,
   logoutEverywhere: () => request<{ ok: boolean }>('/auth/logout-everywhere', { method: 'POST' }),
 
   // Application settings (admin) + public instance config

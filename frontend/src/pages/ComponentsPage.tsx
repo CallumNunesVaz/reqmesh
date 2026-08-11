@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { usePersistedState, setCodec } from '../hooks/usePersistedState';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, ChevronRight, Boxes, Square, CheckSquare, Trash2, X, Search, Eye, EyeOff } from 'lucide-react';
+import { Plus, ChevronRight, Boxes, Square, CheckSquare, Trash2, X, Search, Eye, EyeOff, Download } from 'lucide-react';
 import { api, COMPONENT_TYPES, getTruncationInfo, type Component, type ComponentTreeNode, type TruncationInfo } from '../api/client';
 import { useStore } from '../store';
 import { useAuthStore } from '../store/auth';
@@ -171,6 +171,25 @@ export default function ComponentsPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flatNodes, focusedIndex, collapsed, navigate, projectId]);
+
+  const handleExportBom = async () => {
+    if (!projectId) return;
+    try {
+      const url = api.exportBom(projectId);
+      const res = await fetch(url, { credentials: 'include' });
+      if (!res.ok) throw new Error('Export failed');
+      const blob = await res.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `${projectId}-bom.csv`;
+      document.body.appendChild(a);
+      a.click();
+      URL.revokeObjectURL(a.href);
+      a.remove();
+    } catch (err: any) {
+      addToast('error', err.message || 'Export failed');
+    }
+  };
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -453,6 +472,14 @@ export default function ComponentsPage() {
             <option value="">All types</option>
             {COMPONENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
+          <button
+            className="btn-secondary text-xs h-9"
+            title="Download an indented bill of materials (CSV)"
+            disabled={components.length === 0}
+            onClick={handleExportBom}
+          >
+            <Download size={14} /> Export BOM
+          </button>
         </div>
       </div>
 
