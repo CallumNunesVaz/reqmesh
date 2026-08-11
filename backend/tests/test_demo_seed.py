@@ -220,6 +220,30 @@ def test_baseline_membership_spread(demo):
         assert members >= 6, f"baseline {name!r} has only {members} members (need ≥ 6)"
 
 
+def test_frozen_snapshots_hold_only_ticked_members(demo):
+    """A frozen baseline captures exactly what was ticked into it.
+
+    The seeder snapshotted *every* requirement regardless of membership, so the
+    shipped SRR and PDR each claimed all 57 while their curated membership was 9
+    and 20 — the same shape as the freeze bug the app was fixed for, and it made
+    the baseline diff report on requirements that were never in the baseline.
+    Found by auditing the production data root, not by any test.
+    """
+    reqs = demo.list_requirements()
+    frozen = [b for b in demo.list_items("baselines") if b.get("snapshot") is not None]
+    assert frozen, "the demo ships no frozen baseline, so the diff view has nothing to show"
+
+    for baseline in frozen:
+        name = baseline["name"]
+        ticked = {r["id"] for r in reqs if name in (r.get("baselines") or [])}
+        captured = set(baseline["snapshot"].keys())
+        assert captured == ticked, (
+            f"{name}: snapshot holds {len(captured)} requirements but {len(ticked)} are ticked "
+            f"(extra: {sorted(captured - ticked)[:5]}, missing: {sorted(ticked - captured)[:5]})"
+        )
+        assert captured, f"{name} froze nothing — the demo needs a non-empty baseline to diff"
+
+
 def test_verification_case_statuses_varied(demo):
     """All four statuses appear, with the counts from §4."""
     vcs = demo.list_verification_cases()
@@ -282,13 +306,17 @@ def test_frozen_baselines(demo):
     assert cdr is None, "CDR should not be frozen"
     assert trr is None, "TRR should not be frozen"
 
+    reqs = demo.list_requirements()
     for frozen in (srr, pdr):
-        assert frozen.get("frozen") is True, f"{frozen['name']} is not marked frozen"
-        assert frozen.get("frozen_at"), f"{frozen['name']} has no frozen_at"
-        snapshot = frozen.get("snapshot", {})
-        reqs = demo.list_requirements()
-        assert len(snapshot) == len(reqs), (
-            f"{frozen['name']} snapshot has {len(snapshot)} reqs, expected {len(reqs)}"
+        name = frozen["name"]
+        assert frozen.get("frozen") is True, f"{name} is not marked frozen"
+        assert frozen.get("frozen_at"), f"{name} has no frozen_at"
+        # Membership, not the whole project. This asserted `len(reqs)` until
+        # 2026-08-11, which encoded the seeder's sweep as the expected result —
+        # see test_frozen_snapshots_hold_only_ticked_members.
+        members = [r for r in reqs if name in (r.get("baselines") or [])]
+        assert len(frozen.get("snapshot", {})) == len(members), (
+            f"{name} snapshot has {len(frozen.get('snapshot', {}))} reqs, expected {len(members)}"
         )
 
 

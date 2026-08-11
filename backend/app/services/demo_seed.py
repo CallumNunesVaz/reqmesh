@@ -2530,6 +2530,13 @@ def seed_demo_project(data_root: Path, force: bool = False) -> bool:
                          frozen_at: str, status_overrides: dict[str, str] | None = None):
         snapshot = {}
         for rid, r in reqs.items():
+            # Only what is ticked into *this* baseline. Snapshotting every
+            # requirement is the same shape as the bug `freeze_baseline` was
+            # fixed for: it made SRR and PDR claim all 57 requirements while
+            # their curated membership was 9 and 20, so the baseline diff view
+            # reported on requirements that were never in the baseline.
+            if name not in (r.get("baselines") or []):
+                continue
             snap = {
                 "name": r.get("name", ""),
                 "description": r.get("description", ""),
