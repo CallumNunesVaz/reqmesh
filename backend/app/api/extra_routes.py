@@ -816,12 +816,53 @@ def freeze_baseline(project_id: str, name: str, user: dict = Depends(require_mai
 
 
 @router.get("/projects/{project_id}/baselines/{name}/diff")
-def diff_baseline(project_id: str, name: str):
+def diff_baseline(project_id: str, name: str, against: str | None = None):
+    """Compare a frozen baseline against the current requirements or another
+    frozen baseline.
+
+    ``name`` is always the "before" snapshot; ``against`` is the "after".
+    When ``against`` is absent the comparison is against the live requirements.
+
+    Read ``SRR`` against ``PDR`` as "what PDR did to SRR".
+    """
     store = get_store(project_id)
     baseline = store.get_item("baselines", name)
     if baseline is None:
         raise HTTPException(status_code=404, detail="Not found")
+
     snapshot = baseline.get("snapshot", {})
+
+    if against is not None:
+        safe_id(against, "baseline name")
+        against_baseline = store.get_item("baselines", against)
+        if against_baseline is None or not against_baseline.get("frozen"):
+            raise HTTPException(status_code=404,
+                                detail=f"Baseline '{against}' not found or is not frozen")
+        against_snapshot = against_baseline.get("snapshot", {})
+
+        changes = []
+        for rid, r_data in against_snapshot.items():
+            if rid in snapshot:
+                snap = snapshot[rid]
+                diffs = {}
+                for field in ["status", "priority", "name", "description"]:
+                    before_val = snap.get(field, "")
+                    after_val = r_data.get(field, "")
+                    if before_val != after_val:
+                        diffs[field] = {"before": before_val, "after": after_val}
+                if diffs:
+                    changes.append({"id": rid, "type": "modified", "diffs": diffs})
+            else:
+                changes.append({"id": rid, "type": "added"})
+        for rid in snapshot:
+            if rid not in against_snapshot:
+                changes.append({"id": rid, "type": "removed"})
+        return {"baseline": name, "against": against,
+                "symbol": baseline.get("symbol", ""),
+                "description": baseline.get("description", ""),
+                "frozen_at": baseline.get("frozen_at"), "changes": changes,
+                "changed_count": len(changes)}
+
     current = store.list_requirements()
     changes = []
     for r in current:

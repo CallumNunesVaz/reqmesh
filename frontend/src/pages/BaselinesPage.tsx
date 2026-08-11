@@ -82,6 +82,7 @@ export default function BaselinesPage() {
   const [freezing, setFreezing] = useState<string | null>(null);
   const [diffing, setDiffing] = useState<string | null>(null);
   const [diffResult, setDiffResult] = useState<BaselineDiff | null>(null);
+  const [diffAgainst, setDiffAgainst] = useState<string | undefined>(undefined);
   // Which baseline rows are expanded — persisted per project for the same
   // reason as the other list pages; the create/edit form state above it stays
   // a plain useState, since re-opening a stale draft on return would be wrong.
@@ -170,6 +171,7 @@ export default function BaselinesPage() {
   const handleDiff = async (name: string) => {
     if (!projectId) return;
     setDiffing(name);
+    setDiffAgainst(undefined);
     setError('');
     try {
       const d = await api.diffBaseline(projectId, name);
@@ -180,6 +182,17 @@ export default function BaselinesPage() {
       setDiffing(null);
     }
   };
+
+  // Re-fetch when the comparison target changes — including back to undefined,
+  // which is "current state". Bailing on a falsy `diffAgainst` left the previous
+  // baseline-to-baseline result on screen while the select claimed otherwise.
+  useEffect(() => {
+    if (!projectId || !diffResult) return;
+    setError('');
+    api.diffBaseline(projectId, diffResult.baseline, diffAgainst)
+      .then(setDiffResult)
+      .catch((err: any) => setError(err.message || 'Diff failed'));
+  }, [diffAgainst]);
 
   const commitReorder = async (newOrder: string[]) => {
     if (!projectId || !editable) return;
@@ -647,15 +660,32 @@ export default function BaselinesPage() {
                   </p>
                 </div>
                 <button
-                  onClick={() => setDiffResult(null)}
+                  onClick={() => { setDiffResult(null); setDiffAgainst(undefined); }}
                   className="p-1 rounded-md text-muted-foreground hover:text-foreground"
                 >
                   <X size={16} />
                 </button>
               </div>
 
+              <div className="mb-3">
+                <select
+                  className="input text-sm"
+                  value={diffAgainst ?? ''}
+                  onChange={(e) => setDiffAgainst(e.target.value || undefined)}
+                >
+                  <option value="">Current state</option>
+                  {baselines
+                    .filter((b) => b.frozen && b.name !== diffResult.baseline)
+                    .map((b) => (
+                      <option key={b.name} value={b.name}>
+                        {b.symbol ? `${b.symbol} — ` : ''}{b.name}
+                      </option>
+                    ))}
+                </select>
+              </div>
+
               {diffResult.changes.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No changes since freeze — everything matches.</p>
+                <p className="text-sm text-muted-foreground">No changes — everything matches.</p>
               ) : (
                 <div className="space-y-2 max-h-96 overflow-y-auto">
                   {diffResult.changes.map((c) => (

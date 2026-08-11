@@ -174,6 +174,7 @@ export interface BaselineInfo extends BaselineDef {
 
 export interface BaselineDiff {
   baseline: string;
+  against?: string;
   symbol: string;
   description: string;
   frozen_at: string;
@@ -1239,8 +1240,8 @@ export const api = {
     request<{ name: string; symbol: string; description: string; requirements: number }>(
       `/projects/${projectId}/baselines/${encodeURIComponent(name)}/freeze`,
       { method: 'POST' }),
-  diffBaseline: (projectId: string, name: string) =>
-    request<BaselineDiff>(`/projects/${projectId}/baselines/${encodeURIComponent(name)}/diff`),
+  diffBaseline: (projectId: string, name: string, against?: string) =>
+    request<BaselineDiff>(`/projects/${projectId}/baselines/${encodeURIComponent(name)}/diff${against ? `?against=${encodeURIComponent(against)}` : ''}`),
 
   // Specifications
   listSpecifications: (projectId: string) => request<Specification[]>(`/projects/${projectId}/specifications`),
