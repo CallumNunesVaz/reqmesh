@@ -117,19 +117,27 @@ export default function CommandPalette({ projectId }: { projectId: string }) {
   const trimmed = query.trim();
   const showCreateAction = trimmed === '' ||
     ['new', 'create', 'requirement', 'add'].includes(trimmed.toLowerCase());
+  const showSeeAll = trimmed.length > 0;
 
   const pickCreate = useCallback(() => {
     setOpen(false);
     navigate(`/project/${projectId}/requirements?new=1`);
   }, [navigate, projectId]);
 
+  const pickSeeAll = useCallback(() => {
+    setOpen(false);
+    navigate(`/project/${projectId}/search?q=${encodeURIComponent(trimmed)}`);
+  }, [navigate, projectId, trimmed]);
+
+  const totalItems = combinedResults.length + (showCreateAction ? 1 : 0) + (showSeeAll ? 1 : 0);
+
   // Fix cursor bounds when results change
   useEffect(() => {
-    if (cursor >= combinedResults.length && combinedResults.length > 0) {
+    if (cursor >= totalItems && totalItems > 0) {
       setCursor(0);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [combinedResults.length]);
+  }, [totalItems]);
 
   // Recent items — shown at top when query is empty
   const [recentIds, setRecentIds] = useState<string[]>(() => {
@@ -166,11 +174,12 @@ export default function CommandPalette({ projectId }: { projectId: string }) {
 
   const onInputKey = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') { setOpen(false); return; }
-    if (e.key === 'ArrowDown') { e.preventDefault(); setCursor((c) => Math.min(c + 1, Math.max(showCreateAction ? combinedResults.length : combinedResults.length - 1, 0))); }
+    if (e.key === 'ArrowDown') { e.preventDefault(); setCursor((c) => Math.min(c + 1, Math.max(totalItems - 1, 0))); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); setCursor((c) => Math.max(c - 1, 0)); }
     else if (e.key === 'Enter') {
       e.preventDefault();
       if (showCreateAction && cursor === 0) { pickCreate(); return; }
+      if (showSeeAll && cursor === totalItems - 1) { pickSeeAll(); return; }
       const idx = showCreateAction ? cursor - 1 : cursor;
       if (combinedResults[idx]) pick(combinedResults[idx]);
     }
@@ -255,14 +264,15 @@ export default function CommandPalette({ projectId }: { projectId: string }) {
                     const sr = e as SearchResult;
                     const meta = ENTITY_META[sr.kind as keyof typeof ENTITY_META];
                     const Icon = meta?.icon ?? Search;
+                    const cursorIdx = i + (showCreateAction ? 1 : 0);
                     return (
                       <button
                         key={`b-${sr.kind}-${sr.id}`}
-                        data-active={i + (showCreateAction ? 1 : 0) === cursor}
+                        data-active={cursorIdx === cursor}
                         onClick={() => pick(sr)}
-                        onMouseMove={() => setCursor(i + (showCreateAction ? 1 : 0))}
+                        onMouseMove={() => setCursor(cursorIdx)}
                         className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left transition-colors ${
-                          i + (showCreateAction ? 1 : 0) === cursor ? 'bg-accent' : ''
+                          cursorIdx === cursor ? 'bg-accent' : ''
                         }`}
                       >
                         <Icon size={14} className={`${meta?.cls ?? 'text-muted-foreground'} shrink-0`} />
@@ -278,14 +288,15 @@ export default function CommandPalette({ projectId }: { projectId: string }) {
                   const entity = e as IndexedEntity;
                   const meta = ENTITY_META[entity.kind];
                   const Icon = meta.icon;
+                  const cursorIdx = i + (showCreateAction ? 1 : 0);
                   return (
                     <button
                       key={`${entity.kind}-${entity.id}`}
-                      data-active={i + (showCreateAction ? 1 : 0) === cursor}
+                      data-active={cursorIdx === cursor}
                       onClick={() => pick(entity)}
-                      onMouseMove={() => setCursor(i + (showCreateAction ? 1 : 0))}
+                      onMouseMove={() => setCursor(cursorIdx)}
                       className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left transition-colors ${
-                        i + (showCreateAction ? 1 : 0) === cursor ? 'bg-accent' : ''
+                        cursorIdx === cursor ? 'bg-accent' : ''
                       }`}
                     >
                       <Icon size={14} className={`${meta.cls} shrink-0`} />
@@ -295,6 +306,26 @@ export default function CommandPalette({ projectId }: { projectId: string }) {
                     </button>
                   );
                 })
+              )}
+              {showSeeAll && (
+                <>
+                  <div className="border-t my-1 mx-1" />
+                  <button
+                    key="see-all"
+                    data-active={cursor === totalItems - 1 ? 'true' : undefined}
+                    onClick={pickSeeAll}
+                    onMouseMove={() => setCursor(totalItems - 1)}
+                    className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left transition-colors ${
+                      cursor === totalItems - 1 ? 'bg-accent' : ''
+                    }`}
+                  >
+                    <Search size={14} className="text-muted-foreground shrink-0" />
+                    <span className="text-sm text-card-foreground truncate">
+                      See all results for &lsquo;{trimmed}&rsquo;
+                    </span>
+                    <span className="ml-auto text-[10px] text-muted-foreground shrink-0">Search page</span>
+                  </button>
+                </>
               )}
             </div>
 

@@ -23,6 +23,7 @@ const DecisionsPage = lazy(() => import('./pages/DecisionsPage'));
 const DefinitionsPage = lazy(() => import('./pages/DefinitionsPage'));
 const AnalysisPage = lazy(() => import('./pages/AnalysisPage'));
 const AllocationMatrixPage = lazy(() => import('./pages/AllocationMatrixPage'));
+const SearchPage = lazy(() => import('./pages/SearchPage'));
 const PublishPage = lazy(() => import('./pages/PublishPage'));
 const UsersPage = lazy(() => import('./pages/UsersPage'));
 const SystemPage = lazy(() => import('./pages/SystemPage'));
@@ -71,6 +72,7 @@ export default function App() {
           <Route path="/project/:projectId/definitions" element={<DefinitionsPage />} />
           <Route path="/project/:projectId/analysis" element={<AnalysisPage />} />
           <Route path="/project/:projectId/allocation" element={<AllocationMatrixPage />} />
+          <Route path="/project/:projectId/search" element={<SearchPage />} />
           <Route path="/project/:projectId/publish" element={<PublishPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
