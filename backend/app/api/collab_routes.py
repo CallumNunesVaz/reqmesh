@@ -540,7 +540,11 @@ SAMPLE_JUNIT = """<?xml version="1.0" encoding="UTF-8"?>
 
 
 @router.get("/projects/{project_id}/test-results/sample")
-def sample_test_result():
+def sample_test_result(project_id: str):
+    # `project_id` is unused — the sample is the same for every project — but it
+    # has to be declared, or the generated OpenAPI schema describes a path with
+    # a template variable it never defines, which no client generator (and no
+    # schema-driven test) can satisfy.
     """Return a sample JUnit XML showing the expected format for CI import."""
     return PlainTextResponse(content=SAMPLE_JUNIT, media_type="application/xml")
 

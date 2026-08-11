@@ -66,15 +66,12 @@ jobs:
   contract:
     name: API contract (OpenAPI, property-based)
     runs-on: ubuntu-latest
-    # Manual only, for now. The suite is real but not yet trustworthy as a gate:
-    # a full local run took over 25 minutes and parked on a single operation
-    # whose `case.call()` never returned, and it reported one genuine failure
-    # that has not been triaged. Wiring that into every push would give a red or
-    # hung CI on day one, which teaches people to ignore it. Run it from the
-    # Actions tab (or `pytest -m contract`), fix the hang and the failure, then
-    # drop this condition.
-    if: github.event_name == 'workflow_dispatch'
-    timeout-minutes: 30
+    # Was manual-only while the suite could not finish: it parked forever on the
+    # SSE operation, whose `case.call()` never returned, and tripped a
+    # `filter_too_much` health check on a different operation each run. Both are
+    # fixed (see test_openapi_contract.py) and it now runs to completion in
+    # ~75s, so it gates every push like the rest.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0

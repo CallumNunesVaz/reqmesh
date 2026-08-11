@@ -41,6 +41,25 @@ def _upload(client, project, body, **data):
     )
 
 
+class TestSampleTestResult:
+    def test_sample_is_importable_junit_xml(self, client, project):
+        """The sample exists so a CI author can see the expected shape, which is
+        only true if it round-trips through the importer."""
+        res = client.get(f"/api/projects/{project}/test-results/sample")
+        assert res.status_code == 200, res.text
+        assert res.headers["content-type"].startswith("application/xml")
+        assert _upload(client, project, res.text).status_code == 200
+
+    def test_the_path_parameter_is_declared(self, client, project):
+        """The handler took no `project_id` while its path template had one, so
+        the generated OpenAPI schema described a variable it never defined — a
+        path no client generator could fill in. Assert the schema, not just the
+        response, since the response was fine throughout."""
+        spec = client.get("/openapi.json").json()
+        params = spec["paths"]["/api/projects/{project_id}/test-results/sample"]["get"]["parameters"]
+        assert any(p["name"] == "project_id" and p["in"] == "path" for p in params)
+
+
 class TestJunitImport:
     def test_import_updates_verification_case_status(self, client, project):
         _make_vc(client, project, "VCAF0001", "Thrust check")

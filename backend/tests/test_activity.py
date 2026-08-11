@@ -257,3 +257,25 @@ def test_history_window_does_not_drop_entries_at_the_boundary(client):
     # And a window that ends before the edit must not return it.
     res2 = client.get(f"/api/projects/{p}/activity?since=2020-01-01&until=2020-01-02")
     assert res2.json()["total"] == 0
+
+
+class TestActivityRejectsUnparseableDates:
+    """`date.fromisoformat` raises ValueError, which FastAPI does not turn into
+    a response — so a mistyped date came back as a 500 with a stack trace. Found
+    by the generated contract suite, which is exactly its job."""
+
+    def test_unparseable_since_is_a_400(self, client, project):
+        res = client.get(f"/api/projects/{project}/activity", params={"since": "0"})
+        assert res.status_code == 400, res.text
+        assert "since" in res.json()["detail"]
+
+    def test_unparseable_until_is_a_400(self, client, project):
+        res = client.get(f"/api/projects/{project}/activity", params={"until": "not-a-date"})
+        assert res.status_code == 400, res.text
+        assert "until" in res.json()["detail"]
+
+    def test_empty_dates_still_mean_the_default_window(self, client, project):
+        """An empty string is "unset", not "invalid" — the default 90-day
+        window still applies, so the 400 above cannot have been over-eager."""
+        res = client.get(f"/api/projects/{project}/activity", params={"since": "", "until": ""})
+        assert res.status_code == 200, res.text

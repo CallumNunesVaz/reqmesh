@@ -446,11 +446,22 @@ def activity(
     if bucket not in ("day", "week"):
         raise HTTPException(status_code=400, detail="bucket must be 'day' or 'week'")
 
+    # A date the caller typed wrong is a 400. `date.fromisoformat` raises
+    # ValueError, which FastAPI does not translate, so `?since=0` came back as a
+    # 500 with a stack trace in the log.
+    def _as_date(value: str, field: str) -> date:
+        try:
+            return date.fromisoformat(value)
+        except ValueError:
+            raise HTTPException(
+                status_code=400, detail=f"{field} must be an ISO date (YYYY-MM-DD)"
+            ) from None
+
     today = datetime.now(timezone.utc).date()
-    until_dt = date.fromisoformat(until) if until else today
+    until_dt = _as_date(until, "until") if until else today
 
     if since:
-        since_dt = date.fromisoformat(since)
+        since_dt = _as_date(since, "since")
     else:
         since_dt = until_dt - timedelta(days=90)
 
