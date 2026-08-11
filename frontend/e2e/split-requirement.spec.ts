@@ -189,3 +189,61 @@ test('deselecting a row means that child is not created', async ({ app, server }
   const newChildren = afterChildCount - beforeChildCount;
   expect(newChildren).toBe(remainingChecked);
 });
+
+test('rows are numbered, and the numbering follows what is ticked', async ({ app, server }) => {
+  await signIn(app);
+  const { multi } = await findSuitableReqs(app);
+
+  await app.goto(`${server.baseURL}/project/${P}/requirements/${multi.id}`);
+  await app.waitForSelector('main');
+  await setEditMode(app);
+
+  await app.locator('[title="Split into child requirements"]').click();
+  await expect(app.getByText(new RegExp(`${multi.id} keeps its current description`))).toBeVisible();
+
+  const dialog = app.locator('.fixed.inset-0.z-50');
+  const checkboxes = dialog.locator('input[type="checkbox"]');
+  const total = await checkboxes.count();
+  expect(total).toBeGreaterThan(1);
+
+  // Every row is labelled with its position among the children being created —
+  // the ordinal the names deliberately do not carry.
+  await expect(dialog.getByText(`Child 1 of ${total}`)).toBeVisible();
+  await expect(dialog.getByText(`Child ${total} of ${total}`)).toBeVisible();
+
+  // Untick the first: the count drops and the row stops claiming a position,
+  // which a "1 of 3" baked into the name could never do. `uncheck` asserts the
+  // resulting state — a raw click on a checkbox inside its own <label> can
+  // toggle twice and land back where it started.
+  await checkboxes.first().uncheck();
+
+  await expect(dialog.getByText('Not included')).toBeVisible();
+  await expect(dialog.getByText(`Child 1 of ${total - 1}`)).toBeVisible();
+  await expect(dialog.getByText(`Child ${total} of ${total}`)).toHaveCount(0);
+});
+
+test('a generated name is a title, not a chopped-off sentence', async ({ app, server }) => {
+  await signIn(app);
+  const { multi } = await findSuitableReqs(app);
+
+  await app.goto(`${server.baseURL}/project/${P}/requirements/${multi.id}`);
+  await app.waitForSelector('main');
+  await setEditMode(app);
+
+  await app.locator('[title="Split into child requirements"]').click();
+  await expect(app.getByText(new RegExp(`${multi.id} keeps its current description`))).toBeVisible();
+
+  const dialog = app.locator('.fixed.inset-0.z-50');
+  const names = await dialog.locator('input[type="text"]').evaluateAll(
+    (els: HTMLInputElement[]) => els.map((e) => e.value),
+  );
+  expect(names.length).toBeGreaterThan(1);
+
+  for (const name of names) {
+    expect(name.length).toBeLessThanOrEqual(60);
+    expect(name).not.toMatch(/[.,;:\s]$/);
+  }
+  // Siblings share an opening in real requirement text, so the names have to be
+  // distinguishable from each other or the tree shows duplicates.
+  expect(new Set(names).size).toBe(names.length);
+});

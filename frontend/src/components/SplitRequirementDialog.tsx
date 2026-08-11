@@ -35,6 +35,18 @@ export default function SplitRequirementDialog({ open, onClose, projectId, sourc
 
   const selectedCount = rows.filter((r) => r.selected).length;
 
+  /** 1-based position among the *selected* rows — the order they will be
+   *  created in — or 0 for a row that is not being created. */
+  const ordinalOf = (id: number) => {
+    let n = 0;
+    for (const r of rows) {
+      if (!r.selected) continue;
+      n += 1;
+      if (r.id === id) return n;
+    }
+    return 0;
+  };
+
   const toggleRow = (id: number) => {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, selected: !r.selected } : r)));
   };
@@ -152,6 +164,13 @@ export default function SplitRequirementDialog({ open, onClose, projectId, sourc
                       className="mt-1.5"
                     />
                     <div className="flex-1 min-w-0">
+                      {/* The ordinal lives here, not in the name. It is a live
+                          count of what is ticked, so it can't go stale the way
+                          a "1 of 3" written into the data would once a child is
+                          deleted or the parent is split again. */}
+                      <span className="block text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
+                        {ordinalOf(row.id) ? `Child ${ordinalOf(row.id)} of ${selectedCount}` : 'Not included'}
+                      </span>
                       <input
                         type="text"
                         value={row.name}
