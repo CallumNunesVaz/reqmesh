@@ -872,9 +872,9 @@ class Publisher:
         L.append(r"\end{tabularx}")
         L.append(r"\vspace{0.8em}")
 
-        L.append(r"\begin{longtable}{@{}>{\raggedright\arraybackslash}p{2.1cm} "
-                 r">{\raggedright\arraybackslash}p{2.6cm} >{\raggedright\arraybackslash}p{4.4cm} "
-                 r">{\raggedright\arraybackslash}p{2.2cm} >{\raggedright\arraybackslash}p{2.4cm}@{}}")
+        L.append(r"\begin{longtable}{@{}>{\raggedright\arraybackslash}p{\dimexpr0.12\textwidth-2\tabcolsep\relax} "
+                 r">{\raggedright\arraybackslash}p{\dimexpr0.18\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.34\textwidth-2\tabcolsep\relax} "
+                 r">{\raggedright\arraybackslash}p{\dimexpr0.16\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.20\textwidth-2\tabcolsep\relax}@{}}")
         hdr = (r"\rowcolor{tabhead}\textbf{Date} & \textbf{Item} & \textbf{Name} & "
                r"\textbf{Action} & \textbf{User} \\")
         L.append(r"\toprule" + hdr + r"\midrule\endfirsthead")
@@ -899,7 +899,7 @@ class Publisher:
                 if len(e["fields"]) > 12:
                     rows.append(f"\\textit{{+{len(e['fields']) - 12} more fields}}")
                 detail = " \\newline ".join(rows)
-                L.append(f"\\multicolumn{{5}}{{@{{}}p{{\\dimexpr\\textwidth-\\tabcolsep\\relax}}@{{}}}}"
+                L.append(f"\\multicolumn{{5}}{{@{{}}p{{\\dimexpr\\textwidth-2\\tabcolsep\\relax}}@{{}}}}"
                          f"{{\\footnotesize {detail}}} \\\\")
             L.append(r"\midrule")
         L.append(r"\end{longtable}")
@@ -1044,7 +1044,7 @@ class Publisher:
 
         # ── Tables — airy rows, no cramped stretch ────────────────────────
         L.append(r"\setlength{\tabcolsep}{7pt}")
-        L.append(r"\renewcommand{\arraystretch}{1.2}")
+        L.append(r"\renewcommand{\arraystretch}{1.15}")
         L.append(r"\setlength{\LTpre}{6pt}")
         L.append(r"\setlength{\LTpost}{10pt}")
         L.append(r"\setlength{\extrarowheight}{1pt}")
@@ -1243,7 +1243,7 @@ class Publisher:
 
         # Approval / sign-off block.
         L.append(r"{\large\bfseries\color{accent} Approvals}\par\vspace{4pt}")
-        L.append(r"\begin{tabularx}{\textwidth}{l >{\raggedright\arraybackslash}X p{4cm} p{2.4cm}}")
+        L.append(r"\begin{tabularx}{\textwidth}{l >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{\dimexpr0.18\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.14\textwidth-2\tabcolsep\relax}}")
         L.append(r"\toprule")
         L.append(r"\rowcolor{tabhead}\textbf{Role} & \textbf{Name} & \textbf{Signature} & \textbf{Date} \\")
         L.append(r"\midrule")
@@ -1313,7 +1313,7 @@ class Publisher:
                     ref_paths.append(p)
         if sources:
             L.append(r"\textbf{Applicable documents} — sources cited by requirements in this specification:")
-            L.append(r"\begin{longtable}{@{}p{2cm} >{\raggedright\arraybackslash}p{12.5cm}@{}}")
+            L.append(r"\begin{longtable}{@{}>{\raggedright\arraybackslash}p{\dimexpr0.14\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.86\textwidth-2\tabcolsep\relax}@{}}")
             L.append(r"\toprule\rowcolor{tabhead}\textbf{Ref} & \textbf{Document} \\ \midrule")
             L.append(r"\endfirsthead")
             L.append(r"\toprule\rowcolor{tabhead}\textbf{Ref} & \textbf{Document} \\ \midrule")
@@ -1324,7 +1324,7 @@ class Publisher:
             L.append(r"\end{longtable}")
         if ref_paths:
             L.append(r"\textbf{Reference documents} — external artefacts linked from requirements:")
-            L.append(r"\begin{longtable}{@{}p{2cm} >{\raggedright\arraybackslash}p{12.5cm}@{}}")
+            L.append(r"\begin{longtable}{@{}>{\raggedright\arraybackslash}p{\dimexpr0.14\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.86\textwidth-2\tabcolsep\relax}@{}}")
             L.append(r"\toprule\rowcolor{tabhead}\textbf{Ref} & \textbf{Location} \\ \midrule")
             L.append(r"\endfirsthead")
             L.append(r"\toprule\rowcolor{tabhead}\textbf{Ref} & \textbf{Location} \\ \midrule")
@@ -1367,7 +1367,7 @@ class Publisher:
         prio_bar_colors = {"critical": "pricrit", "high": "prihigh", "medium": "primed", "low": "prlow"}
 
         def dist_table(head: str, dist: dict, colors: dict):
-            out = [r"\begin{tabularx}{\textwidth}{X r r >{\raggedright\arraybackslash}p{6cm}}"]
+            out = [r"\begin{tabularx}{\textwidth}{X r r >{\raggedright\arraybackslash}p{\dimexpr0.40\textwidth-2\tabcolsep\relax}}"]
             out.append(r"\toprule")
             out.append(f"\\rowcolor{{tabhead}}\\textbf{{{head}}} & \\textbf{{Count}} & "
                        r"\textbf{\%} & \textbf{Share} \\")
@@ -1421,7 +1421,7 @@ class Publisher:
             L.append(f"\\subsection{{{_latex_escape(display)}}}")
             n = len(reqs_in_type)
             L.append(f"\\textbf{{{n}}} requirement{'s' if n != 1 else ''} of this type.")
-            L.append(r"\begin{longtable}{@{}>{\raggedright\arraybackslash}p{3cm} >{\raggedright\arraybackslash}p{3.5cm} >{\raggedright\arraybackslash}p{2cm} >{\raggedright\arraybackslash}p{2cm}@{}}")
+            L.append(r"\begin{longtable}{@{}>{\raggedright\arraybackslash}p{\dimexpr0.18\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.46\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.18\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.18\textwidth-2\tabcolsep\relax}@{}}")
             L.append(r"\toprule")
             L.append(r"\rowcolor{tabhead}")
             L.append(r"\textbf{ID} & \textbf{Name} & \textbf{Status} & \textbf{Priority} \\")
@@ -1475,9 +1475,9 @@ class Publisher:
                 extra_str = " \\newline ".join(extras_parts)
 
                 L.append(f"\\hypertarget{{req-{rid_esc}}}{{}}"
-                         f"\\texttt{{{rid_esc}}} & {name} & \\statusbadge{{{status}}} & \\prioritybadge{{{priority}}} \\\\")
+                         f"\\texttt{{{rid_esc}}} & {name} & \\statusbadge{{{status}}} & \\prioritybadge{{{priority}}} \\\\[-2pt]")
                 if extra_str:
-                    L.append(f"\\multicolumn{{4}}{{@{{}}p{{\\dimexpr\\textwidth-\\tabcolsep\\relax}}@{{}}}}{{\\small {extra_str}}} \\\\")
+                    L.append(f"\\multicolumn{{4}}{{@{{}}p{{\\dimexpr\\textwidth-2\\tabcolsep\\relax}}@{{}}}}{{\\small {extra_str}}} \\\\[-3pt]")
                 L.append(r"\midrule")
 
             L.append(r"\end{longtable}")
@@ -1488,7 +1488,7 @@ class Publisher:
         begin_section()
         if self.components:
             L.append(r"\section{Components}")
-            L.append(r"\begin{longtable}{@{}>{\raggedright\arraybackslash}p{3cm} >{\raggedright\arraybackslash}p{3.5cm} >{\raggedright\arraybackslash}p{2.5cm} >{\raggedright\arraybackslash}p{3cm} >{\raggedright\arraybackslash}p{2cm}@{}}")
+            L.append(r"\begin{longtable}{@{}>{\raggedright\arraybackslash}p{\dimexpr0.14\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.32\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.16\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.20\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.18\textwidth-2\tabcolsep\relax}@{}}")
             L.append(r"\toprule")
             L.append(r"\rowcolor{tabhead}")
             L.append(r"\textbf{ID} & \textbf{Name} & \textbf{Type} & \textbf{Part Number} & \textbf{Satisfies} \\")
@@ -1519,7 +1519,7 @@ class Publisher:
         begin_section()
         if self.vcs:
             L.append(r"\section{Verification Cases}")
-            L.append(r"\begin{longtable}{@{}>{\raggedright\arraybackslash}p{2.5cm} >{\raggedright\arraybackslash}p{3cm} >{\raggedright\arraybackslash}p{2cm} >{\raggedright\arraybackslash}p{2cm} >{\raggedright\arraybackslash}p{4cm}@{}}")
+            L.append(r"\begin{longtable}{@{}>{\raggedright\arraybackslash}p{\dimexpr0.18\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.30\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.14\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.14\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.24\textwidth-2\tabcolsep\relax}@{}}")
             L.append(r"\toprule")
             L.append(r"\rowcolor{tabhead}")
             L.append(r"\textbf{ID} & \textbf{Name} & \textbf{Method} & \textbf{Status} & \textbf{Verified Requirements} \\")
@@ -1550,7 +1550,7 @@ class Publisher:
         begin_section()
         if risks_list:
             L.append(r"\section{Risk Register}")
-            L.append(r"\begin{longtable}{@{}>{\raggedright\arraybackslash}p{2.5cm} >{\raggedright\arraybackslash}p{3.5cm} >{\raggedright\arraybackslash}p{2cm} >{\raggedright\arraybackslash}p{2cm} >{\raggedright\arraybackslash}p{2cm} >{\raggedright\arraybackslash}p{2.5cm}@{}}")
+            L.append(r"\begin{longtable}{@{}>{\raggedright\arraybackslash}p{\dimexpr0.12\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.28\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.12\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.12\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.12\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.24\textwidth-2\tabcolsep\relax}@{}}")
             L.append(r"\toprule")
             L.append(r"\rowcolor{tabhead}")
             L.append(r"\textbf{ID} & \textbf{Title} & \textbf{Severity} & \textbf{Probability} & \textbf{Status} & \textbf{Mitigation} \\")
@@ -1582,7 +1582,7 @@ class Publisher:
             L.append(r"case(s) that discharge it, and its current verification status. A")
             L.append(r"requirement with no verification case is a coverage gap, flagged")
             L.append(r"\textcolor{rej}{\textbf{none}} below.")
-            L.append(r"\begin{longtable}{@{}>{\ttfamily}p{2.4cm} >{\raggedright\arraybackslash}p{4.3cm} l >{\raggedright\arraybackslash}p{3cm} l@{}}")
+            L.append(r"\begin{longtable}{@{}>{\ttfamily}p{\dimexpr0.12\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.28\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.12\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.28\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.20\textwidth-2\tabcolsep\relax}@{}}")
             hdr_row = (r"\normalfont\textbf{ID} & \normalfont\textbf{Requirement} & "
                        r"\normalfont\textbf{Method} & \normalfont\textbf{Verified By} & "
                        r"\normalfont\textbf{Status} \\")
@@ -1624,7 +1624,7 @@ class Publisher:
                 for b in r.get("baselines", []):
                     baseline_map.setdefault(b, []).append(r["id"])
             if baseline_map:
-                L.append(r"\begin{longtable}{@{}>{\raggedright\arraybackslash}p{4cm} >{\raggedright\arraybackslash}p{2cm} >{\raggedright\arraybackslash}p{7cm}@{}}")
+                L.append(r"\begin{longtable}{@{}>{\raggedright\arraybackslash}p{\dimexpr0.28\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.14\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.58\textwidth-2\tabcolsep\relax}@{}}")
                 L.append(r"\toprule")
                 L.append(r"\rowcolor{tabhead}")
                 L.append(r"\textbf{Baseline} & \textbf{Count} & \textbf{Requirements} \\")
@@ -1652,7 +1652,7 @@ class Publisher:
             crs = self.store.list_items("change_requests")
             if crs:
                 L.append(r"\section{Change Requests}")
-                L.append(r"\begin{longtable}{@{}>{\raggedright\arraybackslash}p{2.5cm} >{\raggedright\arraybackslash}p{3.5cm} >{\raggedright\arraybackslash}p{2cm} >{\raggedright\arraybackslash}p{5cm}@{}}")
+                L.append(r"\begin{longtable}{@{}>{\raggedright\arraybackslash}p{\dimexpr0.14\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.28\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.14\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.44\textwidth-2\tabcolsep\relax}@{}}")
                 L.append(r"\toprule")
                 L.append(r"\rowcolor{tabhead}")
                 L.append(r"\textbf{ID} & \textbf{Title} & \textbf{Status} & \textbf{Affected Requirements} \\")
@@ -1685,7 +1685,7 @@ class Publisher:
                 if r.get("source", "").strip(): quality["source"] += 1
                 if r.get("allocated_to", "").strip(): quality["allocation"] += 1
                 if r.get("relations"): quality["traceability"] += 1
-            L.append(r"\begin{longtable}{@{}>{\raggedright\arraybackslash}p{4cm} >{\raggedright\arraybackslash}p{3cm} >{\raggedright\arraybackslash}p{3cm}@{}}")
+            L.append(r"\begin{longtable}{@{}>{\raggedright\arraybackslash}p{\dimexpr0.38\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.31\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.31\textwidth-2\tabcolsep\relax}@{}}")
             L.append(r"\toprule")
             L.append(r"\rowcolor{tabhead}")
             L.append(r"\textbf{Metric} & \textbf{Count} & \textbf{Percentage} \\")
@@ -1720,7 +1720,7 @@ class Publisher:
             if gaps:
                 L.append(f"{len(gaps)} requirements with issues.")
                 L.append(r"\vspace{1em}")
-                L.append(r"\begin{longtable}{@{}>{\raggedright\arraybackslash}p{3cm} >{\raggedright\arraybackslash}p{3.5cm} >{\raggedright\arraybackslash}p{6.5cm}@{}}")
+                L.append(r"\begin{longtable}{@{}>{\raggedright\arraybackslash}p{\dimexpr0.14\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.30\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.56\textwidth-2\tabcolsep\relax}@{}}")
                 L.append(r"\toprule")
                 L.append(r"\rowcolor{tabhead}")
                 L.append(r"\textbf{ID} & \textbf{Name} & \textbf{Issues} \\")
@@ -1748,7 +1748,7 @@ class Publisher:
             decisions = self.store.list_items("decisions")
             if decisions:
                 L.append(r"\section{Decisions}")
-                L.append(r"\begin{longtable}{@{}>{\raggedright\arraybackslash}p{2.5cm} >{\raggedright\arraybackslash}p{3cm} >{\raggedright\arraybackslash}p{3.5cm} >{\raggedright\arraybackslash}p{3.5cm} >{\raggedright\arraybackslash}p{2cm}@{}}")
+                L.append(r"\begin{longtable}{@{}>{\raggedright\arraybackslash}p{\dimexpr0.12\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.22\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.26\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.26\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.14\textwidth-2\tabcolsep\relax}@{}}")
                 L.append(r"\toprule")
                 L.append(r"\rowcolor{tabhead}")
                 L.append(r"\textbf{ID} & \textbf{Title} & \textbf{Decision} & \textbf{Rationale} & \textbf{Status} \\")
@@ -1783,7 +1783,7 @@ class Publisher:
         # ── Glossary ──────────────────────────────────────────────────────
         if "glossary" in sections:
             L.append(r"\section{Glossary}")
-            L.append(r"\begin{longtable}{@{}>{\raggedright\arraybackslash}p{4cm} >{\raggedright\arraybackslash}p{9cm}@{}}")
+            L.append(r"\begin{longtable}{@{}>{\raggedright\arraybackslash}p{\dimexpr0.25\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.75\textwidth-2\tabcolsep\relax}@{}}")
             L.append(r"\toprule")
             L.append(r"\rowcolor{tabhead}")
             L.append(r"\textbf{Term} & \textbf{Definition} \\")
@@ -1865,7 +1865,7 @@ class Publisher:
                 if req_params:
                     L.append(r"\textbf{Parameters}")
                     L.append(r"\vspace{0.3em}")
-                    L.append(r"\begin{longtable}{@{}>{\raggedright\arraybackslash}p{3cm} >{\raggedright\arraybackslash}p{2.5cm} >{\raggedright\arraybackslash}p{2cm} >{\raggedright\arraybackslash}p{5cm}@{}}")
+                    L.append(r"\begin{longtable}{@{}>{\raggedright\arraybackslash}p{\dimexpr0.20\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.18\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.14\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.48\textwidth-2\tabcolsep\relax}@{}}")
                     L.append(r"\toprule")
                     L.append(r"\rowcolor{tabhead}")
                     L.append(r"\textbf{Name} & \textbf{Value} & \textbf{Unit} & \textbf{Expression} \\")
@@ -1884,7 +1884,7 @@ class Publisher:
                 if req_constraints:
                     L.append(r"\textbf{Constraints}")
                     L.append(r"\vspace{0.3em}")
-                    L.append(r"\begin{longtable}{@{}>{\raggedright\arraybackslash}p{8cm} >{\raggedright\arraybackslash}p{4cm}@{}}")
+                    L.append(r"\begin{longtable}{@{}>{\raggedright\arraybackslash}p{\dimexpr0.64\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.36\textwidth-2\tabcolsep\relax}@{}}")
                     L.append(r"\toprule")
                     L.append(r"\rowcolor{tabhead}")
                     L.append(r"\textbf{Expression} & \textbf{Status} \\")
@@ -1919,7 +1919,7 @@ class Publisher:
                 if steps:
                     L.append(r"\textbf{Test Steps}")
                     L.append(r"\vspace{0.3em}")
-                    L.append(r"\begin{longtable}{@{}>{\raggedright\arraybackslash}p{5cm} >{\raggedright\arraybackslash}p{4cm} >{\raggedright\arraybackslash}p{4cm}@{}}")
+                    L.append(r"\begin{longtable}{@{}>{\raggedright\arraybackslash}p{\dimexpr0.38\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.31\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.31\textwidth-2\tabcolsep\relax}@{}}")
                     L.append(r"\toprule")
                     L.append(r"\rowcolor{tabhead}")
                     L.append(r"\textbf{Action} & \textbf{Expected Result} & \textbf{Actual Result} \\")
@@ -1938,7 +1938,7 @@ class Publisher:
                 if history:
                     L.append(r"\textbf{Execution History}")
                     L.append(r"\vspace{0.3em}")
-                    L.append(r"\begin{longtable}{@{}>{\raggedright\arraybackslash}p{3cm} >{\raggedright\arraybackslash}p{2.5cm} >{\raggedright\arraybackslash}p{2.5cm} >{\raggedright\arraybackslash}p{2.5cm} >{\raggedright\arraybackslash}p{2cm}@{}}")
+                    L.append(r"\begin{longtable}{@{}>{\raggedright\arraybackslash}p{\dimexpr0.18\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.18\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.28\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.18\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.18\textwidth-2\tabcolsep\relax}@{}}")
                     L.append(r"\toprule")
                     L.append(r"\rowcolor{tabhead}")
                     L.append(r"\textbf{Timestamp} & \textbf{Status} & \textbf{Notes} & \textbf{Executor} & \textbf{Duration} \\")
@@ -1968,7 +1968,7 @@ class Publisher:
                 for s in r.get("system_states", []):
                     state_map.setdefault(s, []).append(r["id"])
             if state_map:
-                L.append(r"\begin{longtable}{@{}>{\raggedright\arraybackslash}p{4cm} >{\raggedright\arraybackslash}p{9cm}@{}}")
+                L.append(r"\begin{longtable}{@{}>{\raggedright\arraybackslash}p{\dimexpr0.25\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.75\textwidth-2\tabcolsep\relax}@{}}")
                 L.append(r"\toprule")
                 L.append(r"\rowcolor{tabhead}")
                 L.append(r"\textbf{System State} & \textbf{Requirements} \\")
