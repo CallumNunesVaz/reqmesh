@@ -88,12 +88,14 @@ def normalize_baseline_defs(baselines: list) -> list[dict]:
     guard in list_baselines.
 
     ``description`` is sanitised here for the same reason, and it matters more:
-    the baselines page renders it with ``dangerouslySetInnerHTML``, and
-    `_meta.yaml` never passes through ``load_guard.validate_on_load`` — that
-    runs only on the per-collection read path, so meta-held HTML had no
-    sanitiser on either the read or the write side. Doing it in this function
-    covers both, because every route that reads or writes baseline definitions
-    goes through it.
+    it is rich text that ends up in the baselines page, exports and published
+    documents, and `_meta.yaml` never passes through
+    ``load_guard.validate_on_load`` — that runs only on the per-collection read
+    path, so meta-held HTML had no sanitiser on either the read or the write
+    side. Doing it in this function covers both, because every route that reads
+    or writes baseline definitions goes through it. (The baselines page used to
+    inject it with ``dangerouslySetInnerHTML``, which made this the only guard;
+    it now renders through ``AutoLinkHtml``, so this is the outer of two.)
     """
     result: list[dict] = []
     for item in (baselines or []):

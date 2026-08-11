@@ -104,3 +104,17 @@ test('baselines survive a settings save', async ({ app, server }) => {
   await app.getByRole('button', { name: /^Save/ }).first().click();
   await app.waitForTimeout(1000);
 });
+
+test('a baseline description renders as rich text, not as markup', async ({ app, server }) => {
+  // The description is stored as HTML and was injected with
+  // dangerouslySetInnerHTML until 2026-08-11. It now goes through the app's
+  // whitelisting renderer, so this asserts the swap kept the rendering: the
+  // prose shows, and the tags do not.
+  await signIn(app);
+  await app.goto(`${server.baseURL}/project/${P}/baselines`);
+  await app.waitForSelector('main');
+
+  const main = app.locator('main');
+  await expect(main.getByText('System Requirements Review', { exact: false }).first()).toBeVisible();
+  expect(await main.innerText()).not.toContain('<p>');
+});

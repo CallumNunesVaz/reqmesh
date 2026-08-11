@@ -276,9 +276,15 @@ export default function BaselinesPage() {
             )}
           </div>
           {b.description && (
-            <div
+            // The app's own read-only renderer, as used for the same text in
+            // the edit form below and for every other stored HTML field: it
+            // parses to React through a tag whitelist and drops every
+            // attribute, so nothing executes. This was the one place left
+            // injecting stored HTML directly.
+            <AutoLinkHtml
+              html={b.description}
+              kinds={entityKinds}
               className="text-sm text-muted-foreground mt-1 prose prose-sm dark:prose-invert max-w-none line-clamp-2 opacity-80"
-              dangerouslySetInnerHTML={{ __html: b.description }}
             />
           )}
           <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
