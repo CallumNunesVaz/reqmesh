@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 
 from app.core.config import settings
-from app.core.ids import safe_id
 from app.services.fingerprint import compute_fingerprint
 from app.services.yaml_store import YamlStore
 

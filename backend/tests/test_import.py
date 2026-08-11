@@ -295,7 +295,6 @@ def test_paste_csv_creates_requirements(client, project):
 
 def test_paste_csv_dry_run_writes_no_history(client, project):
     from app.services.yaml_store import YamlStore
-    from pathlib import Path
     store = YamlStore(Path_data_root(project))
     csv_text = _csv_bytes("REQ-DRY-P").decode()
     history_dir = store.root / "history"
