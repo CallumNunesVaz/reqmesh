@@ -1,10 +1,11 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { GitBranch, Plus, X, LayoutGrid, LayoutList, Search } from 'lucide-react';
+import { GitBranch, Plus, X, LayoutGrid, LayoutList, Search, Download } from 'lucide-react';
 import { api } from '../api/client';
 import type { TraceModelLink, Requirement, VerificationCase } from '../api/client';
 import { removeTraceLink } from '../lib/traceLinks';
+import { matrixToCsv, type MatrixCsvInput } from '../lib/matrixCsv';
 import { useAuthStore } from '../store/auth';
 import { useStore } from '../store';
 import AutocompleteInput from '../components/AutocompleteInput';
@@ -96,12 +97,40 @@ export default function TraceMatrixPage() {
   const removeLink = async (link: TraceModelLink) => {
     if (!projectId) return;
     const updated = removeTraceLink(links, link);
-    if (updated === links) return; // not present; nothing to write
+    if (updated === links) return;
     try {
       const stored = updated.filter((l) => l.stored !== false).map(({ stored, holder, target_collection, ...rest }) => rest);
       await api.updateTraces(projectId, { links: stored });
       setLinks(updated);
     } catch (err: any) { setError(err.message || 'Failed to remove link'); }
+  };
+
+  const handleDownload = () => {
+    if (!projectId) return;
+    const input: MatrixCsvInput = {
+      columns: matrixTargets.map((tgt) => ({
+        id: tgt,
+        label: nameOf(tgt) || tgt,
+      })),
+      rows: matrixSources.map((src) => ({
+        id: src,
+        label: nameOf(src) || src,
+        cells: matrixTargets.map((tgt) =>
+          filteredLinks.some((l) => l.source === src && l.target === tgt),
+        ),
+      })),
+      rowHeader: 'Source',
+    };
+    const csv = matrixToCsv(input);
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${projectId}-trace-matrix.csv`;
+    document.body.appendChild(a);
+    a.click();
+    URL.revokeObjectURL(url);
+    a.remove();
   };
 
   // A general trace matrix: rows are every distinct link source, columns every
@@ -134,6 +163,13 @@ export default function TraceMatrixPage() {
             className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs transition-colors ${viewMode === 'grid' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-accent'}`}
           >
             <LayoutGrid size={13} /> Grid
+          </button>
+          <button
+            onClick={handleDownload}
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            title="Download this matrix as CSV"
+          >
+            <Download size={13} /> CSV
           </button>
         </div>
       </motion.div>

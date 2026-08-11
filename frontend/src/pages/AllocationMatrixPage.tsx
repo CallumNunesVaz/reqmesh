@@ -1,10 +1,11 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Search, Grid3X3, Check, Loader, ArrowUpDown } from 'lucide-react';
+import { Search, Grid3X3, Check, Loader, ArrowUpDown, Download } from 'lucide-react';
 import { api, type AllocationMatrixData, type MatrixAxis } from '../api/client';
 import { EntityLink, type EntityKind } from '../components/entities';
 import { REQUIREMENT_TYPES, REQUIREMENT_TYPE_META } from '../lib/requirementTypes';
+import { matrixToCsv, type MatrixCsvInput } from '../lib/matrixCsv';
 import { useAuthStore } from '../store/auth';
 
 /** The three matrices, and the entity kind each column links to.
@@ -91,6 +92,32 @@ export default function AllocationMatrixPage() {
     }
   };
 
+  const handleDownload = () => {
+    if (!data || !projectId) return;
+    const input: MatrixCsvInput = {
+      columns: data.columns.map((c) => ({ id: c.id, label: c.name })),
+      rows: data.rows.map((r) => ({
+        id: r.row_id || r.req_id,
+        label: data.row_kind === 'components' ? r.row_name : (r.req_name || r.row_name),
+        cells: data.columns.map((c) => r.cells[c.id] ?? false),
+      })),
+      rowHeader: data.row_kind === 'components' ? 'Component' : 'Requirement',
+    };
+    const csv = matrixToCsv(input);
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    // The axis names the file: all four axes render at the same URL, so a
+    // fixed name means the components export and the risks export land in the
+    // downloads folder as indistinguishable siblings.
+    a.download = `${projectId}-allocation-${axis}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    URL.revokeObjectURL(url);
+    a.remove();
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -148,6 +175,13 @@ export default function AllocationMatrixPage() {
               title="Transpose (swap rows and columns)"
             >
               <ArrowUpDown size={14} />
+            </button>
+            <button
+              onClick={handleDownload}
+              className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              title="Download this matrix as CSV"
+            >
+              <Download size={14} />
             </button>
           </div>
         </div>
