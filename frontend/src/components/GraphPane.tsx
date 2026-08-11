@@ -1559,7 +1559,13 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
   // hidden behind a folded parent group.
   useEffect(() => {
     if (!entranceDone || !selectedReqId || selectedReqId === prevSelectedRef.current) return;
-    prevSelectedRef.current = selectedReqId;
+    // A selection can land before the node exists — executing a change request
+    // that proposes a new requirement selects it while the graph reload is
+    // still in flight. Consuming the selection here would frame nothing and
+    // never retry, so wait for the data instead. `reqs` and `nodes` are deps
+    // for exactly this; the prevSelectedRef guard above stops the extra runs
+    // from costing anything once the framing has happened.
+    if (!reqs.some((r) => r.id === selectedReqId)) return;
 
     const byId = new Map(reqs.map(r => [r.id, r]));
     const toExpand = new Set<string>();
@@ -1573,6 +1579,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
       cursor = ancestor;
     }
     if (toExpand.size > 0) {
+      prevSelectedRef.current = selectedReqId;
       const newCollapsed = new Set(collapsed);
       const newGroupsOnly = new Set(groupsOnly);
       for (const id of toExpand) { newCollapsed.delete(id); newGroupsOnly.delete(id); }
@@ -1581,6 +1588,12 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
       refocusRef.current = selectedReqId;
       return;
     }
+
+    // Ancestors are all open, so the node belongs on screen — if it is not laid
+    // out yet the relayout is still in flight. Wait for it rather than framing
+    // an empty subset.
+    if (!nodes.some((n) => n.id === selectedReqId)) return;
+    prevSelectedRef.current = selectedReqId;
 
     // Single-frame delay so dimmed node states commit before camera moves.
     const raf = requestAnimationFrame(() => {
@@ -1610,7 +1623,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
     });
     return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedReqId, entranceDone]);
+  }, [selectedReqId, entranceDone, reqs, nodes]);
 
   // ── "Show derivation" (triggered from the requirement inspector) ─────────
   // Walk incoming relations transitively from the target: everything that

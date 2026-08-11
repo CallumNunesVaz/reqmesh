@@ -1280,7 +1280,7 @@ export const api = {
   getCRRedline: (projectId: string, crId: string) =>
     request<CRRedline>(`/projects/${projectId}/change-requests/${crId}/redline`),
   executeChangeRequest: (projectId: string, crId: string) =>
-    request<{ id: string; status: string; updated: number }>(`/projects/${projectId}/change-requests/${crId}/execute`, { method: 'POST' }),
+    request<{ id: string; status: string; updated: number; created: string[] }>(`/projects/${projectId}/change-requests/${crId}/execute`, { method: 'POST' }),
   rejectChangeRequest: (projectId: string, crId: string) =>
     request<{ id: string; status: string }>(`/projects/${projectId}/change-requests/${crId}/reject`, { method: 'POST' }),
   getRequirementFingerprint: (projectId: string, reqId: string) =>

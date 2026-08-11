@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, Depends, File, Form, Request, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from app.core.config import settings
 from app.core.dependencies import get_store, require_edit, require_maintain, require_admin
@@ -22,6 +22,7 @@ from app.core.ids import safe_id
 from app.api.router import normalize_baseline_defs, _check_precondition
 from app.api._utils import sorted_by_modified, read_upload_capped, paginate
 from app.models.change_request import ChangeRequestCreate, ChangeRequestUpdate
+from app.models.requirement import RequirementCreate
 from app.services.change_requests import redline as compute_redline
 from app.models.risk import RiskCreate, RiskUpdate, CommentCreate, DecisionRecordCreate, DecisionRecordUpdate
 from app.services.history import record_change
@@ -138,6 +139,11 @@ def execute_change_request(
 
     # 2. Apply each target's proposal.
     updated_count = 0
+    #: Ids this execution brought into existence, in redline order. The caller
+    #: needs them to focus the new requirement afterwards, and cannot derive
+    #: them from `cr["creates"]` — that lists what was *proposed*, including
+    #: entries with no proposal body, which are skipped below.
+    created_ids: list[str] = []
     for target in rl["targets"]:
         target_id = target["id"]
         proposed = changes.get(target_id, {})
@@ -146,10 +152,22 @@ def execute_change_request(
 
         if target.get("creates"):
             safe_id(target_id)
-            new_req = {**proposed, "id": target_id}
-            store.create_requirement(new_req)
-            record_change(store, target_id, "create", None, new_req, user.get("username", ""))
+            # Go through the same model and defaults as POST /requirements. A
+            # change request proposes only the fields it cares about, so writing
+            # `proposed` straight out produced a requirement with no type, no
+            # priority and no status — one the UI could not render.
+            try:
+                new_req = RequirementCreate(**{**proposed, "id": target_id}).model_dump(mode="json")
+            except ValidationError as exc:
+                raise HTTPException(status_code=400, detail=f"{target_id}: {exc.errors()[0]['msg']}") from exc
+            new_req.setdefault("attributes", [])
+            new_req.setdefault("relations", [])
+            new_req.setdefault("verification_cases", [])
+            new_req.setdefault("verification_status", "pending")
+            result = store.create_requirement(new_req)
+            record_change(store, target_id, "create", None, result, user.get("username", ""))
             updated_count += 1
+            created_ids.append(target_id)
             continue
 
         before = store.get_requirement(target_id)
@@ -170,7 +188,7 @@ def execute_change_request(
     })
     rc(store, cr_id, "update", before_cr, updated_cr, user.get("username", ""))
 
-    return {"id": cr_id, "status": "implemented", "updated": updated_count}
+    return {"id": cr_id, "status": "implemented", "updated": updated_count, "created": created_ids}
 
 
 @router.post("/projects/{project_id}/change-requests/{cr_id}/reject")

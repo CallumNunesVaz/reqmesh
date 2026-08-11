@@ -198,6 +198,93 @@ def test_mixed_cr_applies_both(client, project):
     assert new_req["description"] == "created"
 
 
+def test_execute_creates_requirement_with_full_defaults(client, project):
+    """A CR proposes only the fields it cares about, so the created requirement
+    must still come out with the same defaults POST /requirements applies.
+    Writing the bare proposal produced a record with no type, priority or
+    status — one the UI crashed on."""
+    store = _store(client, project)
+    _make_cr(store, "CR-DEF",
+             changes={"NEW-DEF": {"name": "Sparse proposal"}},
+             creates=["NEW-DEF"])
+
+    res = client.post(f"/api/projects/{project}/change-requests/CR-DEF/execute")
+    assert res.status_code == 200, res.text
+
+    req = store.get_requirement("NEW-DEF")
+    assert req["type"] == "functional"
+    assert req["priority"] == "medium"
+    assert req["status"] == "proposed"
+    assert req["attributes"] == []
+    assert req["relations"] == []
+    assert req["verification_cases"] == []
+    assert req["verification_status"] == "pending"
+
+
+def test_execute_sanitises_proposed_description(client, project):
+    """The create goes through RequirementCreate, so a script payload proposed
+    in a change request is cleaned exactly as it is on the normal create path."""
+    store = _store(client, project)
+    _make_cr(store, "CR-XSS",
+             changes={"NEW-XSS": {"name": "x", "description": "<p>ok</p><script>alert(1)</script>"}},
+             creates=["NEW-XSS"])
+
+    res = client.post(f"/api/projects/{project}/change-requests/CR-XSS/execute")
+    assert res.status_code == 200, res.text
+    assert "<script>" not in store.get_requirement("NEW-XSS")["description"]
+
+
+def test_execute_rejects_invalid_proposed_field(client, project):
+    """An unusable value in the proposal is a 400, not a half-written record."""
+    store = _store(client, project)
+    _make_cr(store, "CR-INV",
+             changes={"NEW-INV": {"name": "x", "priority": "urgent-ish"}},
+             creates=["NEW-INV"])
+
+    res = client.post(f"/api/projects/{project}/change-requests/CR-INV/execute")
+    assert res.status_code == 400, res.text
+    assert store.get_requirement("NEW-INV") is None
+
+
+# ── Execute reports what it created ───────────────────────────────────────────
+
+def test_execute_returns_created_ids(client, project):
+    """Execute reports the ids it brought into existence, so the caller can focus
+    the new requirement instead of guessing which target was the new one."""
+    store = _store(client, project)
+    store.create_requirement({"id": "SYST-R1", "name": "R1 Orig"})
+    fp = compute_fingerprint(store.get_requirement("SYST-R1"))
+    _make_cr(store, "CR-R1",
+             changes={
+                 "SYST-R1": {"name": "R1 Updated"},
+                 "NEW-R1": {"name": "New R1"},
+             },
+             base_fingerprints={"SYST-R1": fp},
+             creates=["NEW-R1"])
+
+    res = client.post(f"/api/projects/{project}/change-requests/CR-R1/execute")
+    assert res.status_code == 200, res.text
+    data = res.json()
+    # Only the creation, not the edit.
+    assert data["created"] == ["NEW-R1"]
+    assert data["updated"] == 2
+
+
+def test_execute_returns_empty_created_for_edit_only_cr(client, project):
+    """An edit-only CR reports no creations — the field is always present so the
+    caller never has to distinguish absent from empty."""
+    store = _store(client, project)
+    store.create_requirement({"id": "SYST-R2", "name": "R2 Orig"})
+    fp = compute_fingerprint(store.get_requirement("SYST-R2"))
+    _make_cr(store, "CR-R2",
+             changes={"SYST-R2": {"name": "R2 Updated"}},
+             base_fingerprints={"SYST-R2": fp})
+
+    res = client.post(f"/api/projects/{project}/change-requests/CR-R2/execute")
+    assert res.status_code == 200, res.text
+    assert res.json()["created"] == []
+
+
 # ── Unsafe id in creates ──────────────────────────────────────────────────────
 
 def test_unsafe_id_in_creates_is_rejected(client, project):

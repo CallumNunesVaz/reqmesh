@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { usePersistedState } from '../hooks/usePersistedState';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Trash2, GitPullRequest, Square, CheckSquare, X, Search, Play, Edit3, Ban } from 'lucide-react';
 import { api, type ChangeRequest, type Component, type CRRedline, CR_URGENCIES } from '../api/client';
@@ -17,6 +17,7 @@ import { CommentThread } from '../components/CommentThread';
 import { useToasts } from '../components/Toast';
 import { useRangeSelection } from '../hooks/useRangeSelection';
 import { useBulkActions } from '../hooks/useBulkActions';
+import { useSelectedReq, useContextPane } from '../components/Layout';
 
 const statusBadges: Record<string, string> = {
   submitted: 'border-blue-500/30 bg-blue-500/10 text-blue-400',
@@ -72,6 +73,10 @@ export default function ChangeRequestsPage() {
   const dataVersion = useStore((s) => s.dataVersion);
   const entityKinds = useEntityKinds(projectId);
   const showConfirm = useConfirm();
+  const navigate = useNavigate();
+  const { selectReq } = useSelectedReq();
+  const { openContext } = useContextPane();
+  const bumpGraphVersion = useStore((s) => s.bumpGraphVersion);
   // Persisted per project — see RequirementsPage/ComponentsPage for why.
   const pk = (field: string) => (projectId ? `rt-crs-${field}-${projectId}` : null);
   const [search, setSearch] = usePersistedState(pk('search'), '');
@@ -151,14 +156,35 @@ export default function ChangeRequestsPage() {
 
   const handleExecute = async (crId: string, rl: CRRedline | undefined) => {
     const blocked = rl?.blocked;
+    // Creating a requirement is not the same act as editing one, so the gate
+    // says so: the reviewer is told exactly which ids this brings into
+    // existence before it happens, not just that changes will be applied.
+    const newIds = (rl?.targets ?? []).filter((t) => t.creates).map((t) => t.id);
+    const newClause = newIds.length
+      ? ` This creates ${newIds.length} new requirement${newIds.length === 1 ? '' : 's'}: ${newIds.join(', ')}.`
+      : '';
     const msg = blocked
       ? `This change request is stale — ${rl?.targets.filter(t => t.stale).map(t => t.id).join(', ')} changed since it was raised. Execute anyway?`
-      : 'Apply all proposed changes?';
-    const ok = await showConfirm(msg, 'Execute');
+      : `Apply all proposed changes?${newClause}`;
+    const ok = await showConfirm(msg, newIds.length ? 'Create & apply' : 'Execute');
     if (!ok) return;
     try {
-      await api.executeChangeRequest(projectId!, crId);
+      const result = await api.executeChangeRequest(projectId!, crId);
       load();
+      // A requirement that did not exist a moment ago is worth landing on, so
+      // approving the CR hands you the same view as creating it by hand:
+      // reload the graph so the new node exists, select it (the canvas expands
+      // its ancestors and frames it), reveal the inspector in case it was
+      // collapsed, and open the requirement itself.
+      const created = result.created ?? [];
+      const focusId = created[0];
+      if (focusId) {
+        bumpGraphVersion();
+        selectReq(focusId);
+        openContext();
+        addToast('success', created.length === 1 ? `Created ${focusId}` : `Created ${created.join(', ')}`);
+        navigate(`/project/${projectId}/requirements/${focusId}`);
+      }
     } catch (err: any) { setError(err.message || 'Failed to execute'); }
   };
 
