@@ -8,14 +8,14 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Header, HTTPException, Query, Depends, Request, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from app.core.dependencies import get_store, require_maintain, require_maintain_global, require_admin
 from app.core.ids import safe_id
 from app.core.rate_limit import rate_limit
 from app.core.tree_utils import build_flat_tree
 from app.models.baseline import DUE_DATE_RE
-from app.models.requirement import RequirementCreate, RequirementUpdate
+from app.models.requirement import Requirement, RequirementCreate, RequirementUpdate
 from app.services.load_guard import is_safe_id, validate_on_load
 from app.services.rename import matches_scheme, rename_requirement, suggest_id
 from app.services.sanitize import sanitize_html
@@ -781,6 +781,78 @@ def delete_requirement(project_id: str, req_id: str, force: bool = False, user: 
         raise HTTPException(status_code=404, detail="Requirement not found")
     record_change(store, req_id, "delete", before, None, user.get("username", ""))
     return {"ok": True}
+
+
+@router.post("/projects/{project_id}/requirements/{req_id}/history/{entry_id}/restore")
+def restore_requirement_version(project_id: str, req_id: str, entry_id: str,
+                                user: dict = Depends(require_maintain)):
+    store = get_store(project_id)
+    safe_id(req_id, "requirement id")
+    safe_id(entry_id, "entry id")
+
+    history = store.list_history(req_id)
+    entry = None
+    for h in history:
+        if h.get("id") == entry_id:
+            entry = h
+            break
+
+    if entry is None:
+        raise HTTPException(status_code=404, detail="History entry not found")
+
+    if entry.get("action") != "update":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot restore a {entry.get('action')} entry — only update entries can be restored",
+        )
+
+    req = store.get_requirement(req_id)
+    if req is None:
+        raise HTTPException(status_code=404, detail="Requirement not found")
+
+    changes = entry.get("changes", {})
+    patch = {}
+    for field, diff in changes.items():
+        if "before" not in diff:
+            continue
+        value = diff["before"]
+        if value is None:
+            # The field did not exist before this change. Writing null back
+            # would leave a requirement whose `rationale` is None where every
+            # reader expects a string, so restore the model's own empty value.
+            model_field = Requirement.model_fields.get(field)
+            if model_field is None:
+                continue
+            value = model_field.get_default(call_default_factory=True)
+        patch[field] = value
+
+    if not patch:
+        raise HTTPException(status_code=400, detail="No fields to restore")
+
+    # History files are hand-editable and arrive by git pull, so a recorded
+    # `before` is not trusted input. The normal PUT validates through this
+    # model; a restore that skipped it could write a status no enum allows.
+    # Dumping back out in json mode also flattens enum defaults to their plain
+    # values — the YAML writer cannot represent an enum member.
+    try:
+        patch = RequirementUpdate.model_validate(patch).model_dump(mode="json", exclude_unset=True)
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"History entry holds a value this requirement cannot take: {exc.errors()[0]['msg']}",
+        ) from None
+
+    if not patch:
+        raise HTTPException(status_code=400, detail="No restorable fields in that entry")
+
+    before = dict(req)
+    result = store.update_requirement(req_id, patch)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Requirement not found")
+
+    attach_verification_cases(store, [result])
+    record_change(store, req_id, "update", before, result, user.get("username", ""))
+    return result
 
 
 # ── Cascade Operations ───────────────────────────────────────────────────────

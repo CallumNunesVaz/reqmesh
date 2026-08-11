@@ -700,6 +700,7 @@ Key environment variables:
 | POST | `/api/projects/{id}/evaluation/impact` | What-if preview: re-evaluate with hypothetical overrides + dependency-ordered impact trace |
 | GET | `/api/projects/{id}/requirements/{rid}/impact` | Impact analysis (dependents + cascades) |
 | GET | `/api/projects/{id}/history/{item_id}` | Field-level change history for any entity |
+| POST | `/api/projects/{id}/requirements/{req_id}/history/{entry_id}/restore` | Restore a requirement to the state before a chosen update entry |
 | GET | `/api/projects/{id}/activity` | Audit activity bucketed by date and entity kind (`since`, `until`, `bucket=day\|week`) |
 | GET | `/api/projects/{id}/suspect-links` | Links whose target changed since review |
 | GET | `/api/projects/{id}/search` | Full-text search across all entities |

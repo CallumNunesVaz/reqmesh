@@ -80,3 +80,31 @@ def test_contributor_cannot_rename_a_requirement(project, maintainer_client, con
     r = contributor_client.post(f"/api/projects/{project}/requirements/R9/rename",
                                 json={"new_id": "R10"})
     assert r.status_code == 403, f"contributor renamed a requirement: {r.status_code}"
+
+
+def test_viewer_cannot_restore_requirement(project, maintainer_client, guest_client):
+    """A viewer (guest) gets 403 on the restore endpoint."""
+    maintainer_client.post(f"/api/projects/{project}/requirements",
+                           json={"id": "R-VIEW", "name": "x"})
+    maintainer_client.put(f"/api/projects/{project}/requirements/R-VIEW",
+                          json={"name": "y"})
+    history = maintainer_client.get(f"/api/projects/{project}/history/R-VIEW").json()
+    entry_id = history[0]["id"]
+
+    r = guest_client.post(
+        f"/api/projects/{project}/requirements/R-VIEW/history/{entry_id}/restore")
+    assert r.status_code == 403, f"viewer restored a requirement: {r.status_code}"
+
+
+def test_contributor_cannot_restore_requirement(project, maintainer_client, contributor_client):
+    """A contributor gets 403 on the restore endpoint."""
+    maintainer_client.post(f"/api/projects/{project}/requirements",
+                           json={"id": "R-CONT", "name": "x"})
+    maintainer_client.put(f"/api/projects/{project}/requirements/R-CONT",
+                          json={"name": "y"})
+    history = maintainer_client.get(f"/api/projects/{project}/history/R-CONT").json()
+    entry_id = history[0]["id"]
+
+    r = contributor_client.post(
+        f"/api/projects/{project}/requirements/R-CONT/history/{entry_id}/restore")
+    assert r.status_code == 403, f"contributor restored a requirement: {r.status_code}"

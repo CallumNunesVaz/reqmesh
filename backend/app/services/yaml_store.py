@@ -500,7 +500,11 @@ class YamlStore:
         d = self.history_dir(item_id)
         if not d.exists():
             return []
-        entries = [self._read_yaml(f) for f in d.glob("*.yaml")]
+        entries = []
+        for f in d.glob("*.yaml"):
+            entry = self._read_yaml(f)
+            entry["id"] = f.stem
+            entries.append(entry)
         return sorted(entries, key=lambda e: e.get("timestamp", ""), reverse=True)
 
     def append_history(self, item_id: str, entry: dict) -> None:

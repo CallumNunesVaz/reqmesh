@@ -991,6 +991,7 @@ export interface ImpactResultData {
 }
 
 export interface HistoryEntry {
+  id: string;
   timestamp: string;
   action: string;
   user: string;
@@ -1474,6 +1475,8 @@ export const api = {
   // History
   getItemHistory: (projectId: string, itemId: string) =>
     request<HistoryEntry[]>(`/projects/${projectId}/history/${itemId}`),
+  restoreRequirementVersion: (projectId: string, reqId: string, entryId: string) =>
+    request<Requirement>(`/projects/${projectId}/requirements/${reqId}/history/${encodeURIComponent(entryId)}/restore`, { method: 'POST' }),
 
   // Git
   gitLog: (projectId: string, limit: number = 50) =>
