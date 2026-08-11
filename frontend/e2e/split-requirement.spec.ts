@@ -16,7 +16,7 @@ async function findSuitableReqs(app: any): Promise<{ multi: DemoReq; single: Dem
 
   const hasMultiple = (r: DemoReq) => {
     const plain = stripHtml(r.description || '');
-    const clauses = plain.split(/\.\s+|\;\s+|\n/).map((c) => c.trim()).filter((c) => c.length >= minLength);
+    const clauses = plain.split(/\.\s+|;\s+|\n/).map((c) => c.trim()).filter((c) => c.length >= minLength);
     return clauses.length >= 2;
   };
 
