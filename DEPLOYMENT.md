@@ -110,6 +110,21 @@ configuration variable is set in the environment — an upgrade that quietly
 reshaped the deployment because a `REQMESH_PROXY` was left exported is not an
 upgrade. Drop `--upgrade` to apply such a change deliberately.
 
+### Version-specific notes
+
+**Upgrading to 0.2.4 invalidates outstanding password-reset and invitation
+links.** Reset tokens are now stored hashed, so the file no longer holds a
+usable copy of anyone's token — but entries written by an earlier version are
+keyed by the raw token and cannot be told apart from a hash, so they are deleted
+rather than converted. Anyone mid-reset asks for a new link; **any invitation you
+sent and that has not yet been accepted must be re-sent** from Users.
+
+The same upgrade repairs file permissions in the state directory (an older
+bootstrap path could leave `users.yaml` world-readable) and will refuse to start
+if `RT_STATE_DIR` resolves inside `RT_DATA_ROOT` — a layout in which git
+auto-commit would commit and push your password hashes. If that refusal fires,
+move the state directory outside the data root and restart; nothing is lost.
+
 A plain re-run behaves the same way for settings, but does allow changes:
 
 ```bash
