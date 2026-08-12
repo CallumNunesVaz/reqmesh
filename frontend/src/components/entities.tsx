@@ -104,6 +104,21 @@ export const ENTITY_META: Record<EntityKind, EntityMeta> = {
 };
 
 /**
+ * The plural page/section titles for the entity-kind list pages whose nav label
+ * and heading must read the same name. Derived from {@link ENTITY_META}.label so
+ * the sidebar and the page heading cannot drift apart.
+ */
+export const SECTION_TITLES = {
+  verification: `${ENTITY_META.verification.label}s`,
+  analysis: `${ENTITY_META.analysis.label}s`,
+  // Not an entity kind — the matrix is a view over trace links, so there is no
+  // ENTITY_META label to derive from. It belongs here anyway: the nav said
+  // "Trace Matrix" and the page said "Traceability Matrix", which is the same
+  // drift the other two entries exist to prevent.
+  traces: 'Traceability Matrix',
+} as const;
+
+/**
  * The deep link for an entity, or `null` for kinds that have no page.
  *
  * Prefer this over reaching into `ENTITY_META[kind].path` directly: it forces

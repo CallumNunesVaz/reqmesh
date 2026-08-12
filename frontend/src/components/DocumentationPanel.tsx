@@ -79,12 +79,12 @@ const DOCS: DocSection[] = [
     render: () => (
       <>
         <H2>Welcome to reqmesh</H2>
-        <P>Reqmesh is a git-native requirements management tool. All your data lives in human-readable YAML files alongside your source code — no databases, no lock-in.</P>
+        <P>reqmesh is a git-native requirements management tool. All your data lives in human-readable YAML files alongside your source code — no databases, no lock-in.</P>
 
         <Callout variant="tip">New here? Press <Kbd>F1</Kbd> any time to open this documentation. Press <Kbd>Ctrl+K</Kbd> to jump to any entity by name or ID.</Callout>
 
         <H3>ISO 15288 Alignment</H3>
-        <P>Reqmesh follows <strong className="text-card-foreground">ISO/IEC 15288:2023</strong>. The matrix below shows the current support level for each of the ~30 technical and management processes.</P>
+        <P>reqmesh follows <strong className="text-card-foreground">ISO/IEC 15288:2023</strong>. The matrix below shows the current support level for each of the ~30 technical and management processes.</P>
         <div className="flex items-center gap-4 mb-3 text-[10px]">
           <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-emerald-500/30 border border-emerald-500/40" /> Full</span>
           <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-amber-500/30 border border-amber-500/40" /> Partial</span>
@@ -92,7 +92,7 @@ const DOCS: DocSection[] = [
         </div>
         <table className="w-full text-left mb-4">
           <thead>
-            <tr className="border-b"><th className="px-3 py-2 text-xs font-medium text-muted-foreground">Process Group / Clause</th><th className="px-3 py-2 text-xs font-medium text-muted-foreground">ISO 15288 Process</th><th className="px-3 py-2 text-xs font-medium text-muted-foreground">Reqmesh Support</th><th className="px-3 py-2 text-xs font-medium text-muted-foreground">Notes</th></tr>
+            <tr className="border-b"><th className="px-3 py-2 text-xs font-medium text-muted-foreground">Process Group / Clause</th><th className="px-3 py-2 text-xs font-medium text-muted-foreground">ISO 15288 Process</th><th className="px-3 py-2 text-xs font-medium text-muted-foreground">reqmesh Support</th><th className="px-3 py-2 text-xs font-medium text-muted-foreground">Notes</th></tr>
           </thead>
           <tbody>{[
             ['Agreement', '§6.1.1', 'Acquisition', 0, '—'],
@@ -106,7 +106,7 @@ const DOCS: DocSection[] = [
             ['Technical Mgmt', '§6.3.1', 'Project Planning', 1, 'Effort + backlog (no schedule/WBS)'],
             ['Technical Mgmt', '§6.3.2', 'Assessment & Control', 1, 'Metrics dashboard'],
             ['Technical Mgmt', '§6.3.3', 'Decision Mgmt', 2, 'Decision Records'],
-            ['Technical Mgmt', '§6.3.4', 'Risk Mgmt', 2, 'Risks (severity × probability, linked to requirements)'],
+            ['Technical Mgmt', '§6.3.4', 'Risk Mgmt', 2, 'Risks (severity × likelihood, linked to requirements)'],
             ['Technical Mgmt', '§6.3.5', 'Configuration Mgmt', 2, 'Baselines + Change Requests + Git integration'],
             ['Technical Mgmt', '§6.3.6', 'Information Mgmt', 1, 'YAML store + git versioning'],
             ['Technical Mgmt', '§6.3.7', 'Measurement', 1, 'Parametrics + evaluation (no formal measurement plan)'],
@@ -168,7 +168,7 @@ const DOCS: DocSection[] = [
     render: () => (
       <>
         <H2>Keyboard Shortcuts</H2>
-        <P>Reqmesh can be used entirely via keyboard.</P>
+        <P>reqmesh can be used entirely via keyboard.</P>
 
         <Callout variant="info">Shortcuts do not fire when you are typing in a text field (except <Kbd>Ctrl+S</Kbd> for save).</Callout>
 
@@ -320,7 +320,7 @@ const DOCS: DocSection[] = [
           <LI><strong className="text-card-foreground">satisfies</strong> — the requirements this component exists to deliver</LI>
           <LI><strong className="text-card-foreground">verification_cases</strong> — the tests that exercise this component</LI>
         </UL>
-        <P>Both are validated: linking to a non-existent requirement or VC is rejected. Deleting a component promotes its children to the deleted component's parent.</P>
+        <P>Both are validated: linking to a non-existent requirement or verification case is rejected. Deleting a component promotes its children to the deleted component's parent.</P>
 
         <H3>Parameters & Rollups</H3>
         <P>Components carry numeric parameters (mass, current draw, cost…) that participate in <strong className="text-card-foreground">budget rollups</strong>:</P>
@@ -375,10 +375,10 @@ const DOCS: DocSection[] = [
         <H3>Reusable Definitions (SysML v2 constraint / calc def)</H3>
         <P>Write a rule once and reuse it. A <strong className="text-card-foreground">constraint def</strong> declares formal parameters and an expression; requirements apply it by <strong className="text-card-foreground">binding</strong> each formal to a real parameter reference:</P>
         <Code>{'MassBudget(actual, limit) = actual <= limit\n→ bind: actual = AFRM0000.design_mass, limit = AFRM0000.empty_mass'}</Code>
-        <P>A <strong className="text-card-foreground">calc def</strong> (e.g. <InlineCode>Area(w, h) = w * h</InlineCode>) derives a parameter's value the same way. Manage definitions on the <strong className="text-card-foreground">Metrics &amp; Analysis</strong> page; bind them on a requirement under "Use a definition".</P>
+        <P>A <strong className="text-card-foreground">calc def</strong> (e.g. <InlineCode>Area(w, h) = w * h</InlineCode>) derives a parameter's value the same way. Manage definitions on the <strong className="text-card-foreground">Metrics</strong> page; bind them on a requirement under "Use a definition".</P>
 
         <H3>Analysis Cases (what-if)</H3>
-        <P>An analysis case runs the evaluation over a chosen <strong className="text-card-foreground">scope</strong> with hypothetical parameter <strong className="text-card-foreground">overrides</strong>, without touching the model — e.g. "does the mass budget still hold at <InlineCode>empty_mass = 779</InlineCode>?". Create and run them on the Metrics &amp; Analysis page.</P>
+        <P>An analysis case runs the evaluation over a chosen <strong className="text-card-foreground">scope</strong> with hypothetical parameter <strong className="text-card-foreground">overrides</strong>, without touching the model — e.g. "does the mass budget still hold at <InlineCode>empty_mass = 779</InlineCode>?". Create and run them on the Metrics page.</P>
 
         <H3>Requirement Subject</H3>
         <P>A requirement can name the component it constrains via its <strong className="text-card-foreground">subject</strong> (a SysML v2 concept), set in the requirement's properties panel.</P>
@@ -402,10 +402,10 @@ const DOCS: DocSection[] = [
         <P>The auto-complete suggests parameters from linked requirements. The <strong className="text-card-foreground">unit field auto-fills</strong> when you select a parameter.</P>
 
         <H3>Execution</H3>
-        <P>Each VC tracks an execution history: timestamp, status, notes, and executor. The <strong className="text-card-foreground">Run Test</strong> button logs a new execution entry and shows a spinner while the API call is in flight.</P>
+        <P>Each verification case tracks an execution history: timestamp, status, notes, and executor. The <strong className="text-card-foreground">Run Test</strong> button logs a new execution entry and shows a spinner while the API call is in flight.</P>
 
         <H3>Bulk Operations</H3>
-        <P>Select multiple VCs via their checkboxes (visible in edit mode), choose a target status from the bulk action bar, and click <strong className="text-card-foreground">Apply</strong> to update all selected cases at once.</P>
+        <P>Select multiple verification cases via their checkboxes (visible in edit mode), choose a target status from the bulk action bar, and click <strong className="text-card-foreground">Apply</strong> to update all selected cases at once.</P>
       </>
     ),
   },
@@ -415,7 +415,7 @@ const DOCS: DocSection[] = [
     render: () => (
       <>
         <H2>Deep Traceability</H2>
-        <P>Reqmesh provides both <strong className="text-card-foreground">shallow</strong> and <strong className="text-card-foreground">deep</strong> coverage analysis, inspired by OpenFastTrace.</P>
+        <P>reqmesh provides both <strong className="text-card-foreground">shallow</strong> and <strong className="text-card-foreground">deep</strong> coverage analysis, inspired by OpenFastTrace.</P>
 
         <H3>Shallow Coverage</H3>
         <P>For each entry in a requirement's <InlineCode>needs</InlineCode> list, is there at least one covering item of that type? Shallow coverage checks immediate, one-hop coverage.</P>
@@ -536,7 +536,7 @@ const DOCS: DocSection[] = [
     render: () => (
       <>
         <H2>Requirement Quality Linting</H2>
-        <P>Reqmesh automatically checks requirement text against writing guidelines based on INCOSE, EARS, and ISO 29148.</P>
+        <P>reqmesh automatically checks requirement text against writing guidelines based on INCOSE, EARS, and ISO 29148.</P>
 
         <H3>Rules</H3>
         <table className="w-full text-left mb-4">
@@ -635,7 +635,7 @@ const DOCS: DocSection[] = [
     render: () => (
       <>
         <H2>Git Integration</H2>
-        <P>Reqmesh is git-native — your project is a git repository.</P>
+        <P>reqmesh is git-native — your project is a git repository.</P>
 
         <H3>Auto-Commit</H3>
         <P>Every mutation through the API is committed automatically with a descriptive message like <InlineCode>rt: put requirements/SYST0001</InlineCode>. Disable with <InlineCode>RT_GIT_AUTOCOMMIT=false</InlineCode>.</P>
@@ -657,7 +657,7 @@ const DOCS: DocSection[] = [
     render: () => (
       <>
         <H2>Interchange Formats</H2>
-        <P>Reqmesh supports round-trip interchange through five formats:</P>
+        <P>reqmesh supports round-trip interchange through five formats:</P>
 
         <div className="space-y-2 mb-4">
           <Callout variant="info"><strong className="text-card-foreground">ReqIF 1.2</strong> — Standard requirements interchange format used by DOORS, Polarion, and Jama. Both import and export preserve types, attributes, relations, and verification links.</Callout>
@@ -723,7 +723,7 @@ const DOCS: DocSection[] = [
     render: () => (
       <>
         <H2>Deployment</H2>
-        <P>Reqmesh can be deployed as a web server, Docker container, or desktop app.</P>
+        <P>reqmesh can be deployed as a web server, Docker container, or desktop app.</P>
 
         <H3>Server (development)</H3>
         <Code>./start.sh server</Code>
@@ -880,7 +880,7 @@ const DOCS: DocSection[] = [
             { term: 'Refines', def: 'A traceability relation indicating one requirement provides more detail for another. Forms the basis of the requirements hierarchy.' },
             { term: 'Relation', def: 'A directed link between two requirements. Types include: refines, satisfies, derives, conflicts, and verified_by. Relations are bidirectional — both ends always see the link.' },
             { term: 'Review', def: 'The action of fingerprint-baselining a requirement. Stores the current content hash so future changes are detected. Available per-requirement or for all via "Review All".' },
-            { term: 'Risk', def: 'A potential threat to the project with severity, probability, impact, and mitigation. Linked to the requirements it threatens.' },
+            { term: 'Risk', def: 'A potential threat to the project with severity, likelihood, impact, and mitigation. Linked to the requirements it threatens.' },
             { term: 'Satisfies', def: 'A link from a component to a requirement, indicating the component exists to deliver that requirement. Also used as a relation type between requirements.' },
             { term: 'Shallow Coverage', def: 'Checks whether, for each entry in a requirement\'s needs list, at least one covering item of that type exists. A prerequisite for deep coverage.' },
             { term: 'Specification', def: 'A document grouping requirements. Specifications form a hierarchy with children, and can be referenced from multiple requirements.' },
@@ -891,7 +891,7 @@ const DOCS: DocSection[] = [
             { term: 'Verification Method', def: 'How a requirement will be proven — test (physical testing), analysis (modelling/simulation), demonstration (showing it works), or inspection (review/examination).' },
             { term: 'Verdict', def: 'The result of evaluating a constraint — pass, fail, unknown, error, or not applicable. Shown as color-coded badges on the requirement detail page and Metrics dashboard.' },
             { term: 'Workflow', def: 'The allowed status transitions for requirements, configured per project in _meta.yaml. Example: proposed → in_review → approved → implemented → verified.' },
-            { term: 'ISO 15288', def: 'ISO/IEC 15288:2023 — the international standard for system life cycle processes. Reqmesh aligns its terminology and process model with this standard. See the Getting Started page for a mapping table.' },
+            { term: 'ISO 15288', def: 'ISO/IEC 15288:2023 — the international standard for system life cycle processes. reqmesh aligns its terminology and process model with this standard. See the Getting Started page for a mapping table.' },
             { term: 'Stakeholder Requirement', def: '(ISO 15288 §6.4.2.3) A requirement expressing a stakeholder need or expectation. In reqmesh, captured as a Requirement with stakeholder priority scores and an optional source field referencing the originating stakeholder document.' },
             { term: 'System Requirement', def: '(ISO 15288 §6.4.2.3) A requirement derived from stakeholder requirements, expressed in technical terms suitable for design. In reqmesh, represented by functional, interface, and constraint type requirements with verification methods.' },
             { term: 'Validation', def: '(ISO 15288 §6.4.11) Confirmation that the system meets stakeholder needs. In reqmesh, measured verdicts from the parametric engine provide ongoing validation evidence — the actual system behaviour compared against modelled expectations.' },

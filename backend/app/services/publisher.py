@@ -1747,7 +1747,7 @@ class Publisher:
         if "decisions" in sections:
             decisions = self.store.list_items("decisions")
             if decisions:
-                L.append(r"\section{Decisions}")
+                L.append(r"\section{Design Decisions}")
                 L.append(r"\begin{longtable}{@{}>{\raggedright\arraybackslash}p{\dimexpr0.12\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.22\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.26\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.26\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.14\textwidth-2\tabcolsep\relax}@{}}")
                 L.append(r"\toprule")
                 L.append(r"\rowcolor{tabhead}")

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { navGroups } from '../src/components/RequirementNav';
+import { SECTION_TITLES, ENTITY_META } from '../src/components/entities';
 
 /**
  * The UI counterpart to `backend/tests/test_docs_currency.py`.
@@ -60,5 +61,29 @@ describe('nav docs gate', () => {
     // worse than no check at all.
     expect(readme.length).toBeGreaterThan(1000);
     expect(navGroups('demo').flat().length).toBeGreaterThan(5);
+  });
+});
+
+describe('nav label / page heading share one source', () => {
+  const navByRoute = Object.fromEntries(
+    navGroups('demo').flat().map((item) => [item.to.split('/').pop() as string, item.label]),
+  );
+
+  it('verification and analysis nav labels are the ENTITY_META plural — the same source the page headings read', () => {
+    // The pages render these titles from SECTION_TITLES too, so asserting the
+    // nav uses SECTION_TITLES (not a hardcoded label) holds both to one source.
+    expect(navByRoute.verification).toBe(SECTION_TITLES.verification);
+    expect(navByRoute.analysis).toBe(SECTION_TITLES.analysis);
+    // And the source follows the canonical per-kind name, so a drift in
+    // ENTITY_META.label surfaces here rather than in a mismatched heading.
+    expect(SECTION_TITLES.verification).toBe(`${ENTITY_META.verification.label}s`);
+    expect(SECTION_TITLES.analysis).toBe(`${ENTITY_META.analysis.label}s`);
+  });
+
+  it('the trace matrix nav label matches its page heading', () => {
+    // Not an entity kind, so there is no ENTITY_META label to derive from — but
+    // the nav said "Trace Matrix" while the page said "Traceability Matrix",
+    // which is the same drift, so it is held to one source too.
+    expect(navByRoute.traces).toBe(SECTION_TITLES.traces);
   });
 });

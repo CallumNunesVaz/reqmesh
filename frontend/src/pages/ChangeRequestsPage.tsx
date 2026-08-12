@@ -484,7 +484,7 @@ export default function ChangeRequestsPage() {
                       <button
                         onClick={() => startEditing(cr)}
                         className="p-1.5 rounded-md hover:bg-primary/10 text-muted-foreground hover:text-primary opacity-0 group-hover:opacity-100 transition-all"
-                        title="Modify"
+                        title="Edit"
                       >
                         <Edit3 size={14} />
                       </button>

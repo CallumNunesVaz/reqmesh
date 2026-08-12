@@ -1,7 +1,7 @@
 # reqmesh
 
 <p align="center">
-  <img src="media/reqmesh-logo.svg" alt="Reqmesh Logo" width="500">
+  <img src="media/reqmesh-logo.svg" alt="reqmesh Logo" width="500">
 </p>
 
 An open-source, web-based requirements management tool with:

@@ -28,6 +28,7 @@ import {
 import { api, type RequirementTreeNode } from '../api/client';
 import { useStore } from '../store';
 import { useSelectedReq } from './Layout';
+import { SECTION_TITLES } from './entities';
 
 const statusDots: Record<string, string> = {
   proposed: 'bg-blue-400',
@@ -125,7 +126,7 @@ function TreeNode({
 
 type Section = 'requirements' | 'specifications' | 'components' | 'verification' | 'traces' | 'changes' | 'risks';
 
-const SECTION_TITLES: Record<Section, string> = {
+const PANEL_TITLES: Record<Section, string> = {
   requirements: 'Hierarchy',
   specifications: 'Specifications',
   components: 'Component Tree',
@@ -244,7 +245,7 @@ export function navGroups(projectId: string): NavItem[][] {
       { to: `/project/${projectId}/requirements`, label: 'Requirements', icon: ClipboardList },
       { to: `/project/${projectId}/specifications`, label: 'Specifications', icon: FileText },
       { to: `/project/${projectId}/components`, label: 'Components', icon: Boxes },
-      { to: `/project/${projectId}/verification`, label: 'Verification', icon: CheckCircle2 },
+      { to: `/project/${projectId}/verification`, label: SECTION_TITLES.verification, icon: CheckCircle2 },
       { to: `/project/${projectId}/risks`, label: 'Risks', icon: AlertTriangle },
       { to: `/project/${projectId}/baselines`, label: 'Baselines', icon: History },
       { to: `/project/${projectId}/system-states`, label: 'System States', icon: Layers },
@@ -253,9 +254,9 @@ export function navGroups(projectId: string): NavItem[][] {
     [
       { to: `/project/${projectId}/change-requests`, label: 'Change Requests', icon: GitPullRequest },
       { to: `/project/${projectId}/allocation`, label: 'Allocation', icon: Grid3X3 },
-      { to: `/project/${projectId}/traces`, label: 'Trace Matrix', icon: GitBranch },
+      { to: `/project/${projectId}/traces`, label: SECTION_TITLES.traces, icon: GitBranch },
       { to: `/project/${projectId}/decisions`, label: 'Decisions', icon: Scale },
-      { to: `/project/${projectId}/analysis`, label: 'Analysis', icon: FlaskConical },
+      { to: `/project/${projectId}/analysis`, label: SECTION_TITLES.analysis, icon: FlaskConical },
       { to: `/project/${projectId}/metrics`, label: 'Metrics', icon: BarChart3 },
     ],
   ];
@@ -316,7 +317,7 @@ export default function RequirementNav({ width = 300, collapsed, onToggleCollaps
         const byId = new Map(specs.map((s) => [s.id, s]));
         const childIds = new Set(specs.flatMap((s) => s.children));
         const build = (s: (typeof specs)[number]): PanelItem => ({
-          id: s.id, label: s.name, sub: `${s.requirements.length} reqs`, dot: 'bg-yellow-400',
+          id: s.id, label: s.name, sub: `${s.requirements.length} requirements`, dot: 'bg-yellow-400',
           to: `${base}/specifications?focus=${encodeURIComponent(s.id)}`,
           children: s.children.map((c) => byId.get(c)).filter((c): c is NonNullable<typeof c> => !!c).map(build),
         });
@@ -481,7 +482,7 @@ export default function RequirementNav({ width = 300, collapsed, onToggleCollaps
 
       <div className="flex-1 overflow-y-auto p-2">
         <div className="flex items-center justify-between px-2 pt-1 pb-2">
-          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{SECTION_TITLES[section]}</span>
+          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{PANEL_TITLES[section]}</span>
           <span className="text-[10px] text-muted-foreground">
             {section === 'requirements' ? countNodes(filtered) : countPanel(filteredPanel)}
           </span>

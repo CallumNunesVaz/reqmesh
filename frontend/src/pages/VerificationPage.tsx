@@ -7,7 +7,7 @@ import { api, type VerificationCase, type Requirement, type Component, type Test
 import { useStore } from '../store';
 import { useAuthStore } from '../store/auth';
 import AutocompleteInput from '../components/AutocompleteInput';
-import { CopyLinkButton, EntityLink } from '../components/entities';
+import { CopyLinkButton, EntityLink, SECTION_TITLES } from '../components/entities';
 import { useFocusedEntity } from '../components/useFocusedEntity';
 import { AutoLinkText } from '../components/autoLink';
 import MentionTextarea from '../components/MentionTextarea';
@@ -361,7 +361,7 @@ export default function VerificationPage() {
       {loading && verificationCases.length === 0 && <LoadingSplash label="Loading verification cases…" />}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Verification Cases</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">{SECTION_TITLES.verification}</h1>
           <HelpTip>Verification cases prove that requirements are met. Choose a method (test, analysis, demonstration, or inspection), link the requirements being verified, and optionally record measurements to feed the parametric evaluation engine.</HelpTip>
           <p className="text-sm text-muted-foreground mt-1">
             {filtering ? `${filteredVCs.length} of ${verificationCases.length} verification cases` : `${verificationCases.length} verification cases`}
@@ -943,7 +943,7 @@ export default function VerificationPage() {
                         <thead className="sticky top-0 bg-muted">
                           <tr className="text-muted-foreground">
                             <th className="text-left px-2 py-1">Test</th>
-                            <th className="text-left px-2 py-1">VC</th>
+                            <th className="text-left px-2 py-1" title="Verification Case">VC</th>
                             <th className="text-left px-2 py-1">Status</th>
                           </tr>
                         </thead>

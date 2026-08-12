@@ -216,7 +216,7 @@ function CircularNode({ data, selected }: NodeProps) {
               <span style={{ color: fill, fontWeight: 600 }}>{nodeData.status}</span>
               {level >= 5 && <span style={{ color: 'hsl(var(--muted-foreground))' }}>&middot; {nodeData.priority}</span>}
               {(nodeData.vcCount ?? 0) > 0 && level >= 5 && (
-                <span style={{ color: 'hsl(var(--muted-foreground))' }}>&middot; {nodeData.vcCount} VC</span>
+                <span style={{ color: 'hsl(var(--muted-foreground))' }} title={`${nodeData.vcCount} verification cases`}>&middot; {nodeData.vcCount} VC</span>
               )}
               {nodeData.verdict && (
                 <span className="flex items-center gap-0.5" style={{ color: verdictColors[nodeData.verdict] || verdictColors.unknown, fontWeight: 600 }}>

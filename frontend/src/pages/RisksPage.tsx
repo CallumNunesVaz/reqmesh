@@ -42,7 +42,7 @@ export default function RisksPage() {
   const [search, setSearch] = usePersistedState(pk('search'), '');
   const [filterStatus, setFilterStatus] = usePersistedState(pk('filter-status'), '');
   const [filterSeverity, setFilterSeverity] = usePersistedState(pk('filter-severity'), '');
-  const [filterProbability, setFilterProbability] = usePersistedState(pk('filter-probability'), '');
+  const [filterLikelihood, setFilterLikelihood] = usePersistedState(pk('filter-likelihood'), '');
 
   // Requirements are loaded so the "Threatens" links can be edited here, not
   // just displayed — previously this list and the requirement's own "Risks"
@@ -183,20 +183,20 @@ export default function RisksPage() {
   };
 
   const filteredRisks = useMemo(() => {
-    if (!search && !filterStatus && !filterSeverity && !filterProbability) return risks;
+    if (!search && !filterStatus && !filterSeverity && !filterLikelihood) return risks;
     const q = search.toLowerCase();
     return risks.filter((r) => {
       if (filterStatus && r.status !== filterStatus) return false;
       if (filterSeverity && r.severity !== filterSeverity) return false;
-      if (filterProbability && (r.rating?.likelihood ?? r.probability) !== filterProbability) return false;
+      if (filterLikelihood && (r.rating?.likelihood ?? r.probability) !== filterLikelihood) return false;
       if (q) {
         const hay = `${r.id} ${r.title || ''} ${r.description || ''}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
     });
-  }, [risks, search, filterStatus, filterSeverity, filterProbability]);
-  const filtering = !!(search || filterStatus || filterSeverity || filterProbability);
+  }, [risks, search, filterStatus, filterSeverity, filterLikelihood]);
+  const filtering = !!(search || filterStatus || filterSeverity || filterLikelihood);
 
   // Arriving from a link elsewhere (?focus=RSK-001).
   const focusId = useFocusedEntity(risks.length > 0);
@@ -338,7 +338,7 @@ export default function RisksPage() {
             <option value="">All severities</option>
             {(matrix?.severities ?? []).map((sv) => <option key={sv} value={sv}>{formatLevel(sv)}</option>)}
           </select>
-          <select className="select w-36 h-9 text-xs" value={filterProbability} onChange={(e) => setFilterProbability(e.target.value)}>
+          <select className="select w-36 h-9 text-xs" value={filterLikelihood} onChange={(e) => setFilterLikelihood(e.target.value)}>
             <option value="">All likelihoods</option>
             {(matrix?.likelihoods ?? []).map((l) => <option key={l} value={l}>{formatLevel(l)}</option>)}
           </select>
@@ -379,7 +379,7 @@ export default function RisksPage() {
             {filtering ? 'No risks match your filters.' : 'No risks yet'}
           </p>
           {filtering ? (
-            <button className="text-xs text-primary hover:underline mt-2" onClick={() => { setSearch(''); setFilterStatus(''); setFilterSeverity(''); setFilterProbability(''); }}>Clear filters</button>
+            <button className="text-xs text-primary hover:underline mt-2" onClick={() => { setSearch(''); setFilterStatus(''); setFilterSeverity(''); setFilterLikelihood(''); }}>Clear filters</button>
           ) : (
             <p className="text-sm text-muted-foreground mt-1">Identify and track project risks with severity and likelihood.</p>
           )}

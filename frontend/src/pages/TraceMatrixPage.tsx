@@ -9,7 +9,7 @@ import { matrixToCsv, type MatrixCsvInput } from '../lib/matrixCsv';
 import { useAuthStore } from '../store/auth';
 import { useStore } from '../store';
 import AutocompleteInput from '../components/AutocompleteInput';
-import { EntityLink, entityPath, type EntityKind } from '../components/entities';
+import { EntityLink, entityPath, SECTION_TITLES, type EntityKind } from '../components/entities';
 import LoadingSplash from '../components/LoadingSplash';
 
 // Cell tint per link type. Falls back to a neutral chip for any type not
@@ -153,7 +153,7 @@ export default function TraceMatrixPage() {
     <div className="relative max-w-5xl mx-auto p-8">
       {loading && links.length === 0 && requirements.length === 0 && <LoadingSplash label="Loading trace matrix…" />}
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">Traceability Matrix</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">{SECTION_TITLES.traces}</h1>
         <p className="text-sm text-muted-foreground mt-1">{filtering ? `${filteredLinks.length} of ${links.length} trace links` : `${links.length} trace links`}</p>
         <div className="flex gap-1 mt-2">
           <button

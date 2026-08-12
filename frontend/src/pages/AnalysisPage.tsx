@@ -5,7 +5,7 @@ import { Plus, FlaskConical, Trash2, X, Search, Edit3, ChevronDown } from 'lucid
 import { api, type AnalysisCase, type Requirement, type Component } from '../api/client';
 import { useStore } from '../store';
 import { useAuthStore } from '../store/auth';
-import { CopyLinkButton } from '../components/entities';
+import { CopyLinkButton, SECTION_TITLES } from '../components/entities';
 import { useFocusedEntity } from '../components/useFocusedEntity';
 import { usePersistedState, setCodec } from '../hooks/usePersistedState';
 import { LinkEditor } from '../components/LinkEditor';
@@ -155,7 +155,7 @@ export default function AnalysisPage() {
       {loading && cases.length === 0 && <LoadingSplash label="Loading analysis cases…" />}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Analysis Cases</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">{SECTION_TITLES.analysis}</h1>
           <p className="text-sm text-muted-foreground mt-1">
             {filtering ? `${filtered.length} of ${cases.length} cases` : `${cases.length} cases`}
           </p>

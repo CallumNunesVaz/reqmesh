@@ -61,7 +61,7 @@ export default function MetricsPage() {
 
   return (
     <div className="max-w-6xl mx-auto p-8">
-      <h1 className="text-2xl font-bold tracking-tight text-foreground mb-1">Metrics & Analysis</h1>
+      <h1 className="text-2xl font-bold tracking-tight text-foreground mb-1">Metrics</h1>
       <HelpTip>High-level project health dashboard. Summary cards show overall counts. Quality scores measure completeness (descriptions, rationales, sources). Traceability shows shallow vs deep coverage. Gap analysis flags requirements missing key fields. Parametric constraints show pass/fail from the evaluation engine.</HelpTip>
 
       <div className="grid grid-cols-2 @3xl:grid-cols-4 gap-4 mb-6">
