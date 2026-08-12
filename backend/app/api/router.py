@@ -1376,7 +1376,9 @@ def create_definition(project_id: str, data: DefinitionCreate, user: dict = Depe
         raise HTTPException(status_code=409, detail="A definition with that id already exists")
     item = data.model_dump()
     item["id"] = def_id
-    return store.write_item("definitions", def_id, item)
+    result = store.create_item("definitions", item)
+    record_change(store, def_id, "create", None, result, user.get("username", ""))
+    return result
 
 
 @router.put("/projects/{project_id}/definitions/{def_id}")
@@ -1387,16 +1389,22 @@ def update_definition(project_id: str, def_id: str, data: DefinitionUpdate,
     if existing is None:
         raise HTTPException(status_code=404, detail="Definition not found")
     _check_precondition(request, existing)
-    existing.update({k: v for k, v in data.model_dump().items() if v is not None})
-    return store.write_item("definitions", def_id, existing)
+    updates = {k: v for k, v in data.model_dump().items() if v is not None}
+    result = store.update_item("definitions", def_id, updates)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Definition not found")
+    record_change(store, def_id, "update", existing, result, user.get("username", ""))
+    return result
 
 
 @router.delete("/projects/{project_id}/definitions/{def_id}")
 def delete_definition(project_id: str, def_id: str, force: bool = False, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     check_deletable(store, "definitions", def_id, force)
+    before = store.get_item("definitions", def_id)
     if not store.delete_item("definitions", def_id):
         raise HTTPException(status_code=404, detail="Definition not found")
+    record_change(store, def_id, "delete", before, None, user.get("username", ""))
     return {"ok": True}
 
 
@@ -1421,7 +1429,9 @@ def create_analysis_case(project_id: str, data: AnalysisCaseCreate, user: dict =
         raise HTTPException(status_code=409, detail="An analysis case with that id already exists")
     item = data.model_dump()
     item["id"] = case_id
-    return store.write_item("analysis_cases", case_id, item)
+    result = store.create_item("analysis_cases", item)
+    record_change(store, case_id, "create", None, result, user.get("username", ""))
+    return result
 
 
 @router.put("/projects/{project_id}/analysis/{case_id}")
@@ -1432,16 +1442,22 @@ def update_analysis_case(project_id: str, case_id: str, data: AnalysisCaseUpdate
     if existing is None:
         raise HTTPException(status_code=404, detail="Analysis case not found")
     _check_precondition(request, existing)
-    existing.update({k: v for k, v in data.model_dump().items() if v is not None})
-    return store.write_item("analysis_cases", case_id, existing)
+    updates = {k: v for k, v in data.model_dump().items() if v is not None}
+    result = store.update_item("analysis_cases", case_id, updates)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Analysis case not found")
+    record_change(store, case_id, "update", existing, result, user.get("username", ""))
+    return result
 
 
 @router.delete("/projects/{project_id}/analysis/{case_id}")
 def delete_analysis_case(project_id: str, case_id: str, force: bool = False, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     check_deletable(store, "analysis_cases", case_id, force)
+    before = store.get_item("analysis_cases", case_id)
     if not store.delete_item("analysis_cases", case_id):
         raise HTTPException(status_code=404, detail="Analysis case not found")
+    record_change(store, case_id, "delete", before, None, user.get("username", ""))
     return {"ok": True}
 
 
@@ -1541,7 +1557,7 @@ def run_verification(project_id: str, vc_id: str, data: RunVerification, user: d
             raise HTTPException(status_code=404, detail="Verification case not found")
 
         # Update step actual results if provided.
-        steps = vc.get("steps") or []
+        steps = list(vc.get("steps") or [])
         if step_results and isinstance(step_results, dict):
             for idx_str, actual in step_results.items():
                 try:
@@ -1552,7 +1568,7 @@ def run_verification(project_id: str, vc_id: str, data: RunVerification, user: d
                     pass
 
         # Append execution record.
-        history = vc.get("execution_history") or []
+        history = list(vc.get("execution_history") or [])
         history.append({
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "status": new_status,
@@ -1567,6 +1583,7 @@ def run_verification(project_id: str, vc_id: str, data: RunVerification, user: d
             "execution_history": history,
         }
         result = store._update_item_unlocked("verification_cases", vc_id, update)
+    record_change(store, vc_id, "execute", vc, result, user.get("username", ""))
     return result
 
 

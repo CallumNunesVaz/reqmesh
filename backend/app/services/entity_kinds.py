@@ -19,6 +19,9 @@ KIND_LABEL_TO_KEY: dict[str, str] = {
     "Risk": "risk",
     "Change Request": "change",
     "Decision": "decision",
+    "Definition": "definition",
+    "Analysis Case": "analysis",
+    "Comment": "comment",
     "Item": "item",
 }
 
@@ -36,6 +39,9 @@ def resolve_entity_label(store, item_id: str) -> tuple[str, str]:
     5. risks
     6. change requests
     7. decisions
+    8. definitions
+    9. analysis cases
+    10. comments
 
     Falls back to ``("Item", "")``.
 
@@ -70,6 +76,9 @@ def resolve_entity_label(store, item_id: str) -> tuple[str, str]:
         ("Risk", "risks"),
         ("Change Request", "change_requests"),
         ("Decision", "decisions"),
+        ("Definition", "definitions"),
+        ("Analysis Case", "analysis_cases"),
+        ("Comment", "comments"),
     ):
         try:
             for it in store.list_items(collection):

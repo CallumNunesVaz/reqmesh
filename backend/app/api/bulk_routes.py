@@ -233,7 +233,12 @@ def bulk_update_verification_cases(project_id: str, data: dict, user: dict = Dep
         raise HTTPException(status_code=400, detail="ids and updates required")
     updated = 0
     for vc_id in ids:
-        if store.update_verification_case(vc_id, updates):
+        before = store.get_verification_case(vc_id)
+        if before is None:
+            continue
+        result = store.update_verification_case(vc_id, updates)
+        if result:
+            record_change(store, vc_id, "update", before, result, user.get("username", ""))
             updated += 1
     return {"updated": updated}
 
@@ -278,7 +283,12 @@ def bulk_update_specifications(project_id: str, data: dict, user: dict = Depends
         raise HTTPException(status_code=400, detail="ids and updates required")
     updated = 0
     for spec_id in ids:
-        if store.update_specification(spec_id, updates):
+        before = store.get_specification(spec_id)
+        if before is None:
+            continue
+        result = store.update_specification(spec_id, updates)
+        if result:
+            record_change(store, spec_id, "update", before, result, user.get("username", ""))
             updated += 1
     return {"updated": updated}
 
@@ -323,7 +333,12 @@ def bulk_update_risks(project_id: str, data: dict, user: dict = Depends(require_
         raise HTTPException(status_code=400, detail="ids and updates required")
     updated = 0
     for risk_id in ids:
-        if store.update_item("risks", risk_id, updates):
+        before = store.get_item("risks", risk_id)
+        if before is None:
+            continue
+        result = store.update_item("risks", risk_id, updates)
+        if result:
+            record_change(store, risk_id, "update", before, result, user.get("username", ""))
             updated += 1
     return {"updated": updated}
 
@@ -368,7 +383,12 @@ def bulk_update_change_requests(project_id: str, data: dict, user: dict = Depend
         raise HTTPException(status_code=400, detail="ids and updates required")
     updated = 0
     for cr_id in ids:
-        if store.update_item("change_requests", cr_id, updates):
+        before = store.get_item("change_requests", cr_id)
+        if before is None:
+            continue
+        result = store.update_item("change_requests", cr_id, updates)
+        if result:
+            record_change(store, cr_id, "update", before, result, user.get("username", ""))
             updated += 1
     return {"updated": updated}
 

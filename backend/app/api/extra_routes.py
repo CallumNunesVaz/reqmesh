@@ -335,6 +335,7 @@ def create_comment(project_id: str, data: CommentCreate, user: dict = Depends(re
     c.setdefault("author", user.get("username", ""))
     store = get_store(project_id)
     result = store.create_item("comments", c)
+    record_change(store, result["id"], "create", None, result, user.get("username", ""))
     from app.services.email_service import notify_comment, _safe_notify
     _safe_notify(notify_comment, store, project_id, c["entity_kind"], c["entity_id"], user.get("username", ""), c["text"])
     return result
@@ -342,8 +343,11 @@ def create_comment(project_id: str, data: CommentCreate, user: dict = Depends(re
 
 @router.delete("/projects/{project_id}/comments/{comment_id}")
 def delete_comment(project_id: str, comment_id: str, user: dict = Depends(require_edit)):
-    if not get_store(project_id).delete_item("comments", comment_id):
+    store = get_store(project_id)
+    before = store.get_item("comments", comment_id)
+    if not store.delete_item("comments", comment_id):
         raise HTTPException(status_code=404, detail="Comment not found")
+    record_change(store, comment_id, "delete", before, None, user.get("username", ""))
     return {"ok": True}
 
 
@@ -361,6 +365,7 @@ def update_comment(project_id: str, comment_id: str, data: CommentUpdate, user: 
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
     result = store.update_item("comments", comment_id, updates)
+    record_change(store, comment_id, "update", existing, result, user.get("username", ""))
     return result
 
 
