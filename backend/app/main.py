@@ -74,6 +74,37 @@ async def lifespan(app: FastAPI):
                 ", ".join(non_loopback))
     root = Path(settings.data_root)
     root.mkdir(parents=True, exist_ok=True)
+
+    # The state dir holds password hashes and the signing secret. If it sits
+    # inside the data root, a project directory contains users.yaml — and
+    # git auto-commit runs `git add -A` in project directories, so the hashes
+    # would be committed and pushed to whatever remote the project has.
+    # Unrecoverable once pushed, so refuse to start rather than warn.
+    #
+    # Only this direction is wrong. The default bare-metal layout is the
+    # *inverse* — data_root = <state_dir>/projects — which is safe, because a
+    # repo is only ever a single project directory. A symmetric "must be
+    # disjoint" check would refuse every default install.
+    from app.core import auth as _auth
+    state_dir = _auth.USERS_FILE.parent.resolve()
+    data_root = root.resolve()
+    if state_dir == data_root or data_root in state_dir.parents:
+        raise RuntimeError(
+            f"RT_STATE_DIR ({state_dir}) is inside RT_DATA_ROOT ({data_root}). "
+            "Accounts and the signing secret would live in a project directory, "
+            "where git auto-commit would commit and push password hashes. "
+            "Point RT_STATE_DIR somewhere outside the data root."
+        )
+
+    # Repair and migrate the state dir before anything reads accounts from it.
+    try:
+        from app.services.state_migrations import run_state_migrations
+        state_summary = run_state_migrations(state_dir)
+        if state_summary.get("migrated"):
+            logging.getLogger(__name__).info("applied state migrations: %s", state_summary)
+    except Exception:
+        logging.getLogger(__name__).exception("state migration failed")
+
     # Bring existing data forward to the current schema before serving — this is
     # what makes updating from an older program version clean.
     try:

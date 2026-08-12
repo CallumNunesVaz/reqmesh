@@ -84,6 +84,54 @@ def test_no_deadlock_under_concurrent_invite_and_consume(workspace):
     assert not errors, f"unexpected errors: {errors}"
 
 
+# ── Tokens are bearer credentials, so the file must not hold usable copies ────
+
+def test_a_reset_token_is_not_stored_in_plaintext(workspace):
+    """The emailed token must not appear in the file it is checked against.
+
+    Stored verbatim, anyone able to read reset_tokens.yaml — a stray backup, a
+    misdirected volume mount — could set any account's password without knowing
+    the old one.
+    """
+    auth.register_user("tokuser", "Password123!", "contributor")
+    token = auth.create_reset_token("tokuser")
+
+    raw = auth.RESET_TOKENS_FILE.read_text()
+    assert token not in raw
+    assert "tokuser" in raw, "the username is still needed to resolve the account"
+
+
+def test_a_reset_token_read_from_the_file_cannot_be_replayed(workspace):
+    """The account-takeover property, stated directly: what is on disk is not a
+    credential. Replaying the stored key must fail while the real token works."""
+    auth.register_user("replay", "Password123!", "contributor")
+    token = auth.create_reset_token("replay")
+
+    import re
+    stored_key = re.findall(r"\b[0-9a-f]{64}\b", auth.RESET_TOKENS_FILE.read_text())
+    assert len(stored_key) == 1, "expected exactly one hashed key on disk"
+
+    assert auth.consume_reset_token(stored_key[0], "FromTheFile1!") is False
+    assert auth.consume_reset_token(token, "TheRealToken1!") is True
+
+
+def test_a_verification_token_is_not_stored_in_plaintext(workspace):
+    auth.register_user("verifyuser", "Password123!", "contributor")
+    token = auth.create_verify_token("verifyuser")
+
+    assert token not in auth.VERIFY_TOKENS_FILE.read_text()
+    assert auth.verify_email(token) == "verifyuser"
+
+
+def test_token_stores_are_owner_only(workspace):
+    auth.register_user("modeuser", "Password123!", "contributor")
+    auth.create_reset_token("modeuser")
+    auth.create_verify_token("modeuser")
+
+    assert auth.RESET_TOKENS_FILE.stat().st_mode & 0o777 == 0o600
+    assert auth.VERIFY_TOKENS_FILE.stat().st_mode & 0o777 == 0o600
+
+
 def test_verify_email_still_verifies(workspace):
     """The added inner lock in verify_email must not change its behaviour."""
     auth.register_user("carol", "Password123!", "contributor")

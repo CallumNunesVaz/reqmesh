@@ -336,28 +336,41 @@ def reset_admin(username, password, make_admin):
     if len(password) < 12:
         raise click.ClickException("Password must be at least 12 characters.")
 
-    users = auth.load_users()
-    user = users.get(username)
-    if user is None:
-        raise click.ClickException(
-            f"No account named {username!r}. Existing accounts: "
-            f"{', '.join(sorted(users)) or '(none)'}"
-        )
+    # Repair the state dir first: this command is the recovery path, so it is
+    # often the first thing run against a directory written by an older build.
+    try:
+        from app.services.state_migrations import run_state_migrations
+        run_state_migrations(auth.USERS_FILE.parent)
+    except Exception:  # noqa: BLE001 - recovery must not be blocked by a repair
+        pass
 
-    user["password_hash"] = auth.hash_password(password).decode()
-    # Clear the lockout too: five failed attempts locks an account for fifteen
-    # minutes, so resetting without this leaves the new password rejected and
-    # looking as broken as the old one.
-    user["failed_attempts"] = 0
-    user.pop("locked_until", None)
-    user["disabled"] = False
-    # A reset performed here is a deliberate recovery by the operator, not a
-    # provisioning step, so don't force another change at next login.
-    user["password_change_required"] = False
-    if make_admin:
-        user["role"] = "admin"
+    # The whole read-modify-write under the same lock the server uses. Without
+    # it a login landing between the load and the save writes its own snapshot
+    # back and the reset silently disappears — the exact failure this command
+    # exists to get the operator out of.
+    with auth.users_lock():
+        users = auth.load_users()
+        user = users.get(username)
+        if user is None:
+            raise click.ClickException(
+                f"No account named {username!r}. Existing accounts: "
+                f"{', '.join(sorted(users)) or '(none)'}"
+            )
 
-    auth.save_users(users)
+        user["password_hash"] = auth.hash_password(password).decode()
+        # Clear the lockout too: five failed attempts locks an account for fifteen
+        # minutes, so resetting without this leaves the new password rejected and
+        # looking as broken as the old one.
+        user["failed_attempts"] = 0
+        user.pop("locked_until", None)
+        user["disabled"] = False
+        # A reset performed here is a deliberate recovery by the operator, not a
+        # provisioning step, so don't force another change at next login.
+        user["password_change_required"] = False
+        if make_admin:
+            user["role"] = "admin"
+
+        auth.save_users(users)
     click.echo(f"Password reset for {username!r} (role: {user.get('role', 'unknown')}).")
     click.echo(f"Accounts file: {auth.USERS_FILE}")
 

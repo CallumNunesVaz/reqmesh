@@ -1,4 +1,5 @@
 import bcrypt
+import hashlib
 import ipaddress
 import jwt
 import secrets
@@ -115,12 +116,29 @@ def load_users() -> dict:
                 "created": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
             }
         }
-        with _yaml_lock:
-            _yaml.dump(default, USERS_FILE)
+        # Through save_users, not a bare dump: that is what makes the very first
+        # users.yaml atomic and 0600. Dumping straight to the path left a fresh
+        # install's account file at whatever the umask allowed, typically 0644.
+        save_users(default)
         return default
     with open(USERS_FILE) as f:
         with _yaml_lock:
             return _yaml.load(f) or {}
+
+
+def _chmod_private(path: Path) -> None:
+    """Owner-only, always.
+
+    `mkstemp` already creates at 0600 and `os.replace` carries that mode over,
+    so this is belt and braces for the happy path — but it also *repairs* a file
+    an older build created under the umask, without waiting for a migration.
+    Best-effort: a file on a filesystem that cannot represent the mode is not a
+    reason to fail the write that just succeeded.
+    """
+    try:
+        os.chmod(path, 0o600)
+    except OSError as exc:
+        logging.getLogger(__name__).warning("could not tighten permissions on %s: %s", path, exc)
 
 
 def save_users(users: dict) -> None:
@@ -132,6 +150,7 @@ def save_users(users: dict) -> None:
             with _yaml_lock:
                 _yaml.dump(users, f)
         os.replace(tmp, USERS_FILE)
+        _chmod_private(USERS_FILE)
     except BaseException:
         try:
             os.close(fd)
@@ -559,6 +578,7 @@ def _save_token_store(path: Path, data: dict) -> None:
             with _yaml_lock:
                 _yaml.dump(data, f)
         os.replace(tmp, path)
+        _chmod_private(path)
     except BaseException:
         try:
             os.close(fd)
@@ -566,6 +586,22 @@ def _save_token_store(path: Path, data: dict) -> None:
             pass
         os.unlink(tmp)
         raise
+
+
+def _token_key(token: str) -> str:
+    """The stored form of a reset or verification token.
+
+    The token itself is a bearer credential: whoever holds it can set a
+    password without knowing the old one. Storing it verbatim meant anyone who
+    could read ``reset_tokens.yaml`` — a stray backup, a misdirected volume
+    mount — could take over any account with a live token. So the file holds
+    only a digest, and the raw token exists solely in the email.
+
+    Plain SHA-256 rather than bcrypt: the token is ``secrets.token_urlsafe(32)``,
+    256 bits from a CSPRNG, so there is no guessing to slow down. A KDF here
+    would only cost the server on every reset.
+    """
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 def create_reset_token(username: str) -> str | None:
@@ -580,7 +616,8 @@ def create_reset_token(username: str) -> str | None:
     # Inverting it would deadlock against consume_reset_token.
     with file_lock(RESET_TOKENS_FILE):
         tokens = _load_token_store(RESET_TOKENS_FILE)
-        tokens[token] = {"username": username, "expires": int(time.time()) + RESET_TOKEN_TTL}
+        tokens[_token_key(token)] = {"username": username,
+                                     "expires": int(time.time()) + RESET_TOKEN_TTL}
         tokens = {k: v for k, v in tokens.items() if v.get("expires", 0) > now}
         _save_token_store(RESET_TOKENS_FILE, tokens)
     return token
@@ -592,13 +629,14 @@ def consume_reset_token(token: str, new_password: str) -> bool:
     # token lock across that call would invert the users → token-file order and
     # deadlock against create_invited_user. The token is single-use, so burning
     # it before the password write is set is acceptable.
+    key = _token_key(token)
     with file_lock(RESET_TOKENS_FILE):
         tokens = _load_token_store(RESET_TOKENS_FILE)
-        entry = tokens.get(token)
+        entry = tokens.get(key)
         if not entry:
             return False
         expired = entry.get("expires", 0) < time.time()
-        del tokens[token]
+        del tokens[key]
         _save_token_store(RESET_TOKENS_FILE, tokens)
     if expired:
         return False
@@ -619,7 +657,8 @@ def create_verify_token(username: str) -> str | None:
     now = time.time()
     with file_lock(VERIFY_TOKENS_FILE):
         tokens = _load_token_store(VERIFY_TOKENS_FILE)
-        tokens[token] = {"username": username, "expires": int(time.time()) + VERIFY_TOKEN_TTL}
+        tokens[_token_key(token)] = {"username": username,
+                                     "expires": int(time.time()) + VERIFY_TOKEN_TTL}
         tokens = {k: v for k, v in tokens.items() if v.get("expires", 0) > now}
         _save_token_store(VERIFY_TOKENS_FILE, tokens)
     return token
@@ -628,18 +667,19 @@ def create_verify_token(username: str) -> str | None:
 def verify_email(token: str) -> str | None:
     # users_lock is the outer lock; the verify-token file lock nests inside it,
     # preserving the users → token-file order used everywhere else.
+    key = _token_key(token)
     with users_lock():
         with file_lock(VERIFY_TOKENS_FILE):
             tokens = _load_token_store(VERIFY_TOKENS_FILE)
-            entry = tokens.get(token)
+            entry = tokens.get(key)
             if not entry:
                 return None
             if entry.get("expires", 0) < time.time():
-                del tokens[token]
+                del tokens[key]
                 _save_token_store(VERIFY_TOKENS_FILE, tokens)
                 return None
             username = entry["username"]
-            del tokens[token]
+            del tokens[key]
             _save_token_store(VERIFY_TOKENS_FILE, tokens)
         users = load_users()
         if username in users:

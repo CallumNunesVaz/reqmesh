@@ -99,3 +99,67 @@ class TestInitialAdminFile:
 
         auth.load_users()
         assert not (tmp_path / ".initial-admin").exists()
+
+
+# ── State dir must not live inside the data root ─────────────────────────────
+
+class TestStateDirNotInsideDataRoot:
+    """`users.yaml` inside a project directory would be committed and pushed by
+    git auto-commit, which runs `git add -A` in project roots. Password hashes
+    on a remote cannot be recalled, so this refuses to start rather than warn.
+    """
+
+    def _start(self, monkeypatch, state_dir, data_root):
+        from fastapi.testclient import TestClient
+
+        from app.core import config
+        from app.main import app
+
+        monkeypatch.setattr(config.settings, "data_root", str(data_root))
+        monkeypatch.setattr(auth, "USERS_FILE", state_dir / "users.yaml")
+        with TestClient(app):
+            pass
+
+    def test_state_dir_equal_to_the_data_root_refuses(self, tmp_path, monkeypatch):
+        both = tmp_path / "data"
+        both.mkdir()
+        with pytest.raises(RuntimeError, match="RT_STATE_DIR"):
+            self._start(monkeypatch, both, both)
+
+    def test_state_dir_inside_the_data_root_refuses(self, tmp_path, monkeypatch):
+        data = tmp_path / "projects"
+        state = data / ".reqmesh"
+        state.mkdir(parents=True)
+        with pytest.raises(RuntimeError, match="RT_STATE_DIR"):
+            self._start(monkeypatch, state, data)
+
+    def test_the_default_layout_starts_normally(self, tmp_path, monkeypatch):
+        """The shipped bare-metal default is the *inverse* nesting — the data
+        root sits inside the state dir — and it is safe, because a git repo is
+        only ever one project directory. This test exists so nobody later
+        "simplifies" the guard into a disjointness check and breaks every
+        default install.
+        """
+        state = tmp_path / ".reqmesh"
+        data = state / "projects"
+        data.mkdir(parents=True)
+        self._start(monkeypatch, state, data)
+
+    def test_fully_separate_paths_start_normally(self, tmp_path, monkeypatch):
+        state = tmp_path / "state"
+        data = tmp_path / "projects"
+        state.mkdir()
+        data.mkdir()
+        self._start(monkeypatch, state, data)
+
+
+class TestUsersFileIsPrivate:
+    """Password hashes. The mode must not depend on the process umask."""
+
+    def test_the_bootstrap_users_file_is_owner_only(self, workspace):
+        auth.load_users()  # seeds the admin account on first read
+        assert auth.USERS_FILE.stat().st_mode & 0o777 == 0o600
+
+    def test_it_stays_owner_only_after_a_write(self, workspace):
+        auth.register_user("modecheck", "Password123!", "contributor")
+        assert auth.USERS_FILE.stat().st_mode & 0o777 == 0o600
