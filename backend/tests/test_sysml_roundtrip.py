@@ -100,7 +100,7 @@ def test_satisfy_relationships_survive_the_round_trip(seeded):
     before = _satisfy_pairs(seeded)
     text = export_sysml_v2(seeded)
     assert before, "the demo project should have allocations to test"
-    for req_id, comp_id in list(before)[:20]:
+    for req_id, _comp_id in list(before)[:20]:
         assert req_id in text, f"{req_id} missing from the export entirely"
 
 

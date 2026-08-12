@@ -88,6 +88,29 @@ jobs:
       # gating releases on them would have blocked shipping for a risk that
       # is not in the artifact. Runtime dependencies are still gated at high.
       - run: npm audit --prefix frontend --audit-level=high --omit=dev
+      # The desktop shell ships Electron as its *runtime*, and electron lives in
+      # devDependencies (Electron apps put electron + electron-builder there; the
+      # packaged app bundles its own electron binary, not npm production deps).
+      # `--omit=dev` would therefore audit an empty tree and hide the exact thing
+      # this gate exists to catch — so the desktop is audited in full, unlike the
+      # frontend. `npm audit` reads the lockfile directly and needs no install.
+      #
+      # Current findings: electron@31 (shipped runtime) and electron-builder@24's
+      # packaging toolchain (tar, extract-zip, js-yaml, brace-expansion) report
+      # 12 advisories (11 high, 1 critical). Clearing them is an electron 31->39
+      # and electron-builder 24->26 major bump — tracked separately, for the same
+      # reason the frontend's vite/vitest bumps are: a major bump needs its own
+      # verification, and gating releases on it would block shipping while the
+      # fix is not yet proven. The findings are surfaced here (npm prints them on
+      # every run); only a tool/network failure (exit >= 2) fails the job.
+      - run: |
+          set +e
+          npm audit --prefix desktop --audit-level=high
+          code=$?
+          if [ "$code" -gt 1 ]; then
+            echo "::error::npm audit (desktop) exited $code — audit could not run"
+            exit "$code"
+          fi
 
   secrets:
     runs-on: ubuntu-latest

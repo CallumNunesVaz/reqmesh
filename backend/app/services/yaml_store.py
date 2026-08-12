@@ -391,7 +391,7 @@ class YamlStore:
                 status_code=409,
                 detail=f"Cannot update {item_id}: {collection}/{item_id}.yaml is not valid "
                        f"YAML ({exc}). Fix the file and retry.",
-            )
+            ) from exc
         existing.update(data)
         existing["modified"] = _now()
         existing["id"] = item_id

@@ -1,2 +1,13 @@
 [lint]
-select = ["F", "E9"]
+# F + E9: pyflakes (unused names, undefined names) and syntax errors — the
+# baseline this project has always gated on. B adds flake8-bugbear, which
+# catches real defect classes (mutable default args, `raise` without `from`,
+# silent `zip()` truncation) without importing style noise.
+select = ["F", "E9", "B"]
+
+[lint.flake8-bugbear]
+# FastAPI dependency injection and Pydantic secret fields are declared as
+# call-in-defaults by design — `Depends(...)`/`File(...)` in a route signature
+# is how FastAPI wires dependencies, and `SecretStr` is immutable. B008's
+# "mutable default" concern (shared mutable state across calls) does not apply.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.File", "pydantic.SecretStr"]

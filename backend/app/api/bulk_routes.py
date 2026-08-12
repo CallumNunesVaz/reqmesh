@@ -54,7 +54,7 @@ def bulk_update_requirements(project_id: str, data: dict, user: dict = Depends(r
     try:
         updates = RequirementUpdate.model_validate(data.get("updates", {})).model_dump(mode="json", exclude_unset=True)
     except ValidationError as exc:
-        raise HTTPException(status_code=422, detail=exc.errors())
+        raise HTTPException(status_code=422, detail=exc.errors()) from exc
     if not ids or not updates:
         raise HTTPException(status_code=400, detail="ids and updates required")
 
@@ -125,7 +125,7 @@ def bulk_update_components(project_id: str, data: dict, user: dict = Depends(req
     try:
         updates = ComponentUpdate.model_validate(data.get("updates", {})).model_dump(mode="json", exclude_unset=True)
     except ValidationError as exc:
-        raise HTTPException(status_code=422, detail=exc.errors())
+        raise HTTPException(status_code=422, detail=exc.errors()) from exc
     if not ids or not updates:
         raise HTTPException(status_code=400, detail="ids and updates required")
     updated = 0
@@ -203,7 +203,7 @@ def bulk_update_verification_cases(project_id: str, data: dict, user: dict = Dep
     try:
         updates = VerificationCaseUpdate.model_validate(data.get("updates", {})).model_dump(mode="json", exclude_unset=True)
     except ValidationError as exc:
-        raise HTTPException(status_code=422, detail=exc.errors())
+        raise HTTPException(status_code=422, detail=exc.errors()) from exc
     if not ids or not updates:
         raise HTTPException(status_code=400, detail="ids and updates required")
     updated = 0
@@ -253,7 +253,7 @@ def bulk_update_specifications(project_id: str, data: dict, user: dict = Depends
     try:
         updates = SpecificationUpdate.model_validate(data.get("updates", {})).model_dump(mode="json", exclude_unset=True)
     except ValidationError as exc:
-        raise HTTPException(status_code=422, detail=exc.errors())
+        raise HTTPException(status_code=422, detail=exc.errors()) from exc
     if not ids or not updates:
         raise HTTPException(status_code=400, detail="ids and updates required")
     updated = 0
@@ -303,7 +303,7 @@ def bulk_update_risks(project_id: str, data: dict, user: dict = Depends(require_
     try:
         updates = RiskUpdate.model_validate(data.get("updates", {})).model_dump(mode="json", exclude_unset=True)
     except ValidationError as exc:
-        raise HTTPException(status_code=422, detail=exc.errors())
+        raise HTTPException(status_code=422, detail=exc.errors()) from exc
     if not ids or not updates:
         raise HTTPException(status_code=400, detail="ids and updates required")
     updated = 0
@@ -353,7 +353,7 @@ def bulk_update_change_requests(project_id: str, data: dict, user: dict = Depend
     try:
         updates = ChangeRequestUpdate.model_validate(data.get("updates", {})).model_dump(mode="json", exclude_unset=True)
     except ValidationError as exc:
-        raise HTTPException(status_code=422, detail=exc.errors())
+        raise HTTPException(status_code=422, detail=exc.errors()) from exc
     if not ids or not updates:
         raise HTTPException(status_code=400, detail="ids and updates required")
     updated = 0

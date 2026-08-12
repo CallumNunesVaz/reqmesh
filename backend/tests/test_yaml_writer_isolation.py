@@ -15,6 +15,7 @@ one failure cannot reach the next.
 import threading
 
 import pytest
+from ruamel.yaml import YAMLError
 
 from app.services.yaml_store import YamlStore, _round_trip_yaml, _fast_reader
 
@@ -29,7 +30,7 @@ def test_a_failed_dump_does_not_break_the_next_write(tmp_path):
     store.write_meta({"name": "before"})
 
     # Poison attempt: a value ruamel cannot represent, dumped through the store.
-    with pytest.raises(Exception):
+    with pytest.raises(YAMLError):
         store.write_meta({"name": "bad", "boom": _Unrepresentable()})
 
     # The next write must still succeed. Sharing one instance made this fail
@@ -43,7 +44,7 @@ def test_a_failed_dump_does_not_break_requirement_writes(tmp_path):
     store.ensure_dirs()
     store.create_requirement({"id": "R1", "name": "One", "description": "d"})
 
-    with pytest.raises(Exception):
+    with pytest.raises(YAMLError):
         store.write_meta({"boom": _Unrepresentable()})
 
     # Exactly the path that 500'd in production: review and change-request both

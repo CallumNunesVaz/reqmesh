@@ -140,7 +140,7 @@ def scan_code(project_id: str, code_root: str = Form(""), user: dict = Depends(r
             raise HTTPException(
                 status_code=400,
                 detail=f"code_root must be inside the project directory: {project_root}",
-            )
+            ) from None
     else:
         root = store.root
 

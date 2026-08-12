@@ -159,11 +159,13 @@ class Evaluator:
         try:
             tree = ast.parse(text, mode="eval")
         except SyntaxError as e:
-            raise EvalError(f"syntax error: {e.msg}")
+            raise EvalError(f"syntax error: {e.msg}") from e
         return self._eval(tree.body, owner, stack, env or {})
 
     def _eval(self, node: ast.AST, owner: str, stack: frozenset[str],
-              env: dict[str, str] = {}):
+              env: Optional[dict[str, str]] = None):
+        if env is None:
+            env = {}
         if isinstance(node, ast.Constant):
             if isinstance(node.value, bool) or not isinstance(node.value, (int, float)):
                 raise EvalError(f"literal {node.value!r} is not a number")
@@ -189,9 +191,9 @@ class Evaluator:
             try:
                 return op(left, right)
             except ZeroDivisionError:
-                raise EvalError("division by zero")
+                raise EvalError("division by zero") from None
             except OverflowError:
-                raise EvalError("numerical result out of range")
+                raise EvalError("numerical result out of range") from None
 
         if isinstance(node, ast.UnaryOp):
             operand = self._eval(node.operand, owner, stack, env)
@@ -205,7 +207,7 @@ class Evaluator:
 
         if isinstance(node, ast.Compare):
             left = self._eval(node.left, owner, stack, env)
-            for op_node, comparator in zip(node.ops, node.comparators):
+            for op_node, comparator in zip(node.ops, node.comparators, strict=True):
                 op = _CMP_OPS.get(type(op_node))
                 if op is None:
                     raise EvalError(f"comparison {type(op_node).__name__} is not allowed")
@@ -236,7 +238,7 @@ class Evaluator:
             try:
                 return func(*args)
             except (OverflowError, ValueError, TypeError) as e:
-                raise EvalError(f"{fname}: {e}")
+                raise EvalError(f"{fname}: {e}") from e
 
         raise EvalError(f"disallowed syntax: {type(node).__name__}")
 
@@ -778,7 +780,7 @@ def build_impact(store, overrides: dict[str, float]) -> dict:
     # the affected-requirement diff, so we never re-run a full evaluate_project.
     owner_base: dict[str, list[str]] = {}
     owner_over: dict[str, list[str]] = {}
-    for cid, owner, c, c_refs in constraint_deps:
+    for _cid, owner, c, c_refs in constraint_deps:
         b_verdict = _constraint_verdict(base, c, owner)
         o_verdict = _constraint_verdict(over, c, owner)
         owner_base.setdefault(owner, []).append(b_verdict["status"])

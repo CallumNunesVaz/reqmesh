@@ -735,7 +735,7 @@ def install_git_hook(project_id: str, user: dict = Depends(require_maintain)):
         path = install_hook(str(get_store(project_id).root))
         return {"installed": True, "path": path}
     except FileNotFoundError:
-        raise HTTPException(status_code=400, detail="No .git directory found. Run 'git init' first.")
+        raise HTTPException(status_code=400, detail="No .git directory found. Run 'git init' first.") from None
 
 
 @router.post("/projects/{project_id}/hooks/uninstall")

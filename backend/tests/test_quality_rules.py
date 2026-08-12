@@ -245,7 +245,7 @@ def test_as_dicts_matches_rules():
     """as_dicts() returns one dict per PATTERN_RULES entry."""
     dicts = as_dicts()
     assert len(dicts) == len(PATTERN_RULES)
-    for rule, d in zip(PATTERN_RULES, dicts):
+    for rule, d in zip(PATTERN_RULES, dicts, strict=True):
         assert d["id"] == rule.id
         assert d["severity"] == rule.severity
         assert d["pattern"] == rule.pattern

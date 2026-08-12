@@ -357,9 +357,9 @@ def _check_xlsx_zip_bomb(content: bytes) -> None:
     except ValueError:
         raise
     except zipfile.BadZipFile:
-        raise ValueError("XLSX file rejected: not a valid ZIP file")
+        raise ValueError("XLSX file rejected: not a valid ZIP file") from None
     except Exception:
-        raise ValueError("XLSX file rejected: could not inspect archive")
+        raise ValueError("XLSX file rejected: could not inspect archive") from None
 
 
 def _count_xlsx_rows(content: bytes) -> int:
@@ -439,7 +439,7 @@ def import_xlsx(store, content: bytes, mode: str = "merge", dry_run: bool = Fals
         for req in store.list_requirements():
             store.delete_requirement(req["id"])
 
-    for req_data, rid in zip(parsed_rows, row_ids):
+    for req_data, rid in zip(parsed_rows, row_ids, strict=True):
         if not rid:
             skipped += 1
             continue

@@ -65,7 +65,7 @@ def test_request_update_rejected_when_unsupported(monkeypatch):
     monkeypatch.setattr(updater, "self_update_supported", lambda: False)
     try:
         updater.request_update("9.9.9", "admin")
-        assert False, "expected RuntimeError"
+        raise AssertionError("expected RuntimeError")
     except RuntimeError:
         pass
 
@@ -270,7 +270,7 @@ def test_bundle_rejects_not_newer(tmp_path, monkeypatch):
     tarball = _make_bundle(tmp_path, version="0.5.0")
     try:
         bu.stage_from_archive(tarball, "admin")
-        assert False, "expected RuntimeError"
+        raise AssertionError("expected RuntimeError")
     except RuntimeError as e:
         assert "not newer" in str(e)
 
@@ -281,7 +281,7 @@ def test_bundle_rejects_malformed(tmp_path, monkeypatch):
     tarball = _make_bundle(tmp_path, drop_frontend=True)
     try:
         bu.stage_from_archive(tarball, "admin")
-        assert False, "expected RuntimeError"
+        raise AssertionError("expected RuntimeError")
     except RuntimeError as e:
         assert "frontend/dist" in str(e)
 
@@ -292,7 +292,7 @@ def test_bundle_blocks_path_traversal(tmp_path, monkeypatch):
     tarball = _make_bundle(tmp_path, traversal=True)
     try:
         bu.stage_from_archive(tarball, "admin")
-        assert False, "expected RuntimeError"
+        raise AssertionError("expected RuntimeError")
     except RuntimeError:
         pass
     # Nothing escaped the install tree.

@@ -232,7 +232,7 @@ def _validate_due_dates(baselines: list) -> None:
             raise HTTPException(
                 status_code=400,
                 detail=f"Invalid due date: {due} (expected YYYY-MM-DD)",
-            )
+            ) from None
 
     # Phase 2: monotonic check on the normalized form which knows the order.
     defs = normalize_baseline_defs(baselines)

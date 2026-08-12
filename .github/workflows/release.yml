@@ -94,7 +94,10 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           IMAGE="ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
-          docker build -f Dockerfile.prod -t "$IMAGE:$VERSION" -t "$IMAGE:latest" .
+          docker build -f Dockerfile.prod \
+            --build-arg VERSION="$VERSION" \
+            --build-arg REVISION="${GITHUB_SHA}" \
+            -t "$IMAGE:$VERSION" -t "$IMAGE:latest" .
           docker push "$IMAGE:$VERSION"
           docker push "$IMAGE:latest"
 

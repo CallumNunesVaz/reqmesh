@@ -168,7 +168,7 @@ async def start_update(body: UpdateRequest, admin: dict = Depends(require_admin)
             updater.request_update, target, admin.get("username", "admin")
         )
     except RuntimeError as exc:
-        raise HTTPException(status_code=409, detail=str(exc))
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return result
 
 
@@ -217,7 +217,7 @@ async def upload_update(
     try:
         size = await asyncio.to_thread(_stream_to_disk, file, dest, limit)
     except ValueError:
-        raise HTTPException(status_code=413, detail=f"Upload exceeds {settings.max_update_upload_mb} MB limit.")
+        raise HTTPException(status_code=413, detail=f"Upload exceeds {settings.max_update_upload_mb} MB limit.") from None
 
     if size == 0:
         dest.unlink(missing_ok=True)
@@ -228,7 +228,7 @@ async def upload_update(
             updater.request_file_update, target_version.strip(), admin.get("username", "admin")
         )
     except RuntimeError as exc:
-        raise HTTPException(status_code=409, detail=str(exc))
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return {**result, "archive_bytes": size}
 
 
@@ -257,7 +257,7 @@ async def upload_bundle(
     try:
         size = await asyncio.to_thread(_stream_to_disk, file, dest, limit)
     except ValueError:
-        raise HTTPException(status_code=413, detail=f"Upload exceeds {settings.max_update_upload_mb} MB limit.")
+        raise HTTPException(status_code=413, detail=f"Upload exceeds {settings.max_update_upload_mb} MB limit.") from None
 
     if size == 0:
         dest.unlink(missing_ok=True)
@@ -268,7 +268,7 @@ async def upload_bundle(
             bundle_update.stage_from_archive, dest, admin.get("username", "admin")
         )
     except RuntimeError as exc:
-        raise HTTPException(status_code=409, detail=str(exc))
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return {**result, "archive_bytes": size}
 
 

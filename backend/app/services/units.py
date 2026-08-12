@@ -33,7 +33,7 @@ def _mul(d: Dimension, n: int) -> Dimension:
 
 
 def _add(a: Dimension, b: Dimension) -> Dimension:
-    return tuple(x + y for x, y in zip(a, b))  # type: ignore[return-value]
+    return tuple(x + y for x, y in zip(a, b, strict=True))  # type: ignore[return-value]
 
 
 # symbol -> (factor to SI base, dimension). Factor is unused by dimensional

@@ -16,6 +16,18 @@ RUN npm run build
 # ═══ Stage 2 — backend + built frontend ════════════════════════════════════════
 FROM python:3.12-slim
 
+# OCI provenance labels. VERSION and REVISION are injected at build time by
+# release.yml from the git tag and commit — never hardcoded here, so a release
+# cannot ship a stale version label (a literal string would be a fourth file
+# set_version.py cannot see). The `dev`/`unknown` defaults only ever appear on
+# local or CI-only builds that are never published.
+ARG VERSION=dev
+ARG REVISION=unknown
+LABEL org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${REVISION}" \
+      org.opencontainers.image.source="https://github.com/CallumNunesVaz/reqmesh" \
+      org.opencontainers.image.licenses="GPL-3.0-or-later"
+
 # apt-get upgrade: the base tag is only rebuilt periodically, so between
 # rebuilds it carries known-vulnerable system packages that Debian has already
 # patched. Installing on top of it without upgrading bakes those in for the

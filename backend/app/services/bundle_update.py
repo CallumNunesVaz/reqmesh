@@ -182,7 +182,7 @@ def stage_from_archive(archive: Path, requested_by: str) -> dict:
             with tarfile.open(archive, "r:*") as tar:
                 _safe_extract(tar, extract_tmp)
         except (tarfile.TarError, OSError) as exc:
-            raise RuntimeError(f"Could not read the bundle archive: {exc}")
+            raise RuntimeError(f"Could not read the bundle archive: {exc}") from exc
 
         # A release bundle contains a single top-level reqmesh-vX.Y.Z/ directory.
         entries = [p for p in extract_tmp.iterdir() if p.is_dir()]

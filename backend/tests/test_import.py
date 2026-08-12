@@ -44,7 +44,7 @@ def test_parse_reqif_roundtrip():
 def test_parse_reqif_rejects_garbage():
     try:
         parse_reqif("this is not xml at all <<<")
-        assert False, "expected ReqIFParseError"
+        raise AssertionError("expected ReqIFParseError")
     except ReqIFParseError:
         pass
 
@@ -90,7 +90,7 @@ def test_parse_sysml_basic():
 def test_parse_sysml_rejects_garbage():
     try:
         parse_sysml("just some prose without any requirement blocks")
-        assert False, "expected SysMLParseError"
+        raise AssertionError("expected SysMLParseError")
     except SysMLParseError:
         pass
 

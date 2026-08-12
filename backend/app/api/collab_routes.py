@@ -581,10 +581,10 @@ def import_test_results(
     try:
         results = parse_results(content, detected)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=400,
-                            detail=f"Failed to parse test results: {exc}")
+                            detail=f"Failed to parse test results: {exc}") from exc
 
     store = get_store(project_id)
     summary = do_import(store, results, dry_run=dry_run)
