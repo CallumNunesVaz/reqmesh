@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { X, AlertTriangle } from 'lucide-react';
 import { api, type Requirement } from '../api/client';
+import type { RequirementCreate } from '../api/generated/writeModels';
 import { useUndoStore } from '../store/undo';
 import { splitDescription } from '../lib/splitText';
 import type { SplitCandidate } from '../lib/splitText';
@@ -63,12 +64,12 @@ export default function SplitRequirementDialog({ open, onClose, projectId, sourc
     setError('');
 
     const createdIds: string[] = [];
-    const createdData: { id: string; data: Partial<Requirement> }[] = [];
+    const createdData: { id: string; data: RequirementCreate }[] = [];
 
     for (const row of selected) {
       try {
         const uid = await api.getNextUid(projectId, source.id);
-        const data: Partial<Requirement> = {
+        const data: RequirementCreate = {
           id: uid.next_id,
           name: row.name,
           description: `<p>${row.candidate.text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')}</p>`,

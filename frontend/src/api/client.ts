@@ -126,6 +126,18 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
 import { useAuthStore } from '../store/auth';
 
+import type {
+  AnalysisCaseCreate, AnalysisCaseUpdate,
+  ChangeRequestCreate, ChangeRequestUpdate,
+  ComponentCreate, ComponentUpdate,
+  DecisionRecordCreate, DecisionRecordUpdate,
+  DefinitionCreate, DefinitionUpdate,
+  RequirementCreate, RequirementUpdate,
+  RiskCreate, RiskUpdate,
+  SpecificationCreate, SpecificationUpdate,
+  VerificationCaseCreate, VerificationCaseUpdate,
+} from './generated/writeModels';
+
 export interface Project {
   id: string;
   name: string;
@@ -1183,9 +1195,9 @@ export const api = {
     request<ComponentTreeNode[]>(`/projects/${projectId}/components/tree`),
   getComponent: (projectId: string, componentId: string) =>
     request<Component>(`/projects/${projectId}/components/${componentId}`),
-  createComponent: (projectId: string, data: Partial<Component>) =>
+  createComponent: (projectId: string, data: ComponentCreate) =>
     request<Component>(`/projects/${projectId}/components`, { method: 'POST', body: data }),
-  updateComponent: (projectId: string, componentId: string, data: Partial<Component>, ifMatch?: string) =>
+  updateComponent: (projectId: string, componentId: string, data: ComponentUpdate, ifMatch?: string) =>
     request<Component>(`/projects/${projectId}/components/${componentId}`, { method: 'PUT', body: data, ifMatch }),
   deleteComponent: (projectId: string, componentId: string, force = false) =>
     request<{ok?: true} | undefined>(`/projects/${projectId}/components/${componentId}${force ? '?force=true' : ''}`, { method: 'DELETE' }),
@@ -1195,9 +1207,9 @@ export const api = {
     request<Component[]>(`/projects/${projectId}/verification/${vcId}/components`),
   getRequirement: (projectId: string, reqId: string) =>
     request<Requirement>(`/projects/${projectId}/requirements/${reqId}`),
-  createRequirement: (projectId: string, data: Partial<Requirement>) =>
+  createRequirement: (projectId: string, data: RequirementCreate) =>
     request<Requirement>(`/projects/${projectId}/requirements`, { method: 'POST', body: data }),
-  updateRequirement: (projectId: string, reqId: string, data: Partial<Requirement>, ifMatch?: string) =>
+  updateRequirement: (projectId: string, reqId: string, data: RequirementUpdate, ifMatch?: string) =>
     request<Requirement>(`/projects/${projectId}/requirements/${reqId}`, { method: 'PUT', body: data, ifMatch }),
   deleteRequirement: (projectId: string, reqId: string, force = false) =>
     request<{ok?: true} | undefined>(`/projects/${projectId}/requirements/${reqId}${force ? '?force=true' : ''}`, { method: 'DELETE' }),
@@ -1246,18 +1258,18 @@ export const api = {
 
   // Specifications
   listSpecifications: (projectId: string) => request<Specification[]>(`/projects/${projectId}/specifications`),
-  createSpecification: (projectId: string, data: Partial<Specification>) =>
+  createSpecification: (projectId: string, data: SpecificationCreate) =>
     request<Specification>(`/projects/${projectId}/specifications`, { method: 'POST', body: data }),
-  updateSpecification: (projectId: string, specId: string, data: Partial<Specification>) =>
+  updateSpecification: (projectId: string, specId: string, data: SpecificationUpdate) =>
     request<Specification>(`/projects/${projectId}/specifications/${specId}`, { method: 'PUT', body: data }),
   deleteSpecification: (projectId: string, specId: string, force = false) =>
     request<{ok?: true} | undefined>(`/projects/${projectId}/specifications/${specId}${force ? '?force=true' : ''}`, { method: 'DELETE' }),
 
   // Verification Cases
   listVerificationCases: (projectId: string) => request<VerificationCase[]>(`/projects/${projectId}/verification`),
-  createVerificationCase: (projectId: string, data: Partial<VerificationCase>) =>
+  createVerificationCase: (projectId: string, data: VerificationCaseCreate) =>
     request<VerificationCase>(`/projects/${projectId}/verification`, { method: 'POST', body: data }),
-  updateVerificationCase: (projectId: string, vcId: string, data: Partial<VerificationCase>) =>
+  updateVerificationCase: (projectId: string, vcId: string, data: VerificationCaseUpdate) =>
     request<VerificationCase>(`/projects/${projectId}/verification/${vcId}`, { method: 'PUT', body: data }),
   deleteVerificationCase: (projectId: string, vcId: string, force = false) =>
     request<{ok?: true} | undefined>(`/projects/${projectId}/verification/${vcId}${force ? '?force=true' : ''}`, { method: 'DELETE' }),
@@ -1274,9 +1286,9 @@ export const api = {
 
   // Change Requests
   listChangeRequests: (projectId: string) => request<ChangeRequest[]>(`/projects/${projectId}/change-requests`),
-  createChangeRequest: (projectId: string, data: Partial<ChangeRequest>) =>
+  createChangeRequest: (projectId: string, data: ChangeRequestCreate) =>
     request<ChangeRequest>(`/projects/${projectId}/change-requests`, { method: 'POST', body: data }),
-  updateChangeRequest: (projectId: string, crId: string, data: Partial<ChangeRequest>) =>
+  updateChangeRequest: (projectId: string, crId: string, data: ChangeRequestUpdate) =>
     request<ChangeRequest>(`/projects/${projectId}/change-requests/${crId}`, { method: 'PUT', body: data }),
   deleteChangeRequest: (projectId: string, crId: string, force = false) =>
     request<{ok?: true} | undefined>(`/projects/${projectId}/change-requests/${crId}${force ? '?force=true' : ''}`, { method: 'DELETE' }),
@@ -1295,9 +1307,9 @@ export const api = {
   listRisks: (projectId: string) => request<Risk[]>(`/projects/${projectId}/risks`),
   getRiskMatrix: (projectId: string) => request<RiskMatrix>(`/projects/${projectId}/risk-matrix`),
   getRiskBingo: (projectId: string) => request<RiskBingo>(`/projects/${projectId}/risk-bingo`),
-  createRisk: (projectId: string, data: Partial<Risk>) =>
+  createRisk: (projectId: string, data: RiskCreate) =>
     request<Risk>(`/projects/${projectId}/risks`, { method: 'POST', body: data }),
-  updateRisk: (projectId: string, riskId: string, data: Partial<Risk>) =>
+  updateRisk: (projectId: string, riskId: string, data: RiskUpdate) =>
     request<Risk>(`/projects/${projectId}/risks/${riskId}`, { method: 'PUT', body: data }),
   deleteRisk: (projectId: string, riskId: string, force = false) =>
     request<{ok?: true} | undefined>(`/projects/${projectId}/risks/${riskId}${force ? '?force=true' : ''}`, { method: 'DELETE' }),
@@ -1316,9 +1328,9 @@ export const api = {
 
   // Decisions
   listDecisions: (projectId: string) => request<DecisionRecord[]>(`/projects/${projectId}/decisions`),
-  createDecision: (projectId: string, data: Partial<DecisionRecord>) =>
+  createDecision: (projectId: string, data: DecisionRecordCreate) =>
     request<DecisionRecord>(`/projects/${projectId}/decisions`, { method: 'POST', body: data }),
-  updateDecision: (projectId: string, decId: string, data: Partial<DecisionRecord>) =>
+  updateDecision: (projectId: string, decId: string, data: DecisionRecordUpdate) =>
     request<DecisionRecord>(`/projects/${projectId}/decisions/${decId}`, { method: 'PUT', body: data }),
   deleteDecision: (projectId: string, decId: string, force = false) =>
     request<{ok?: true} | undefined>(`/projects/${projectId}/decisions/${decId}${force ? '?force=true' : ''}`, { method: 'DELETE' }),
@@ -1347,9 +1359,9 @@ export const api = {
   // Reusable parametric definitions (constraint def / calc def)
   listDefinitions: (projectId: string) =>
     request<Definition[]>(`/projects/${projectId}/definitions`),
-  createDefinition: (projectId: string, data: Definition) =>
+  createDefinition: (projectId: string, data: DefinitionCreate) =>
     request<Definition>(`/projects/${projectId}/definitions`, { method: 'POST', body: data }),
-  updateDefinition: (projectId: string, defId: string, data: Partial<Definition>) =>
+  updateDefinition: (projectId: string, defId: string, data: DefinitionUpdate) =>
     request<Definition>(`/projects/${projectId}/definitions/${encodeURIComponent(defId)}`, { method: 'PUT', body: data }),
   deleteDefinition: (projectId: string, defId: string) =>
     request<{ ok: boolean }>(`/projects/${projectId}/definitions/${encodeURIComponent(defId)}`, { method: 'DELETE' }),
@@ -1357,9 +1369,9 @@ export const api = {
   // Analysis cases (scoped, parameterised what-if evaluation)
   listAnalysisCases: (projectId: string) =>
     request<AnalysisCase[]>(`/projects/${projectId}/analysis`),
-  createAnalysisCase: (projectId: string, data: AnalysisCase) =>
+  createAnalysisCase: (projectId: string, data: AnalysisCaseCreate) =>
     request<AnalysisCase>(`/projects/${projectId}/analysis`, { method: 'POST', body: data }),
-  updateAnalysisCase: (projectId: string, caseId: string, data: Partial<AnalysisCase>) =>
+  updateAnalysisCase: (projectId: string, caseId: string, data: AnalysisCaseUpdate) =>
     request<AnalysisCase>(`/projects/${projectId}/analysis/${encodeURIComponent(caseId)}`, { method: 'PUT', body: data }),
   deleteAnalysisCase: (projectId: string, caseId: string) =>
     request<{ ok: boolean }>(`/projects/${projectId}/analysis/${encodeURIComponent(caseId)}`, { method: 'DELETE' }),

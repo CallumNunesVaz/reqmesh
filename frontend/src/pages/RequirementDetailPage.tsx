@@ -92,7 +92,7 @@ export default function RequirementDetailPage() {
   const [newRelTarget, setNewRelTarget] = useState('');
   const [reverseAdd, setReverseAdd] = useState(false);
   const [newVC, setNewVC] = useState('');
-  const { user } = useAuthStore();
+  useAuthStore();
   const bumpGraphVersion = useStore((s) => s.bumpGraphVersion);
   const bumpDataVersion = useStore((s) => s.bumpDataVersion);
   const setNavGuard = useStore((s) => s.setNavGuard);
@@ -460,7 +460,10 @@ export default function RequirementDetailPage() {
     setCrSaving(true);
     setCrError('');
     try {
-      // Get the fingerprint.
+      // The target's fingerprint as of now. `execute` refuses when it no longer
+      // matches, so a request cannot silently overwrite edits made after it was
+      // raised. `ChangeRequestCreate` has to carry this field or it is dropped
+      // and the guard never fires.
       const fp = await api.getRequirementFingerprint(projectId, reqId);
       // Create the CR with an auto-derived id.
       const crId = `CR-${reqId}-${Date.now().toString(36).toUpperCase()}`;
@@ -472,7 +475,6 @@ export default function RequirementDetailPage() {
         affected_requirements: [reqId],
         changes: { [reqId]: changes },
         base_fingerprints: { [reqId]: fp.fingerprint },
-        submitted_by: user?.username || '',
       });
       setShowRequestChange(false);
       // Refresh the affecting CRs list.

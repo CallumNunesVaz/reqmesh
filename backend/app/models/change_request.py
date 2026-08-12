@@ -81,6 +81,14 @@ class ChangeRequestCreate(BaseModel):
     affected_requirements: list[str] = Field(default_factory=list)
     changes: dict[str, dict[str, Any]] = Field(default_factory=dict)
     creates: list[str] = Field(default_factory=list)
+    #: Accepted on create because the fingerprint is only meaningful as of the
+    #: moment the request was raised — the client reads it from
+    #: `GET .../fingerprint` and sends it here. Omitting it from this model
+    #: silently dropped it, leaving `base_fingerprints` permanently empty, and
+    #: the staleness check in `services/change_requests.py` only fires when a
+    #: fingerprint is present. The guard the entity documents was therefore
+    #: dead: executing a request could clobber edits made after it was raised.
+    base_fingerprints: dict[str, str] = Field(default_factory=dict)
 
 
 class ChangeRequestUpdate(BaseModel):

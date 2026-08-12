@@ -164,7 +164,7 @@ jobs:
           retention-days: 7
 
   schema-freshness:
-    name: Schema freshness
+    name: Generated-code freshness
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -177,3 +177,9 @@ jobs:
       - run: python gen_schemas.py
         working-directory: backend
       - run: git diff --exit-code schemas/
+      # The write models are generated into the frontend tree the same way the
+      # schemas are into schemas/ — a Pydantic change that is not regenerated
+      # must fail the build rather than let the client types drift.
+      - run: python gen_write_models.py
+        working-directory: backend
+      - run: git diff --exit-code frontend/src/api/generated/writeModels.ts
