@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, useMemo } from 'react';
 import { usePersistedState, setCodec } from '../hooks/usePersistedState';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, CheckCircle2, Trash2, XCircle, Clock, ChevronDown, X, Link as LinkIcon, Play, ListChecks, ClipboardList, FlaskConical, Loader, Search, UploadCloud } from 'lucide-react';
+import { Plus, CheckCircle2, Trash2, XCircle, Clock, ChevronDown, X, Link as LinkIcon, Play, ListChecks, ClipboardList, FlaskConical, Loader, Search, UploadCloud, Copy } from 'lucide-react';
 import { api, type VerificationCase, type Requirement, type Component, type TestResultImportSummary } from '../api/client';
 import { useStore } from '../store';
 import { useAuthStore } from '../store/auth';
@@ -138,6 +138,26 @@ export default function VerificationPage() {
       addToast('success', `Verification case ${vcId} deleted`);
     } catch (err) {
       addToast('error', err instanceof Error ? err.message : 'Delete failed');
+    }
+  };
+
+  const handleDuplicate = async (vc: VerificationCase) => {
+    if (!projectId) return;
+    const existing = new Set(verificationCases.map((v) => v.id));
+    let id = `${vc.id}-copy`;
+    let n = 2;
+    while (existing.has(id)) { id = `${vc.id}-copy${n++}`; }
+    try {
+      await api.createVerificationCase(projectId, {
+        id,
+        name: `${vc.name} (copy)`,
+        description: vc.description,
+        method: vc.method,
+      });
+      addToast('success', `Verification case ${id} created`);
+      load();
+    } catch (err) {
+      addToast('error', err instanceof Error ? err.message : 'Failed to duplicate verification case');
     }
   };
 
@@ -558,6 +578,15 @@ export default function VerificationPage() {
                       <option value="passed">Passed</option>
                       <option value="failed">Failed</option>
                     </select>
+                    {editable && (
+                    <button
+                      onClick={() => handleDuplicate(vc)}
+                      className="p-1.5 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-all"
+                      title="Duplicate verification case"
+                    >
+                      <Copy size={14} />
+                    </button>
+                    )}
                     {editable && (
                     <button
                       onClick={() => handleDelete(vc.id)}

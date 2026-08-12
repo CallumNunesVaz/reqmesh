@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Sigma, Boxes, Trash2, X, Search, Edit3 } from 'lucide-react';
+import { Plus, Sigma, Boxes, Trash2, X, Search, Edit3, ChevronDown } from 'lucide-react';
 import { api, type Definition } from '../api/client';
 import { useStore } from '../store';
 import { useAuthStore } from '../store/auth';
 import { CopyLinkButton } from '../components/entities';
 import { useFocusedEntity } from '../components/useFocusedEntity';
-import { usePersistedState } from '../hooks/usePersistedState';
+import { usePersistedState, setCodec } from '../hooks/usePersistedState';
+import { HistoryPanel } from '../components/HistoryPanel';
+import { CommentThread } from '../components/CommentThread';
 import { useToasts } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmDialog';
 import { useKeyboardShortcuts } from '../components/useKeyboardShortcuts';
@@ -46,6 +48,7 @@ export default function DefinitionsPage() {
   const [draft, setDraft] = useState(EMPTY);
   const pk = (field: string) => (projectId ? `rt-definitions-${field}-${projectId}` : null);
   const [search, setSearch] = usePersistedState(pk('search'), '');
+  const [expanded, setExpanded] = usePersistedState<Set<string>>(pk('expanded'), new Set(), setCodec<string>());
   const searchRef = useRef<HTMLInputElement>(null);
 
   const load = () => {
@@ -97,6 +100,13 @@ export default function DefinitionsPage() {
       addToast('error', err instanceof Error ? err.message : 'Failed to save definition');
     }
   };
+
+  const toggleExpand = (id: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
 
   const openEdit = (d: Definition) => {
     setDraft({
@@ -269,18 +279,20 @@ export default function DefinitionsPage() {
         </div>
       ) : (
         <div className="space-y-2">
-          {filtered.map((d, i) => (
+          {filtered.map((d, i) => {
+            const isExpanded = expanded.has(d.id);
+            return (
             <motion.div
               key={d.id}
               id={`entity-${d.id}`}
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: i * 0.03 }}
-              className={`card p-4 hover:shadow-md transition-shadow group ${
+              className={`card hover:shadow-md transition-shadow group ${
                 focusId === d.id || selectedId === d.id ? 'ring-2 ring-primary/50' : ''
               }`}
             >
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 p-4 cursor-pointer" onClick={() => toggleExpand(d.id)}>
                 <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${
                   d.type === 'calc' ? 'bg-cs-purple/10 text-cs-purple' : 'bg-cs-teal/10 text-cs-teal'
                 }`}>
@@ -305,14 +317,14 @@ export default function DefinitionsPage() {
                 {editable && (
                   <>
                     <button
-                      onClick={() => openEdit(d)}
+                      onClick={(e) => { e.stopPropagation(); openEdit(d); }}
                       className="p-1.5 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-all"
                       title="Edit"
                     >
                       <Edit3 size={14} />
                     </button>
                     <button
-                      onClick={() => handleDelete(d.id)}
+                      onClick={(e) => { e.stopPropagation(); handleDelete(d.id); }}
                       className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
                       title="Delete"
                     >
@@ -320,9 +332,37 @@ export default function DefinitionsPage() {
                     </button>
                   </>
                 )}
+                <ChevronDown
+                  size={15}
+                  className={`text-muted-foreground transition-transform duration-200 shrink-0 ${isExpanded ? 'rotate-180' : ''}`}
+                />
               </div>
+
+              <AnimatePresence initial={false}>
+                {isExpanded && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.15 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="px-4 pb-4 border-t pt-3 space-y-3">
+                      <div>
+                        <h4 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Comments</h4>
+                        <CommentThread entityKind="definitions" entityId={d.id} />
+                      </div>
+                      <div className="pt-3 border-t border-border">
+                        <h4 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Change History</h4>
+                        <HistoryPanel itemId={d.id} />
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </motion.div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

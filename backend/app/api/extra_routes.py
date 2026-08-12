@@ -57,6 +57,15 @@ def list_change_requests(
     return paginate(items, offset, limit)
 
 
+@router.get("/projects/{project_id}/change-requests/{cr_id}")
+def get_change_request(project_id: str, cr_id: str):
+    store = get_store(project_id)
+    cr = store.get_item("change_requests", cr_id)
+    if cr is None:
+        raise HTTPException(status_code=404, detail="Change request not found")
+    return cr
+
+
 @router.post("/projects/{project_id}/change-requests", status_code=201)
 def create_change_request(project_id: str, data: ChangeRequestCreate, user: dict = Depends(require_edit)):
     store = get_store(project_id)
@@ -253,6 +262,15 @@ def list_risks(
     return paginate(items, offset, limit)
 
 
+@router.get("/projects/{project_id}/risks/{risk_id}")
+def get_risk(project_id: str, risk_id: str):
+    store = get_store(project_id)
+    risk = store.get_item("risks", risk_id)
+    if risk is None:
+        raise HTTPException(status_code=404, detail="Risk not found")
+    return _rated(store, [risk])[0]
+
+
 @router.post("/projects/{project_id}/risks", status_code=201)
 def create_risk(project_id: str, data: RiskCreate, user: dict = Depends(require_edit)):
     store = get_store(project_id)
@@ -379,6 +397,15 @@ def list_decisions(
 ):
     items = sorted_by_modified(get_store(project_id).list_items("decisions"))
     return paginate(items, offset, limit)
+
+
+@router.get("/projects/{project_id}/decisions/{dec_id}")
+def get_decision(project_id: str, dec_id: str):
+    store = get_store(project_id)
+    decision = store.get_item("decisions", dec_id)
+    if decision is None:
+        raise HTTPException(status_code=404, detail="Decision not found")
+    return decision
 
 
 @router.post("/projects/{project_id}/decisions", status_code=201)

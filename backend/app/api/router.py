@@ -1256,6 +1256,16 @@ def list_system_states(project_id: str):
     return {"states": defs, "orphans": orphans}
 
 
+@router.get("/projects/{project_id}/system-states/{name}")
+def get_system_state(project_id: str, name: str):
+    store = get_store(project_id)
+    defs = normalize_system_states(store.read_meta().get("system_states", []))
+    for d in defs:
+        if d["name"] == name:
+            return d
+    raise HTTPException(status_code=404, detail="System state not found")
+
+
 @router.post("/projects/{project_id}/system-states", status_code=201)
 def create_system_state(project_id: str, data: SystemStateCreate,
                         user: dict = Depends(require_maintain)):
@@ -1369,6 +1379,15 @@ def list_definitions(
     return paginate(items, offset, limit)
 
 
+@router.get("/projects/{project_id}/definitions/{def_id}")
+def get_definition(project_id: str, def_id: str):
+    store = get_store(project_id)
+    item = store.get_item("definitions", def_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Definition not found")
+    return item
+
+
 @router.post("/projects/{project_id}/definitions", status_code=201)
 def create_definition(project_id: str, data: DefinitionCreate, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
@@ -1420,6 +1439,15 @@ def list_analysis_cases(
     store = get_store(project_id)
     items = store.list_items("analysis_cases")
     return paginate(items, offset, limit)
+
+
+@router.get("/projects/{project_id}/analysis/{case_id}")
+def get_analysis_case(project_id: str, case_id: str):
+    store = get_store(project_id)
+    item = store.get_item("analysis_cases", case_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Analysis case not found")
+    return item
 
 
 @router.post("/projects/{project_id}/analysis", status_code=201)

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { usePersistedState, setCodec } from '../hooks/usePersistedState';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, FileText, Trash2, ChevronDown, Square, CheckSquare, X, Search, ExternalLink, Edit3 } from 'lucide-react';
+import { Plus, FileText, Trash2, ChevronDown, Square, CheckSquare, X, Search, ExternalLink, Edit3, Copy } from 'lucide-react';
 import { api, type Requirement, type Component, type Specification } from '../api/client';
 import { useStore } from '../store';
 import { useAuthStore } from '../store/auth';
@@ -110,6 +110,26 @@ export default function SpecificationsPage() {
     });
     setEditingId(spec.id);
     setShowCreate(true);
+  };
+
+  const handleDuplicate = async (spec: Specification) => {
+    if (!projectId) return;
+    const existing = new Set(specifications.map((s) => s.id));
+    let id = `${spec.id}-copy`;
+    let n = 2;
+    while (existing.has(id)) { id = `${spec.id}-copy${n++}`; }
+    try {
+      await api.createSpecification(projectId, {
+        id,
+        name: `${spec.name} (copy)`,
+        description: spec.description,
+        url: spec.url,
+      });
+      addToast('success', `Specification ${id} created`);
+      load();
+    } catch (err) {
+      addToast('error', err instanceof Error ? err.message : 'Failed to duplicate specification');
+    }
   };
 
   const setSpecComponents = async (specId: string, linked: string[]) => {
@@ -295,6 +315,13 @@ export default function SpecificationsPage() {
                 </div>
                 {editable && (
                   <>
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleDuplicate(spec); }}
+                  className="p-1.5 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-all"
+                  title="Duplicate specification"
+                >
+                  <Copy size={14} />
+                </button>
                 <button
                   onClick={(e) => { e.stopPropagation(); openEdit(spec); }}
                   className="p-1.5 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-all"

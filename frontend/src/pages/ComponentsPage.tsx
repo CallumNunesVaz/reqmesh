@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { usePersistedState, setCodec } from '../hooks/usePersistedState';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, ChevronRight, Boxes, Square, CheckSquare, Trash2, X, Search, Eye, EyeOff, Download } from 'lucide-react';
+import { Plus, ChevronRight, Boxes, Square, CheckSquare, Trash2, X, Search, Eye, EyeOff, Download, Copy } from 'lucide-react';
 import { api, COMPONENT_TYPES, getTruncationInfo, type Component, type ComponentTreeNode, type TruncationInfo } from '../api/client';
 import { useStore } from '../store';
 import { useAuthStore } from '../store/auth';
@@ -215,6 +215,30 @@ export default function ComponentsPage() {
     }
   };
 
+  const handleDuplicate = async (src: Component) => {
+    if (!projectId) return;
+    const existing = new Set(components.map((c) => c.id));
+    let id = `${src.id}-copy`;
+    let n = 2;
+    while (existing.has(id)) { id = `${src.id}-copy${n++}`; }
+    try {
+      await api.createComponent(projectId, {
+        id,
+        name: `${src.name} (copy)`,
+        type: src.type,
+        parent: src.parent,
+        description: src.description,
+        part_number: src.part_number,
+        supplier: src.supplier,
+        quantity: src.quantity,
+      });
+      addToast('success', `Component ${id} created`);
+      load();
+    } catch (err: any) {
+      addToast('error', err.message || 'Failed to duplicate component');
+    }
+  };
+
   const toggle = (id: string) =>
     setCollapsed((prev) => {
       const next = new Set(prev);
@@ -308,6 +332,7 @@ export default function ComponentsPage() {
     };
     if (filtering && !subtreeMatches(node)) return null;
     const isFocused = flatNodes[focusedIndex]?.id === node.id;
+    const comp = components.find((c) => c.id === node.id);
     return (
       <div key={node.id}>
         <DropRow id={node.id} disabled={!editable} isOver={overId === node.id} valid={dropIsValid}>
@@ -352,6 +377,15 @@ export default function ComponentsPage() {
               toggle is a no-op, and the only control that would reveal it was
               on an ancestor the user had to go and find. Clicking now clears
               whichever ancestors are doing the hiding. */}
+          {editable && comp && (
+            <button
+              onClick={(e) => { e.stopPropagation(); handleDuplicate(comp); }}
+              className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+              title="Duplicate component"
+            >
+              <Copy size={13} />
+            </button>
+          )}
           <button
             onClick={(e) => {
               e.stopPropagation();

@@ -1243,6 +1243,8 @@ export const api = {
   // System States
   listSystemStates: (projectId: string) =>
     request<SystemStatesResponse>(`/projects/${projectId}/system-states`),
+  getSystemState: (projectId: string, name: string) =>
+    request<SystemStateDef>(`/projects/${projectId}/system-states/${encodeURIComponent(name)}`),
   createSystemState: (projectId: string, data: { name: string; description: string }) =>
     request<SystemStateDef>(`/projects/${projectId}/system-states`, { method: 'POST', body: data }),
   updateSystemState: (projectId: string, name: string, data: { name?: string; description?: string }) =>
@@ -1286,6 +1288,8 @@ export const api = {
 
   // Change Requests
   listChangeRequests: (projectId: string) => request<ChangeRequest[]>(`/projects/${projectId}/change-requests`),
+  getChangeRequest: (projectId: string, crId: string) =>
+    request<ChangeRequest>(`/projects/${projectId}/change-requests/${crId}`),
   createChangeRequest: (projectId: string, data: ChangeRequestCreate) =>
     request<ChangeRequest>(`/projects/${projectId}/change-requests`, { method: 'POST', body: data }),
   updateChangeRequest: (projectId: string, crId: string, data: ChangeRequestUpdate) =>
@@ -1305,6 +1309,8 @@ export const api = {
   getBacklinks: (projectId: string, entityId: string) =>
     request<Backlinks>(`/projects/${projectId}/entities/${entityId}/backlinks`),
   listRisks: (projectId: string) => request<Risk[]>(`/projects/${projectId}/risks`),
+  getRisk: (projectId: string, riskId: string) =>
+    request<Risk>(`/projects/${projectId}/risks/${riskId}`),
   getRiskMatrix: (projectId: string) => request<RiskMatrix>(`/projects/${projectId}/risk-matrix`),
   getRiskBingo: (projectId: string) => request<RiskBingo>(`/projects/${projectId}/risk-bingo`),
   createRisk: (projectId: string, data: RiskCreate) =>
@@ -1328,6 +1334,8 @@ export const api = {
 
   // Decisions
   listDecisions: (projectId: string) => request<DecisionRecord[]>(`/projects/${projectId}/decisions`),
+  getDecision: (projectId: string, decId: string) =>
+    request<DecisionRecord>(`/projects/${projectId}/decisions/${decId}`),
   createDecision: (projectId: string, data: DecisionRecordCreate) =>
     request<DecisionRecord>(`/projects/${projectId}/decisions`, { method: 'POST', body: data }),
   updateDecision: (projectId: string, decId: string, data: DecisionRecordUpdate) =>
@@ -1359,6 +1367,8 @@ export const api = {
   // Reusable parametric definitions (constraint def / calc def)
   listDefinitions: (projectId: string) =>
     request<Definition[]>(`/projects/${projectId}/definitions`),
+  getDefinition: (projectId: string, defId: string) =>
+    request<Definition>(`/projects/${projectId}/definitions/${encodeURIComponent(defId)}`),
   createDefinition: (projectId: string, data: DefinitionCreate) =>
     request<Definition>(`/projects/${projectId}/definitions`, { method: 'POST', body: data }),
   updateDefinition: (projectId: string, defId: string, data: DefinitionUpdate) =>
@@ -1369,6 +1379,8 @@ export const api = {
   // Analysis cases (scoped, parameterised what-if evaluation)
   listAnalysisCases: (projectId: string) =>
     request<AnalysisCase[]>(`/projects/${projectId}/analysis`),
+  getAnalysisCase: (projectId: string, caseId: string) =>
+    request<AnalysisCase>(`/projects/${projectId}/analysis/${encodeURIComponent(caseId)}`),
   createAnalysisCase: (projectId: string, data: AnalysisCaseCreate) =>
     request<AnalysisCase>(`/projects/${projectId}/analysis`, { method: 'POST', body: data }),
   updateAnalysisCase: (projectId: string, caseId: string, data: AnalysisCaseUpdate) =>

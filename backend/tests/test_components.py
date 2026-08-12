@@ -202,6 +202,39 @@ def test_reverse_lookup_from_verification_case(client, wired):
     assert [c["id"] for c in res.json()] == ["C-001"]
 
 
+def test_duplicate_compose_does_not_carry_links(client, wired):
+    """A duplicate is the client's compose of existing endpoints: POST the
+    content fields with a fresh id, sending no links. That must not inherit the
+    source's traceability — satisfies, verification_cases, relations or
+    baseline membership — nor touch the original."""
+    make_component(
+        client, wired, "C-001",
+        satisfies=["REQ-001"], verification_cases=["VC-001"],
+        relations=[{"type": "derives", "target": "REQ-001"}],
+        baselines=["SRR"],
+    )
+    src = client.get(f"/api/projects/{wired}/components/C-001").json()
+
+    res = client.post(f"/api/projects/{wired}/components", json={
+        "id": "C-001-copy", "name": "C-001 (copy)", "type": src["type"],
+        "parent": src["parent"], "description": src["description"],
+        "part_number": src["part_number"], "supplier": src["supplier"],
+        "quantity": src["quantity"],
+    })
+    assert res.status_code == 201, res.text
+
+    copy = client.get(f"/api/projects/{wired}/components/C-001-copy").json()
+    assert copy["satisfies"] == []
+    assert copy["verification_cases"] == []
+    assert copy["relations"] == []
+    assert copy["baselines"] == []
+
+    orig = client.get(f"/api/projects/{wired}/components/C-001").json()
+    assert orig["satisfies"] == ["REQ-001"]
+    assert orig["verification_cases"] == ["VC-001"]
+    assert orig["baselines"] == ["SRR"]
+
+
 def test_reverse_lookup_on_missing_requirement(client, wired):
     assert client.get(f"/api/projects/{wired}/requirements/ghost/components").status_code == 404
 
