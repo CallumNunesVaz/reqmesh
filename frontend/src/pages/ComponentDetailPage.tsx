@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Trash2, ArrowLeft, Save, X, ChevronRight, CheckCircle2 } from 'lucide-react';
+import { Trash2, ArrowLeft, Save, X, ChevronRight, AlertTriangle } from 'lucide-react';
 import { api, baselineNames, COMPONENT_TYPES, type Component, type Requirement, type VerificationCase, type Backlinks } from '../api/client';
 import { CopyLinkButton, EntityLink, COMPONENT_TYPE_META, type EntityKind } from '../components/entities';
 import { useEntityKinds } from '../components/entityIndex';
@@ -17,6 +17,7 @@ import RichTextEditor from '../components/RichTextEditor';
 import { HistoryPanel } from '../components/HistoryPanel';
 import { CommentThread } from '../components/CommentThread';
 import { useConfirm } from '../components/ConfirmDialog';
+import { useToasts } from '../components/Toast';
 
 /** Registry collection -> the entity kinds EntityLink knows how to render.
  *  Collections without a detail page of their own (decisions, analysis cases)
@@ -54,6 +55,7 @@ export default function ComponentDetailPage() {
   const bumpGraphVersion = useStore((s) => s.bumpGraphVersion);
   const entityKinds = useEntityKinds(projectId);
   const showConfirm = useConfirm();
+  const { addToast } = useToasts();
 
   const [component, setComponent] = useState<Component | null>(null);
   const [allComponents, setAllComponents] = useState<Component[]>([]);
@@ -61,7 +63,6 @@ export default function ComponentDetailPage() {
   const [cases, setCases] = useState<VerificationCase[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [saveSuccess, setSaveSuccess] = useState(false);
   const [projectBaselines, setProjectBaselines] = useState<string[]>([]);
   const [backlinks, setBacklinks] = useState<Backlinks | null>(null);
 
@@ -110,8 +111,7 @@ export default function ComponentDetailPage() {
       // made since. Omitted when unknown, which behaves exactly as before.
       const updated = await api.updateComponent(projectId, componentId, data, component?.modified);
       setComponent(updated);
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 2000);
+      addToast('success', `Component ${componentId} updated`);
       bumpGraphVersion();
     } catch (err: any) {
       setError(err.message || 'Save failed');
@@ -130,6 +130,7 @@ export default function ComponentDetailPage() {
     setError('');
     try {
       await api.deleteComponent(projectId, componentId);
+      addToast('success', `Component ${componentId} deleted`);
       navigate(`/project/${projectId}/components`);
     } catch (err: any) {
       setError(err.message || 'Failed to delete component');
@@ -193,14 +194,9 @@ export default function ComponentDetailPage() {
   return (
     <div className="max-w-4xl mx-auto p-8">
       {error && (
-        <div className="mb-4 px-4 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm flex items-center gap-2">
-          <Trash2 size={14} /> {error}
-          <button onClick={() => setError('')} className="ml-auto text-red-400/50 hover:text-red-400"><X size={14} /></button>
-        </div>
-      )}
-      {saveSuccess && (
-        <div className="mb-4 px-4 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm flex items-center gap-2">
-          <CheckCircle2 size={14} /> Saved
+        <div className="mb-4 px-4 py-2 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm flex items-center gap-2">
+          <AlertTriangle size={14} /> {error}
+          <button onClick={() => setError('')} className="ml-auto text-destructive/50 hover:text-destructive"><X size={14} /></button>
         </div>
       )}
       <div className="flex items-center gap-3 mb-6">

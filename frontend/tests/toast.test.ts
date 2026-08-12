@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { pushToast, type Toast } from '../src/components/Toast';
+import { countMessage } from '../src/lib/feedback';
 
 describe('pushToast', () => {
   it('appends in order and assigns the given id', () => {
@@ -44,5 +45,18 @@ describe('pushToast', () => {
     const frozen = [...initial];
     pushToast(initial, 'error', 'B', 2, 1);
     expect(initial).toEqual(frozen);
+  });
+});
+
+describe('countMessage', () => {
+  it('pluralises the noun when the count is not one', () => {
+    expect(countMessage(3, 'requirement', 'deleted')).toBe('3 requirements deleted');
+    expect(countMessage(5, 'risk', 'updated')).toBe('5 risks updated');
+    expect(countMessage(2, 'verification case', 'updated')).toBe('2 verification cases updated');
+  });
+
+  it('keeps the noun singular when the count is one', () => {
+    expect(countMessage(1, 'requirement', 'deleted')).toBe('1 requirement deleted');
+    expect(countMessage(1, 'risk', 'updated')).toBe('1 risk updated');
   });
 });

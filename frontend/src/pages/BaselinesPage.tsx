@@ -16,6 +16,7 @@ import { useSortable, SortableContext, verticalListSortingStrategy } from '@dnd-
 import type { CSSProperties } from 'react';
 import { moveInSequence, moveToIndex } from '../lib/reorder';
 import { useConfirm } from '../components/ConfirmDialog';
+import { useToasts } from '../components/Toast';
 import LoadingSplash from '../components/LoadingSplash';
 
 /**
@@ -64,6 +65,7 @@ export default function BaselinesPage() {
   const entityKinds = useEntityKinds(projectId);
   const bumpGraph = useStore((s) => s.bumpGraphVersion);
   const showConfirm = useConfirm();
+  const { addToast } = useToasts();
   const hiddenBaselines = useStore((s) => s.hiddenBaselines);
   const toggleHiddenBaseline = useStore((s) => s.toggleHiddenBaseline);
   const [activeDragName, setActiveDragName] = useState<string | null>(null);
@@ -133,8 +135,10 @@ export default function BaselinesPage() {
       if (editingName) {
         const newName = formName.trim() !== editingName ? formName.trim() : editingName;
         await api.renameBaseline(projectId, editingName, newName, formSymbol, formDesc, formDueDate);
+        addToast('success', `Baseline ${newName} updated`);
       } else {
         await api.createBaseline(projectId, formName.trim(), formSymbol, formDesc, undefined, formDueDate);
+        addToast('success', `Baseline ${formName.trim()} created`);
       }
       setShowForm(false);
       await load();
@@ -156,6 +160,7 @@ export default function BaselinesPage() {
     if (!ok) return;
     try {
       await api.deleteBaseline(projectId, name);
+      addToast('success', `Baseline ${name} deleted`);
       await load();
       bumpGraph();
     } catch (err: any) {
@@ -169,6 +174,7 @@ export default function BaselinesPage() {
     setError('');
     try {
       await api.freezeBaseline(projectId, name);
+      addToast('success', `Baseline ${name} frozen`);
       await load();
     } catch (err: any) {
       setError(err.message || 'Freeze failed');

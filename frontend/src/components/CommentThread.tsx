@@ -42,6 +42,7 @@ export function CommentThread({ entityKind, entityId }: {
         entity_id: entityId,
         text: newText.trim(),
       });
+      addToast('success', 'Comment added');
       setNewText('');
       load();
     } catch (err) {
@@ -67,6 +68,7 @@ export function CommentThread({ entityKind, entityId }: {
     if (!ok) return;
     try {
       await api.deleteComment(projectId, c.id);
+      addToast('success', 'Comment deleted');
       load();
     } catch (err) {
       addToast('error', err instanceof Error ? err.message : 'Failed to delete comment');

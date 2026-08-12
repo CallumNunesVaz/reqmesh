@@ -98,12 +98,14 @@ export default function AnalysisPage() {
           name: draft.name.trim(), doc: draft.doc.trim(),
           overrides: parseOverrides(draft.overrides),
         });
+        addToast('success', `Analysis case ${editingId} updated`);
       } else {
         await api.createAnalysisCase(projectId, {
           id: draft.id.trim(), name: draft.name.trim(), doc: draft.doc.trim(),
           scope: [], scope_components: [],
           overrides: parseOverrides(draft.overrides),
         });
+        addToast('success', `Analysis case ${draft.id.trim()} created`);
       }
       setShowCreate(false);
       setEditingId(null);
@@ -144,6 +146,7 @@ export default function AnalysisPage() {
       addToast('error', err instanceof Error ? err.message : 'Delete failed');
       return;
     }
+    addToast('success', `Analysis case ${id} deleted`);
     load();
   };
 

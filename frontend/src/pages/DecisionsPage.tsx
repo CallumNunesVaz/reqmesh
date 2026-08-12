@@ -16,6 +16,7 @@ import { HistoryPanel } from '../components/HistoryPanel';
 import { CommentThread } from '../components/CommentThread';
 import { deleteWithReferenceCheck } from '../lib/forceDelete';
 import { useConfirm } from '../components/ConfirmDialog';
+import { useToasts } from '../components/Toast';
 import LoadingSplash from '../components/LoadingSplash';
 
 /**
@@ -61,6 +62,7 @@ export default function DecisionsPage() {
   const [expanded, setExpanded] = usePersistedState<Set<string>>(pk('expanded'), new Set(), setCodec<string>());
   const entityKinds = useEntityKinds(projectId);
   const showConfirm = useConfirm();
+  const { addToast } = useToasts();
 
   const load = () => {
     if (!projectId) return;
@@ -103,8 +105,11 @@ export default function DecisionsPage() {
       if (editingId) {
         const { id: _id, ...rest } = draft;
         await api.updateDecision(projectId, editingId, rest);
+        addToast('success', `Decision ${editingId} updated`);
       } else {
-        await api.createDecision(projectId, { ...draft, id: draft.id.trim() });
+        const newId = draft.id.trim();
+        await api.createDecision(projectId, { ...draft, id: newId });
+        addToast('success', `Decision ${newId} created`);
       }
       setShowCreate(false);
       setEditingId(null);
@@ -145,7 +150,10 @@ export default function DecisionsPage() {
       (force) => api.deleteDecision(projectId, id, force),
       (message) => showConfirm(message),
     );
-    if (done) load();
+    if (done) {
+      addToast('success', `Decision ${id} deleted`);
+      load();
+    }
   };
 
   // The stored status may be anything, so the picker must offer whatever is

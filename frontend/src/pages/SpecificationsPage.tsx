@@ -85,9 +85,11 @@ export default function SpecificationsPage() {
         await api.updateSpecification(projectId, editingId, {
           name: newSpec.name, description: newSpec.description, url: newSpec.url,
         });
+        addToast('success', `Specification ${editingId} updated`);
       } else {
         if (!newSpec.id.trim()) return;
         await api.createSpecification(projectId, newSpec);
+        addToast('success', `Specification ${newSpec.id.trim()} created`);
       }
       setShowCreate(false);
       setEditingId(null);
@@ -128,6 +130,7 @@ export default function SpecificationsPage() {
     if (!ok) return;
     await api.deleteSpecification(projectId, specId);
     setSpecifications(specifications.filter((s) => s.id !== specId));
+    addToast('success', `Specification ${specId} deleted`);
   };
 
   // `filteredSpecs` is the list as displayed, which is the only ordering a

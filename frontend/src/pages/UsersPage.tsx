@@ -6,6 +6,8 @@ import { api, type ManagedUser } from '../api/client';
 import { useAuthStore } from '../store/auth';
 import BodyPortal from '../components/BodyPortal';
 import { useConfirm } from '../components/ConfirmDialog';
+import { useToasts } from '../components/Toast';
+import { countMessage } from '../lib/feedback';
 
 const ROLE_LABELS: Record<string, string> = { admin: 'Administrator', maintainer: 'Maintainer', contributor: 'Contributor', guest: 'Guest' };
 
@@ -56,6 +58,7 @@ export default function UsersPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [error, setError] = useState('');
   const showConfirm = useConfirm();
+  const { addToast } = useToasts();
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [sortBy, setSortBy] = useState<'username' | 'full_name' | 'role' | 'last_active' | 'joined'>('username');
@@ -158,6 +161,7 @@ export default function UsersPage() {
     setSavingSelf(true);
     try {
       await api.updateProfile({ full_name: selfForm.full_name || undefined, email: selfForm.email || undefined, password: selfForm.password || undefined });
+      addToast('success', 'Profile saved');
       setEditingSelf(false);
       setSelfForm((f) => ({ ...f, password: '' }));
       load();
@@ -170,6 +174,7 @@ export default function UsersPage() {
     setError(''); setCreating(true);
     try {
       await api.createUser({ username: newUsername.trim(), password: newPassword, role: newRole, full_name: newFullName.trim(), email: newEmail.trim() });
+      addToast('success', `User ${newUsername.trim()} created`);
       setShowCreate(false);
       setNewUsername(''); setNewPassword(''); setNewRole('contributor'); setNewFullName(''); setNewEmail('');
       load();
@@ -179,7 +184,7 @@ export default function UsersPage() {
 
   const handleRoleChange = async (uname: string, role: string) => {
     setError('');
-    try { await api.updateUser(uname, { role }); load(); }
+    try { await api.updateUser(uname, { role }); addToast('success', `User ${uname} updated`); load(); }
     catch (err: any) { setError(err.message); }
   };
 
@@ -187,18 +192,18 @@ export default function UsersPage() {
     const ok = await showConfirm(`Delete user "${uname}"? This cannot be undone.`, 'Delete User', { resultLabel: 'Delete', destructive: true });
     if (!ok) return;
     setError('');
-    try { await api.deleteUser(uname); load(); }
+    try { await api.deleteUser(uname); addToast('success', `User ${uname} deleted`); load(); }
     catch (err: any) { setError(err.message); }
   };
 
   const handleDisable = async (uname: string, disabled: boolean) => {
     setError('');
-    try { await api.setUserDisabled(uname, disabled); load(); }
+    try { await api.setUserDisabled(uname, disabled); addToast('success', `User ${uname} ${disabled ? 'disabled' : 'enabled'}`); load(); }
     catch (err: any) { setError(err.message); }
   };
   const handleUnlock = async (uname: string) => {
     setError('');
-    try { await api.unlockUser(uname); load(); }
+    try { await api.unlockUser(uname); addToast('success', `User ${uname} unlocked`); load(); }
     catch (err: any) { setError(err.message); }
   };
   const handleForceLogout = async (uname: string) => {
@@ -229,6 +234,9 @@ export default function UsersPage() {
     try {
       const res = await api.bulkUsers([...selected], action, role);
       if (res.skipped.length) setError(`Skipped (protected): ${res.skipped.join(', ')}`);
+      const verb = action === 'delete' ? 'deleted' : action === 'set_role' ? 'updated' : action === 'disable' ? 'disabled' : 'enabled';
+      const acted = selected.size - res.skipped.length;
+      if (acted > 0) addToast('success', countMessage(acted, 'user', verb));
       setSelected(new Set());
       load();
     } catch (err: any) { setError(err.message); }
@@ -269,7 +277,7 @@ export default function UsersPage() {
     e.preventDefault();
     if (!resetFor) return;
     setError(''); setResetting(true);
-    try { await api.updateUser(resetFor, { password: resetPassword }); setResetFor(null); setResetPassword(''); }
+    try { await api.updateUser(resetFor, { password: resetPassword }); addToast('success', `Password for ${resetFor} reset`); setResetFor(null); setResetPassword(''); }
     catch (err: any) { setError(err.message); }
     finally { setResetting(false); }
   };
@@ -280,7 +288,7 @@ export default function UsersPage() {
   };
   const saveEditRow = async (uname: string) => {
     setError('');
-    try { await api.updateUser(uname, editForm); setEditingRow(null); load(); }
+    try { await api.updateUser(uname, editForm); addToast('success', `User ${uname} updated`); setEditingRow(null); load(); }
     catch (err: any) { setError(err.message); }
   };
 

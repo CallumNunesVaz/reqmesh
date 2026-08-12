@@ -4,6 +4,7 @@ import { useToasts } from '../components/Toast';
 import { useStore } from '../store';
 import { useUndoStore } from '../store/undo';
 import { bulkDeleteUndo, bulkUpdateUndo } from '../lib/bulkUndo';
+import { countMessage } from '../lib/feedback';
 
 /**
  * The effects behind a bulk action: confirm, call, push undo, invalidate, reload.
@@ -57,6 +58,7 @@ export function useBulkActions(opts: {
         bumpDataVersion();
         clearSelection();
         reload();
+        addToast('success', countMessage(args.ids.length, args.noun, 'deleted'));
       } catch (e: any) {
         addToast('error', e?.message || 'Bulk delete failed');
       }
@@ -67,6 +69,7 @@ export function useBulkActions(opts: {
   const runBulkUpdate = useCallback(
     async (args: {
       label: string;
+      noun: string;
       ids: string[];
       before: Record<string, Record<string, unknown>>;
       updates: Record<string, unknown>;
@@ -88,6 +91,7 @@ export function useBulkActions(opts: {
         bumpDataVersion();
         clearSelection();
         reload();
+        addToast('success', countMessage(args.ids.length, args.noun, 'updated'));
       } catch (e: any) {
         addToast('error', e?.message || 'Bulk update failed');
       }

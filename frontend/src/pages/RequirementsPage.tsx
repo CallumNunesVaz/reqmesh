@@ -17,6 +17,7 @@ import LoadingSplash from '../components/LoadingSplash';
 import RichTextEditor from '../components/RichTextEditor';
 import { useConfirm } from '../components/ConfirmDialog';
 import { deleteWithReferenceCheck } from '../lib/forceDelete';
+import { countMessage } from '../lib/feedback';
 import { REQUIREMENT_TYPES, REQUIREMENT_TYPE_META, reqTypeClass, reqTypeIcon } from '../lib/requirementTypes';
 import BodyPortal from '../components/BodyPortal';
 import { useToasts } from '../components/Toast';
@@ -301,6 +302,7 @@ export default function RequirementsPage() {
       if (selectedReqId && ids.includes(selectedReqId)) selectReq(null);
       clearSelection();
       load();
+      addToast('success', countMessage(ids.length, 'requirement', 'deleted'));
     } catch (e: any) {
       addToast('error', e?.message || 'Bulk delete failed');
     }
@@ -332,6 +334,7 @@ export default function RequirementsPage() {
             await api.setRequirementBaselines(projectId, touched, op === 'add' ? { add: [baseline] } : { remove: [baseline] });
           },
         });
+        addToast('success', countMessage(res.updated, 'requirement', 'updated'));
       }
       bumpDataVersion();
       clearSelection();

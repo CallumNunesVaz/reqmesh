@@ -118,6 +118,7 @@ export default function VerificationPage() {
     if (!projectId || !newVC.id.trim() || !editable) return;
     try {
       await api.createVerificationCase(projectId, newVC);
+      addToast('success', `Verification case ${newVC.id.trim()} created`);
       setShowCreate(false);
       setNewVC({ id: '', name: '', description: '', method: 'test' });
       load();
@@ -133,6 +134,7 @@ export default function VerificationPage() {
     try {
       await api.deleteVerificationCase(projectId, vcId);
       setVerificationCases(verificationCases.filter((v) => v.id !== vcId));
+      addToast('success', `Verification case ${vcId} deleted`);
     } catch (err) {
       addToast('error', err instanceof Error ? err.message : 'Delete failed');
     }
@@ -345,6 +347,7 @@ export default function VerificationPage() {
     );
     await runBulkUpdate({
       label: `${status} on ${ids.length} verification cases`,
+      noun: 'verification case',
       ids,
       before,
       updates: { status },

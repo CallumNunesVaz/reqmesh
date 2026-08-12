@@ -30,6 +30,7 @@ export function DefinitionsManager({ projectId, editable }: { projectId: string;
         parameters: draft.parameters.split(',').map((s) => s.trim()).filter(Boolean),
         expr: draft.expr.trim(), unit: draft.unit.trim(),
       });
+      addToast('success', `Definition ${draft.id.trim()} created`);
       setDraft({ id: '', type: 'constraint', name: '', parameters: '', expr: '', unit: '' });
       setError('');
       load();
@@ -41,7 +42,7 @@ export function DefinitionsManager({ projectId, editable }: { projectId: string;
   const remove = async (id: string) => {
     const ok = await showConfirm(`Delete definition ${id}?`, 'Delete Definition', { resultLabel: 'Delete', destructive: true });
     if (!ok) return;
-    try { await api.deleteDefinition(projectId, id); }
+    try { await api.deleteDefinition(projectId, id); addToast('success', `Definition ${id} deleted`); }
     catch (err) { addToast('error', err instanceof Error ? err.message : 'Delete failed'); }
     load();
   };
@@ -144,6 +145,7 @@ export function AnalysisCasesPanel({ projectId, editable }: { projectId: string;
         scope_components: [],
         overrides,
       });
+      addToast('success', `Analysis case ${draft.id.trim()} created`);
       setDraft({ id: '', name: '', scope: '', overrides: '' });
       setError('');
       load();
@@ -162,7 +164,7 @@ export function AnalysisCasesPanel({ projectId, editable }: { projectId: string;
   const remove = async (id: string) => {
     const ok = await showConfirm(`Delete analysis case ${id}?`, 'Delete Analysis Case', { resultLabel: 'Delete', destructive: true });
     if (!ok) return;
-    try { await api.deleteAnalysisCase(projectId, id); }
+    try { await api.deleteAnalysisCase(projectId, id); addToast('success', `Analysis case ${id} deleted`); }
     catch (err) { addToast('error', err instanceof Error ? err.message : 'Delete failed'); }
     if (result?.case.id === id) setResult(null);
     load();

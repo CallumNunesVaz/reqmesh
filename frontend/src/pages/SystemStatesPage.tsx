@@ -5,6 +5,7 @@ import { Plus, Trash2, Edit3, Check, X, Layers, Loader, AlertTriangle } from 'lu
 import { api, type SystemStateDef } from '../api/client';
 import { useAuthStore } from '../store/auth';
 import { useConfirm } from '../components/ConfirmDialog';
+import { useToasts } from '../components/Toast';
 import LoadingSplash from '../components/LoadingSplash';
 
 export default function SystemStatesPage() {
@@ -15,6 +16,7 @@ export default function SystemStatesPage() {
   const [error, setError] = useState('');
   const editable = useAuthStore((s) => s.canEdit());
   const showConfirm = useConfirm();
+  const { addToast } = useToasts();
 
   // Create / edit form state
   const [showForm, setShowForm] = useState(false);
@@ -58,15 +60,18 @@ export default function SystemStatesPage() {
     setError('');
     try {
       if (editingName) {
+        const newName = formName.trim() !== editingName ? formName.trim() : editingName;
         await api.updateSystemState(projectId, editingName, {
           name: formName.trim() !== editingName ? formName.trim() : undefined,
           description: formDesc,
         });
+        addToast('success', `System state ${newName} updated`);
       } else {
         await api.createSystemState(projectId, {
           name: formName.trim(),
           description: formDesc,
         });
+        addToast('success', `System state ${formName.trim()} created`);
       }
       setShowForm(false);
       await load();
@@ -87,6 +92,7 @@ export default function SystemStatesPage() {
     if (!ok) return;
     try {
       const res = await api.deleteSystemState(projectId, name);
+      addToast('success', `System state ${name} deleted`);
       if (res.requirements_cleared > 0) {
         setError(`Deleted "${name}" — ${res.requirements_cleared} requirement${res.requirements_cleared !== 1 ? 's' : ''} now reference an undefined state.`);
       }

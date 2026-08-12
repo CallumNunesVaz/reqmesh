@@ -228,8 +228,10 @@ export default function RisksPage() {
           title: form.title, description: form.description,
           severity: form.severity, likelihood: form.likelihood,
         });
+        addToast('success', `Risk ${editingId} updated`);
       } else {
         await api.createRisk(projectId, form);
+        addToast('success', `Risk ${form.id.trim()} created`);
       }
       setShowCreate(false); setForm({ id: '', title: '', description: '', severity: '', likelihood: '' });
       setEditingId(null);
@@ -246,7 +248,10 @@ export default function RisksPage() {
         (force) => api.deleteRisk(projectId, id, force),
         (msg) => showConfirm(msg),
       );
-      if (done) setRisks(risks.filter(r => r.id !== id));
+      if (done) {
+        setRisks(risks.filter(r => r.id !== id));
+        addToast('success', `Risk ${id} deleted`);
+      }
     } catch (err: any) { setError(err.message || 'Failed to delete'); }
   };
 
@@ -272,6 +277,7 @@ export default function RisksPage() {
     );
     await runBulkUpdate({
       label: `${status} on ${ids.length} risks`,
+      noun: 'risk',
       ids,
       before,
       updates: { status },

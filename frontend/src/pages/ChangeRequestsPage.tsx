@@ -259,6 +259,7 @@ export default function ChangeRequestsPage() {
     );
     await runBulkUpdate({
       label: `${status} on ${ids.length} change requests`,
+      noun: 'change request',
       ids,
       before,
       updates: { status },

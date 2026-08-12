@@ -81,8 +81,10 @@ export default function DefinitionsPage() {
       if (editingId) {
         const { id: _id, ...rest } = payload;
         await api.updateDefinition(projectId, editingId, rest);
+        addToast('success', `Definition ${editingId} updated`);
       } else {
         await api.createDefinition(projectId, payload);
+        addToast('success', `Definition ${payload.id} created`);
       }
       setShowCreate(false);
       setEditingId(null);
@@ -113,6 +115,7 @@ export default function DefinitionsPage() {
       addToast('error', err instanceof Error ? err.message : 'Delete failed');
       return;
     }
+    addToast('success', `Definition ${id} deleted`);
     load();
   };
 

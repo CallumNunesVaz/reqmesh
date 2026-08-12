@@ -205,6 +205,7 @@ export default function ComponentsPage() {
         type: draft.type,
         parent: draft.parent || null,
       });
+      addToast('success', `Component ${draft.id.trim()} created`);
       setShowCreate(false);
       setDraft(EMPTY_DRAFT);
       load();
@@ -283,6 +284,7 @@ export default function ComponentsPage() {
     );
     await runBulkUpdate({
       label: `${type} on ${ids.length} components`,
+      noun: 'component',
       ids,
       before,
       updates: { type },
