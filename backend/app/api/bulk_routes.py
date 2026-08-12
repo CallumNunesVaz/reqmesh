@@ -22,31 +22,6 @@ from app.services.delete_guard import check_deletable
 router = APIRouter()
 
 
-def _bulk_delete(store, ids: list[str], get_fn, delete_fn, record_type: str, username: str) -> int:
-    deleted = 0
-    for item_id in ids:
-        before = get_fn(item_id)
-        if before is None:
-            continue
-        if delete_fn(item_id):
-            record_change(store, item_id, "delete", before, None, username)
-            deleted += 1
-    return deleted
-
-
-def _bulk_update(store, ids: list[str], updates: dict, update_fn, username: str = "") -> int:
-    """Apply *updates* to every item in *ids* via *update_fn*(item_id, updates).
-
-    *update_fn* is typically ``store.update_requirement`` or
-    ``store.update_component``. Returns the count of successful updates.
-    """
-    updated = 0
-    for item_id in ids:
-        if update_fn(item_id, updates):
-            updated += 1
-    return updated
-
-
 # ── Requirements ──────────────────────────────────────────────────────────────
 
 @router.post("/projects/{project_id}/requirements/bulk")

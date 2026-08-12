@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import datetime
 import logging
-import re
 import string
 from pathlib import Path
 from typing import Optional
@@ -147,12 +146,23 @@ def normalize_system_states(states: list) -> list[dict]:
     return result
 
 
-def serialize_system_states(defs: list[dict]) -> list[dict]:
-    """The `_meta.yaml` form: ``order`` dropped, empty descriptions omitted."""
+def _serialize_meta_defs(defs: list[dict]) -> list[dict]:
+    """The `_meta.yaml` form of normalized definitions (baselines and system states).
+
+    Drops ``order`` — it is the list position, derived on read, and writing it
+    back would create a second copy of the sequence free to disagree with the
+    first. Empty optional fields are omitted so a project that never set a
+    symbol or a due date keeps a clean `_meta.yaml`.
+    """
     return [
         {k: v for k, v in d.items() if k != "order" and (k == "name" or v)}
         for d in defs
     ]
+
+
+def serialize_system_states(defs: list[dict]) -> list[dict]:
+    """Alias of :func:`_serialize_meta_defs` for project system states."""
+    return _serialize_meta_defs(defs)
 
 
 def normalize_stakeholders(stakeholders: list) -> list[dict]:
@@ -180,17 +190,8 @@ def normalize_stakeholders(stakeholders: list) -> list[dict]:
 
 
 def serialize_baseline_defs(defs: list[dict]) -> list[dict]:
-    """The `_meta.yaml` form of normalized definitions.
-
-    Drops ``order`` — it is the list position, derived on read, and writing it
-    back would create a second copy of the sequence free to disagree with the
-    first. Empty optional fields are omitted so a project that never set a
-    symbol or a due date keeps a clean `_meta.yaml`.
-    """
-    return [
-        {k: v for k, v in d.items() if k != "order" and (k == "name" or v)}
-        for d in defs
-    ]
+    """Alias of :func:`_serialize_meta_defs` for baseline definitions."""
+    return _serialize_meta_defs(defs)
 
 
 def _baseline_def_by_name(baselines: list, name: str) -> dict | None:
@@ -1623,10 +1624,3 @@ def get_trace_model(project_id: str, _rate: None = Depends(rate_limit(20, 60))):
     store = get_store(project_id)
     links = all_links(store)
     return {"links": links, "total": len(links)}
-
-
-# ── Auto UID ──────────────────────────────────────────────────────────────────
-
-def _parse_uid_prefix(req_id: str) -> str | None:
-    m = re.match(r"^([A-Z]{4})\d{4}$", req_id or "")
-    return m.group(1) if m else None

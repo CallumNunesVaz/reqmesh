@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import re
 
-from app.services.table_io import _strip_html
 from app.services.verification_links import attach as attach_verification_cases
 
 
@@ -18,11 +17,17 @@ from app.services.verification_links import attach as attach_verification_cases
 # putting a separator back welds the last word of one block onto the first word
 # of the next ("Para onePara two").
 _BLOCK_BREAK = re.compile(r"(?i)</(?:p|div|li|h[1-6]|tr)\s*>|<br\s*/?>")
+_TAG = re.compile(r"<[^>]*>")
 
 
 def _plain_text(html: str) -> str:
-    """Rich text as plain text, keeping block boundaries as newlines."""
-    return _strip_html(_BLOCK_BREAK.sub("\n", html or ""))
+    """Rich text as plain text, keeping block boundaries as newlines.
+
+    Block boundaries become newlines first; the remaining (inline and opening)
+    tags are then dropped without a separator, since the block pass has already
+    put a separator where one is needed.
+    """
+    return _TAG.sub("", _BLOCK_BREAK.sub("\n", html or "")).strip()
 
 
 def _safe_name(entity_id: str) -> str:

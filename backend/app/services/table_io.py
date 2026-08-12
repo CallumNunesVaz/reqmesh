@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import csv
 import io
-import re
 import zipfile
 
 try:
@@ -14,13 +13,7 @@ except ImportError:
 
 from app.services.verification_links import attach as attach_verification_cases
 from app.services.history import record_change
-
-
-_HTML_TAG = re.compile(r"<[^>]*>")
-
-
-def _strip_html(text: str) -> str:
-    return _HTML_TAG.sub("", text).strip()
+from app.services.html_text import strip_html
 
 
 # Excel/LibreOffice evaluate a cell whose text begins with one of these, so a
@@ -61,7 +54,7 @@ def _req_to_row(req: dict, meta: dict | None = None) -> dict:
         "id": req.get("id", ""),
         "type": req.get("type", "functional"),
         "name": req.get("name", ""),
-        "description": _strip_html(req.get("description", "")),
+        "description": strip_html(req.get("description", "")),
         "status": req.get("status", "proposed"),
         "priority": req.get("priority", "medium"),
         "verification_method": req.get("verification_method", "test"),

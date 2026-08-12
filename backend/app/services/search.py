@@ -13,14 +13,10 @@ substring matching and relevance scoring.
 
 from __future__ import annotations
 
-import re
-from html import unescape as html_unescape
-
 from app.services.verification_links import attach as attach_verification_cases
+from app.services.html_text import strip_html
 
 FILTERABLE_FIELDS = ("type", "priority", "status", "verification_status")
-
-_HTML_TAG = re.compile(r"<[^>]*>")
 
 _KIND_LABELS: dict[str, str] = {
     "requirement": "Requirement",
@@ -49,10 +45,6 @@ _KIND_ICON: dict[str, str] = {
     "analysis": "flask-conical",
     "baseline": "history",
 }
-
-
-def _strip_html(text: str) -> str:
-    return _HTML_TAG.sub(" ", html_unescape(text or ""))
 
 
 def _searchable_text(req: dict) -> str:
@@ -92,8 +84,8 @@ def search_project(store, query: str, kind: str | None = None, limit: int = 50) 
         # Keep the original-cased text alongside the folded copy: matching is
         # case-insensitive, but the snippet is shown to the user, and slicing
         # it out of the lowercased string rendered every result all-lowercase.
-        detail_s = _strip_html(detail)
-        extra_s = _strip_html(extra)
+        detail_s = strip_html(detail)
+        extra_s = strip_html(extra)
         id_l, name_l = identifier.lower(), name.lower()
         detail_l, extra_l = detail_s.lower(), extra_s.lower()
 
@@ -122,7 +114,7 @@ def search_project(store, query: str, kind: str | None = None, limit: int = 50) 
                 if end < len(src):
                     snippet = snippet + "..."
                 break
-        return score, _strip_html(name) or identifier, snippet
+        return score, strip_html(name) or identifier, snippet
 
     # Requirements
     if not kind or kind == "requirement":

@@ -172,6 +172,27 @@ async def start_update(body: UpdateRequest, admin: dict = Depends(require_admin)
     return result
 
 
+def _stream_to_disk(file: UploadFile, dest, limit: int) -> int:
+    """Stream an uploaded file to ``dest``, refusing files over ``limit`` bytes.
+
+    Shared by the Docker-image and bundle update upload handlers, which enforce
+    the same cap on two different staging paths.
+    """
+    written = 0
+    with open(dest, "wb") as out:
+        while True:
+            chunk = file.file.read(4 * 1024 * 1024)
+            if not chunk:
+                break
+            written += len(chunk)
+            if written > limit:
+                out.close()
+                dest.unlink(missing_ok=True)
+                raise ValueError("too_large")
+            out.write(chunk)
+    return written
+
+
 @router.post("/update/upload")
 async def upload_update(
     file: UploadFile = File(...),
@@ -193,23 +214,8 @@ async def upload_update(
     dest.parent.mkdir(parents=True, exist_ok=True)
     limit = settings.max_update_upload_mb * 1024 * 1024
 
-    def _stream_to_disk() -> int:
-        written = 0
-        with open(dest, "wb") as out:
-            while True:
-                chunk = file.file.read(4 * 1024 * 1024)
-                if not chunk:
-                    break
-                written += len(chunk)
-                if written > limit:
-                    out.close()
-                    dest.unlink(missing_ok=True)
-                    raise ValueError("too_large")
-                out.write(chunk)
-        return written
-
     try:
-        size = await asyncio.to_thread(_stream_to_disk)
+        size = await asyncio.to_thread(_stream_to_disk, file, dest, limit)
     except ValueError:
         raise HTTPException(status_code=413, detail=f"Upload exceeds {settings.max_update_upload_mb} MB limit.")
 
@@ -248,23 +254,8 @@ async def upload_bundle(
     dest = bundle_update.incoming_path()
     limit = settings.max_update_upload_mb * 1024 * 1024
 
-    def _stream_to_disk() -> int:
-        written = 0
-        with open(dest, "wb") as out:
-            while True:
-                chunk = file.file.read(4 * 1024 * 1024)
-                if not chunk:
-                    break
-                written += len(chunk)
-                if written > limit:
-                    out.close()
-                    dest.unlink(missing_ok=True)
-                    raise ValueError("too_large")
-                out.write(chunk)
-        return written
-
     try:
-        size = await asyncio.to_thread(_stream_to_disk)
+        size = await asyncio.to_thread(_stream_to_disk, file, dest, limit)
     except ValueError:
         raise HTTPException(status_code=413, detail=f"Upload exceeds {settings.max_update_upload_mb} MB limit.")
 

@@ -10,7 +10,7 @@
 
 /** Schemes a stored link may carry. Allowlist, never a denylist of `javascript:`
  *  — a denylist loses to case tricks and embedded control characters. */
-export const SAFE_URL_SCHEMES = ['http', 'https', 'mailto'];
+const SAFE_URL_SCHEMES = ['http', 'https', 'mailto'];
 
 const SCHEME_RE = /^\s*([A-Za-z][A-Za-z0-9+.-]*)\s*:/;
 

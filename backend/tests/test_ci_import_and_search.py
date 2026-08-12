@@ -165,6 +165,32 @@ class TestProjectSearch:
         hit = next(h for h in res.json()["results"] if h["id"] == "SYST0001")
         assert "<" not in hit["snippet"]
 
+    def test_export_and_search_agree_on_stripped_html(self, client, project):
+        """The same HTML description renders to the same plain text in a CSV
+        export and in a search snippet — block tags become spaces, not nothing,
+        so ``<p>a</p><p>b</p>`` never welds into ``ab``."""
+        import csv
+        import io
+
+        from app.core.dependencies import get_store
+        from app.services.table_io import export_table
+
+        make_req(client, project, "SYST0001", name="Widget",
+                 description="<p>Alpha</p><p>Beta</p>")
+
+        store = get_store(project)
+        rows = list(csv.DictReader(io.StringIO(export_table(store, "csv"))))
+        exported = next(r["description"] for r in rows if r["id"] == "SYST0001")
+
+        res = client.get(f"/api/projects/{project}/search", params={"q": "beta"})
+        hit = next(h for h in res.json()["results"] if h["id"] == "SYST0001")
+
+        def norm(s: str) -> str:
+            return " ".join(s.split())
+
+        assert norm(exported) == "Alpha Beta"
+        assert norm(hit["snippet"]) == "Alpha Beta"
+
     def test_short_queries_return_nothing(self, client, project):
         make_req(client, project, "SYST0001", name="Gear")
         assert client.get(f"/api/projects/{project}/search",

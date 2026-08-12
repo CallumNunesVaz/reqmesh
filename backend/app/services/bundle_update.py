@@ -100,8 +100,10 @@ def can_restart() -> bool:
 
 # ── Status ───────────────────────────────────────────────────────────────────
 
-def _now_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+# One implementation, shared with updater.py (which this module already depends
+# on); aliased here so callers and tests keep the same names.
+_now_iso = updater._now_iso
+_write_json_atomic = updater._write_json_atomic
 
 
 def _read_json(path: Path) -> Optional[dict]:
@@ -109,12 +111,6 @@ def _read_json(path: Path) -> Optional[dict]:
         return json.loads(path.read_text())
     except (OSError, ValueError):
         return None
-
-
-def _write_json_atomic(path: Path, data: dict) -> None:
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(data, indent=2))
-    os.replace(tmp, path)
 
 
 def pending_marker() -> Optional[dict]:

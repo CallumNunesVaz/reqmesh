@@ -415,7 +415,6 @@ def update_decision(project_id: str, dec_id: str, data: DecisionRecordUpdate,
     from app.services.email_service import notify_decision, _safe_notify
     _safe_notify(notify_decision, store, project_id, dec_id, "updated", user.get("username", ""))
     return result
-    return result
 
 
 @router.delete("/projects/{project_id}/decisions/{dec_id}")
@@ -723,7 +722,7 @@ def get_suspect_links(project_id: str):
 
 
 @router.post("/projects/{project_id}/suspect-links/clear")
-def clear_suspects(project_id: str, data: dict | None = None, user: dict = Depends(require_maintain)):
+def clear_suspects(project_id: str, user: dict = Depends(require_maintain)):
     from app.services.fingerprint import review_all
     return {"ok": True, **review_all(get_store(project_id), user.get("username", ""))}
 
