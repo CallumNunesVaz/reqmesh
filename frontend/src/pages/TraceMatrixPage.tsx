@@ -10,6 +10,7 @@ import { useAuthStore } from '../store/auth';
 import { useStore } from '../store';
 import AutocompleteInput from '../components/AutocompleteInput';
 import { EntityLink, entityPath, type EntityKind } from '../components/entities';
+import LoadingSplash from '../components/LoadingSplash';
 
 // Cell tint per link type. Falls back to a neutral chip for any type not
 // listed here (importers emit types like `verifies`/`traces` too).
@@ -34,6 +35,7 @@ export default function TraceMatrixPage() {
   const dataVersion = useStore((s) => s.dataVersion);
   const [search, setSearch] = useState('');
   const [filterLinkType, setFilterLinkType] = useState('');
+  const [loading, setLoading] = useState(true);
 
   const entitySuggestions = useMemo(() => {
     const reqItems = requirements.map((r) => ({ id: r.id, label: r.name || r.id }));
@@ -51,7 +53,8 @@ export default function TraceMatrixPage() {
       setLinks(model.links || []);
       setRequirements(reqs);
       setVerificationCases(vcs);
-    }).catch(console.error);
+    }).catch(console.error)
+      .finally(() => setLoading(false));
   };
 
   useEffect(load, [projectId, dataVersion]);
@@ -147,7 +150,8 @@ export default function TraceMatrixPage() {
   );
 
   return (
-    <div className="max-w-5xl mx-auto p-8">
+    <div className="relative max-w-5xl mx-auto p-8">
+      {loading && links.length === 0 && requirements.length === 0 && <LoadingSplash label="Loading trace matrix…" />}
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
         <h1 className="text-2xl font-bold tracking-tight text-foreground">Traceability Matrix</h1>
         <p className="text-sm text-muted-foreground mt-1">{filtering ? `${filteredLinks.length} of ${links.length} trace links` : `${links.length} trace links`}</p>

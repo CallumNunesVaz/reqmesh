@@ -10,6 +10,7 @@ import { useFocusedEntity } from '../components/useFocusedEntity';
 import { usePersistedState } from '../hooks/usePersistedState';
 import { useToasts } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmDialog';
+import LoadingSplash from '../components/LoadingSplash';
 
 /**
  * Reusable SysML v2-style constraint and calc definitions.
@@ -37,6 +38,7 @@ export default function DefinitionsPage() {
   const { addToast } = useToasts();
   const showConfirm = useConfirm();
   const [defs, setDefs] = useState<Definition[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState(EMPTY);
@@ -45,7 +47,8 @@ export default function DefinitionsPage() {
 
   const load = () => {
     if (!projectId) return;
-    api.listDefinitions(projectId).then(setDefs).catch(() => setDefs([]));
+    api.listDefinitions(projectId).then(setDefs).catch(() => setDefs([]))
+      .finally(() => setLoading(false));
   };
 
   useEffect(load, [projectId, dataVersion]);
@@ -114,7 +117,8 @@ export default function DefinitionsPage() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto p-8">
+    <div className="relative max-w-5xl mx-auto p-8">
+      {loading && defs.length === 0 && <LoadingSplash label="Loading definitions…" />}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Definitions</h1>
@@ -233,7 +237,7 @@ export default function DefinitionsPage() {
             {filtering ? 'No definitions match your search.' : 'No definitions yet'}
           </p>
           {filtering ? (
-            <button className="text-xs text-primary hover:underline mt-2" onClick={() => setSearch('')}>Clear search</button>
+            <button className="text-xs text-primary hover:underline mt-2" onClick={() => setSearch('')}>Clear filters</button>
           ) : (
             <p className="text-sm text-muted-foreground mt-1">
               Write a rule once over formal parameters, then bind it on any requirement.

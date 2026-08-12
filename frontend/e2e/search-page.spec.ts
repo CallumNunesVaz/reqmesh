@@ -96,10 +96,15 @@ test('the search page works in viewing mode', async ({ app, server }) => {
 });
 
 test('the kind filter offers exactly the kinds the search endpoint branches on', async ({ app, server }) => {
-  // `services/search.py` branches on ten kinds. The page listed nine — it was
-  // derived from ENTITY_META, which has no entry for `comment`, so comments
-  // were searchable but not filterable. This asserts the two vocabularies
-  // match, which is the thing that drifts.
+  // `services/search.py` branches on eleven kinds, and the filter has fallen
+  // behind it twice: first `comment`, then `baseline` — each searchable but
+  // not filterable, so those hits could only be reached from an "All kinds"
+  // search.
+  //
+  // `backend/tests/test_search_kind_coverage.py` pins the same property
+  // against the real source of both lists, so it catches a *new* backend kind
+  // that nobody thought to add here. This one stays because it checks what the
+  // rendered `<select>` actually offers, which that test cannot see.
   await signIn(app);
   await app.goto(`${server.baseURL}/project/${DEMO_PROJECT}/search?q=system`);
   await app.waitForSelector('main');
@@ -108,7 +113,8 @@ test('the kind filter offers exactly the kinds the search endpoint branches on',
     .locator('option').evaluateAll((els: HTMLOptionElement[]) => els.map((e) => e.value));
 
   expect(values.filter((v) => v !== '').sort()).toEqual([
-    'analysis', 'change_request', 'comment', 'component', 'decision',
-    'definition', 'requirement', 'risk', 'specification', 'verification',
+    'analysis', 'baseline', 'change_request', 'comment', 'component',
+    'decision', 'definition', 'requirement', 'risk', 'specification',
+    'verification',
   ]);
 });

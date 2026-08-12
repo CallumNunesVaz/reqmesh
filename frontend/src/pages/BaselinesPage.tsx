@@ -16,6 +16,7 @@ import { useSortable, SortableContext, verticalListSortingStrategy } from '@dnd-
 import type { CSSProperties } from 'react';
 import { moveInSequence, moveToIndex } from '../lib/reorder';
 import { useConfirm } from '../components/ConfirmDialog';
+import LoadingSplash from '../components/LoadingSplash';
 
 /**
  * One draggable row.
@@ -265,14 +266,6 @@ export default function BaselinesPage() {
     });
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <Loader size={20} className="animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
   const renderRow = (b: BaselineInfo) => (
     <motion.div
       key={b.name}
@@ -482,12 +475,13 @@ export default function BaselinesPage() {
   const activeDrag = activeDragName ? baselines.find((b) => b.name === activeDragName) ?? null : null;
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto">
+    <div className="relative flex flex-col h-full overflow-y-auto">
+      {loading && <LoadingSplash label="Loading baselines…" />}
       <div className="p-6 space-y-6 max-w-6xl mx-auto w-full">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-card-foreground">Baselines</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">Baselines</h1>
             <p className="text-sm text-muted-foreground mt-0.5">
               Configuration baselines represent snapshots of the system at a point in time.
               Define baselines with a name, symbol, and description, then freeze them to

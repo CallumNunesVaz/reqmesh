@@ -18,6 +18,7 @@ import { useToasts } from '../components/Toast';
 import { useRangeSelection } from '../hooks/useRangeSelection';
 import { useBulkActions } from '../hooks/useBulkActions';
 import { useSelectedReq, useContextPane } from '../components/Layout';
+import LoadingSplash from '../components/LoadingSplash';
 
 const statusBadges: Record<string, string> = {
   submitted: 'border-blue-500/30 bg-blue-500/10 text-blue-400',
@@ -58,6 +59,7 @@ export default function ChangeRequestsPage() {
   const [form, setForm] = useState({ id: '', title: '', description: '', rationale: '', urgency: 'normal' });
   const [editingCrId, setEditingCrId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ title: '', description: '', rationale: '', urgency: 'normal' });
+  const [loading, setLoading] = useState(true);
   const editable = useAuthStore((s) => s.canPropose());
   // Bulk operations are maintainer-tier (backend require_maintain), unlike
   // individual create/edit/delete which are propose-tier.
@@ -84,7 +86,8 @@ export default function ChangeRequestsPage() {
 
   const load = () => {
     if (!projectId) return;
-    api.listChangeRequests(projectId).then(setCrs).catch(console.error);
+    api.listChangeRequests(projectId).then(setCrs).catch(console.error)
+      .finally(() => setLoading(false));
   };
   useEffect(load, [projectId, dataVersion]);
   useEffect(() => {
@@ -279,11 +282,12 @@ export default function ChangeRequestsPage() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto p-8">
+    <div className="relative max-w-5xl mx-auto p-8">
+      {loading && crs.length === 0 && <LoadingSplash label="Loading change requests…" />}
       {error && <div className="mb-4 text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">{error}</div>}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Change Requests</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Change Requests</h1>
           <p className="text-sm text-muted-foreground mt-1">{filtering ? `${filteredCRs.length} of ${crs.length} change requests` : `${crs.length} change requests`}</p>
         </div>
         {editable && (
@@ -352,6 +356,19 @@ export default function ChangeRequestsPage() {
         )}
       </AnimatePresence>
 
+      {filteredCRs.length === 0 ? (
+        <div className="card p-12 text-center">
+          <GitPullRequest size={48} className="mx-auto text-muted-foreground/40 mb-4" />
+          <p className="text-card-foreground font-medium">
+            {filtering ? 'No change requests match your filters.' : 'No change requests yet'}
+          </p>
+          {filtering ? (
+            <button className="text-xs text-primary hover:underline mt-2" onClick={() => { setSearch(''); setFilterStatus(''); }}>Clear filters</button>
+          ) : (
+            <p className="text-sm text-muted-foreground mt-1">Propose and track changes to requirements.</p>
+          )}
+        </div>
+      ) : (
       <div className="space-y-3">
         {filteredCRs.map((cr, i) => {
           const rl = redlines[cr.id];
@@ -492,6 +509,7 @@ export default function ChangeRequestsPage() {
           </motion.div>
         )})}
       </div>
+      )}
       {selectedIds.size > 0 && canBulk && (
         <div className="sticky bottom-6 z-40 mx-auto w-fit max-w-full flex flex-wrap items-center justify-center gap-3 bg-card border rounded-xl shadow-2xl px-4 py-3">
           <span className="text-xs font-medium text-foreground">{selectedIds.size} selected</span>

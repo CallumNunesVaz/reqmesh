@@ -18,6 +18,7 @@ import { HistoryPanel } from '../components/HistoryPanel';
 import { CommentThread } from '../components/CommentThread';
 import { useToasts } from '../components/Toast';
 import { useBulkActions } from '../hooks/useBulkActions';
+import LoadingSplash from '../components/LoadingSplash';
 
 const statusBadges: Record<string, string> = {
   pending: 'border-amber-500/30 bg-amber-500/10 text-amber-400',
@@ -46,6 +47,7 @@ export default function VerificationPage() {
   const editable = useAuthStore((s) => s.canEdit());
   const { addToast } = useToasts();
   const showConfirm = useConfirm();
+  const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [newVC, setNewVC] = useState({ id: '', name: '', description: '', method: 'test' });
   const [requirements, setRequirements] = useState<Requirement[]>([]);
@@ -83,7 +85,8 @@ export default function VerificationPage() {
     ]).then(([vcs, reqs]) => {
       setVerificationCases(vcs);
       setRequirements(reqs);
-    }).catch(console.error);
+    }).catch(console.error)
+      .finally(() => setLoading(false));
     api.listComponents(projectId).then(setComponents).catch(() => {});
   };
 
@@ -351,7 +354,8 @@ export default function VerificationPage() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto p-8">
+    <div className="relative max-w-5xl mx-auto p-8">
+      {loading && verificationCases.length === 0 && <LoadingSplash label="Loading verification cases…" />}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Verification Cases</h1>

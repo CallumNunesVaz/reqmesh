@@ -18,6 +18,7 @@ import { CommentThread } from '../components/CommentThread';
 import { useRangeSelection } from '../hooks/useRangeSelection';
 import { useConfirm } from '../components/ConfirmDialog';
 import { useBulkActions } from '../hooks/useBulkActions';
+import LoadingSplash from '../components/LoadingSplash';
 
 export default function SpecificationsPage() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -30,6 +31,7 @@ export default function SpecificationsPage() {
   const [newSpec, setNewSpec] = useState({ id: '', name: '', description: '', url: '' });
   const [requirements, setRequirements] = useState<Requirement[]>([]);
   const [components, setComponents] = useState<Component[]>([]);
+  const [loading, setLoading] = useState(true);
   // Persisted per project — see RequirementsPage/ComponentsPage for why.
   const pk = (field: string) => (projectId ? `rt-specs-${field}-${projectId}` : null);
   const [search, setSearch] = usePersistedState(pk('search'), '');
@@ -38,7 +40,8 @@ export default function SpecificationsPage() {
 
   const load = () => {
     if (!projectId) return;
-    api.listSpecifications(projectId).then(setSpecifications).catch(console.error);
+    api.listSpecifications(projectId).then(setSpecifications).catch(console.error)
+      .finally(() => setLoading(false));
     api.listRequirements(projectId).then(setRequirements).catch(() => {});
     api.listComponents(projectId).then(setComponents).catch(() => {});
   };
@@ -154,7 +157,8 @@ export default function SpecificationsPage() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto p-8">
+    <div className="relative max-w-5xl mx-auto p-8">
+      {loading && specifications.length === 0 && <LoadingSplash label="Loading specifications…" />}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Specifications</h1>

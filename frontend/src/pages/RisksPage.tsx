@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { usePersistedState } from '../hooks/usePersistedState';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Trash2, Edit3, Square, CheckSquare, X, Search } from 'lucide-react';
+import { Plus, Trash2, Edit3, Square, CheckSquare, X, Search, AlertTriangle } from 'lucide-react';
 import { api, RISK_STATUSES, type Risk, type Requirement, type Component, type RiskMatrix } from '../api/client';
 import { useAuthStore } from '../store/auth';
 import { useStore } from '../store';
@@ -19,6 +19,7 @@ import { useToasts } from '../components/Toast';
 import { useRangeSelection } from '../hooks/useRangeSelection';
 import { useConfirm } from '../components/ConfirmDialog';
 import { useBulkActions } from '../hooks/useBulkActions';
+import LoadingSplash from '../components/LoadingSplash';
 
 const formatLevel = (s: string) => s.replace(/_/g, ' ');
 
@@ -57,8 +58,9 @@ export default function RisksPage() {
   // dropdowns offer, so a project that renamed its axes does not get a form
   // offering levels its own matrix cannot rate.
   const [matrix, setMatrix] = useState<RiskMatrix | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const load = () => { if (!projectId) return; api.listRisks(projectId).then(setRisks).catch(console.error); };
+  const load = () => { if (!projectId) return; api.listRisks(projectId).then(setRisks).catch(console.error).finally(() => setLoading(false)); };
   useEffect(() => {
     if (!projectId) return;
     let alive = true;
@@ -293,10 +295,11 @@ export default function RisksPage() {
   };
 
   return (
-    <div className="max-w-6xl mx-auto p-8">
+    <div className="relative max-w-6xl mx-auto p-8">
+      {loading && risks.length === 0 && <LoadingSplash label="Loading risks…" />}
       {error && <div className="mb-4 text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">{error}</div>}
       <div className="flex items-center justify-between mb-6">
-        <div><h1 className="text-2xl font-bold text-foreground">Risks</h1><p className="text-sm text-muted-foreground mt-1">{filtering ? `${filteredRisks.length} of ${risks.length} risks` : `${risks.length} risks`}</p></div>
+        <div><h1 className="text-2xl font-bold tracking-tight text-foreground">Risks</h1><p className="text-sm text-muted-foreground mt-1">{filtering ? `${filteredRisks.length} of ${risks.length} risks` : `${risks.length} risks`}</p></div>
         {editable && (
         <button onClick={openCreate} className="btn-primary"><Plus size={16} /> New Risk</button>
         )}
@@ -363,6 +366,19 @@ export default function RisksPage() {
           </motion.form>
         )}
       </AnimatePresence>
+      {filteredRisks.length === 0 ? (
+        <div className="card p-12 text-center">
+          <AlertTriangle size={48} className="mx-auto text-muted-foreground/40 mb-4" />
+          <p className="text-card-foreground font-medium">
+            {filtering ? 'No risks match your filters.' : 'No risks yet'}
+          </p>
+          {filtering ? (
+            <button className="text-xs text-primary hover:underline mt-2" onClick={() => { setSearch(''); setFilterStatus(''); setFilterSeverity(''); setFilterProbability(''); }}>Clear filters</button>
+          ) : (
+            <p className="text-sm text-muted-foreground mt-1">Identify and track project risks with severity and likelihood.</p>
+          )}
+        </div>
+      ) : (
       <div className="space-y-3">
         {filteredRisks.map((r, i) => (
           <motion.div key={r.id} id={`entity-${r.id}`} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.03 }}
@@ -551,6 +567,7 @@ export default function RisksPage() {
           </motion.div>
         ))}
       </div>
+      )}
       {selectedIds.size > 0 && canBulk && (
         <div className="sticky bottom-6 z-40 mx-auto w-fit max-w-full flex flex-wrap items-center justify-center gap-3 bg-card border rounded-xl shadow-2xl px-4 py-3">
           <span className="text-xs font-medium text-foreground">{selectedIds.size} selected</span>

@@ -18,6 +18,7 @@ import ReparentDialog from '../components/ReparentDialog';
 import { DndContext, DragOverlay, closestCenter } from '@dnd-kit/core';
 import { useTreeDrag, TOP_LEVEL_ID } from '../hooks/useTreeDrag';
 import { DropRow, DragGrip, TopLevelDropZone } from '../components/TreeDragRow';
+import LoadingSplash from '../components/LoadingSplash';
 
 const EMPTY_DRAFT = { id: '', name: '', type: 'assembly', parent: '' };
 
@@ -46,6 +47,7 @@ export default function ComponentsPage() {
   const [draft, setDraft] = useState(EMPTY_DRAFT);
   const [error, setError] = useState('');
   const [truncation, setTruncation] = useState<TruncationInfo | null>(null);
+  const [loading, setLoading] = useState(true);
   const { addToast } = useToasts();
   const [focusedIndex, setFocusedIndex] = useState(-1);
   const treeContainerRef = useRef<HTMLDivElement>(null);
@@ -67,7 +69,8 @@ export default function ComponentsPage() {
     if (!projectId) return;
     Promise.all([api.listComponents(projectId), api.getComponentTree(projectId)])
       .then(([list, t]) => { setComponents(list); setTree(t); setTruncation(getTruncationInfo('components')); })
-      .catch((e) => setError(e.message));
+      .catch((e) => setError(e.message))
+      .finally(() => setLoading(false));
   };
 
   useEffect(load, [projectId, dataVersion]);
@@ -369,7 +372,8 @@ export default function ComponentsPage() {
   };
 
   return (
-    <div className="max-w-6xl mx-auto p-8">
+    <div className="relative max-w-6xl mx-auto p-8">
+      {loading && components.length === 0 && <LoadingSplash label="Loading components…" />}
       {truncation && <TruncationBanner info={truncation} />}
       <div className="flex items-center justify-between mb-6">
         <div>

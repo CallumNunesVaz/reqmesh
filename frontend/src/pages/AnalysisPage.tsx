@@ -11,6 +11,7 @@ import { usePersistedState, setCodec } from '../hooks/usePersistedState';
 import { LinkEditor } from '../components/LinkEditor';
 import { useToasts } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmDialog';
+import LoadingSplash from '../components/LoadingSplash';
 
 /**
  * Scoped what-if analysis cases.
@@ -47,6 +48,7 @@ export default function AnalysisPage() {
   const [cases, setCases] = useState<AnalysisCase[]>([]);
   const [requirements, setRequirements] = useState<Requirement[]>([]);
   const [components, setComponents] = useState<Component[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState(EMPTY);
@@ -56,7 +58,8 @@ export default function AnalysisPage() {
 
   const load = () => {
     if (!projectId) return;
-    api.listAnalysisCases(projectId).then(setCases).catch(() => setCases([]));
+    api.listAnalysisCases(projectId).then(setCases).catch(() => setCases([]))
+      .finally(() => setLoading(false));
     api.listRequirements(projectId).then(setRequirements).catch(() => {});
     api.listComponents(projectId).then(setComponents).catch(() => {});
   };
@@ -145,7 +148,8 @@ export default function AnalysisPage() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto p-8">
+    <div className="relative max-w-5xl mx-auto p-8">
+      {loading && cases.length === 0 && <LoadingSplash label="Loading analysis cases…" />}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Analysis Cases</h1>
@@ -243,7 +247,7 @@ export default function AnalysisPage() {
             {filtering ? 'No analysis cases match your search.' : 'No analysis cases yet'}
           </p>
           {filtering ? (
-            <button className="text-xs text-primary hover:underline mt-2" onClick={() => setSearch('')}>Clear search</button>
+            <button className="text-xs text-primary hover:underline mt-2" onClick={() => setSearch('')}>Clear filters</button>
           ) : (
             <p className="text-sm text-muted-foreground mt-1">
               Define a scoped set of hypothetical parameter values, then evaluate it against the live solver.

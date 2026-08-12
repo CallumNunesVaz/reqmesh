@@ -16,6 +16,7 @@ import { HistoryPanel } from '../components/HistoryPanel';
 import { CommentThread } from '../components/CommentThread';
 import { deleteWithReferenceCheck } from '../lib/forceDelete';
 import { useConfirm } from '../components/ConfirmDialog';
+import LoadingSplash from '../components/LoadingSplash';
 
 /**
  * Architecture decision records.
@@ -50,6 +51,7 @@ export default function DecisionsPage() {
   const [decisions, setDecisions] = useState<DecisionRecord[]>([]);
   const [requirements, setRequirements] = useState<Requirement[]>([]);
   const [components, setComponents] = useState<Component[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState(EMPTY);
@@ -62,7 +64,8 @@ export default function DecisionsPage() {
 
   const load = () => {
     if (!projectId) return;
-    api.listDecisions(projectId).then(setDecisions).catch(() => setDecisions([]));
+    api.listDecisions(projectId).then(setDecisions).catch(() => setDecisions([]))
+      .finally(() => setLoading(false));
     api.listRequirements(projectId).then(setRequirements).catch(() => {});
     api.listComponents(projectId).then(setComponents).catch(() => {});
   };
@@ -154,7 +157,8 @@ export default function DecisionsPage() {
   }, [draft.status]);
 
   return (
-    <div className="max-w-5xl mx-auto p-8">
+    <div className="relative max-w-5xl mx-auto p-8">
+      {loading && decisions.length === 0 && <LoadingSplash label="Loading decisions…" />}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Decisions</h1>
@@ -262,7 +266,7 @@ export default function DecisionsPage() {
             {filtering ? 'No decisions match your search.' : 'No decisions yet'}
           </p>
           {filtering ? (
-            <button className="text-xs text-primary hover:underline mt-2" onClick={() => setSearch('')}>Clear search</button>
+            <button className="text-xs text-primary hover:underline mt-2" onClick={() => setSearch('')}>Clear filters</button>
           ) : (
             <p className="text-sm text-muted-foreground mt-1">
               Record why the architecture is the way it is, so the reasoning outlives the people who had it.

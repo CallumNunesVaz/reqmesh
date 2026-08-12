@@ -393,7 +393,7 @@ export default function RequirementsPage() {
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-2 mb-5">
         <div>
-          <h1 className="text-xl font-bold tracking-tight text-foreground">Requirements</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Requirements</h1>
           <p className="text-xs text-muted-foreground mt-0.5">
             {filtering ? `${matchCount} of ${requirements.length} requirements` : `${requirements.length} requirements`}
           </p>
@@ -483,10 +483,13 @@ export default function RequirementsPage() {
       {/* Tree list */}
       <div className="card mt-2 overflow-hidden divide-y divide-border/60">
         {rows.length === 0 ? (
-          <div className="p-14 text-center">
-            <Inbox size={28} className="mx-auto text-muted-foreground/50 mb-3" />
-            <p className="text-sm text-muted-foreground">
-              {filtering ? 'No requirements match your filters.' : 'No requirements yet.'}
+          // No `card` class here, unlike the sibling pages: this sits *inside*
+          // the tree-list card above, so repeating it doubles the border and
+          // the background. Padding and icon size still match the others.
+          <div className="p-12 text-center">
+            <Inbox size={48} className="mx-auto text-muted-foreground/40 mb-4" />
+            <p className="text-card-foreground font-medium">
+              {filtering ? 'No requirements match your filters.' : 'No requirements yet'}
             </p>
             {filtering ? (
               <button

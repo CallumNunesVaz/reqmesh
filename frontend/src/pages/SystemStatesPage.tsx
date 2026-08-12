@@ -5,6 +5,7 @@ import { Plus, Trash2, Edit3, Check, X, Layers, Loader, AlertTriangle } from 'lu
 import { api, type SystemStateDef } from '../api/client';
 import { useAuthStore } from '../store/auth';
 import { useConfirm } from '../components/ConfirmDialog';
+import LoadingSplash from '../components/LoadingSplash';
 
 export default function SystemStatesPage() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -95,21 +96,14 @@ export default function SystemStatesPage() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <Loader size={20} className="animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
   return (
-    <div className="flex flex-col h-full overflow-y-auto">
+    <div className="relative flex flex-col h-full overflow-y-auto">
+      {loading && <LoadingSplash label="Loading system states…" />}
       <div className="p-6 space-y-6 max-w-6xl mx-auto w-full">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-card-foreground">System States</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">System States</h1>
             <p className="text-sm text-muted-foreground mt-0.5">
               System states represent operational modes or phases a requirement applies to.
               Define them here so the requirement editor can offer a picker rather than a
