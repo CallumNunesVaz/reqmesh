@@ -19,6 +19,7 @@ interface RichTextEditorProps {
   onBlur: (html: string) => void;
   disabled?: boolean;
   placeholder?: string;
+  id?: string;
 }
 
 const ENTITY_LINK_GLOBAL_REGEX = /\[\[([\w\-_.]+)\]\]/g;
@@ -121,7 +122,7 @@ const EntityLinkExtension = Node.create({
   },
 });
 
-export default function RichTextEditor({ content, onChange, onBlur, disabled = false, placeholder }: RichTextEditorProps) {
+export default function RichTextEditor({ content, onChange, onBlur, disabled = false, placeholder, id }: RichTextEditorProps) {
   const isInternalChange = useRef(false);
   const navigate = useNavigate();
   const { projectId } = useParams<{ projectId: string }>();
@@ -307,7 +308,7 @@ export default function RichTextEditor({ content, onChange, onBlur, disabled = f
   }, [content, editor]);
 
   if (!editor) {
-    return <div className="input min-h-[100px]" />;
+    return <div id={id} className="input min-h-[100px]" />;
   }
 
   const ToolbarButton = ({ active, onClick, label, children }: { active?: boolean; onClick: () => void; label: string; children: React.ReactNode }) => (
@@ -356,6 +357,7 @@ export default function RichTextEditor({ content, onChange, onBlur, disabled = f
       )}
       <EditorContent
         editor={editor}
+        id={id}
         className="prose prose-sm dark:prose-invert max-w-none p-3 min-h-[120px] focus:outline-none
           [&_.ProseMirror]:outline-none [&_.ProseMirror]:min-h-[100px]
           [&_.ProseMirror_p.is-editor-empty:first-child::before]:text-muted-foreground

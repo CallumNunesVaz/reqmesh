@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { X, User, Lock, Eye, EyeOff, LogIn, UserPlus } from 'lucide-react';
 import { api } from '../api/client';
 import { useAuthStore } from '../store/auth';
@@ -17,6 +17,8 @@ export default function LoginModal({ open, onClose }: LoginModalProps) {
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const usernameId = useId();
+  const passwordId = useId();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,17 +64,17 @@ export default function LoginModal({ open, onClose }: LoginModalProps) {
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="label">Username</label>
+                <label className="label" htmlFor={usernameId}>Username</label>
                 <div className="relative">
                   <User size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                  <input className="input pl-9" placeholder="username" value={username} onChange={e => setUsername(e.target.value)} required minLength={3} />
+                  <input id={usernameId} className="input pl-9" placeholder="username" value={username} onChange={e => setUsername(e.target.value)} required minLength={3} />
                 </div>
               </div>
               <div>
-                <label className="label">Password</label>
+                <label className="label" htmlFor={passwordId}>Password</label>
                 <div className="relative">
                   <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                  <input type={showPw ? 'text' : 'password'} className="input pl-9 pr-9" placeholder="password" value={password} onChange={e => setPassword(e.target.value)} required minLength={mode === 'register' ? 12 : 1} />
+                  <input id={passwordId} type={showPw ? 'text' : 'password'} className="input pl-9 pr-9" placeholder="password" value={password} onChange={e => setPassword(e.target.value)} required minLength={mode === 'register' ? 12 : 1} />
                   <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                     {showPw ? <EyeOff size={14} /> : <Eye size={14} />}
                   </button>

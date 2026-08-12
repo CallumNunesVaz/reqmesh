@@ -335,24 +335,21 @@ export default function ChangeRequestsPage() {
           <motion.form initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
             onSubmit={handleCreate} className="card p-4 mb-4 overflow-hidden">
             <div className="flex items-end gap-3">
-              <div className="w-32"><label className="label">ID</label><input className="input font-mono" placeholder="CR-001" value={form.id} onChange={e => setForm({...form, id: e.target.value})} autoFocus /></div>
-              <div className="flex-1"><label className="label">Title</label><input className="input" placeholder="Change request title" value={form.title} onChange={e => setForm({...form, title: e.target.value})} /></div>
+              <div className="w-32"><label className="label">ID <input className="input font-mono" placeholder="CR-001" value={form.id} onChange={e => setForm({...form, id: e.target.value})} autoFocus /></label></div>
+              <div className="flex-1"><label className="label">Title <input className="input" placeholder="Change request title" value={form.title} onChange={e => setForm({...form, title: e.target.value})} /></label></div>
               <div className="w-28">
-                <label className="label">Urgency</label>
-                <select className="select" value={form.urgency} onChange={e => setForm({...form, urgency: e.target.value})}>
+                <label className="label">Urgency <select className="select" value={form.urgency} onChange={e => setForm({...form, urgency: e.target.value})}>
                   {CR_URGENCIES.map((u) => <option key={u} value={u}>{u}</option>)}
-                </select>
+                </select></label>
               </div>
               <button type="submit" className="btn-primary">Create</button>
               <button type="button" onClick={() => setShowCreate(false)} className="btn-secondary">Cancel</button>
             </div>
             <div className="mt-2">
-              <label className="label">Description</label>
-              <input className="input" placeholder="What the change is" value={form.description} onChange={e => setForm({...form, description: e.target.value})} />
+              <label className="label">Description <input className="input" placeholder="What the change is" value={form.description} onChange={e => setForm({...form, description: e.target.value})} /></label>
             </div>
             <div className="mt-2">
-              <label className="label">Rationale</label>
-              <input className="input" placeholder="Why the change is needed" value={form.rationale} onChange={e => setForm({...form, rationale: e.target.value})} />
+              <label className="label">Rationale <input className="input" placeholder="Why the change is needed" value={form.rationale} onChange={e => setForm({...form, rationale: e.target.value})} /></label>
             </div>
           </motion.form>
         )}

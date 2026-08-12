@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useId } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, X, Sigma, CheckCircle2, XCircle, HelpCircle, AlertTriangle, MinusCircle, FlaskConical, Ruler, Boxes, ArrowUp, ArrowDown, Beaker, Play } from 'lucide-react';
 import type {
@@ -381,12 +381,13 @@ export function ParameterEditor({ parameters, editable, onChange }: {
 }) {
   const [draft, setDraft] = useState({ name: '', value: '', unit: '' });
   useEffect(() => setDraft({ name: '', value: '', unit: '' }), [parameters]);
+  const paramNameId = useId();
 
   if (!editable && parameters.length === 0) return null;
 
   return (
     <div>
-      <label className="label flex items-center gap-1"><Sigma size={11} className="text-cs-teal" /> Parameters</label>
+      <label className="label flex items-center gap-1" htmlFor={paramNameId}><Sigma size={11} className="text-cs-teal" /> Parameters</label>
       <p className="text-[11px] text-muted-foreground -mt-1 mb-1.5">Quantities budget rollups can sum</p>
       {parameters.length > 0 && (
         <div className="space-y-1 mb-2">
@@ -407,7 +408,7 @@ export function ParameterEditor({ parameters, editable, onChange }: {
       )}
       {editable && (
         <div className="flex gap-1">
-          <input className="input flex-1 text-xs font-mono" placeholder="name" value={draft.name}
+          <input id={paramNameId} className="input flex-1 text-xs font-mono" placeholder="name" value={draft.name}
             onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
           <input className="input w-20 text-xs font-mono" placeholder="value" value={draft.value}
             onChange={(e) => setDraft({ ...draft, value: e.target.value })} />

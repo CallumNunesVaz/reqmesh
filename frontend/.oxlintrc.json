@@ -14,7 +14,7 @@
     "no-unused-vars": "warn",
     "no-unused-expressions": "warn",
     "react-hooks/exhaustive-deps": "warn",
-    "jsx-a11y/label-has-associated-control": "warn",
+    "jsx-a11y/label-has-associated-control": "error",
     "unicorn/no-useless-fallback-in-spread": "warn",
     "unicorn/no-useless-spread": "warn",
     "unicorn/no-new-array": "warn",

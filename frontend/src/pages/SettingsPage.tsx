@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useId } from 'react';
 import {
   SlidersHorizontal, ShieldCheck, Save, Loader, Lock, Send, CheckCircle2,
   AlertTriangle,   Palette, ToggleLeft, Mail, KeyRound, Gauge, ArrowUpCircle, Users, FileText, Plus, X, Upload,
@@ -30,6 +30,7 @@ export default function SettingsPage() {
   const [testTo, setTestTo] = useState('');
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; error?: string } | null>(null);
+  const testEmailId = useId();
 
   const load = useCallback(async () => {
     try {
@@ -120,9 +121,9 @@ export default function SettingsPage() {
 
             {cat === 'email' && (
               <div className="mt-4 pt-3 border-t border-border/60">
-                <label className="text-xs text-muted-foreground">Send a test email</label>
+                <label className="text-xs text-muted-foreground" htmlFor={testEmailId}>Send a test email</label>
                 <div className="flex gap-2 mt-1">
-                  <input className="input text-sm flex-1" type="email" placeholder="you@example.com"
+                  <input id={testEmailId} className="input text-sm flex-1" type="email" placeholder="you@example.com"
                     value={testTo} onChange={(e) => setTestTo(e.target.value)} />
                   <button className="btn-secondary" onClick={sendTest} disabled={testing || !testTo}>
                     {testing ? <Loader size={15} className="animate-spin" /> : <Send size={15} />} Test

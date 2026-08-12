@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
+import { useEffect, useState, useMemo, useRef, useCallback, useId } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { GuardedLink as Link } from '../components/navGuard';
 import { motion } from 'framer-motion';
@@ -100,6 +100,11 @@ export default function RequirementDetailPage() {
   // propose-tier (contributor+, no edit-mode gate).
   const editable = useAuthStore((s) => s.canEdit());
   const canPropose = useAuthStore((s) => s.canPropose());
+  const crDescriptionId = useId();
+  const crRationaleId = useId();
+  const descriptionId = useId();
+  const rationaleId = useId();
+  const parentId = useId();
   const { addToast } = useToasts();
   const showConfirm = useConfirm();
   const [workflow, setWorkflow] = useState<{ states: string[]; transitions: Record<string, string[]> } | null>(null);
@@ -859,45 +864,39 @@ export default function RequirementDetailPage() {
           {crError && <div className="mb-3 text-xs text-destructive bg-destructive/10 rounded px-2 py-1">{crError}</div>}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
             <div>
-              <label className="label">CR Title</label>
-              <input className="input" value={crForm.title} onChange={e => setCrForm({...crForm, title: e.target.value})} />
+              <label className="label">CR Title<input className="input" value={crForm.title} onChange={e => setCrForm({...crForm, title: e.target.value})} /></label>
             </div>
             <div>
-              <label className="label">Urgency</label>
-              <select className="select" value={crForm.urgency} onChange={e => setCrForm({...crForm, urgency: e.target.value})}>
+              <label className="label">Urgency<select className="select" value={crForm.urgency} onChange={e => setCrForm({...crForm, urgency: e.target.value})}>
                 {CR_URGENCIES.map(u => <option key={u} value={u}>{u}</option>)}
-              </select>
+              </select></label>
             </div>
             <div>
-              <label className="label">Rationale (why)</label>
-              <input className="input" placeholder="Why this change is needed" value={crForm.rationale} onChange={e => setCrForm({...crForm, rationale: e.target.value})} />
+              <label className="label">Rationale (why)<input className="input" placeholder="Why this change is needed" value={crForm.rationale} onChange={e => setCrForm({...crForm, rationale: e.target.value})} /></label>
             </div>
           </div>
           <p className="text-[11px] text-muted-foreground mb-2">Only fields you alter will be proposed. Leave unchanged fields as-is.</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="label">Name</label>
-              <input className="input" value={crForm.name} onChange={e => setCrForm({...crForm, name: e.target.value})} />
+              <label className="label">Name<input className="input" value={crForm.name} onChange={e => setCrForm({...crForm, name: e.target.value})} /></label>
             </div>
             <div>
-              <label className="label">Priority</label>
-              <select className="select" value={crForm.priority} onChange={e => setCrForm({...crForm, priority: e.target.value})}>
+              <label className="label">Priority<select className="select" value={crForm.priority} onChange={e => setCrForm({...crForm, priority: e.target.value})}>
                 {priorityOptions.map(p => <option key={p} value={p}>{p}</option>)}
-              </select>
+              </select></label>
             </div>
             <div>
-              <label className="label">Status</label>
-              <select className="select" value={crForm.status} onChange={e => setCrForm({...crForm, status: e.target.value})}>
+              <label className="label">Status<select className="select" value={crForm.status} onChange={e => setCrForm({...crForm, status: e.target.value})}>
                 {statusOptions.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
+              </select></label>
             </div>
             <div>
-              <label className="label">Verification Method</label>
-              <input className="input" value={crForm.verification_method} onChange={e => setCrForm({...crForm, verification_method: e.target.value})} />
+              <label className="label">Verification Method<input className="input" value={crForm.verification_method} onChange={e => setCrForm({...crForm, verification_method: e.target.value})} /></label>
             </div>
             <div className="sm:col-span-2">
-              <label className="label">Description</label>
+              <label className="label" htmlFor={crDescriptionId}>Description</label>
               <RichTextEditor
+                id={crDescriptionId}
                 content={crForm.description}
                 onChange={(html) => setCrForm({...crForm, description: html})}
                 onBlur={() => {}}
@@ -905,8 +904,9 @@ export default function RequirementDetailPage() {
               />
             </div>
             <div className="sm:col-span-2">
-              <label className="label">Requirement Rationale</label>
+              <label className="label" htmlFor={crRationaleId}>Requirement Rationale</label>
               <RichTextEditor
+                id={crRationaleId}
                 content={crForm.reqRationale}
                 onChange={(html) => setCrForm({...crForm, reqRationale: html})}
                 onBlur={() => {}}
@@ -925,20 +925,20 @@ export default function RequirementDetailPage() {
       <div className="grid grid-cols-1 @4xl:grid-cols-3 gap-6">
         <div className="@4xl:col-span-2 space-y-6">
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="card p-5">
-            <label className="label">Name</label>
-            <input
+            <label className="label">Name<input
               className="input text-lg font-medium"
               value={req.name}
               onChange={(e) => setReq({ ...req, name: e.target.value })}
               onBlur={(e) => save({ name: e.target.value })}
               disabled={!editable}
-            />
-            <label className="label mt-4 flex items-center gap-2">
+            /></label>
+            <label className="label mt-4 flex items-center gap-2" htmlFor={descriptionId}>
               Description
               <DescriptionHelper description={req.description} verificationMethod={req.verification_method} />
             </label>
             {editable ? (
               <RichTextEditor
+                id={descriptionId}
                 content={req.description}
                 onChange={(html) => { setReq({ ...req, description: html }); }}
                 onBlur={(html) => save({ description: html })}
@@ -1328,8 +1328,7 @@ export default function RequirementDetailPage() {
             <HelpTip>Classification metadata for this requirement. Type describes what kind of requirement it is. Status tracks its lifecycle. Priority reflects stakeholder importance. Verification method selects the approach used to prove it.</HelpTip>
             <div className="space-y-3 mt-2">
               <div>
-                <label className="label">Type</label>
-                <select className="select" value={req.type} onChange={(e) => save({ type: e.target.value })} disabled={!editable} style={{ color: reqTypeColor(req.type) }}>
+                <label className="label">Type<select className="select" value={req.type} onChange={(e) => save({ type: e.target.value })} disabled={!editable} style={{ color: reqTypeColor(req.type) }}>
                   {typeOptionsFor(req.type).map((t) => (
                     <option key={t} value={t} style={{ color: reqTypeColor(t) }}>
                       {REQUIREMENT_TYPE_META[t]
@@ -1337,10 +1336,10 @@ export default function RequirementDetailPage() {
                         : `${formatReqType(t)} (unrecognised)`}
                     </option>
                   ))}
-                </select>
+                </select></label>
               </div>
               <div>
-                <label className="label">System States</label>
+                <div className="label">System States</div>
                 <div className="flex flex-wrap gap-1.5 mt-1">
                   {projectSystemStates.map((s) => {
                     const active = (req.system_states || []).includes(s.name);
@@ -1385,16 +1384,14 @@ export default function RequirementDetailPage() {
                 <div className="text-[10px] text-muted-foreground mt-0.5">OOSEM: modes this requirement applies to</div>
               </div>
               <div>
-                <label className="label">Status</label>
-        <select className="select" value={req.status} onChange={(e) => save({ status: e.target.value })} disabled={!editable} style={{ color: statusColors[req.status]?.text }}>
+                <label className="label">Status<select className="select" value={req.status} onChange={(e) => save({ status: e.target.value })} disabled={!editable} style={{ color: statusColors[req.status]?.text }}>
           {allowedStatuses.map((s) => (<option key={s} value={s} style={{ color: statusColors[s]?.text }}>{s}</option>))}
-        </select>
+        </select></label>
       </div>
               <div>
-                <label className="label">Priority</label>
-                <select className="select" value={req.priority} onChange={(e) => save({ priority: e.target.value })} disabled={!editable} style={{ color: priorityColorMap[req.priority] }}>
+                <label className="label">Priority<select className="select" value={req.priority} onChange={(e) => save({ priority: e.target.value })} disabled={!editable} style={{ color: priorityColorMap[req.priority] }}>
                   {priorityOptions.map((p) => (<option key={p} value={p} style={{ color: priorityColorMap[p] }}>{p}</option>))}
-                </select>
+                </select></label>
               </div>
               <div>
                 <label className="label flex items-center justify-between">
@@ -1404,7 +1401,7 @@ export default function RequirementDetailPage() {
                 <div className="text-[10px] text-muted-foreground mt-0.5">Included in coverage analysis</div>
               </div>
               <div>
-                <label className="label">Coverage Needs</label>
+                <div className="label">Coverage Needs</div>
                 {/* Checkboxes over the vocabulary the backend actually
                     satisfies, fetched from /coverage-needs. Free text let a
                     project declare obligations nothing could ever discharge —
@@ -1531,7 +1528,7 @@ export default function RequirementDetailPage() {
                 </div>
               </div>
               <div>
-                <label className="label">Verification</label>
+                <div className="label">Verification</div>
                 <div className="flex items-center gap-2 text-sm">
                   <span className="text-foreground">
                     {req.verification_methods.length > 1
@@ -1564,11 +1561,12 @@ export default function RequirementDetailPage() {
                 )}
               </div>
               <div>
-                <label className="label">Parent</label>
+                <label className="label" htmlFor={parentId}>Parent</label>
                 {/* The select owns the value; an <option> can't be a link, so
                     navigation to the parent gets its own button beside it. */}
                 <div className="flex items-center gap-1.5">
                   <select
+                    id={parentId}
                     className="select flex-1 min-w-0"
                     value={req.parent || ''}
                     onChange={(e) => save({ parent: e.target.value || null })}
@@ -1591,7 +1589,7 @@ export default function RequirementDetailPage() {
                 </div>
               </div>
               <div>
-                <label className="label">Rationale</label>
+                <label className="label" htmlFor={rationaleId}>Rationale</label>
                 {/* A single-line <input> for the "why" behind a requirement was
                     too small to write in and lost every bit of structure. Same
                     editor as Description, so [[SYST0001]] entity links and
@@ -1599,6 +1597,7 @@ export default function RequirementDetailPage() {
                     to SysML v2 as doc text, so structure is worth keeping. */}
                 {editable ? (
                   <RichTextEditor
+                    id={rationaleId}
                     content={req.rationale || ''}
                     onChange={(html) => { setReq({ ...req, rationale: html }); }}
                     onBlur={(html) => save({ rationale: html })}
@@ -1613,15 +1612,14 @@ export default function RequirementDetailPage() {
                 )}
               </div>
               <div>
-                <label className="label">Source</label>
-                <input
+                <label className="label">Source<input
                   className="input"
                   placeholder="Stakeholder/document reference..."
                   value={req.source || ''}
                   onChange={(e) => setReq({ ...req, source: e.target.value })}
                   onBlur={(e) => save({ source: e.target.value })}
                   disabled={!editable}
-                />
+                /></label>
               </div>
               {/* "Allocated To" used to be a free-text input here, writing straight
                   to req.allocated_to — a field the allocation matrix already
@@ -1633,7 +1631,7 @@ export default function RequirementDetailPage() {
                   endpoint the matrix uses — editable there now instead of a
                   second, disconnected copy of the same idea. */}
               <div>
-                <label className="label">Baselines</label>
+                <div className="label">Baselines</div>
                 <div className="flex flex-wrap gap-1.5 mt-1">
                   {projectBaselines.map((b) => {
                     const active = (req.baselines || []).includes(b);

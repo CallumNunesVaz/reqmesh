@@ -159,25 +159,27 @@ export default function SystemStatesPage() {
                   {editingName ? `Edit "${editingName}"` : 'New System State'}
                 </h3>
                 <div>
-                  <label className="label">Name *</label>
-                  <input
-                    className="input"
-                    value={formName}
-                    onChange={(e) => setFormName(e.target.value)}
-                    placeholder="e.g. takeoff, cruise, landing"
-                    disabled={formSaving}
-                    onKeyDown={(e) => { if (e.key === 'Enter') save(); }}
-                  />
+                  <label className="label">Name *
+                    <input
+                      className="input"
+                      value={formName}
+                      onChange={(e) => setFormName(e.target.value)}
+                      placeholder="e.g. takeoff, cruise, landing"
+                      disabled={formSaving}
+                      onKeyDown={(e) => { if (e.key === 'Enter') save(); }}
+                    />
+                  </label>
                 </div>
                 <div>
-                  <label className="label">Description</label>
-                  <textarea
-                    className="input min-h-[80px] resize-y"
-                    value={formDesc}
-                    onChange={(e) => setFormDesc(e.target.value)}
-                    placeholder="Describe this operational mode or system phase"
-                    disabled={formSaving}
-                  />
+                  <label className="label">Description
+                    <textarea
+                      className="input min-h-[80px] resize-y"
+                      value={formDesc}
+                      onChange={(e) => setFormDesc(e.target.value)}
+                      placeholder="Describe this operational mode or system phase"
+                      disabled={formSaving}
+                    />
+                  </label>
                 </div>
                 <div className="flex gap-2 justify-end">
                   <button

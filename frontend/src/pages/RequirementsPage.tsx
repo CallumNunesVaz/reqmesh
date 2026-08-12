@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import CreateRequirementModal, { type CreateIntent } from '../components/CreateRequirementModal';
 import { usePersistedState, setCodec } from '../hooks/usePersistedState';
 import { useRangeSelection } from '../hooks/useRangeSelection';
@@ -776,6 +776,8 @@ function BulkEditModal({
   const [form, setForm] = useState(INITIAL);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const cascadeFromId = useId();
+  const descriptionId = useId();
 
   useEffect(() => {
     if (open) { setForm(INITIAL); setError(''); }
@@ -879,25 +881,22 @@ function BulkEditModal({
               {/* Row 1: Type / Priority / Status */}
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="label">Type</label>
-                  <select className="select" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
+                  <label className="label">Type<select className="select" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
                     <option value="">No change</option>
                     {REQUIREMENT_TYPES.map((k) => <option key={k} value={k}>{REQUIREMENT_TYPE_META[k].label}</option>)}
-                  </select>
+                  </select></label>
                 </div>
                 <div>
-                  <label className="label">Priority</label>
-                  <select className="select" value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })}>
+                  <label className="label">Priority<select className="select" value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })}>
                     <option value="">No change</option>
                     <option value="low">Low</option>
                     <option value="medium">Medium</option>
                     <option value="high">High</option>
                     <option value="critical">Critical</option>
-                  </select>
+                  </select></label>
                 </div>
                 <div>
-                  <label className="label">Status</label>
-                  <select className="select" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+                  <label className="label">Status<select className="select" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
                     <option value="">No change</option>
                     <option value="proposed">Proposed</option>
                     <option value="approved">Approved</option>
@@ -905,44 +904,41 @@ function BulkEditModal({
                     <option value="verified">Verified</option>
                     <option value="rejected">Rejected</option>
                     <option value="deprecated">Deprecated</option>
-                  </select>
+                  </select></label>
                 </div>
               </div>
 
               {/* Row 2: Rationale / Source / Allocated To */}
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="label">Rationale</label>
-                  <input className="input" placeholder="Why this requirement exists..." value={form.rationale}
-                    onChange={(e) => setForm({ ...form, rationale: e.target.value })} />
+                  <label className="label">Rationale<input className="input" placeholder="Why this requirement exists..." value={form.rationale}
+                    onChange={(e) => setForm({ ...form, rationale: e.target.value })} /></label>
                 </div>
                 <div>
-                  <label className="label">Source</label>
-                  <input className="input" placeholder="Stakeholder/document ref..." value={form.source}
-                    onChange={(e) => setForm({ ...form, source: e.target.value })} />
+                  <label className="label">Source<input className="input" placeholder="Stakeholder/document ref..." value={form.source}
+                    onChange={(e) => setForm({ ...form, source: e.target.value })} /></label>
                 </div>
                 <div>
-                  <label className="label">Allocated To</label>
-                  <input className="input" placeholder="System element..." value={form.allocated_to}
-                    onChange={(e) => setForm({ ...form, allocated_to: e.target.value })} />
+                  <label className="label">Allocated To<input className="input" placeholder="System element..." value={form.allocated_to}
+                    onChange={(e) => setForm({ ...form, allocated_to: e.target.value })} /></label>
                 </div>
               </div>
 
               {/* Row 4: Subject / Cascade From / Effort */}
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="label">Subject</label>
-                  <input className="input font-mono text-xs" placeholder="e.g. WING" value={form.subject}
-                    onChange={(e) => setForm({ ...form, subject: e.target.value })} />
+                  <label className="label">Subject<input className="input font-mono text-xs" placeholder="e.g. WING" value={form.subject}
+                    onChange={(e) => setForm({ ...form, subject: e.target.value })} /></label>
                 </div>
                 <div>
-                  <label className="label">Cascade From</label>
+                  <label className="label" htmlFor={cascadeFromId}>Cascade From</label>
                   {/* Was a free-text id box. Setting this is not a label: the
                       master's name, description, priority, status and type
                       overwrite this requirement's on every future edit of the
                       master. A typo silently pointed at nothing; picking from
                       the list cannot. */}
                   <select
+                    id={cascadeFromId}
                     className="select font-mono text-xs"
                     value={form.cascade_from}
                     onChange={(e) => setForm({ ...form, cascade_from: e.target.value })}
@@ -970,35 +966,33 @@ function BulkEditModal({
               {/* Row 5: System States / Coverage Needs */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="label">System States</label>
-                  <input className="input font-mono text-xs" placeholder="takeoff, cruise, landing" value={form.system_states}
-                    onChange={(e) => setForm({ ...form, system_states: e.target.value })} />
+                  <label className="label">System States<input className="input font-mono text-xs" placeholder="takeoff, cruise, landing" value={form.system_states}
+                    onChange={(e) => setForm({ ...form, system_states: e.target.value })} /></label>
                   <div className="text-[10px] text-muted-foreground mt-0.5">Comma-separated OOSEM modes</div>
                 </div>
                 <div>
-                  <label className="label">Coverage Needs</label>
-                  <input className="input font-mono text-xs" placeholder="design, verification_case" value={form.needs}
-                    onChange={(e) => setForm({ ...form, needs: e.target.value })} />
+                  <label className="label">Coverage Needs<input className="input font-mono text-xs" placeholder="design, verification_case" value={form.needs}
+                    onChange={(e) => setForm({ ...form, needs: e.target.value })} /></label>
                   <div className="text-[10px] text-muted-foreground mt-0.5">Comma-separated artifact types</div>
                 </div>
               </div>
 
               {/* Stakeholder Priorities */}
               <div>
-                <label className="label">Stakeholder Priorities</label>
-                <textarea
+                <label className="label">Stakeholder Priorities<textarea
                   className="input font-mono text-xs h-16 resize-none"
                   placeholder="development: 5\ncustomers: 8\nsafety: 10"
                   value={form.priorities}
                   onChange={(e) => setForm({ ...form, priorities: e.target.value })}
-                />
+                /></label>
                 <div className="text-[10px] text-muted-foreground mt-0.5">One per line, format: stakeholder: score</div>
               </div>
 
               {/* Description */}
               <div>
-                <label className="label">Description</label>
+                <label className="label" htmlFor={descriptionId}>Description</label>
                 <RichTextEditor
+                  id={descriptionId}
                   content={form.description}
                   onChange={(html) => setForm({ ...form, description: html })}
                   onBlur={() => {}}
@@ -1027,7 +1021,7 @@ function BulkEditModal({
               {/* Baselines */}
               {projectBaselines.length > 0 && (
                 <div>
-                  <label className="label">Baselines</label>
+                  <div className="label">Baselines</div>
                   <div className="flex flex-wrap gap-1.5 mt-1">
                     {projectBaselines.map((b) => {
                       const active = (form.baselines || []).includes(b);

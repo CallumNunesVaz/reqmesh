@@ -463,27 +463,23 @@ export default function ComponentsPage() {
           >
             <div className="flex items-end gap-3 flex-wrap">
               <div className="w-36">
-                <label className="label">ID</label>
-                <input className="input font-mono" placeholder="C-001" value={draft.id}
-                  onChange={(e) => setDraft({ ...draft, id: e.target.value })} autoFocus />
+                <label className="label">ID <input className="input font-mono" placeholder="C-001" value={draft.id}
+                  onChange={(e) => setDraft({ ...draft, id: e.target.value })} autoFocus /></label>
               </div>
               <div className="flex-1 min-w-[160px]">
-                <label className="label">Name</label>
-                <input className="input" placeholder="Fuel pump" value={draft.name}
-                  onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
+                <label className="label">Name <input className="input" placeholder="Fuel pump" value={draft.name}
+                  onChange={(e) => setDraft({ ...draft, name: e.target.value })} /></label>
               </div>
               <div className="w-36">
-                <label className="label">Type</label>
-                <select className="input" value={draft.type} onChange={(e) => setDraft({ ...draft, type: e.target.value })}>
+                <label className="label">Type <select className="input" value={draft.type} onChange={(e) => setDraft({ ...draft, type: e.target.value })}>
                   {COMPONENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-                </select>
+                </select></label>
               </div>
               <div className="w-44">
-                <label className="label">Parent</label>
-                <select className="input" value={draft.parent} onChange={(e) => setDraft({ ...draft, parent: e.target.value })}>
+                <label className="label">Parent <select className="input" value={draft.parent} onChange={(e) => setDraft({ ...draft, parent: e.target.value })}>
                   <option value="">(top level)</option>
                   {components.map((c) => <option key={c.id} value={c.id}>{c.id} — {c.name}</option>)}
-                </select>
+                </select></label>
               </div>
               <button type="submit" className="btn-primary">Create</button>
               <button type="button" onClick={() => setShowCreate(false)} className="btn-secondary">Cancel</button>

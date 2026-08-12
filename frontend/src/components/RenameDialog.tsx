@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useId } from 'react';
 import { AlertTriangle, Loader, Tag, X } from 'lucide-react';
 import Modal from './Modal';
 
@@ -25,6 +25,7 @@ export default function RenameDialog({ open, onClose, currentId, suggest, onRena
   const [error, setError] = useState('');
   const [done, setDone] = useState<{ children: string[]; relinked: string[] } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const newId = useId();
 
   useEffect(() => {
     if (!open) return;
@@ -87,9 +88,10 @@ export default function RenameDialog({ open, onClose, currentId, suggest, onRena
                   any id that fits the scheme is accepted.
                 </p>
 
-                <label className="label">New id</label>
+                <label className="label" htmlFor={newId}>New id</label>
                 <input
                   ref={inputRef}
+                  id={newId}
                   aria-label="New id"
                   className="input font-mono w-full mt-1"
                   value={value}

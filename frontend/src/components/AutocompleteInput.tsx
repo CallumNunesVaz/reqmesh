@@ -6,6 +6,7 @@ interface Suggestion {
 }
 
 interface AutocompleteInputProps {
+  id?: string;
   value: string;
   onChange: (value: string) => void;
   suggestions: Suggestion[];
@@ -15,6 +16,7 @@ interface AutocompleteInputProps {
 }
 
 export default function AutocompleteInput({
+  id,
   value,
   onChange,
   suggestions,
@@ -88,6 +90,7 @@ export default function AutocompleteInput({
     <div ref={containerRef} className="relative">
       <input
         ref={inputRef}
+        id={id}
         className={className}
         value={value}
         onChange={(e) => {

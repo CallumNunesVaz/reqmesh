@@ -226,7 +226,7 @@ export default function ExportDialog({ open, onClose, projectId }: ExportDialogP
               <div>
                 <div className="flex items-center gap-2 mb-2">
                   <FileDown size={14} className="text-muted-foreground" />
-                  <label className="label">Reports</label>
+                  <span className="label">Reports</span>
                   <span className="text-[10px] text-muted-foreground">— formatted documents with section selection</span>
                 </div>
                 <div className="grid grid-cols-4 gap-2">
@@ -253,7 +253,7 @@ export default function ExportDialog({ open, onClose, projectId }: ExportDialogP
               <div>
                 <div className="flex items-center gap-2 mb-2">
                   <FileSpreadsheet size={14} className="text-muted-foreground" />
-                  <label className="label">Data Exports</label>
+                  <span className="label">Data Exports</span>
                   <span className="text-[10px] text-muted-foreground">— tabular data for spreadsheets and analysis tools</span>
                 </div>
                 <div className="grid grid-cols-3 gap-2">
@@ -280,7 +280,7 @@ export default function ExportDialog({ open, onClose, projectId }: ExportDialogP
               <div>
                 <div className="flex items-center gap-2 mb-2">
                   <FileType size={14} className="text-muted-foreground" />
-                  <label className="label">Interchange Formats</label>
+                  <span className="label">Interchange Formats</span>
                   <span className="text-[10px] text-muted-foreground">— industry standards for tool-to-tool exchange</span>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
@@ -318,7 +318,7 @@ export default function ExportDialog({ open, onClose, projectId }: ExportDialogP
                 {isReportFormat(format) ? (
                   <div>
                     <div className="flex items-center justify-between mb-1">
-                      <label className="label">Sections</label>
+                      <span className="label">Sections</span>
                       <div className="flex gap-2">
                         <button onClick={selectAllSections} className="text-[10px] text-muted-foreground hover:text-foreground">All</button>
                         <button onClick={selectNoneSections} className="text-[10px] text-muted-foreground hover:text-foreground">None</button>
@@ -370,24 +370,26 @@ export default function ExportDialog({ open, onClose, projectId }: ExportDialogP
                         </p>
                         <div className="flex flex-wrap gap-2">
                           <div className="flex-1 min-w-[120px]">
-                            <label className="block text-[10px] text-muted-foreground mb-0.5">From</label>
-                            <input
-                              type="date"
-                              className="input text-xs h-8"
-                              value={changelogFrom}
-                              max={changelogTo || undefined}
-                              onChange={(e) => setChangelogFrom(e.target.value)}
-                            />
+                            <label className="block text-[10px] text-muted-foreground mb-0.5">From
+                              <input
+                                type="date"
+                                className="input text-xs h-8"
+                                value={changelogFrom}
+                                max={changelogTo || undefined}
+                                onChange={(e) => setChangelogFrom(e.target.value)}
+                              />
+                            </label>
                           </div>
                           <div className="flex-1 min-w-[120px]">
-                            <label className="block text-[10px] text-muted-foreground mb-0.5">To</label>
-                            <input
-                              type="date"
-                              className="input text-xs h-8"
-                              value={changelogTo}
-                              min={changelogFrom || undefined}
-                              onChange={(e) => setChangelogTo(e.target.value)}
-                            />
+                            <label className="block text-[10px] text-muted-foreground mb-0.5">To
+                              <input
+                                type="date"
+                                className="input text-xs h-8"
+                                value={changelogTo}
+                                min={changelogFrom || undefined}
+                                onChange={(e) => setChangelogTo(e.target.value)}
+                              />
+                            </label>
                           </div>
                         </div>
                         {datesInvalid && (
@@ -401,7 +403,7 @@ export default function ExportDialog({ open, onClose, projectId }: ExportDialogP
                   </div>
                 ) : (
                   <div>
-                    <label className="label">Sections</label>
+                    <span className="label">Sections</span>
                     <p className="text-xs text-muted-foreground mt-1">
                       Section selection applies to report formats only. {format === 'reqif' ? 'ReqIF exports all requirements.' : format === 'sysml' ? 'SysML v2 exports all requirements.' : 'Data exports include all requirements in flat table form.'}
                     </p>
@@ -411,7 +413,7 @@ export default function ExportDialog({ open, onClose, projectId }: ExportDialogP
                 {/* Subsystems — always shown */}
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="label">Subsystems</label>
+                    <span className="label">Subsystems</span>
                     <div className="flex gap-2">
                       <button onClick={handleSelectAllGroups} className="text-[10px] text-muted-foreground hover:text-foreground">All</button>
                       <button onClick={handleSelectNoneGroups} className="text-[10px] text-muted-foreground hover:text-foreground">None</button>

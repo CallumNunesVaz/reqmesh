@@ -229,16 +229,19 @@ export default function SpecificationsPage() {
           >
             <div className="flex items-end gap-3">
               <div className="w-40">
-                <label className="label">ID</label>
-                <input className="input font-mono" placeholder="SRS-001" value={newSpec.id} onChange={(e) => setNewSpec({ ...newSpec, id: e.target.value })} autoFocus disabled={!!editingId} />
+                <label className="label">ID
+                  <input className="input font-mono" placeholder="SRS-001" value={newSpec.id} onChange={(e) => setNewSpec({ ...newSpec, id: e.target.value })} autoFocus disabled={!!editingId} />
+                </label>
               </div>
               <div className="flex-1">
-                <label className="label">Name</label>
-                <input className="input" placeholder="Specification name" value={newSpec.name} onChange={(e) => setNewSpec({ ...newSpec, name: e.target.value })} />
+                <label className="label">Name
+                  <input className="input" placeholder="Specification name" value={newSpec.name} onChange={(e) => setNewSpec({ ...newSpec, name: e.target.value })} />
+                </label>
               </div>
               <div className="w-60">
-                <label className="label">Source URL</label>
-                <input className="input" placeholder="https://…" value={newSpec.url} onChange={(e) => setNewSpec({ ...newSpec, url: e.target.value })} />
+                <label className="label">Source URL
+                  <input className="input" placeholder="https://…" value={newSpec.url} onChange={(e) => setNewSpec({ ...newSpec, url: e.target.value })} />
+                </label>
               </div>
               <button type="submit" className="btn-primary">{editingId ? 'Save' : 'Create'}</button>
               <button type="button" onClick={() => { setShowCreate(false); setEditingId(null); setNewSpec({ id: '', name: '', description: '', url: '' }); }} className="btn-secondary">Cancel</button>

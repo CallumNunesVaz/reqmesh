@@ -157,8 +157,15 @@
            font-medium text-sm shadow-sm;
   }
 
+  /* `tracking-normal font-normal`: associating labels put many inputs *inside*
+     their <label>, and Tailwind's preflight makes form controls inherit
+     letter-spacing and font-weight. Without these a wrapped input picks up
+     .label's `tracking-wider font-semibold` and renders what the user typed
+     bold and wide-spaced. Measured, not assumed: wrapped inputs computed
+     0.6px/600 where unwrapped ones compute normal/400. */
   .input {
     @apply w-full px-3 py-2 rounded-lg border bg-background text-sm
+           tracking-normal font-normal
            focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-ring/30
            placeholder:text-muted-foreground transition-all;
   }

@@ -118,7 +118,7 @@ export default function ImportDialog({ open, onClose, projectId }: ImportDialogP
 
             <div className="space-y-5">
               <div>
-                <label className="label">Source</label>
+                <span className="label">Source</span>
                 <div className="grid grid-cols-2 gap-2 mt-1">
                   <button
                     onClick={() => chooseSource('file')}
@@ -140,7 +140,7 @@ export default function ImportDialog({ open, onClose, projectId }: ImportDialogP
               </div>
 
               <div>
-                <label className="label">Format</label>
+                <span className="label">Format</span>
                 <div className="grid grid-cols-3 gap-2 mt-1">
                   {formats.map((f) => {
                     const active = format === f.id;
@@ -164,7 +164,7 @@ export default function ImportDialog({ open, onClose, projectId }: ImportDialogP
               </div>
 
               <div>
-                <label className="label">Mode</label>
+                <span className="label">Mode</span>
                 <div className="grid grid-cols-2 gap-2 mt-1">
                   <button
                     onClick={() => chooseMode('merge')}

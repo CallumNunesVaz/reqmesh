@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useId } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Trash2, ArrowLeft, Save, X, ChevronRight, AlertTriangle } from 'lucide-react';
@@ -56,6 +56,7 @@ export default function ComponentDetailPage() {
   const entityKinds = useEntityKinds(projectId);
   const showConfirm = useConfirm();
   const { addToast } = useToasts();
+  const descriptionId = useId();
 
   const [component, setComponent] = useState<Component | null>(null);
   const [allComponents, setAllComponents] = useState<Component[]>([]);
@@ -229,17 +230,19 @@ export default function ComponentDetailPage() {
         {/* Main content area */}
         <div className="@4xl:col-span-2 space-y-6">
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="card p-5">
-            <label className="label">Name</label>
-            <input
-              className="input text-lg font-medium"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              onBlur={(e) => save({ name: e.target.value })}
-              disabled={!editable}
-            />
-            <label className="label mt-4">Description</label>
+            <label className="label">Name
+              <input
+                className="input text-lg font-medium"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                onBlur={(e) => save({ name: e.target.value })}
+                disabled={!editable}
+              />
+            </label>
+            <label className="label mt-4" htmlFor={descriptionId}>Description</label>
             {editable ? (
               <RichTextEditor
+                id={descriptionId}
                 content={form.description || ''}
                 onChange={(html) => setForm({ ...form, description: html })}
                 // Saves on blur like every other field on this page (name,
@@ -290,41 +293,46 @@ export default function ComponentDetailPage() {
             <h2 className="font-semibold text-sm text-card-foreground mb-3">Properties</h2>
             <div className="space-y-3">
               <div>
-                <label className="label">Type</label>
-                <select className="input" value={form.type} onChange={(e) => { setForm({ ...form, type: e.target.value }); save({ type: e.target.value }); }} disabled={!editable}>
-                  {COMPONENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-                </select>
+                <label className="label">Type
+                  <select className="input" value={form.type} onChange={(e) => { setForm({ ...form, type: e.target.value }); save({ type: e.target.value }); }} disabled={!editable}>
+                    {COMPONENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </label>
               </div>
               <div>
-                <label className="label">Parent</label>
-                <select className="input" value={form.parent} onChange={(e) => { setForm({ ...form, parent: e.target.value }); save({ parent: e.target.value || null }); }} disabled={!editable}>
-                  <option value="">(top level)</option>
-                  {parentOptions.map((c) => <option key={c.id} value={c.id}>{c.id} — {c.name}</option>)}
-                </select>
+                <label className="label">Parent
+                  <select className="input" value={form.parent} onChange={(e) => { setForm({ ...form, parent: e.target.value }); save({ parent: e.target.value || null }); }} disabled={!editable}>
+                    <option value="">(top level)</option>
+                    {parentOptions.map((c) => <option key={c.id} value={c.id}>{c.id} — {c.name}</option>)}
+                  </select>
+                </label>
               </div>
               <div>
-                <label className="label">Quantity</label>
-                <input className="input" type="number" min={1} value={form.quantity}
-                  onBlur={(e) => save({ quantity: Number(e.target.value) || 1 })}
-                  onChange={(e) => setForm({ ...form, quantity: Number(e.target.value) || 1 })}
-                  disabled={!editable} />
+                <label className="label">Quantity
+                  <input className="input" type="number" min={1} value={form.quantity}
+                    onBlur={(e) => save({ quantity: Number(e.target.value) || 1 })}
+                    onChange={(e) => setForm({ ...form, quantity: Number(e.target.value) || 1 })}
+                    disabled={!editable} />
+                </label>
               </div>
               <div>
-                <label className="label">Part number</label>
-                <input className="input" value={form.part_number}
-                  onChange={(e) => setForm({ ...form, part_number: e.target.value })}
-                  onBlur={(e) => save({ part_number: e.target.value })}
-                  disabled={!editable} />
+                <label className="label">Part number
+                  <input className="input" value={form.part_number}
+                    onChange={(e) => setForm({ ...form, part_number: e.target.value })}
+                    onBlur={(e) => save({ part_number: e.target.value })}
+                    disabled={!editable} />
+                </label>
               </div>
               <div>
-                <label className="label">Supplier</label>
-                <input className="input" value={form.supplier}
-                  onChange={(e) => setForm({ ...form, supplier: e.target.value })}
-                  onBlur={(e) => save({ supplier: e.target.value })}
-                  disabled={!editable} />
+                <label className="label">Supplier
+                  <input className="input" value={form.supplier}
+                    onChange={(e) => setForm({ ...form, supplier: e.target.value })}
+                    onBlur={(e) => save({ supplier: e.target.value })}
+                    disabled={!editable} />
+                </label>
               </div>
               <div>
-                <label className="label">Baselines</label>
+                <span className="label">Baselines</span>
                 <div className="flex flex-wrap gap-1.5 mt-1">
                   {projectBaselines.map((b) => {
                     const active = (component.baselines || []).includes(b);

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useId } from 'react';
 import { X, ArrowUp } from 'lucide-react';
 import { api, type Requirement } from '../api/client';
 import { useUndoStore } from '../store/undo';
@@ -25,6 +25,7 @@ export default function CreateRequirementModal({
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const { selectedReqId, selectReq } = useSelectedReq();
+  const parentId = useId();
 
   useEffect(() => {
     if (!open) return;
@@ -131,9 +132,9 @@ export default function CreateRequirementModal({
 
             <div className="space-y-3">
               <div>
-                <label className="label">Parent</label>
+                <label className="label" htmlFor={parentId}>Parent</label>
                 <div className="flex gap-1.5">
-                  <select className="select flex-1" value={form.parent} onChange={(e) => handleParentChange(e.target.value)}>
+                  <select id={parentId} className="select flex-1" value={form.parent} onChange={(e) => handleParentChange(e.target.value)}>
                     <option value="">None (top level)</option>
                     {parentOptions.map((r) => (
                       <option key={r.id} value={r.id}>{r.id} — {r.name || 'Untitled'}</option>
@@ -150,42 +151,37 @@ export default function CreateRequirementModal({
 
               <div className="grid grid-cols-[8rem_1fr] gap-3">
                 <div>
-                  <label className="label">ID</label>
-                  <input className="input font-mono" value={form.id} onChange={(e) => setForm({ ...form, id: e.target.value })} />
+                  <label className="label">ID <input className="input font-mono" value={form.id} onChange={(e) => setForm({ ...form, id: e.target.value })} /></label>
                 </div>
                 <div>
-                  <label className="label">Name</label>
-                  <input className="input" placeholder="Requirement name" value={form.name} autoFocus
-                    onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                  <label className="label">Name <input className="input" placeholder="Requirement name" value={form.name} autoFocus
+                    onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="label">Type</label>
-                  <select className="select" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
+                  <label className="label">Type <select className="select" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
                     {REQUIREMENT_TYPES.map((k) => <option key={k} value={k}>{REQUIREMENT_TYPE_META[k].label}</option>)}
-                  </select>
+                  </select></label>
                 </div>
                 <div>
-                  <label className="label">Priority</label>
-                  <select className="select" value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })}>
+                  <label className="label">Priority <select className="select" value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })}>
                     <option value="low">Low</option>
                     <option value="medium">Medium</option>
                     <option value="high">High</option>
                     <option value="critical">Critical</option>
-                  </select>
+                  </select></label>
                 </div>
               </div>
 
               <div>
-                <label className="label">Description <span className="normal-case font-normal">(optional)</span></label>
-                <textarea
+                <label className="label">Description <span className="normal-case font-normal">(optional)</span><textarea
                   className="input min-h-[72px] resize-y"
                   placeholder="Describe the requirement…"
                   value={form.description}
                   onChange={(e) => setForm({ ...form, description: e.target.value })}
-                />
+                /></label>
               </div>
 
               {error && <p className="text-xs text-destructive">{error}</p>}

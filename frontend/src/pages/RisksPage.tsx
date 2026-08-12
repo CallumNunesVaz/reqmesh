@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useId } from 'react';
 import { usePersistedState } from '../hooks/usePersistedState';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -31,6 +31,7 @@ export default function RisksPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [form, setForm] = useState({ id: '', title: '', description: '', severity: '', likelihood: '' });
+  const descriptionId = useId();
   const editable = useAuthStore((s) => s.canPropose());
   // Bulk operations are maintainer-tier (backend require_maintain), unlike
   // individual create/edit/delete which are propose-tier.
@@ -350,20 +351,21 @@ export default function RisksPage() {
           <motion.form initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
             onSubmit={handleCreate} className="card p-4 mb-4 overflow-hidden">
             <div className="flex flex-wrap items-end gap-3">
-              <div className="w-32"><label className="label">ID</label><input className="input font-mono" placeholder="RSK-001" value={form.id} onChange={e => setForm({...form, id: e.target.value})} autoFocus disabled={!!editingId} /></div>
-              <div className="flex-1 min-w-[12rem]"><label className="label">Title</label><input className="input" placeholder="Risk title" value={form.title} onChange={e => setForm({...form, title: e.target.value})} /></div>
-              <div className="w-36"><label className="label">Severity</label><select className="select" value={form.severity} onChange={e => setForm({...form, severity: e.target.value})}>
+              <div className="w-32"><label className="label">ID <input className="input font-mono" placeholder="RSK-001" value={form.id} onChange={e => setForm({...form, id: e.target.value})} autoFocus disabled={!!editingId} /></label></div>
+              <div className="flex-1 min-w-[12rem]"><label className="label">Title <input className="input" placeholder="Risk title" value={form.title} onChange={e => setForm({...form, title: e.target.value})} /></label></div>
+              <div className="w-36"><label className="label">Severity <select className="select" value={form.severity} onChange={e => setForm({...form, severity: e.target.value})}>
                 {(matrix?.severities ?? []).map((sv) => <option key={sv} value={sv}>{formatLevel(sv)}</option>)}
-              </select></div>
-              <div className="w-40"><label className="label">Likelihood</label><select className="select" value={form.likelihood} onChange={e => setForm({...form, likelihood: e.target.value})}>
+              </select></label></div>
+              <div className="w-40"><label className="label">Likelihood <select className="select" value={form.likelihood} onChange={e => setForm({...form, likelihood: e.target.value})}>
                 {(matrix?.likelihoods ?? []).map((l) => <option key={l} value={l}>{formatLevel(l)}</option>)}
-              </select></div>
+              </select></label></div>
               <button type="submit" className="btn-primary">{editingId ? 'Save' : 'Create'}</button>
               <button type="button" onClick={() => setShowCreate(false)} className="btn-secondary">Cancel</button>
             </div>
             <div className="mt-3">
-              <label className="label">Description</label>
+              <label className="label" htmlFor={descriptionId}>Description</label>
               <RichTextEditor
+                id={descriptionId}
                 content={form.description}
                 onChange={(html) => setForm({ ...form, description: html })}
                 onBlur={() => {}}

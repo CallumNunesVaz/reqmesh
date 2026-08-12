@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useId } from 'react';
 import { usePersistedState, setCodec } from '../hooks/usePersistedState';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -84,6 +84,7 @@ export default function BaselinesPage() {
   const [formDueDate, setFormDueDate] = useState('');
   const [editingName, setEditingName] = useState<string | null>(null);
   const [formSaving, setFormSaving] = useState(false);
+  const descriptionId = useId();
 
   // Freeze / diff state
   const [freezing, setFreezing] = useState<string | null>(null);
@@ -539,42 +540,40 @@ export default function BaselinesPage() {
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-[1fr_100px] gap-3">
                   <div>
-                    <label className="label">Name *</label>
-                    <input
+                    <label className="label">Name * <input
                       className="input"
                       value={formName}
                       onChange={(e) => setFormName(e.target.value)}
                       placeholder="e.g. PDR, CDR, TRR"
                       disabled={formSaving}
                       onKeyDown={(e) => { if (e.key === 'Enter') saveBaseline(); }}
-                    />
+                    /></label>
                   </div>
                   <div>
-                    <label className="label">Symbol</label>
-                    <input
+                    <label className="label">Symbol <input
                       className="input font-mono"
                       value={formSymbol}
                       onChange={(e) => setFormSymbol(e.target.value)}
                       placeholder="e.g. P"
                       maxLength={8}
                       disabled={formSaving}
-                    />
+                    /></label>
                   </div>
                 </div>
                 <div>
-                  <label className="label">Due Date</label>
-                  <input
+                  <label className="label">Due Date <input
                     className="input"
                     type="date"
                     value={formDueDate}
                     onChange={(e) => setFormDueDate(e.target.value)}
                     disabled={formSaving}
-                  />
+                  /></label>
                 </div>
                 <div>
-                  <label className="label">Description</label>
+                  <label className="label" htmlFor={descriptionId}>Description</label>
                   {editable ? (
                     <RichTextEditor
+                      id={descriptionId}
                       content={formDesc}
                       onChange={setFormDesc}
                       onBlur={() => {}}

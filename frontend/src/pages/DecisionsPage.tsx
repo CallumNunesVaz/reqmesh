@@ -235,27 +235,23 @@ export default function DecisionsPage() {
           >
             <div className="flex items-end gap-3">
               <div className="w-44">
-                <label className="label">ID</label>
-                <input className="input font-mono" placeholder="ADR-001" value={draft.id}
+                <label className="label">ID <input className="input font-mono" placeholder="ADR-001" value={draft.id}
                   onChange={(e) => setDraft({ ...draft, id: e.target.value })}
-                  autoFocus disabled={!!editingId} />
+                  autoFocus disabled={!!editingId} /></label>
               </div>
               <div className="flex-1">
-                <label className="label">Title</label>
-                <input className="input" placeholder="Decision title" value={draft.title}
-                  onChange={(e) => setDraft({ ...draft, title: e.target.value })} />
+                <label className="label">Title <input className="input" placeholder="Decision title" value={draft.title}
+                  onChange={(e) => setDraft({ ...draft, title: e.target.value })} /></label>
               </div>
               <div className="w-40">
-                <label className="label">Status</label>
-                <select className="input" value={draft.status}
+                <label className="label">Status <select className="input" value={draft.status}
                   onChange={(e) => setDraft({ ...draft, status: e.target.value })}>
                   {statusOptions.map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
+                </select></label>
               </div>
               <div className="w-44">
-                <label className="label">Decided by</label>
-                <input className="input" placeholder="Name" value={draft.decided_by}
-                  onChange={(e) => setDraft({ ...draft, decided_by: e.target.value })} />
+                <label className="label">Decided by <input className="input" placeholder="Name" value={draft.decided_by}
+                  onChange={(e) => setDraft({ ...draft, decided_by: e.target.value })} /></label>
               </div>
             </div>
             {/* The four ADR fields, each its own box — see the file header. */}

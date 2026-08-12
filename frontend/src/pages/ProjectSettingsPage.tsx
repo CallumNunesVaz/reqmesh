@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Save, Settings, X, Plus, RotateCw } from 'lucide-react';
@@ -57,6 +57,7 @@ export default function ProjectSettingsPage() {
   const [gitCommitSchedule, setGitCommitSchedule] = useState('every_change');
   const [gitCommitIntervalHours, setGitCommitIntervalHours] = useState(0);
   const [gitCommitChangesThreshold, setGitCommitChangesThreshold] = useState(0);
+  const commitScheduleId = useId();
 
   // Stakeholders whose views a requirement is scored against. Defined per
   // project so the scores are comparable between requirements — they used to
@@ -217,37 +218,32 @@ export default function ProjectSettingsPage() {
               </div>
               <div className="grid grid-cols-2 @xl:grid-cols-3 gap-2">
                 <div>
-                  <label className="label text-[10px]">Prefix hint</label>
-                  <input className="input text-xs font-mono" value={rule.prefix_hint}
+                  <label className="label text-[10px]">Prefix hint<input className="input text-xs font-mono" value={rule.prefix_hint}
                     onChange={(e) => updateRule(key, { prefix_hint: e.target.value })}
-                    disabled={!editable} />
+                    disabled={!editable} /></label>
                 </div>
                 <div>
-                  <label className="label text-[10px]">Prefix length</label>
-                  <input className="input text-xs" type="number" min={1} max={8} value={rule.prefix_length}
+                  <label className="label text-[10px]">Prefix length<input className="input text-xs" type="number" min={1} max={8} value={rule.prefix_length}
                     onChange={(e) => updateRule(key, { prefix_length: Number(e.target.value) || 1 })}
-                    disabled={!editable} />
+                    disabled={!editable} /></label>
                 </div>
                 <div>
-                  <label className="label text-[10px]">Separator</label>
-                  <input className="input text-xs font-mono" maxLength={1} value={rule.separator}
+                  <label className="label text-[10px]">Separator<input className="input text-xs font-mono" maxLength={1} value={rule.separator}
                     onChange={(e) => updateRule(key, { separator: e.target.value.slice(0, 1) })}
-                    disabled={!editable} />
+                    disabled={!editable} /></label>
                 </div>
                 <div>
-                  <label className="label text-[10px]">Suffix length</label>
-                  <input className="input text-xs" type="number" min={1} max={10} value={rule.suffix_length}
+                  <label className="label text-[10px]">Suffix length<input className="input text-xs" type="number" min={1} max={10} value={rule.suffix_length}
                     onChange={(e) => updateRule(key, { suffix_length: Number(e.target.value) || 1 })}
-                    disabled={!editable} />
+                    disabled={!editable} /></label>
                 </div>
                 <div>
-                  <label className="label text-[10px]">Suffix type</label>
-                  <select className="input text-xs" value={rule.suffix_type}
+                  <label className="label text-[10px]">Suffix type<select className="input text-xs" value={rule.suffix_type}
                     onChange={(e) => updateRule(key, { suffix_type: e.target.value as any })}
                     disabled={!editable}>
                     <option value="numeric">Numeric (0-9)</option>
                     <option value="alphanumeric">Alphanumeric (a-z, 0-9)</option>
-                  </select>
+                  </select></label>
                 </div>
               </div>
             </div>
@@ -267,15 +263,14 @@ export default function ProjectSettingsPage() {
           {stakeholders.map((sh) => (
             <div key={sh.name} className="flex items-center gap-2">
               <span className="text-sm text-foreground flex-1 min-w-0 truncate">{sh.name}</span>
-              <label className="text-[10px] text-muted-foreground">weight</label>
-              <input
+              <label className="text-[10px] text-muted-foreground">weight<input
                 type="number" min={0} step={0.1}
                 className="input w-20 h-8 text-xs"
                 value={sh.weight}
                 disabled={!editable}
                 onChange={(e) => setStakeholders((prev) => prev.map((x) =>
                   x.name === sh.name ? { ...x, weight: Number(e.target.value) } : x))}
-              />
+              /></label>
               {editable && (
                 <button
                   onClick={() => setStakeholders((prev) => prev.filter((x) => x.name !== sh.name))}
@@ -433,36 +428,33 @@ export default function ProjectSettingsPage() {
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="label">Author Name</label>
-              <input className="input text-sm font-mono" value={gitUserName}
+              <label className="label">Author Name<input className="input text-sm font-mono" value={gitUserName}
                 onChange={(e) => setGitUserName(e.target.value)} disabled={!editable}
-                placeholder="Acme Systems Engineering" />
+                placeholder="Acme Systems Engineering" /></label>
               <div className="text-[10px] text-muted-foreground mt-0.5">Git commit author name</div>
             </div>
             <div>
-              <label className="label">Author Email</label>
-              <input className="input text-sm font-mono" value={gitUserEmail}
+              <label className="label">Author Email<input className="input text-sm font-mono" value={gitUserEmail}
                 onChange={(e) => setGitUserEmail(e.target.value)} disabled={!editable}
-                placeholder="systems@acme-aero.com" />
+                placeholder="systems@acme-aero.com" /></label>
               <div className="text-[10px] text-muted-foreground mt-0.5">Git commit author email</div>
             </div>
           </div>
 
           <div>
-            <label className="label">Remote URL</label>
-            <input className="input text-sm font-mono" value={gitRemoteUrl}
+            <label className="label">Remote URL<input className="input text-sm font-mono" value={gitRemoteUrl}
               onChange={(e) => setGitRemoteUrl(e.target.value)} disabled={!editable}
-              placeholder="git@github.com:org/project-data.git" />
+              placeholder="git@github.com:org/project-data.git" /></label>
             <div className="text-[10px] text-muted-foreground mt-0.5">Git remote to push commits to (SSH or HTTPS). Leave blank for no remote.</div>
           </div>
 
           {/* Commit Schedule */}
           <div className="border-t border-border/60 pt-4 mt-4">
-            <label className="label mb-2">Commit Schedule</label>
+            <label className="label mb-2" htmlFor={commitScheduleId}>Commit Schedule</label>
             <p className="text-[10px] text-muted-foreground mb-3">
               Choose when git commits are created. Auto-commit must be enabled above.
             </p>
-            <select className="select mb-3" value={gitCommitSchedule}
+            <select id={commitScheduleId} className="select mb-3" value={gitCommitSchedule}
               onChange={(e) => setGitCommitSchedule(e.target.value)} disabled={!editable || !gitAutocommit}>
               <option value="every_change">Every change (debounced)</option>
               <option value="interval">Time-based — every N hours</option>
@@ -472,12 +464,11 @@ export default function ProjectSettingsPage() {
 
             {(gitCommitSchedule === 'interval' || gitCommitSchedule === 'both') && (
               <div className="mb-3">
-                <label className="label">Commit interval (hours)</label>
-                <input className="input text-sm w-32" type="number" min={0.5} step={0.5} max={720}
+                <label className="label">Commit interval (hours)<input className="input text-sm w-32" type="number" min={0.5} step={0.5} max={720}
                   value={gitCommitIntervalHours || ''}
                   onChange={(e) => setGitCommitIntervalHours(Number(e.target.value) || 0)}
                   disabled={!editable || !gitAutocommit}
-                  placeholder="24" />
+                  placeholder="24" /></label>
                 <div className="text-[10px] text-muted-foreground mt-0.5">
                   {gitCommitIntervalHours >= 24
                     ? `≈ every ${(gitCommitIntervalHours / 24).toFixed(1)} days`
@@ -492,12 +483,11 @@ export default function ProjectSettingsPage() {
 
             {(gitCommitSchedule === 'changes' || gitCommitSchedule === 'both') && (
               <div className="mb-3">
-                <label className="label">Commit after every N changes</label>
-                <input className="input text-sm w-32" type="number" min={1} max={10000}
+                <label className="label">Commit after every N changes<input className="input text-sm w-32" type="number" min={1} max={10000}
                   value={gitCommitChangesThreshold || ''}
                   onChange={(e) => setGitCommitChangesThreshold(Number(e.target.value) || 0)}
                   disabled={!editable || !gitAutocommit}
-                  placeholder="50" />
+                  placeholder="50" /></label>
                 <div className="text-[10px] text-muted-foreground mt-0.5">
                   {gitCommitChangesThreshold > 0
                     ? `A commit will be created after ${gitCommitChangesThreshold} changes.`
@@ -521,9 +511,8 @@ export default function ProjectSettingsPage() {
           </div>
 
           <div>
-            <label className="label">Push Interval (minutes)</label>
-            <input className="input text-sm w-32" type="number" min={0} max={1440} value={gitPushInterval}
-              onChange={(e) => setGitPushInterval(Number(e.target.value) || 0)} disabled={!editable || gitPushOnCommit} />
+            <label className="label">Push Interval (minutes)<input className="input text-sm w-32" type="number" min={0} max={1440} value={gitPushInterval}
+              onChange={(e) => setGitPushInterval(Number(e.target.value) || 0)} disabled={!editable || gitPushOnCommit} /></label>
             <div className="text-[10px] text-muted-foreground mt-0.5">
               {gitPushOnCommit ? 'Push on commit is enabled — interval is ignored.' : gitPushInterval > 0 ? `Push every ${gitPushInterval} minutes. 0 = manual only.` : 'Pushes are manual only. Use the CLI `push_to_remote` or set an interval.'}
             </div>

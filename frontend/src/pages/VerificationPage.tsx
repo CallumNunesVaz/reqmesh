@@ -468,21 +468,24 @@ export default function VerificationPage() {
           >
             <div className="flex items-end gap-3">
               <div className="w-40">
-                <label className="label">ID</label>
-                <input className="input font-mono" placeholder="VC-001" value={newVC.id} onChange={(e) => setNewVC({ ...newVC, id: e.target.value })} autoFocus />
+                <label className="label">ID
+                  <input className="input font-mono" placeholder="VC-001" value={newVC.id} onChange={(e) => setNewVC({ ...newVC, id: e.target.value })} autoFocus />
+                </label>
               </div>
               <div className="flex-1">
-                <label className="label">Name</label>
-                <input className="input" placeholder="Verification case name" value={newVC.name} onChange={(e) => setNewVC({ ...newVC, name: e.target.value })} />
+                <label className="label">Name
+                  <input className="input" placeholder="Verification case name" value={newVC.name} onChange={(e) => setNewVC({ ...newVC, name: e.target.value })} />
+                </label>
               </div>
               <div>
-                <label className="label">Method</label>
-                <select className="select" value={newVC.method} onChange={(e) => setNewVC({ ...newVC, method: e.target.value })}>
-                  <option value="test">Test</option>
-                  <option value="analysis">Analysis</option>
-                  <option value="demonstration">Demonstration</option>
-                  <option value="inspection">Inspection</option>
-                </select>
+                <label className="label">Method
+                  <select className="select" value={newVC.method} onChange={(e) => setNewVC({ ...newVC, method: e.target.value })}>
+                    <option value="test">Test</option>
+                    <option value="analysis">Analysis</option>
+                    <option value="demonstration">Demonstration</option>
+                    <option value="inspection">Inspection</option>
+                  </select>
+                </label>
               </div>
               <button type="submit" className="btn-primary">Create</button>
               <button type="button" onClick={() => setShowCreate(false)} className="btn-secondary">Cancel</button>
@@ -919,19 +922,21 @@ export default function VerificationPage() {
                 <div className="space-y-3">
                   <div className="flex gap-3">
                     <div className="flex-1">
-                      <label className="label">File</label>
-                      <input type="file" accept=".xml,.json,.tap,.txt" className="input"
-                        onChange={(e) => setImportFile(e.target.files?.[0] ?? null)} />
+                      <label className="label">File
+                        <input type="file" accept=".xml,.json,.tap,.txt" className="input"
+                          onChange={(e) => setImportFile(e.target.files?.[0] ?? null)} />
+                      </label>
                     </div>
                     <div>
-                      <label className="label">Format</label>
-                      <select className="select" value={importFormat}
-                        onChange={(e) => setImportFormat(e.target.value)}>
-                        <option value="auto">Auto-detect</option>
-                        <option value="junit">JUnit XML</option>
-                        <option value="ctrf">CTRF JSON</option>
-                        <option value="tap">TAP</option>
-                      </select>
+                      <label className="label">Format
+                        <select className="select" value={importFormat}
+                          onChange={(e) => setImportFormat(e.target.value)}>
+                          <option value="auto">Auto-detect</option>
+                          <option value="junit">JUnit XML</option>
+                          <option value="ctrf">CTRF JSON</option>
+                          <option value="tap">TAP</option>
+                        </select>
+                      </label>
                     </div>
                   </div>
                   <label className="flex items-center gap-2 text-xs">

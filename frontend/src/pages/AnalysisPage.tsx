@@ -222,33 +222,37 @@ export default function AnalysisPage() {
           >
             <div className="flex items-end gap-3">
               <div className="w-48">
-                <label className="label">ID</label>
-                <input className="input font-mono" placeholder="heavy-config" value={draft.id}
-                  onChange={(e) => setDraft({ ...draft, id: e.target.value })}
-                  autoFocus disabled={!!editingId} />
+                <label className="label">ID
+                  <input className="input font-mono" placeholder="heavy-config" value={draft.id}
+                    onChange={(e) => setDraft({ ...draft, id: e.target.value })}
+                    autoFocus disabled={!!editingId} />
+                </label>
               </div>
               <div className="flex-1">
-                <label className="label">Name</label>
-                <input className="input" placeholder="Heavy configuration" value={draft.name}
-                  onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
+                <label className="label">Name
+                  <input className="input" placeholder="Heavy configuration" value={draft.name}
+                    onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
+                </label>
               </div>
             </div>
             <div>
-              <label className="label">Overrides</label>
-              <textarea
-                className="input font-mono text-sm h-24 resize-y"
-                placeholder={'One per line:\nGROS0001.mass = 1200'}
-                value={draft.overrides}
-                onChange={(e) => setDraft({ ...draft, overrides: e.target.value })}
-              />
+              <label className="label">Overrides
+                <textarea
+                  className="input font-mono text-sm h-24 resize-y"
+                  placeholder={'One per line:\nGROS0001.mass = 1200'}
+                  value={draft.overrides}
+                  onChange={(e) => setDraft({ ...draft, overrides: e.target.value })}
+                />
+              </label>
               <p className="text-[11px] text-muted-foreground mt-1">
                 Hypothetical parameter values, keyed <code className="font-mono">ENTITY.param</code>.
               </p>
             </div>
             <div>
-              <label className="label">Notes</label>
-              <textarea className="input text-sm h-16 resize-y" value={draft.doc}
-                onChange={(e) => setDraft({ ...draft, doc: e.target.value })} />
+              <label className="label">Notes
+                <textarea className="input text-sm h-16 resize-y" value={draft.doc}
+                  onChange={(e) => setDraft({ ...draft, doc: e.target.value })} />
+              </label>
             </div>
             <div className="flex gap-2">
               <button type="submit" className="btn-primary" disabled={!draft.id.trim()}>

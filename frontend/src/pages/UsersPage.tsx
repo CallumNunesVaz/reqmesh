@@ -342,16 +342,13 @@ export default function UsersPage() {
           {editingSelf ? (
             <form onSubmit={saveProfile} className="flex flex-wrap items-end gap-3">
               <div>
-                <label className="label text-[10px]">Full name</label>
-                <input className="input text-sm" value={selfForm.full_name} onChange={(e) => setSelfForm({ ...selfForm, full_name: e.target.value })} placeholder="Your name" autoFocus />
+                <label className="label text-[10px]">Full name<input className="input text-sm" value={selfForm.full_name} onChange={(e) => setSelfForm({ ...selfForm, full_name: e.target.value })} placeholder="Your name" autoFocus /></label>
               </div>
               <div>
-                <label className="label text-[10px]">Email</label>
-                <input className="input text-sm" value={selfForm.email} onChange={(e) => setSelfForm({ ...selfForm, email: e.target.value })} placeholder="you@example.com" />
+                <label className="label text-[10px]">Email<input className="input text-sm" value={selfForm.email} onChange={(e) => setSelfForm({ ...selfForm, email: e.target.value })} placeholder="you@example.com" /></label>
               </div>
               <div>
-                <label className="label text-[10px]">New password (optional)</label>
-                <input className="input text-sm" type="password" value={selfForm.password} onChange={(e) => setSelfForm({ ...selfForm, password: e.target.value })} placeholder="Leave blank to keep" />
+                <label className="label text-[10px]">New password (optional)<input className="input text-sm" type="password" value={selfForm.password} onChange={(e) => setSelfForm({ ...selfForm, password: e.target.value })} placeholder="Leave blank to keep" /></label>
               </div>
               <button type="submit" className="btn-primary" disabled={savingSelf}>
                 {savingSelf ? <><Loader size={14} className="animate-spin" /> Saving</> : <><Check size={14} /> Save</>}
@@ -385,26 +382,21 @@ export default function UsersPage() {
                 className="card p-4 mb-6 flex items-end gap-3 flex-wrap"
               >
                 <div className="min-w-[140px]">
-                  <label className="label text-[10px]">Username *</label>
-                  <input className="input text-sm" placeholder="jdoe" value={newUsername} onChange={(e) => setNewUsername(e.target.value)} autoFocus />
+                  <label className="label text-[10px]">Username *<input className="input text-sm" placeholder="jdoe" value={newUsername} onChange={(e) => setNewUsername(e.target.value)} autoFocus /></label>
                 </div>
                 <div className="min-w-[140px]">
-                  <label className="label text-[10px]">Full name</label>
-                  <input className="input text-sm" placeholder="Jane Doe" value={newFullName} onChange={(e) => setNewFullName(e.target.value)} />
+                  <label className="label text-[10px]">Full name<input className="input text-sm" placeholder="Jane Doe" value={newFullName} onChange={(e) => setNewFullName(e.target.value)} /></label>
                 </div>
                 <div className="min-w-[180px]">
-                  <label className="label text-[10px]">Email</label>
-                  <input className="input text-sm" placeholder="jane@example.com" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} />
+                  <label className="label text-[10px]">Email<input className="input text-sm" placeholder="jane@example.com" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} /></label>
                 </div>
                 <div className="min-w-[140px]">
-                  <label className="label text-[10px]">Password *</label>
-                  <input className="input text-sm" type="password" placeholder="min 12 chars" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+                  <label className="label text-[10px]">Password *<input className="input text-sm" type="password" placeholder="min 12 chars" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} /></label>
                 </div>
                 <div className="min-w-[130px]">
-                  <label className="label text-[10px]">Role</label>
-                  <select className="input text-sm" value={newRole} onChange={(e) => setNewRole(e.target.value)}>
+                  <label className="label text-[10px]">Role<select className="input text-sm" value={newRole} onChange={(e) => setNewRole(e.target.value)}>
                     <RoleOptions />
-                  </select>
+                  </select></label>
                 </div>
                 <button type="submit" className="btn-primary" disabled={creating}>
                   {creating ? <><Loader size={14} className="animate-spin" /> Creating</> : 'Create'}
@@ -621,13 +613,12 @@ export default function UsersPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              <div><label className="label text-[10px]">Username *</label><input className="input text-sm" value={invite.username} onChange={(e) => setInvite({ ...invite, username: e.target.value })} placeholder="jdoe" autoFocus /></div>
-              <div><label className="label text-[10px]">Email</label><input className="input text-sm" value={invite.email} onChange={(e) => setInvite({ ...invite, email: e.target.value })} placeholder="jane@example.com" /></div>
-              <div><label className="label text-[10px]">Full name</label><input className="input text-sm" value={invite.full_name} onChange={(e) => setInvite({ ...invite, full_name: e.target.value })} placeholder="Jane Doe" /></div>
-              <div><label className="label text-[10px]">Role</label>
-                <select className="input text-sm" value={invite.role} onChange={(e) => setInvite({ ...invite, role: e.target.value })}>
+              <div><label className="label text-[10px]">Username *<input className="input text-sm" value={invite.username} onChange={(e) => setInvite({ ...invite, username: e.target.value })} placeholder="jdoe" autoFocus /></label></div>
+              <div><label className="label text-[10px]">Email<input className="input text-sm" value={invite.email} onChange={(e) => setInvite({ ...invite, email: e.target.value })} placeholder="jane@example.com" /></label></div>
+              <div><label className="label text-[10px]">Full name<input className="input text-sm" value={invite.full_name} onChange={(e) => setInvite({ ...invite, full_name: e.target.value })} placeholder="Jane Doe" /></label></div>
+              <div><label className="label text-[10px]">Role<select className="input text-sm" value={invite.role} onChange={(e) => setInvite({ ...invite, role: e.target.value })}>
                   <RoleOptions />
-                </select>
+                </select></label>
               </div>
               <button type="submit" className="btn-primary w-full justify-center" disabled={inviting || !invite.username.trim()}>
                 {inviting ? <><Loader size={14} className="animate-spin" /> Inviting</> : 'Send invite'}

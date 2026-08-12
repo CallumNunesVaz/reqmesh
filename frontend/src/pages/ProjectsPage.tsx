@@ -96,23 +96,25 @@ export default function ProjectsPage() {
           className="card p-4 mb-6 flex items-end gap-3"
         >
           <div className="flex-1">
-            <label className="label">Project ID</label>
-            <input
-              className="input"
-              placeholder="my-aircraft-system"
-              value={newId}
-              onChange={(e) => setNewId(e.target.value)}
-              autoFocus
-            />
+            <label className="label">Project ID
+              <input
+                className="input"
+                placeholder="my-aircraft-system"
+                value={newId}
+                onChange={(e) => setNewId(e.target.value)}
+                autoFocus
+              />
+            </label>
           </div>
           <div className="flex-1">
-            <label className="label">Display Name (optional)</label>
-            <input
-              className="input"
-              placeholder="My Aircraft System"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-            />
+            <label className="label">Display Name (optional)
+              <input
+                className="input"
+                placeholder="My Aircraft System"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+              />
+            </label>
           </div>
           <button type="submit" className="btn-primary">Create</button>
           <button type="button" onClick={() => setShowCreate(false)} className="btn-secondary">Cancel</button>

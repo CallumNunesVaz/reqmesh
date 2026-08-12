@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useId } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { GitBranch, Plus, X, LayoutGrid, LayoutList, Search, Download } from 'lucide-react';
@@ -36,6 +36,8 @@ export default function TraceMatrixPage() {
   const [search, setSearch] = useState('');
   const [filterLinkType, setFilterLinkType] = useState('');
   const [loading, setLoading] = useState(true);
+  const sourceId = useId();
+  const targetId = useId();
 
   const entitySuggestions = useMemo(() => {
     const reqItems = requirements.map((r) => ({ id: r.id, label: r.name || r.id }));
@@ -214,8 +216,9 @@ export default function TraceMatrixPage() {
         </h2>
         <div className="flex items-end gap-2">
           <div className="flex-1">
-            <label className="label">Source</label>
+            <label className="label" htmlFor={sourceId}>Source</label>
             <AutocompleteInput
+              id={sourceId}
               className="select"
               placeholder="Select source..."
               value={newLink.source}
@@ -224,18 +227,20 @@ export default function TraceMatrixPage() {
             />
           </div>
           <div>
-            <label className="label">Type</label>
-            <select className="select w-32" value={newLink.type} onChange={(e) => setNewLink({ ...newLink, type: e.target.value })}>
-              <option value="satisfies">Satisfies</option>
-              <option value="refines">Refines</option>
-              <option value="verified_by">Verified By</option>
-              <option value="derives">Derives</option>
-              <option value="conflicts">Conflicts</option>
-            </select>
+            <label className="label">Type
+              <select className="select w-32" value={newLink.type} onChange={(e) => setNewLink({ ...newLink, type: e.target.value })}>
+                <option value="satisfies">Satisfies</option>
+                <option value="refines">Refines</option>
+                <option value="verified_by">Verified By</option>
+                <option value="derives">Derives</option>
+                <option value="conflicts">Conflicts</option>
+              </select>
+            </label>
           </div>
           <div className="flex-1">
-            <label className="label">Target</label>
+            <label className="label" htmlFor={targetId}>Target</label>
             <AutocompleteInput
+              id={targetId}
               className="select"
               placeholder="Select target..."
               value={newLink.target}
