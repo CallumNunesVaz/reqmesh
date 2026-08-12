@@ -40,9 +40,11 @@ commits since the last tag, builds the bundle locally as a smoke test, commits
 
 Pushing the tag triggers `.github/workflows/release.yml`, which:
 
-1. rebuilds the bundle and publishes a **GitHub Release** with the tarball +
+1. runs the full CI suite (`.github/workflows/ci.yml` via `workflow_call`);
+   **all CI jobs must pass** or the release stops before publishing;
+2. rebuilds the bundle and publishes a **GitHub Release** with the tarball +
    `.sha256` attached and the tag message as notes;
-2. builds and pushes the **Docker image** to `ghcr.io`.
+3. builds and pushes the **Docker image** to `ghcr.io`.
 
 Useful flags:
 

@@ -19,12 +19,17 @@ git-versioned, validated against the JSON Schemas in `schemas/`.
 .venv/bin/pytest -q                     # fast suite; contract tests excluded by pytest.ini
 .venv/bin/pytest -m contract -q         # slow OpenAPI-generated contract suite
 .venv/bin/python gen_schemas.py         # regenerate schemas/*.json from the Pydantic models
+ruff check app tests                    # lint (also in CI — cannot ship a lint failure)
 
 # frontend (cwd: frontend/)
 npm run typecheck                       # tsc --noEmit
 npm test                                # vitest run
+npm run lint                            # oxlint (also in CI)
 npm run build                           # tsc -b && vite build && check:selfcontained
 npm run e2e                             # playwright; requires a fresh `npm run build`
+
+# deploy scripts (cwd: repo root)
+bash scripts/tests/run.sh               # discover & run all test_*.sh suites
 ```
 
 A change is "done" only when the suites covering it pass. Run them yourself;

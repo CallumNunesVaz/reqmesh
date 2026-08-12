@@ -8,9 +8,11 @@ import click
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from app.core._version import __version__
+
 
 @click.group()
-@click.version_option("0.4.0", prog_name="reqmesh")
+@click.version_option(__version__, prog_name="reqmesh")
 def cli():
     """reqmesh - Requirements management using version control."""
 

@@ -9,6 +9,7 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
@@ -108,7 +109,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - run: bash scripts/tests/test_deploy.sh
+      # Discover test_*.sh suites via run.sh — a hardcoded roster silently skips
+      # a newly added suite (comment at scripts/tests/run.sh:19-21).
+      - run: bash scripts/tests/run.sh
 
   e2e:
     name: End-to-end (Playwright)
@@ -141,3 +144,18 @@ jobs:
           name: playwright-report
           path: frontend/playwright-report/
           retention-days: 7
+
+  schema-freshness:
+    name: Schema freshness
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+      - run: pip install -r backend/requirements-dev.txt
+      - run: python gen_schemas.py
+        working-directory: backend
+      - run: git diff --exit-code schemas/

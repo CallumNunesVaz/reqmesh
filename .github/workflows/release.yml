@@ -13,8 +13,21 @@ permissions:
   packages: write   # push to ghcr.io
 
 jobs:
+  # Gate the release on the full CI suite.
+  #
+  # We use `workflow_call` (not `workflow_run`) so the CI pipeline runs inline as
+  # a job dependency: if any CI job fails, the release stops before publishing.
+  # `workflow_run` fires *after* CI finishes and can only gate the whole release
+  # workflow — if the release workflow needed a pre-check of its own that would
+  # still slip through. A called workflow runs as part of the release trigger, so
+  # the tag-version verification below and the CI gate share the same fate.
+  ci:
+    name: CI
+    uses: ./.github/workflows/ci.yml
+
   bundle:
     name: Build bundle & publish release
+    needs: ci
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

@@ -601,6 +601,8 @@ section "release staging cannot drop a versioned file"
 files="$(/usr/bin/python3 "$REPO/scripts/set_version.py" --files)"
 check "--files includes install.sh" "$(printf '%s' "$files" | grep -c 'scripts/install.sh')" "1"
 check "--files includes VERSION" "$(printf '%s' "$files" | grep -cx 'VERSION')" "1"
+check "--files includes cli.py" "$(printf '%s' "$files" | grep -c 'backend/app/cli.py')" "1"
+check "--files includes start.sh" "$(printf '%s' "$files" | grep -cx 'start.sh')" "1"
 check "release.sh has no hardcoded list" \
       "$(grep -c 'VERSION backend/app/core/_version.py frontend/package.json' "$REPO/scripts/release.sh")" "0"
 check "release.sh stages the derived list" \

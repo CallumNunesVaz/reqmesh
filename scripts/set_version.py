@@ -81,6 +81,8 @@ def touched_files() -> list[str]:
         "VERSION",
         "backend/app/core/_version.py",
         "scripts/install.sh",
+        "backend/app/cli.py",
+        "start.sh",
     ]
     paths += [d for d in DOC_FILES if (ROOT / d).is_file()]
     paths += [p for p in ("frontend/package.json", "desktop/package.json")
@@ -105,6 +107,16 @@ def write_all(version: str) -> None:
         ROOT / "scripts/install.sh",
         r"REQMESH_REF:-v\d+\.\d+\.\d+",
         f"REQMESH_REF:-v{version}",
+    )
+    _sub_once(
+        ROOT / "start.sh",
+        r"reqmesh v\d+\.\d+\.\d+  \(server\)",
+        f"reqmesh v{version}  (server)",
+    )
+    _sub_once(
+        ROOT / "start.sh",
+        r"reqmesh v\d+\.\d+\.\d+  \(desktop\)",
+        f"reqmesh v{version}  (desktop)",
     )
     # Every occurrence, not the first: the docs quote the version in several
     # commands (the one-liner, the bundle download, the unpack directory).
