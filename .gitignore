@@ -21,6 +21,8 @@ desktop/release/
 
 # Project data (local)
 *.db
+data/
+.rt-*
 
 # OS
 .DS_Store

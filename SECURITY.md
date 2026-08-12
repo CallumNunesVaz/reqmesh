@@ -60,7 +60,7 @@ are assigned lower severity.
 ## Known Issues
 
 A running list of known, accepted limitations is maintained in
-[AUDIT.md](AUDIT.md) — see §6.2 for the open items. Before reporting, check
+[AUDIT.md](docs/internal/AUDIT.md) — see §6.2 for the open items. Before reporting, check
 whether the finding is already tracked there.
 
 ## Supported Versions

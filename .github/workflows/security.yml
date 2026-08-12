@@ -60,6 +60,11 @@ jobs:
             exit "$code"
           fi
       - run: pip-audit -r backend/requirements.txt
+      # The dev requirements (pytest, schemathesis, bandit, ruff, httpx) are
+      # what the backend/contract CI jobs actually install, so they are audited
+      # too — auditing only requirements.txt would leave the code CI runs on
+      # unexamined.
+      - run: pip-audit -r backend/requirements-dev.txt
       - uses: github/codeql-action/upload-sarif@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4.37.3
         if: always() && hashFiles('bandit.sarif') != ''
         with:

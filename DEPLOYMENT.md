@@ -211,6 +211,10 @@ Ensure the [requirements](#requirements) are met before installing.
     openssl rand -base64 12 > .rt-admin-pw
     ```
 
+    > `.rt-secret` (the JWT signing key), `.rt-admin-pw` (the admin password)
+    > and `data/` (the requirement data) are secrets and are gitignored. If you
+    > move them to another location, check that your `.gitignore` still matches.
+
 5.  **Create a data directory and seed the demo project**
     ```bash
     mkdir -p data/projects
