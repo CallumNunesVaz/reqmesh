@@ -10,11 +10,15 @@ from __future__ import annotations
 
 import os
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import pytest
 
 from app.core.config import Settings
 from app.services.event_bus import EventBus
+
+#: repo root, three levels up from backend/tests/<file>
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 # ── Settings: the forms an operator's env file actually contains ─────────────
@@ -201,3 +205,35 @@ def test_touch_does_not_broadcast():
     q = bus.subscribe("p")
     bus.touch("p", "alice")
     assert q.empty()
+
+
+# ── Backup documentation must cover the state dir ────────────────────────────
+
+class TestBackupDocsCoverAccounts:
+    """The documented backup covered `projects/` only, so accounts and the
+    signing secret — a different tree — were outside it. An operator following
+    the docs exactly would have restored the work and lost every login.
+    """
+
+    def _backups_section(self) -> str:
+        text = (REPO_ROOT / "DEPLOYMENT.md").read_text()
+        start = text.index("## Backups")
+        end = text.index("\n## ", start + 1)
+        return text[start:end]
+
+    def test_the_state_dir_is_in_the_backup_instructions(self):
+        section = self._backups_section()
+        assert ".reqmesh" in section
+        assert "users.yaml" in section
+        assert "secret" in section
+
+    def test_the_bootstrap_password_file_is_excluded(self):
+        assert ".initial-admin" in self._backups_section()
+
+    def test_there_is_a_restore_procedure_with_ownership(self):
+        section = self._backups_section()
+        assert "Restoring" in section
+        assert "chown" in section, "restoring as root leaves files the container cannot write"
+
+    def test_the_env_reference_documents_the_state_dir(self):
+        assert "`RT_STATE_DIR`" in (REPO_ROOT / "DEPLOYMENT.md").read_text()

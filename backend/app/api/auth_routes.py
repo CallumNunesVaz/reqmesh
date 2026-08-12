@@ -36,15 +36,13 @@ from app.core.auth import (
     clear_auth_cookies,
 )
 from app.core.dependencies import get_current_user, require_admin
+from app.core.password_policy import validate_password
 
-MIN_PASSWORD_LENGTH = 12
-PASSWORD_RE = re.compile(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};:\"\\|,.<>\/?]).{12,}$')
-
-def _validate_password(password: str) -> None:
-    if len(password) < MIN_PASSWORD_LENGTH:
-        raise HTTPException(status_code=400, detail=f"Password must be at least {MIN_PASSWORD_LENGTH} characters")
-    if not PASSWORD_RE.match(password):
-        raise HTTPException(status_code=400, detail="Password must contain at least one uppercase letter, one lowercase letter, one digit, and one special character")
+def _validate_password(password: str, username: str = "") -> None:
+    """The HTTP face of `core.password_policy`, which the CLI shares."""
+    problem = validate_password(password, username)
+    if problem:
+        raise HTTPException(status_code=400, detail=problem)
 
 # Usernames become YAML keys and URL path segments, so keep them simple/safe.
 USERNAME_RE = re.compile(r"^[A-Za-z0-9._-]{3,32}$")
@@ -93,7 +91,7 @@ def register(data: RegisterRequest, response: Response,
         raise HTTPException(status_code=400, detail="Username must be 3–32 chars: letters, digits, . _ -")
     if len(data.username) < 3:
         raise HTTPException(status_code=400, detail="Username must be at least 3 characters")
-    _validate_password(data.password)
+    _validate_password(data.password, data.username)
     from app.core.config import settings
     requester = None
     if authorization and authorization.startswith("Bearer "):
@@ -344,7 +342,7 @@ def list_users(admin: dict = Depends(require_admin)):
 def create_user(data: CreateUserRequest, admin: dict = Depends(require_admin)):
     if not USERNAME_RE.match(data.username):
         raise HTTPException(status_code=400, detail="Username must be 3–32 chars: letters, digits, . _ -")
-    _validate_password(data.password)
+    _validate_password(data.password, data.username)
     _validate_role(data.role)
     result = register_user(data.username, data.password, data.role)
     if not result:

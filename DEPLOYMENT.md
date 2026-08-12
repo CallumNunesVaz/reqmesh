@@ -395,19 +395,52 @@ self-register if `RT_ALLOW_SELF_REGISTRATION=true`.
 
 ## Backups
 
-reqmesh data is plain YAML files. Back up the data directory:
+reqmesh data is plain YAML files, so a backup is a copy of a directory. Back up
+**both** the project data and the state directory beside it — they are separate
+trees and the projects alone are not a complete backup:
+
+| Path | Holds | Cost of losing it |
+|------|-------|-------------------|
+| `projects/` | every project's requirements, components, history | the work itself |
+| `.reqmesh/users.yaml` | every account (password hashes, roles) | re-bootstrap the admin and re-invite everyone |
+| `.reqmesh/secret` | the session signing key | every session invalidated; everyone logs in again. Irrelevant if you pin `RT_SECRET` in the environment, which is the better practice |
+| `.reqmesh/settings.yaml` | admin settings overrides, including the SMTP password | re-enter them |
 
 ```bash
-# Bare-metal
-tar -czf reqmesh-backup-$(date +%Y%m%d).tar.gz -C /opt/reqmesh data/projects/
+# Bare-metal — the parent of projects/, so the state dir is included
+tar -czf reqmesh-backup-$(date +%Y%m%d).tar.gz \
+    --exclude .initial-admin -C /opt/reqmesh data/
 
 # Docker
-docker exec reqmesh-reqmesh-1 tar -czf /tmp/backup.tar.gz -C /data projects/
+docker exec reqmesh-reqmesh-1 tar -czf /tmp/backup.tar.gz \
+    --exclude .initial-admin -C / data/
 docker cp reqmesh-reqmesh-1:/tmp/backup.tar.gz ./backup.tar.gz
 ```
 
+`.initial-admin` is excluded deliberately: it holds the generated bootstrap
+password in cleartext, and it should have been deleted after first login anyway.
+
+**The archive contains password hashes and your SMTP credentials.** Store it with
+the same care as the instance itself — an offline copy of `users.yaml` is exactly
+what a password-cracking attempt needs.
+
+### Restoring
+
+```bash
+# Stop first: restoring under a running instance races its writes
+docker compose -f docker-compose.prod.yml stop reqmesh
+sudo tar -xzf backup.tar.gz -C /
+sudo chown -R 999:999 /data          # the container runs as uid 999
+sudo chmod 600 /data/.reqmesh/users.yaml /data/.reqmesh/secret
+docker compose -f docker-compose.prod.yml start reqmesh
+```
+
+The ownership step is the one people miss: restoring as root leaves files the
+container cannot write, and the failure shows up later as a login that cannot
+update `last_active`.
+
 For projects with Git enabled, the auto-commit history serves as an
-additional fail-safe.
+additional fail-safe — but note it covers project data only, never accounts.
 
 ---
 
@@ -418,6 +451,7 @@ additional fail-safe.
 | `RT_SECRET` | (required) | JWT signing key. Generate with `openssl rand -hex 32` |
 | `RT_ADMIN_PASSWORD` | (required) | Initial admin password |
 | `RT_DATA_ROOT` | `~/.reqmesh/projects` | Project data directory |
+| `RT_STATE_DIR` | `~/.reqmesh` | Accounts, signing secret, settings. Must **not** be inside `RT_DATA_ROOT` — the app refuses to start if it is, because git auto-commit would push password hashes |
 | `RT_STATIC_DIR` | `""` | Path to built frontend `/dist`. Set for single-origin serve |
 | `RT_HOST` | `0.0.0.0` | uvicorn bind address |
 | `RT_PORT` | `8000` | uvicorn listen port |

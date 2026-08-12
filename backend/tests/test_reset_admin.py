@@ -22,7 +22,7 @@ def seeded(tmp_path, monkeypatch):
     monkeypatch.setattr(auth, "USERS_FILE", tmp_path / "users.yaml")
     auth.save_users({
         "admin": {"username": "admin", "role": "admin",
-                  "password_hash": auth.hash_password("original-password").decode()},
+                  "password_hash": auth.hash_password("Original-Password1!").decode()},
         "bob": {"username": "bob", "role": "contributor",
                 "password_hash": auth.hash_password("bobs-password-12").decode()},
     })
@@ -30,12 +30,12 @@ def seeded(tmp_path, monkeypatch):
 
 
 def test_resets_the_password(seeded):
-    res = CliRunner().invoke(cli, ["reset-admin", "--password", "a-new-password"])
+    res = CliRunner().invoke(cli, ["reset-admin", "--password", "A-New-Password1!"])
     assert res.exit_code == 0, res.output
 
     user = auth.load_users()["admin"]
-    assert auth.verify_password("a-new-password", user["password_hash"])
-    assert not auth.verify_password("original-password", user["password_hash"])
+    assert auth.verify_password("A-New-Password1!", user["password_hash"])
+    assert not auth.verify_password("Original-Password1!", user["password_hash"])
 
 
 def test_clears_the_lockout(seeded):
@@ -47,7 +47,7 @@ def test_clears_the_lockout(seeded):
     users["admin"]["disabled"] = True
     auth.save_users(users)
 
-    CliRunner().invoke(cli, ["reset-admin", "--password", "a-new-password"])
+    CliRunner().invoke(cli, ["reset-admin", "--password", "A-New-Password1!"])
 
     user = auth.load_users()["admin"]
     assert user["failed_attempts"] == 0
@@ -61,46 +61,46 @@ def test_does_not_force_another_password_change(seeded):
     users["admin"]["password_change_required"] = True
     auth.save_users(users)
 
-    CliRunner().invoke(cli, ["reset-admin", "--password", "a-new-password"])
+    CliRunner().invoke(cli, ["reset-admin", "--password", "A-New-Password1!"])
     assert auth.load_users()["admin"]["password_change_required"] is False
 
 
 def test_can_target_any_account(seeded):
-    res = CliRunner().invoke(cli, ["reset-admin", "-u", "bob", "-p", "bobs-new-password"])
+    res = CliRunner().invoke(cli, ["reset-admin", "-u", "bob", "-p", "Fresh-Secret-Pass1!"])
     assert res.exit_code == 0
-    assert auth.verify_password("bobs-new-password", auth.load_users()["bob"]["password_hash"])
+    assert auth.verify_password("Fresh-Secret-Pass1!", auth.load_users()["bob"]["password_hash"])
     # and leaves the others alone
-    assert auth.verify_password("original-password", auth.load_users()["admin"]["password_hash"])
+    assert auth.verify_password("Original-Password1!", auth.load_users()["admin"]["password_hash"])
 
 
 def test_rejects_a_short_password(seeded):
     res = CliRunner().invoke(cli, ["reset-admin", "--password", "short"])
     assert res.exit_code != 0
     assert "12 characters" in res.output
-    assert auth.verify_password("original-password", auth.load_users()["admin"]["password_hash"])
+    assert auth.verify_password("Original-Password1!", auth.load_users()["admin"]["password_hash"])
 
 
 def test_unknown_account_lists_what_exists(seeded):
     """A typo should not read as "the accounts file is empty"."""
-    res = CliRunner().invoke(cli, ["reset-admin", "-u", "nope", "-p", "a-new-password"])
+    res = CliRunner().invoke(cli, ["reset-admin", "-u", "nope", "-p", "A-New-Password1!"])
     assert res.exit_code != 0
     assert "admin" in res.output and "bob" in res.output
 
 
 def test_make_admin_restores_the_role(seeded):
-    res = CliRunner().invoke(cli, ["reset-admin", "-u", "bob", "-p", "bobs-new-password",
+    res = CliRunner().invoke(cli, ["reset-admin", "-u", "bob", "-p", "Fresh-Secret-Pass1!",
                                    "--make-admin"])
     assert res.exit_code == 0
     assert auth.load_users()["bob"]["role"] == "admin"
 
 
 def test_role_is_left_alone_without_the_flag(seeded):
-    CliRunner().invoke(cli, ["reset-admin", "-u", "bob", "-p", "bobs-new-password"])
+    CliRunner().invoke(cli, ["reset-admin", "-u", "bob", "-p", "Fresh-Secret-Pass1!"])
     assert auth.load_users()["bob"]["role"] == "contributor"
 
 
 def test_the_reset_password_actually_authenticates(seeded):
     """End to end through authenticate_user, including its lockout handling."""
-    CliRunner().invoke(cli, ["reset-admin", "--password", "a-new-password"])
-    result = auth.authenticate("admin", "a-new-password")
+    CliRunner().invoke(cli, ["reset-admin", "--password", "A-New-Password1!"])
+    result = auth.authenticate("admin", "A-New-Password1!")
     assert result["status"] == "ok", result

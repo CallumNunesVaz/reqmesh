@@ -333,8 +333,12 @@ def reset_admin(username, password, make_admin):
 
     if not password:
         password = click.prompt("New password", hide_input=True, confirmation_prompt=True)
-    if len(password) < 12:
-        raise click.ClickException("Password must be at least 12 characters.")
+    # The same policy the API applies. This used to check length only, so an
+    # operator could set out of band a password the web UI would have refused.
+    from app.core.password_policy import validate_password
+    problem = validate_password(password, username)
+    if problem:
+        raise click.ClickException(f"{problem}.")
 
     # Repair the state dir first: this command is the recovery path, so it is
     # often the first thing run against a directory written by an older build.
