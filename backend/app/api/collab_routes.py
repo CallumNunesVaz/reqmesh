@@ -15,6 +15,7 @@ from pydantic import BaseModel
 
 from app.core.config import settings
 from app.core.dependencies import get_store, require_maintain, get_current_user
+from app.core.filelock import file_lock
 from app.core.rate_limit import rate_limit
 from app.api._utils import read_upload_capped
 from app.services.link_registry import COLLECTION_LABELS, LINKS
@@ -427,19 +428,23 @@ def set_allocation(project_id: str, data: AllocationRequest, user: dict = Depend
             raise HTTPException(status_code=404, detail="Baseline not found")
 
         if data.row_kind == "components":
-            comp = store.get_item("components", entity_id)
-            if not comp:
-                raise HTTPException(status_code=404, detail="Component not found")
+            path = store._item_path("components", entity_id)
+            # Hold the item lock across the read-modify-write so a concurrent
+            # allocation edit to the same component cannot clobber this one.
+            with file_lock(path):
+                comp = store.get_item("components", entity_id)
+                if not comp:
+                    raise HTTPException(status_code=404, detail="Component not found")
 
-            blist = list(comp.get(ax.req_field) or [])
+                blist = list(comp.get(ax.req_field) or [])
 
-            if data.allocated:
-                if target_id not in blist:
-                    blist.append(target_id)
-            else:
-                blist = [b for b in blist if b != target_id]
+                if data.allocated:
+                    if target_id not in blist:
+                        blist.append(target_id)
+                else:
+                    blist = [b for b in blist if b != target_id]
 
-            store.update_item("components", entity_id, {ax.req_field: blist})
+                store._update_item_unlocked("components", entity_id, {ax.req_field: blist})
 
             return {"req_id": data.req_id, "row_id": entity_id,
                     "row_kind": "components",
@@ -448,22 +453,24 @@ def set_allocation(project_id: str, data: AllocationRequest, user: dict = Depend
                     "allocated": data.allocated, "allocated_to": ""}
 
         # Row kind is "requirements" (requirement-held axis, as before).
-        req = store.get_requirement(entity_id)
-        if not req:
-            raise HTTPException(status_code=404, detail="Requirement not found")
+        path = store._item_path("requirements", entity_id)
+        with file_lock(path):
+            req = store.get_requirement(entity_id)
+            if not req:
+                raise HTTPException(status_code=404, detail="Requirement not found")
 
-        blist = list(req.get(ax.req_field) or [])
+            blist = list(req.get(ax.req_field) or [])
 
-        if data.allocated:
-            if target_id not in blist:
-                blist.append(target_id)
-        else:
-            blist = [b for b in blist if b != target_id]
+            if data.allocated:
+                if target_id not in blist:
+                    blist.append(target_id)
+            else:
+                blist = [b for b in blist if b != target_id]
 
-        # `entity_id`, not `data.req_id` — the read above used the resolved row,
-        # so writing the raw alias would read one record and update another
-        # whenever a caller sends `row_id` and `req_id` that differ.
-        store.update_requirement(entity_id, {ax.req_field: blist})
+            # `entity_id`, not `data.req_id` — the read above used the resolved row,
+            # so writing the raw alias would read one record and update another
+            # whenever a caller sends `row_id` and `req_id` that differ.
+            store._update_item_unlocked("requirements", entity_id, {ax.req_field: blist})
 
         return {"req_id": data.req_id, "row_id": entity_id,
                 "row_kind": "requirements",

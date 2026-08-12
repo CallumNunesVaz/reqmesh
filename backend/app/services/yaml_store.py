@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import os
 import tempfile
 import threading
@@ -217,8 +218,32 @@ class YamlStore:
             return {"name": self._root.name, "created": _now()}
         return self._read_yaml(self._meta_file)
 
-    def write_meta(self, data: dict) -> None:
+    @contextlib.contextmanager
+    def meta_lock(self):
+        """Hold the meta file lock for the duration, so a read-modify-write on
+        ``_meta.yaml`` cannot interleave between workers.
+
+        Usage::
+
+            with store.meta_lock():
+                meta = store.read_meta()
+                meta["key"] = value
+                store._write_meta_unlocked(meta)
+        """
+        with _file_lock(self._meta_file):
+            yield
+
+    def _write_meta_unlocked(self, data: dict) -> None:
+        """Write ``_meta.yaml`` without acquiring the file lock — callers inside
+        ``meta_lock()`` use this to avoid deadlocking the non-re-entrant
+        ``file_lock``."""
         self._write_yaml(self._meta_file, data)
+
+    def write_meta(self, data: dict) -> None:
+        """Locked public entry point for write-meta; callers that already hold
+        ``meta_lock()`` must use ``_write_meta_unlocked`` instead."""
+        with self.meta_lock():
+            self._write_meta_unlocked(data)
 
     # --- Generic collections ---
 
@@ -347,24 +372,31 @@ class YamlStore:
         # Hold an advisory lock across the read-modify-write so concurrent updates
         # to the same item can't clobber each other (lost-update race).
         with _file_lock(path):
-            if not path.exists():
-                return None
-            # Refuse to merge into a file we couldn't parse — `_read_yaml`
-            # would hand back `{}` and the write would silently replace the
-            # user's (recoverable) broken file with only the patch fields.
-            try:
-                existing = self._parse_yaml(path)
-            except Exception as exc:
-                raise HTTPException(
-                    status_code=409,
-                    detail=f"Cannot update {item_id}: {collection}/{item_id}.yaml is not valid "
-                           f"YAML ({exc}). Fix the file and retry.",
-                )
-            existing.update(data)
-            existing["modified"] = _now()
-            existing["id"] = item_id
-            self._write_yaml(path, existing)
-            return existing
+            return self._update_item_unlocked(collection, item_id, data)
+
+    def _update_item_unlocked(self, collection: str, item_id: str, data: dict) -> Optional[dict]:
+        """Same as ``update_item`` but without acquiring the file lock.
+        Callers that wrap a larger block in ``_file_lock`` (e.g. ``run_verification``)
+        use this to avoid deadlocking the non-re-entrant ``file_lock``."""
+        path = self._item_path(collection, item_id)
+        if not path.exists():
+            return None
+        # Refuse to merge into a file we couldn't parse — `_read_yaml`
+        # would hand back `{}` and the write would silently replace the
+        # user's (recoverable) broken file with only the patch fields.
+        try:
+            existing = self._parse_yaml(path)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Cannot update {item_id}: {collection}/{item_id}.yaml is not valid "
+                       f"YAML ({exc}). Fix the file and retry.",
+            )
+        existing.update(data)
+        existing["modified"] = _now()
+        existing["id"] = item_id
+        self._write_yaml(path, existing)
+        return existing
 
     def delete_item(self, collection: str, item_id: str) -> bool:
         path = self._item_path(collection, item_id)

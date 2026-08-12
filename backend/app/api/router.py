@@ -11,6 +11,7 @@ from fastapi import APIRouter, Header, HTTPException, Query, Depends, Request, R
 from pydantic import BaseModel, ValidationError
 
 from app.core.dependencies import get_store, require_maintain, require_maintain_global, require_admin
+from app.core.filelock import file_lock
 from app.core.ids import safe_id
 from app.core.rate_limit import rate_limit
 from app.core.tree_utils import build_flat_tree
@@ -408,41 +409,42 @@ def _guard_git_settings(new_git: dict, existing_git: dict, user: dict) -> None:
 @router.patch("/projects/{project_id}")
 def update_project_settings(project_id: str, data: ProjectSettings, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
-    meta = store.read_meta()
-    updates = {}
-    for field in ("name", "naming", "quality", "workflow", "git", "baselines",
-                  "permissions", "stakeholders", "risk_matrix"):
-        val = getattr(data, field, None)
-        if val is not None:
-            updates[field] = val
-    if not updates:
-        raise HTTPException(status_code=400, detail="No fields to update")
-    if "git" in updates:
-        _guard_git_settings(updates["git"], meta.get("git", {}), user)
-    if "baselines" in updates and updates["baselines"] is not None:
-        # Validate due dates on the raw input before normalization, which
-        # degrades bad dates on the read path. A rejected write must leave
-        # _meta.yaml untouched.
-        _validate_due_dates(updates["baselines"])
-        defs = normalize_baseline_defs(updates["baselines"])
-        # Baseline names become filenames when a baseline is frozen
-        # (`store.get_item("baselines", name)`), so they need the same
-        # validation `create_baseline` applies. Without it this endpoint
-        # accepted `../../etc/passwd`, and every later GET /baselines then
-        # raised 400 from `_item_path` — breaking the whole listing for the
-        # project until someone hand-edited _meta.yaml.
-        for d in defs:
-            safe_id(d["name"], "baseline name")
-        updates["baselines"] = serialize_baseline_defs(defs)
-    if "stakeholders" in updates and updates["stakeholders"] is not None:
-        updates["stakeholders"] = normalize_stakeholders(updates["stakeholders"])
-    if "risk_matrix" in updates and updates["risk_matrix"] is not None:
-        # Normalized on write as well as on read: a matrix stored with a
-        # mis-sized cell grid would silently re-rate risks against fallback
-        # bands every time it was read back.
-        updates["risk_matrix"] = normalize_matrix(updates["risk_matrix"])
-    meta.update(updates)
-    store.write_meta(meta)
+    with store.meta_lock():
+        meta = store.read_meta()
+        updates = {}
+        for field in ("name", "naming", "quality", "workflow", "git", "baselines",
+                      "permissions", "stakeholders", "risk_matrix"):
+            val = getattr(data, field, None)
+            if val is not None:
+                updates[field] = val
+        if not updates:
+            raise HTTPException(status_code=400, detail="No fields to update")
+        if "git" in updates:
+            _guard_git_settings(updates["git"], meta.get("git", {}), user)
+        if "baselines" in updates and updates["baselines"] is not None:
+            # Validate due dates on the raw input before normalization, which
+            # degrades bad dates on the read path. A rejected write must leave
+            # _meta.yaml untouched.
+            _validate_due_dates(updates["baselines"])
+            defs = normalize_baseline_defs(updates["baselines"])
+            # Baseline names become filenames when a baseline is frozen
+            # (`store.get_item("baselines", name)`), so they need the same
+            # validation `create_baseline` applies. Without it this endpoint
+            # accepted `../../etc/passwd`, and every later GET /baselines then
+            # raised 400 from `_item_path` — breaking the whole listing for the
+            # project until someone hand-edited _meta.yaml.
+            for d in defs:
+                safe_id(d["name"], "baseline name")
+            updates["baselines"] = serialize_baseline_defs(defs)
+        if "stakeholders" in updates and updates["stakeholders"] is not None:
+            updates["stakeholders"] = normalize_stakeholders(updates["stakeholders"])
+        if "risk_matrix" in updates and updates["risk_matrix"] is not None:
+            # Normalized on write as well as on read: a matrix stored with a
+            # mis-sized cell grid would silently re-rate risks against fallback
+            # bands every time it was read back.
+            updates["risk_matrix"] = normalize_matrix(updates["risk_matrix"])
+        meta.update(updates)
+        store._write_meta_unlocked(meta)
     return meta
 
 
@@ -1058,24 +1060,25 @@ def list_baselines(project_id: str):
 def create_baseline(project_id: str, data: BaselineCreate, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     name = safe_id(data.name, "baseline name")
-    # Upsert the baseline definition into project metadata
-    meta = store.read_meta()
-    defs = normalize_baseline_defs(meta.get("baselines", []))
-    existing = next((d for d in defs if d["name"] == name), None)
-    if existing:
-        existing["symbol"] = data.symbol or existing["symbol"]
-        existing["description"] = data.description or existing["description"]
-        if data.due_date:
-            existing["due_date"] = data.due_date
-    else:
-        defs.append({"name": name, "symbol": data.symbol, "description": data.description,
-                     "due_date": data.due_date})
-    serialized = serialize_baseline_defs(defs)
-    # Validate the proposed list before writing — a rejected write must
-    # leave _meta.yaml untouched.
-    _validate_due_dates(serialized)
-    meta["baselines"] = serialized
-    store.write_meta(meta)
+    # Upsert the baseline definition into project metadata.
+    with store.meta_lock():
+        meta = store.read_meta()
+        defs = normalize_baseline_defs(meta.get("baselines", []))
+        existing = next((d for d in defs if d["name"] == name), None)
+        if existing:
+            existing["symbol"] = data.symbol or existing["symbol"]
+            existing["description"] = data.description or existing["description"]
+            if data.due_date:
+                existing["due_date"] = data.due_date
+        else:
+            defs.append({"name": name, "symbol": data.symbol, "description": data.description,
+                         "due_date": data.due_date})
+        serialized = serialize_baseline_defs(defs)
+        # Validate the proposed list before writing — a rejected write must
+        # leave _meta.yaml untouched.
+        _validate_due_dates(serialized)
+        meta["baselines"] = serialized
+        store._write_meta_unlocked(meta)
     # Assign the baseline to specified requirements
     updated = 0
     for req_id in data.requirements:
@@ -1095,29 +1098,30 @@ def create_baseline(project_id: str, data: BaselineCreate, user: dict = Depends(
 def reorder_baselines(project_id: str, data: ReorderBaselines, user: dict = Depends(require_maintain)):
     """Rewrite the baseline sequence."""
     store = get_store(project_id)
-    meta = store.read_meta()
-    current_defs = normalize_baseline_defs(meta.get("baselines", []))
-    defined_names = [d["name"] for d in current_defs]
+    with store.meta_lock():
+        meta = store.read_meta()
+        current_defs = normalize_baseline_defs(meta.get("baselines", []))
+        defined_names = [d["name"] for d in current_defs]
 
-    # Must be exactly the same set — a permutation, no duplicates, no missing.
-    if set(data.names) != set(defined_names) or len(data.names) != len(defined_names):
-        raise HTTPException(
-            status_code=400,
-            detail="names must list every defined baseline exactly once",
-        )
+        # Must be exactly the same set — a permutation, no duplicates, no missing.
+        if set(data.names) != set(defined_names) or len(data.names) != len(defined_names):
+            raise HTTPException(
+                status_code=400,
+                detail="names must list every defined baseline exactly once",
+            )
 
-    # Build the new list in the requested order, preserving other fields.
-    by_name = {d["name"]: d for d in current_defs}
-    # `order` is left alone here: serialize_baseline_defs is the one place it is
-    # dropped, and duplicating that responsibility is how the derived value and
-    # the list position start to disagree.
-    reordered = [dict(by_name[nm]) for nm in data.names]
+        # Build the new list in the requested order, preserving other fields.
+        by_name = {d["name"]: d for d in current_defs}
+        # `order` is left alone here: serialize_baseline_defs is the one place it is
+        # dropped, and duplicating that responsibility is how the derived value and
+        # the list position start to disagree.
+        reordered = [dict(by_name[nm]) for nm in data.names]
 
-    serialized = serialize_baseline_defs(reordered)
-    # Validate due dates in the new order before writing.
-    _validate_due_dates(serialized)
-    meta["baselines"] = serialized
-    store.write_meta(meta)
+        serialized = serialize_baseline_defs(reordered)
+        # Validate due dates in the new order before writing.
+        _validate_due_dates(serialized)
+        meta["baselines"] = serialized
+        store._write_meta_unlocked(meta)
 
     return {"baselines": normalize_baseline_defs(serialized)}
 
@@ -1132,23 +1136,24 @@ def rename_baseline(project_id: str, name: str, data: RenameBaseline, user: dict
     safe_id(new_name, "baseline name")
     if store.get_item("baselines", new_name) is not None:
         raise HTTPException(status_code=409, detail="A baseline with that name already exists")
-    # Update the baseline definition in project metadata
-    meta = store.read_meta()
-    defs = normalize_baseline_defs(meta.get("baselines", []))
-    for d in defs:
-        if d["name"] == name:
-            d["name"] = new_name
-            if data.symbol is not None:
-                d["symbol"] = data.symbol
-            if data.description is not None:
-                d["description"] = data.description
-            if data.due_date is not None:
-                d["due_date"] = data.due_date
-    serialized = serialize_baseline_defs(defs)
-    # Validate before writing — a rejected write must leave _meta.yaml untouched.
-    _validate_due_dates(serialized)
-    meta["baselines"] = serialized
-    store.write_meta(meta)
+    # Update the baseline definition in project metadata.
+    with store.meta_lock():
+        meta = store.read_meta()
+        defs = normalize_baseline_defs(meta.get("baselines", []))
+        for d in defs:
+            if d["name"] == name:
+                d["name"] = new_name
+                if data.symbol is not None:
+                    d["symbol"] = data.symbol
+                if data.description is not None:
+                    d["description"] = data.description
+                if data.due_date is not None:
+                    d["due_date"] = data.due_date
+        serialized = serialize_baseline_defs(defs)
+        # Validate before writing — a rejected write must leave _meta.yaml untouched.
+        _validate_due_dates(serialized)
+        meta["baselines"] = serialized
+        store._write_meta_unlocked(meta)
     # Rename on all requirements
     updated = 0
     for r in store.list_requirements():
@@ -1183,13 +1188,14 @@ def rename_baseline(project_id: str, name: str, data: RenameBaseline, user: dict
 def delete_baseline(project_id: str, name: str, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     store.delete_item("baselines", name)
-    # Remove the baseline definition from project metadata
-    meta = store.read_meta()
-    defs = normalize_baseline_defs(meta.get("baselines", []))
-    defs = [d for d in defs if d["name"] != name]
-    serialized = serialize_baseline_defs(defs)
-    meta["baselines"] = serialized
-    store.write_meta(meta)
+    # Remove the baseline definition from project metadata.
+    with store.meta_lock():
+        meta = store.read_meta()
+        defs = normalize_baseline_defs(meta.get("baselines", []))
+        defs = [d for d in defs if d["name"] != name]
+        serialized = serialize_baseline_defs(defs)
+        meta["baselines"] = serialized
+        store._write_meta_unlocked(meta)
     updated = 0
     for r in store.list_requirements():
         blist = list(r.get("baselines") or [])
@@ -1244,15 +1250,16 @@ def create_system_state(project_id: str, data: SystemStateCreate,
     if not name:
         raise HTTPException(status_code=400, detail="State name is required")
 
-    meta = store.read_meta()
-    defs = normalize_system_states(meta.get("system_states", []))
-    if any(d["name"] == name for d in defs):
-        raise HTTPException(status_code=409,
-                            detail="A system state with that name already exists")
+    with store.meta_lock():
+        meta = store.read_meta()
+        defs = normalize_system_states(meta.get("system_states", []))
+        if any(d["name"] == name for d in defs):
+            raise HTTPException(status_code=409,
+                                detail="A system state with that name already exists")
 
-    defs.append({"name": name, "description": data.description})
-    meta["system_states"] = serialize_system_states(defs)
-    store.write_meta(meta)
+        defs.append({"name": name, "description": data.description})
+        meta["system_states"] = serialize_system_states(defs)
+        store._write_meta_unlocked(meta)
 
     return {"name": name, "description": data.description, "order": len(defs)}
 
@@ -1265,31 +1272,31 @@ def update_system_state(project_id: str, name: str, data: SystemStateUpdate,
     if new_name == "":
         raise HTTPException(status_code=400, detail="State name is required")
 
-    meta = store.read_meta()
-    defs = normalize_system_states(meta.get("system_states", []))
+    with store.meta_lock():
+        meta = store.read_meta()
+        defs = normalize_system_states(meta.get("system_states", []))
 
-    target: dict | None = None
-    for d in defs:
-        if d["name"] == name:
-            target = d
-            break
+        target: dict | None = None
+        for d in defs:
+            if d["name"] == name:
+                target = d
+                break
 
-    if target is None:
-        raise HTTPException(status_code=404, detail="System state not found")
+        if target is None:
+            raise HTTPException(status_code=404, detail="System state not found")
 
-    if new_name is not None and new_name != name:
-        if any(d["name"] == new_name for d in defs):
-            raise HTTPException(status_code=409,
-                                detail="A system state with that name already exists")
+        if new_name is not None and new_name != name:
+            if any(d["name"] == new_name for d in defs):
+                raise HTTPException(status_code=409,
+                                    detail="A system state with that name already exists")
 
-    # Persist the definition changes.
-    if new_name is not None and new_name != name:
-        target["name"] = new_name
-    if data.description is not None:
-        target["description"] = data.description
+        if new_name is not None and new_name != name:
+            target["name"] = new_name
+        if data.description is not None:
+            target["description"] = data.description
 
-    meta["system_states"] = serialize_system_states(defs)
-    store.write_meta(meta)
+        meta["system_states"] = serialize_system_states(defs)
+        store._write_meta_unlocked(meta)
 
     # Rename cascades to every requirement that referenced the old name.
     requirements_updated = 0
@@ -1312,11 +1319,12 @@ def update_system_state(project_id: str, name: str, data: SystemStateUpdate,
 def delete_system_state(project_id: str, name: str,
                         user: dict = Depends(require_maintain)):
     store = get_store(project_id)
-    meta = store.read_meta()
-    defs = normalize_system_states(meta.get("system_states", []))
-    defs = [d for d in defs if d["name"] != name]
-    meta["system_states"] = serialize_system_states(defs)
-    store.write_meta(meta)
+    with store.meta_lock():
+        meta = store.read_meta()
+        defs = normalize_system_states(meta.get("system_states", []))
+        defs = [d for d in defs if d["name"] != name]
+        meta["system_states"] = serialize_system_states(defs)
+        store._write_meta_unlocked(meta)
 
     # Count how many requirements still carry the name — they become orphans.
     affected = 0
@@ -1492,45 +1500,51 @@ def delete_verification_case(project_id: str, vc_id: str, force: bool = False, u
 @router.post("/projects/{project_id}/verification/{vc_id}/run")
 def run_verification(project_id: str, vc_id: str, data: RunVerification, user: dict = Depends(require_maintain)):
     """Record a test execution run with optional step results and new status."""
-    store = get_store(project_id)
-    vc = store.get_verification_case(vc_id)
-    if vc is None:
-        raise HTTPException(status_code=404, detail="Verification case not found")
-
     from datetime import datetime, timezone
+
+    store = get_store(project_id)
     new_status = data.status
     notes = data.notes
     executed_by = user.get("username", "unknown")
     step_results = data.step_results
 
-    # Update step actual results if provided.
-    steps = vc.get("steps") or []
-    if step_results and isinstance(step_results, dict):
-        for idx_str, actual in step_results.items():
-            try:
-                idx = int(idx_str)
-                if 0 <= idx < len(steps):
-                    steps[idx] = {**steps[idx], "actual_result": actual}
-            except (ValueError, TypeError):
-                pass
+    path = store._item_path("verification_cases", vc_id)
+    # Hold the item lock across the read-append-write so two concurrent
+    # runs cannot lose an execution record — `update_item` covers only the
+    # write half.  `_update_item_unlocked` is used to avoid deadlocking the
+    # non-re-entrant `file_lock`.
+    with file_lock(path):
+        vc = store.get_verification_case(vc_id)
+        if vc is None:
+            raise HTTPException(status_code=404, detail="Verification case not found")
 
-    # Append execution record.
-    history = vc.get("execution_history") or []
-    history.append({
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "status": new_status,
-        "notes": notes,
-        "executed_by": executed_by,
-    })
+        # Update step actual results if provided.
+        steps = vc.get("steps") or []
+        if step_results and isinstance(step_results, dict):
+            for idx_str, actual in step_results.items():
+                try:
+                    idx = int(idx_str)
+                    if 0 <= idx < len(steps):
+                        steps[idx] = {**steps[idx], "actual_result": actual}
+                except (ValueError, TypeError):
+                    pass
 
-    update = {
-        "status": new_status,
-        "result": new_status,
-        "steps": steps,
-        "execution_history": history,
-        "modified": datetime.now(timezone.utc).isoformat(),
-    }
-    result = store.update_verification_case(vc_id, update)
+        # Append execution record.
+        history = vc.get("execution_history") or []
+        history.append({
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "status": new_status,
+            "notes": notes,
+            "executed_by": executed_by,
+        })
+
+        update = {
+            "status": new_status,
+            "result": new_status,
+            "steps": steps,
+            "execution_history": history,
+        }
+        result = store._update_item_unlocked("verification_cases", vc_id, update)
     return result
 
 

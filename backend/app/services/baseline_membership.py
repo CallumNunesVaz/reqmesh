@@ -13,6 +13,7 @@ single-item PUTs) for the client to notice with.
 """
 from __future__ import annotations
 
+from app.core.filelock import file_lock
 from app.services.history import record_change
 
 
@@ -61,24 +62,28 @@ def apply_membership(
     updated: list[str] = []
 
     for item_id in ids:
-        before = store.get_requirement(item_id)
-        if before is None:
-            continue
+        path = store._item_path("requirements", item_id)
+        # Hold the item lock across the read-modify-write so a concurrent
+        # baseline edit to the same requirement cannot clobber this one.
+        with file_lock(path):
+            before = store.get_requirement(item_id)
+            if before is None:
+                continue
 
-        current = list(before.get("baselines") or [])
-        after = [b for b in current if b not in remove_set]
-        for name in add_set:
-            if name not in after:
-                after.append(name)
+            current = list(before.get("baselines") or [])
+            after = [b for b in current if b not in remove_set]
+            for name in add_set:
+                if name not in after:
+                    after.append(name)
 
-        if after == current:
-            continue
+            if after == current:
+                continue
 
-        result = store.update_requirement(item_id, {"baselines": after})
-        if not result:
-            continue
+            result = store._update_item_unlocked("requirements", item_id, {"baselines": after})
+            if not result:
+                continue
 
-        record_change(store, item_id, "update", before, result, username)
+            record_change(store, item_id, "update", before, result, username)
         updated.append(item_id)
         if any(b not in current for b in after):
             added.append(item_id)

@@ -188,3 +188,87 @@ class TestCascade:
         res = client.put(f"/api/projects/{project}/requirements/A",
                          json={"name": "Loop"})
         assert res.status_code in (200, 404), res.text
+
+
+class TestMetaConcurrency:
+    """Two updaters setting different meta keys must not lose each other's
+    writes — the read-modify-write on ``_meta.yaml`` is not protected by the
+    individual-item lock."""
+
+    def test_concurrent_project_settings_both_keys_survive(self, client, project):
+        store = get_store(project)
+        # Prime with a known name so both threads read the same baseline.
+        client.patch(f"/api/projects/{project}", json={"name": "before"})
+
+        _run_concurrently([
+            lambda: client.patch(f"/api/projects/{project}", json={"quality": {"review_required": True}}),
+            lambda: client.patch(f"/api/projects/{project}", json={"workflow": {"states": {"done": {"label": "Done"}}}}),
+        ])
+
+        meta = store.read_meta()
+        assert meta.get("quality") is not None, "quality key was lost"
+        assert meta.get("workflow") is not None, "workflow key was lost"
+
+
+class TestVerificationConcurrency:
+    """Two concurrent verification runs against the same case must each be
+    recorded — the lock inside ``update_item`` covers only the write half."""
+
+    def test_concurrent_verification_runs_preserve_both_executions(self, client, project):
+        store = get_store(project)
+        res = client.post(f"/api/projects/{project}/verification", json={
+            "id": "VC-CONC",
+            "name": "Concurrent VC",
+        })
+        assert res.status_code == 201, res.text
+
+        _run_concurrently([
+            lambda: client.post(f"/api/projects/{project}/verification/VC-CONC/run",
+                                json={"status": "passed", "notes": "worker A"}),
+            lambda: client.post(f"/api/projects/{project}/verification/VC-CONC/run",
+                                json={"status": "failed", "notes": "worker B"}),
+        ])
+
+        vc = store.get_verification_case("VC-CONC")
+        history = vc.get("execution_history") or []
+        assert len(history) == 2, f"expected 2 executions, got {len(history)}: {history}"
+
+
+class TestDuplicateCreate:
+    """Creating the same id twice must return 409, matching the four sibling
+    POST endpoints that already had the check.
+
+    The second POST carries a *different* title on purpose: a 409 alone would
+    still pass if the handler wrote the record and then complained, so each
+    test also asserts the original survived untouched. That is the property
+    that matters — the id is client-supplied, and `create_item` writes the
+    whole file.
+    """
+
+    def _assert_duplicate_refused(self, client, project, collection, item_id,
+                                  expected_detail):
+        first = client.post(f"/api/projects/{project}/{collection}",
+                            json={"id": item_id, "title": "Original"})
+        assert first.status_code == 201, first.text
+
+        second = client.post(f"/api/projects/{project}/{collection}",
+                             json={"id": item_id, "title": "Overwrite attempt"})
+        assert second.status_code == 409, second.text
+        assert second.json()["detail"] == expected_detail
+
+        surviving = get_store(project).get_item(
+            collection.replace("-", "_"), item_id)
+        assert surviving["title"] == "Original", \
+            f"the refused create still overwrote {item_id}: {surviving}"
+
+    def test_duplicate_risk_returns_409(self, client, project):
+        self._assert_duplicate_refused(client, project, "risks", "DUP-RISK",
+                                       "Risk already exists")
+
+    def test_duplicate_decision_returns_409(self, client, project):
+        self._assert_duplicate_refused(client, project, "decisions", "DUP-DEC",
+                                       "Decision already exists")
+
+    def test_duplicate_change_request_returns_409(self, client, project):
+        self._assert_duplicate_refused(client, project, "change-requests",
+                                       "DUP-CR", "Change request already exists")

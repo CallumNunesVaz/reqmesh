@@ -60,6 +60,9 @@ def list_change_requests(
 @router.post("/projects/{project_id}/change-requests", status_code=201)
 def create_change_request(project_id: str, data: ChangeRequestCreate, user: dict = Depends(require_edit)):
     store = get_store(project_id)
+    safe_id(data.id, "change request id")
+    if store.get_item("change_requests", data.id):
+        raise HTTPException(status_code=409, detail="Change request already exists")
     cr = data.model_dump(mode="json")
     cr.setdefault("status", "submitted")
     cr.setdefault("submitted_by", user.get("username", ""))
@@ -252,12 +255,15 @@ def list_risks(
 
 @router.post("/projects/{project_id}/risks", status_code=201)
 def create_risk(project_id: str, data: RiskCreate, user: dict = Depends(require_edit)):
+    store = get_store(project_id)
+    safe_id(data.id, "risk id")
+    if store.get_item("risks", data.id):
+        raise HTTPException(status_code=409, detail="Risk already exists")
     r = data.model_dump(mode="json")
     r.setdefault("impact", "")
     r.setdefault("mitigation", "")
     r.setdefault("linked_requirements", [])
     r.setdefault("status", "open")
-    store = get_store(project_id)
     result = store.create_item("risks", r)
     record_change(store, result["id"], "create", None, result, user.get("username", ""))
     _rated(store, [result])
@@ -372,13 +378,16 @@ def list_decisions(
 
 @router.post("/projects/{project_id}/decisions", status_code=201)
 def create_decision(project_id: str, data: DecisionRecordCreate, user: dict = Depends(require_edit)):
+    store = get_store(project_id)
+    safe_id(data.id, "decision id")
+    if store.get_item("decisions", data.id):
+        raise HTTPException(status_code=409, detail="Decision already exists")
     d = data.model_dump(mode="json")
     d.setdefault("rationale", "")
     d.setdefault("consequences", "")
     d.setdefault("linked_requirements", [])
     d.setdefault("status", "accepted")
     d.setdefault("decided_by", user.get("username", ""))
-    store = get_store(project_id)
     result = store.create_item("decisions", d)
     record_change(store, result["id"], "create", None, result, user.get("username", ""))
     from app.services.email_service import notify_decision, _safe_notify
