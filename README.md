@@ -558,14 +558,14 @@ Quick start — the installer handles Docker or bare-metal, the reverse proxy,
 TLS, secrets and the systemd unit:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/CallumNunesVaz/reqmesh/v0.2.3/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/CallumNunesVaz/reqmesh/v0.2.4/scripts/install.sh | bash
 ```
 
 It walks through deployment mode, proxy, TLS and credentials, then deploys. For
 CI or a scripted rollout, drive it with environment variables instead:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/CallumNunesVaz/reqmesh/v0.2.3/scripts/install.sh \
+curl -fsSL https://raw.githubusercontent.com/CallumNunesVaz/reqmesh/v0.2.4/scripts/install.sh \
   | REQMESH_PROXY=caddy REQMESH_TLS=selfsigned bash -s -- --non-interactive
 ```
 
