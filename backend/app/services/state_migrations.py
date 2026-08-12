@@ -72,6 +72,31 @@ def _migrate_1_to_2(state_dir: Path) -> None:
     for name in _PRIVATE_FILES:
         _chmod_private(state_dir / name)
 
+    _carry_settings_forward(state_dir)
+
+
+def _carry_settings_forward(state_dir: Path) -> None:
+    """Bring a legacy ``~/.reqmesh/settings.yaml`` to the state dir.
+
+    `settings_store` used to hardcode ``$HOME``; it now follows ``RT_STATE_DIR``
+    like everything else. Where the two differ, an existing file would otherwise
+    be silently abandoned along with the SMTP password in it.
+
+    Copy, never move: the old location may be a different mount, and leaving the
+    original costs nothing while a failed move could lose the only copy.
+    """
+    legacy = Path.home() / ".reqmesh" / "settings.yaml"
+    target = state_dir / "settings.yaml"
+    try:
+        if legacy.resolve() == target.resolve() or not legacy.exists() or target.exists():
+            return
+        target.write_bytes(legacy.read_bytes())
+        _chmod_private(target)
+        logger.info("state migration: carried settings.yaml forward from %s to %s "
+                    "(the original is left in place)", legacy, target)
+    except OSError as exc:
+        logger.warning("state migration: could not carry settings.yaml forward: %s", exc)
+
 
 # ── Migration registry ───────────────────────────────────────────────────────
 # MIGRATIONS[n] upgrades state from version (n-1) to version n.

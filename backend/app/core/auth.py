@@ -8,6 +8,8 @@ import os
 import logging
 from pathlib import Path
 
+from app.core.paths import state_dir
+
 audit_logger = logging.getLogger("audit")
 
 TOKEN_TTL = 86400 * 7  # 7 days
@@ -25,7 +27,7 @@ VERIFY_TOKEN_TTL = 86400  # 24 hours
 # discarded on restart while the project data beside it persisted.
 #
 # RT_STATE_DIR points this at the same durable volume as the project data.
-_STATE_DIR = Path(os.environ.get("RT_STATE_DIR") or (Path.home() / ".reqmesh"))
+_STATE_DIR = state_dir()
 
 USERS_FILE = _STATE_DIR / "users.yaml"
 SECRET_FILE = _STATE_DIR / "secret"
@@ -160,12 +162,50 @@ def save_users(users: dict) -> None:
         raise
 
 
+#: bcrypt work factor. OWASP's floor is 10; 12 is roughly a quarter-second per
+#: hash on current hardware, which is a cost an attacker pays per guess and a
+#: user pays once per login. Stated here rather than left to `gensalt()`'s
+#: default so the number is a reqmesh decision, not a bcrypt-version one.
+BCRYPT_ROUNDS = 12
+
+#: Prefixes bcrypt produces. Kept as a tuple because `verify_password`
+#: dispatches on it: that is the seam that lets a future algorithm be added
+#: without a flag day or a forced password reset for every account.
+_BCRYPT_PREFIXES = ("$2a$", "$2b$", "$2y$")
+
+
 def hash_password(password: str) -> bytes:
-    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt())
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt(rounds=BCRYPT_ROUNDS))
 
 
 def verify_password(password: str, hashed: str) -> bool:
-    return bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
+    """Check a password against a stored hash, dispatching on its format.
+
+    Fails closed on anything unrecognised. Previously a corrupted or truncated
+    hash reached bcrypt, which raises — turning a bad record in `users.yaml`
+    into a 500 on the login path rather than a failed login.
+    """
+    if not hashed.startswith(_BCRYPT_PREFIXES):
+        return False
+    try:
+        return bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
+    except (ValueError, TypeError):
+        return False
+
+
+def needs_rehash(hashed: str) -> bool:
+    """True when a stored hash is weaker than what `hash_password` produces now.
+
+    The work factor is meant to rise as hardware gets cheaper, and OWASP's
+    guidance is to re-hash at the next successful login rather than force a
+    reset — the only moment the plaintext is legitimately in hand.
+    """
+    if not hashed.startswith(_BCRYPT_PREFIXES):
+        return True
+    try:
+        return int(hashed.split("$")[2]) < BCRYPT_ROUNDS
+    except (IndexError, ValueError):
+        return True
 
 
 def _token_ttl() -> int:
@@ -248,6 +288,12 @@ def authenticate(username: str, password: str) -> dict:
         user["failed_attempts"] = 0
         user["locked_until"] = 0
         user["last_active"] = time.strftime("%Y-%m-%dT%H:%M:%SZ")
+        # A successful login is the only moment the plaintext is legitimately in
+        # hand, so it is where a hash written under an older work factor gets
+        # upgraded. Free: this branch already holds the lock and already saves.
+        if needs_rehash(user["password_hash"]):
+            user["password_hash"] = hash_password(password).decode()
+            audit_logger.info("Rehashed password for user=%s at the current work factor", username)
         save_users(users)
         role = user.get("role", "guest")
         tv = int(user.get("token_version", 0))

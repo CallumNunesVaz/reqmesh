@@ -14,11 +14,14 @@ rest UI-configurable.
 from __future__ import annotations
 
 import os
-from pathlib import Path
 
+from app.core.paths import state_dir
 from ruamel.yaml import YAML
 
-SETTINGS_FILE = Path.home() / ".reqmesh" / "settings.yaml"
+# Follows RT_STATE_DIR like the account files do. Hardcoding $HOME meant that
+# under Docker — HOME=/app on a read-only rootfs — every save raised, so admin
+# settings could not be persisted at all in the shipped deployment.
+SETTINGS_FILE = state_dir() / "settings.yaml"
 
 def _settings_yaml() -> YAML:
     """A YAML instance per call, for the reason `yaml_store` uses one.
