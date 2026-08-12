@@ -17,6 +17,8 @@ import type { CSSProperties } from 'react';
 import { moveInSequence, moveToIndex } from '../lib/reorder';
 import { useConfirm } from '../components/ConfirmDialog';
 import { useToasts } from '../components/Toast';
+import { useKeyboardShortcuts } from '../components/useKeyboardShortcuts';
+import { useListSelection } from '../hooks/useListSelection';
 import LoadingSplash from '../components/LoadingSplash';
 
 /**
@@ -275,9 +277,10 @@ export default function BaselinesPage() {
   const renderRow = (b: BaselineInfo) => (
     <motion.div
       key={b.name}
+      id={`entity-${b.name}`}
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="card p-4"
+      className={`card p-4 ${selectedId === b.name ? 'ring-2 ring-primary/50' : ''}`}
     >
       {/* Row header */}
       <div className="flex items-start justify-between gap-3">
@@ -479,6 +482,19 @@ export default function BaselinesPage() {
   const firstSeqName = inSequence.length > 0 ? inSequence[0].name : null;
   const lastSeqName = inSequence.length > 0 ? inSequence[inSequence.length - 1].name : null;
   const activeDrag = activeDragName ? baselines.find((b) => b.name === activeDragName) ?? null : null;
+
+  const { focusId: selectedId, onListDown, onListUp, onListOpen, onListEscape } = useListSelection(
+    [...inSequence, ...orphans].map((b) => b.name),
+    toggleExpand,
+  );
+
+  useKeyboardShortcuts(projectId, {
+    onListDown,
+    onListUp,
+    onListOpen,
+    onListEscape,
+    onListNew: () => { if (editable) openCreate(); },
+  });
 
   return (
     <div className="relative flex flex-col h-full overflow-y-auto">

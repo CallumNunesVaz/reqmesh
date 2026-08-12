@@ -6,6 +6,8 @@ import { api, type SystemStateDef } from '../api/client';
 import { useAuthStore } from '../store/auth';
 import { useConfirm } from '../components/ConfirmDialog';
 import { useToasts } from '../components/Toast';
+import { useKeyboardShortcuts } from '../components/useKeyboardShortcuts';
+import { useListSelection } from '../hooks/useListSelection';
 import LoadingSplash from '../components/LoadingSplash';
 
 export default function SystemStatesPage() {
@@ -101,6 +103,19 @@ export default function SystemStatesPage() {
       setError(err.message || 'Delete failed');
     }
   };
+
+  const { focusId: selectedId, onListDown, onListUp, onListOpen, onListEscape } = useListSelection(
+    states.map((s) => s.name),
+    (name) => { const s = states.find((x) => x.name === name); if (s) openEdit(s); },
+  );
+
+  useKeyboardShortcuts(projectId, {
+    onListDown,
+    onListUp,
+    onListOpen,
+    onListEscape,
+    onListNew: () => { if (editable) openCreate(); },
+  });
 
   return (
     <div className="relative flex flex-col h-full overflow-y-auto">
@@ -237,9 +252,10 @@ export default function SystemStatesPage() {
             {states.map((s) => (
               <motion.div
                 key={s.name}
+                id={`entity-${s.name}`}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="card p-4"
+                className={`card p-4 ${selectedId === s.name ? 'ring-2 ring-primary/50' : ''}`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">

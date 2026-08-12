@@ -1,8 +1,9 @@
 import { useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
+import { LIST_ROUTES, DETAIL_ROUTES } from '../lib/keyboardShortcuts';
 
-interface ShortcutGroup { section: string; items: { keys: string; description: string }[] }
+interface ShortcutGroup { section: string; pages?: readonly string[]; items: { keys: string; description: string }[] }
 
 const SHORTCUTS: ShortcutGroup[] = [
   {
@@ -12,7 +13,10 @@ const SHORTCUTS: ShortcutGroup[] = [
       { keys: 'Ctrl+E', description: 'Toggle edit / view mode' },
       { keys: 'Ctrl+G', description: 'Toggle graph pane' },
       { keys: 'Ctrl+H', description: 'Toggle guided mode (helpers)' },
+      { keys: 'Ctrl+Z', description: 'Undo' },
+      { keys: 'Ctrl+Y', description: 'Redo' },
       { keys: 'Ctrl+/ or ?', description: 'Show this help dialog' },
+      { keys: 'F1', description: 'Open documentation' },
       { keys: 'Escape', description: 'Close dialog, deselect, or go back' },
     ],
   },
@@ -26,12 +30,15 @@ const SHORTCUTS: ShortcutGroup[] = [
       { keys: 'Alt+T', description: 'Go to Trace Matrix' },
       { keys: 'Alt+H', description: 'Go to Change Requests' },
       { keys: 'Alt+K', description: 'Go to Risks' },
+      { keys: 'Alt+B', description: 'Go to Baselines' },
+      { keys: 'Alt+A', description: 'Go to Allocation' },
       { keys: 'Alt+M', description: 'Go to Metrics' },
       { keys: 'Alt+P', description: 'Go to Publish' },
     ],
   },
   {
     section: 'List Pages',
+    pages: LIST_ROUTES,
     items: [
       { keys: 'j or ↓', description: 'Select next item' },
       { keys: 'k or ↑', description: 'Select previous item' },
@@ -43,6 +50,7 @@ const SHORTCUTS: ShortcutGroup[] = [
   },
   {
     section: 'Detail Pages',
+    pages: DETAIL_ROUTES,
     items: [
       { keys: 'Ctrl+S', description: 'Save changes' },
       { keys: 'Escape', description: 'Back to list' },
@@ -77,6 +85,9 @@ export default function ShortcutHelp({ open, onClose }: { open: boolean; onClose
               {SHORTCUTS.map((group) => (
                 <div key={group.section}>
                   <h3 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">{group.section}</h3>
+                  {group.pages && (
+                    <p className="text-[10px] text-muted-foreground/60 mb-2 -mt-1 font-mono">{group.pages.join(' · ')}</p>
+                  )}
                   <div className="space-y-1">
                     {group.items.map((item) => (
                       <div key={item.keys} className="flex items-center justify-between text-xs py-1 px-2 rounded hover:bg-accent/50">

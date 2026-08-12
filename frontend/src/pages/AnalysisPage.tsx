@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, FlaskConical, Trash2, X, Search, Edit3, ChevronDown } from 'lucide-react';
@@ -11,6 +11,8 @@ import { usePersistedState, setCodec } from '../hooks/usePersistedState';
 import { LinkEditor } from '../components/LinkEditor';
 import { useToasts } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmDialog';
+import { useKeyboardShortcuts } from '../components/useKeyboardShortcuts';
+import { useListSelection } from '../hooks/useListSelection';
 import LoadingSplash from '../components/LoadingSplash';
 
 /**
@@ -54,6 +56,7 @@ export default function AnalysisPage() {
   const [draft, setDraft] = useState(EMPTY);
   const pk = (field: string) => (projectId ? `rt-analysis-${field}-${projectId}` : null);
   const [search, setSearch] = usePersistedState(pk('search'), '');
+  const searchRef = useRef<HTMLInputElement>(null);
   const [expanded, setExpanded] = usePersistedState<Set<string>>(pk('expanded'), new Set(), setCodec<string>());
 
   const load = () => {
@@ -88,6 +91,20 @@ export default function AnalysisPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     useCallback((id: string) => setExpanded((prev) => new Set(prev).add(id)), []),
   );
+
+  const { focusId: selectedId, onListDown, onListUp, onListOpen, onListEscape } = useListSelection(
+    useMemo(() => filtered.map((c) => c.id), [filtered]),
+    toggleExpand,
+  );
+
+  useKeyboardShortcuts(projectId, {
+    onListDown,
+    onListUp,
+    onListOpen,
+    onListEscape,
+    onListNew: () => { if (editable) { setEditingId(null); setDraft(EMPTY); setShowCreate(true); } },
+    onListSearch: () => searchRef.current?.focus(),
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -174,12 +191,13 @@ export default function AnalysisPage() {
         <div className="relative flex-1">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <input
+            ref={searchRef}
             className="input pl-9 pr-14 h-9"
             placeholder="Search analysis cases…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
-          {search && (
+          {search ? (
             <button
               className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               onClick={() => setSearch('')}
@@ -187,6 +205,8 @@ export default function AnalysisPage() {
             >
               <X size={14} />
             </button>
+          ) : (
+            <kbd className="absolute right-3 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded border bg-muted text-[10px] font-mono text-muted-foreground pointer-events-none">/</kbd>
           )}
         </div>
       </div>
@@ -270,7 +290,7 @@ export default function AnalysisPage() {
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: i * 0.03 }}
                 className={`card hover:shadow-md transition-shadow group ${
-                  focusId === c.id ? 'ring-2 ring-primary/50' : ''
+                  focusId === c.id || selectedId === c.id ? 'ring-2 ring-primary/50' : ''
                 }`}
               >
                 <div className="flex items-center gap-3 p-4 cursor-pointer" onClick={() => toggleExpand(c.id)}>

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Scale, Trash2, ChevronDown, X, Search, Edit3 } from 'lucide-react';
@@ -17,6 +17,8 @@ import { CommentThread } from '../components/CommentThread';
 import { deleteWithReferenceCheck } from '../lib/forceDelete';
 import { useConfirm } from '../components/ConfirmDialog';
 import { useToasts } from '../components/Toast';
+import { useKeyboardShortcuts } from '../components/useKeyboardShortcuts';
+import { useListSelection } from '../hooks/useListSelection';
 import LoadingSplash from '../components/LoadingSplash';
 
 /**
@@ -59,6 +61,7 @@ export default function DecisionsPage() {
   const [error, setError] = useState('');
   const pk = (field: string) => (projectId ? `rt-decisions-${field}-${projectId}` : null);
   const [search, setSearch] = usePersistedState(pk('search'), '');
+  const searchRef = useRef<HTMLInputElement>(null);
   const [expanded, setExpanded] = usePersistedState<Set<string>>(pk('expanded'), new Set(), setCodec<string>());
   const entityKinds = useEntityKinds(projectId);
   const showConfirm = useConfirm();
@@ -97,6 +100,20 @@ export default function DecisionsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     useCallback((id: string) => setExpanded((prev) => new Set(prev).add(id)), []),
   );
+
+  const { focusId: selectedId, onListDown, onListUp, onListOpen, onListEscape } = useListSelection(
+    useMemo(() => filtered.map((d) => d.id), [filtered]),
+    toggleExpand,
+  );
+
+  useKeyboardShortcuts(projectId, {
+    onListDown,
+    onListUp,
+    onListOpen,
+    onListEscape,
+    onListNew: () => { if (editable) { setEditingId(null); setDraft(EMPTY); setShowCreate(true); } },
+    onListSearch: () => searchRef.current?.focus(),
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -188,18 +205,21 @@ export default function DecisionsPage() {
         <div className="relative flex-1">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <input
+            ref={searchRef}
             className="input pl-9 pr-14 h-9"
             placeholder="Search decisions…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
-          {search && (
+          {search ? (
             <button
               className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               onClick={() => setSearch('')}
             >
               <X size={14} />
             </button>
+          ) : (
+            <kbd className="absolute right-3 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded border bg-muted text-[10px] font-mono text-muted-foreground pointer-events-none">/</kbd>
           )}
         </div>
       </div>
@@ -292,7 +312,7 @@ export default function DecisionsPage() {
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: i * 0.03 }}
-                className={`card hover:shadow-md transition-shadow group ${focusId === d.id ? 'ring-2 ring-primary/50' : ''}`}
+                className={`card hover:shadow-md transition-shadow group ${focusId === d.id || selectedId === d.id ? 'ring-2 ring-primary/50' : ''}`}
               >
                 <div className="flex items-center gap-3 p-4 cursor-pointer" onClick={() => toggleExpand(d.id)}>
                   <div className="w-9 h-9 bg-cs-teal/10 text-cs-teal rounded-lg flex items-center justify-center">

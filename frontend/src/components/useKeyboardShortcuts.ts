@@ -1,5 +1,6 @@
 import { useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { isListPath, isDetailPath } from '../lib/keyboardShortcuts';
 
 /** Key that, when pressed alone (no modifiers), is ignored during text editing. */
 const TEXT_INPUT_TAGS = new Set(['INPUT', 'TEXTAREA', 'SELECT']);
@@ -34,8 +35,8 @@ interface ShortcutHandlers {
 export function useKeyboardShortcuts(projectId: string | undefined, handlers: ShortcutHandlers) {
   const location = useLocation();
   const navigate = useNavigate();
-  const isDetail = /\/project\/[^/]+\/(requirements|components)\/[^/]+/.test(location.pathname);
-  const isList = /\/project\/[^/]+\/(requirements|components|specifications|verification|traces|change-requests|risks)$/.test(location.pathname);
+  const isDetail = isDetailPath(location.pathname);
+  const isList = isListPath(location.pathname);
   const isInProject = !!projectId;
 
   const h = useCallback((e: KeyboardEvent) => {

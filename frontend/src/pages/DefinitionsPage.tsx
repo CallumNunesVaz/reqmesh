@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Sigma, Boxes, Trash2, X, Search, Edit3 } from 'lucide-react';
@@ -10,6 +10,8 @@ import { useFocusedEntity } from '../components/useFocusedEntity';
 import { usePersistedState } from '../hooks/usePersistedState';
 import { useToasts } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmDialog';
+import { useKeyboardShortcuts } from '../components/useKeyboardShortcuts';
+import { useListSelection } from '../hooks/useListSelection';
 import LoadingSplash from '../components/LoadingSplash';
 
 /**
@@ -44,6 +46,7 @@ export default function DefinitionsPage() {
   const [draft, setDraft] = useState(EMPTY);
   const pk = (field: string) => (projectId ? `rt-definitions-${field}-${projectId}` : null);
   const [search, setSearch] = usePersistedState(pk('search'), '');
+  const searchRef = useRef<HTMLInputElement>(null);
 
   const load = () => {
     if (!projectId) return;
@@ -119,6 +122,20 @@ export default function DefinitionsPage() {
     load();
   };
 
+  const { focusId: selectedId, onListDown, onListUp, onListOpen, onListEscape } = useListSelection(
+    useMemo(() => filtered.map((d) => d.id), [filtered]),
+    (id) => { const d = defs.find((x) => x.id === id); if (d) openEdit(d); },
+  );
+
+  useKeyboardShortcuts(projectId, {
+    onListDown,
+    onListUp,
+    onListOpen,
+    onListEscape,
+    onListNew: () => { if (editable) { setEditingId(null); setDraft(EMPTY); setShowCreate(true); } },
+    onListSearch: () => searchRef.current?.focus(),
+  });
+
   return (
     <div className="relative max-w-5xl mx-auto p-8">
       {loading && defs.length === 0 && <LoadingSplash label="Loading definitions…" />}
@@ -143,12 +160,13 @@ export default function DefinitionsPage() {
         <div className="relative flex-1">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <input
+            ref={searchRef}
             className="input pl-9 pr-14 h-9"
             placeholder="Search definitions…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
-          {search && (
+          {search ? (
             <button
               className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               onClick={() => setSearch('')}
@@ -156,6 +174,8 @@ export default function DefinitionsPage() {
             >
               <X size={14} />
             </button>
+          ) : (
+            <kbd className="absolute right-3 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded border bg-muted text-[10px] font-mono text-muted-foreground pointer-events-none">/</kbd>
           )}
         </div>
       </div>
@@ -257,7 +277,7 @@ export default function DefinitionsPage() {
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: i * 0.03 }}
               className={`card p-4 hover:shadow-md transition-shadow group ${
-                focusId === d.id ? 'ring-2 ring-primary/50' : ''
+                focusId === d.id || selectedId === d.id ? 'ring-2 ring-primary/50' : ''
               }`}
             >
               <div className="flex items-center gap-3">
