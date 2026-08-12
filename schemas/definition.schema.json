@@ -1,0 +1,50 @@
+{
+  "properties": {
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "type": {
+      "default": "constraint",
+      "enum": [
+        "constraint",
+        "calc"
+      ],
+      "title": "Type",
+      "type": "string"
+    },
+    "name": {
+      "default": "",
+      "title": "Name",
+      "type": "string"
+    },
+    "parameters": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Parameters",
+      "type": "array"
+    },
+    "expr": {
+      "title": "Expr",
+      "type": "string"
+    },
+    "unit": {
+      "default": "",
+      "title": "Unit",
+      "type": "string"
+    },
+    "doc": {
+      "default": "",
+      "title": "Doc",
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "expr"
+  ],
+  "title": "reqmesh definition",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

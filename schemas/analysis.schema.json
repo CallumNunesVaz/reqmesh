@@ -1,0 +1,45 @@
+{
+  "properties": {
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "name": {
+      "default": "",
+      "title": "Name",
+      "type": "string"
+    },
+    "doc": {
+      "default": "",
+      "title": "Doc",
+      "type": "string"
+    },
+    "scope": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Scope",
+      "type": "array"
+    },
+    "scope_components": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Scope Components",
+      "type": "array"
+    },
+    "overrides": {
+      "additionalProperties": {
+        "type": "number"
+      },
+      "title": "Overrides",
+      "type": "object"
+    }
+  },
+  "required": [
+    "id"
+  ],
+  "title": "reqmesh analysis",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

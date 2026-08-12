@@ -9,7 +9,7 @@ import { Bold, Italic, List, ListOrdered, Heading1, Undo2, Redo2 } from 'lucide-
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { loadEntityIndex, useEntityKinds, type IndexedEntity } from './entityIndex';
-import { ENTITY_META, entityIconMeta, type EntityKind } from './entities';
+import { ENTITY_META, entityIconMeta, entityPath, type EntityKind } from './entities';
 import { findMentionTrigger } from './mentions';
 import MentionPicker from './MentionPicker';
 
@@ -162,7 +162,10 @@ export default function RichTextEditor({ content, onChange, onBlur, disabled = f
         e.preventDefault();
         e.stopPropagation();
         const kind: EntityKind = entityKinds.get(entityId) ?? 'requirement';
-        navigate(ENTITY_META[kind].path(projectId, entityId));
+        // A mention of a kind with no page of its own swallows the click
+        // rather than navigating somewhere arbitrary.
+        const destination = entityPath(kind, projectId, entityId);
+        if (destination) navigate(destination);
         return;
       }
       target = target.parentElement;

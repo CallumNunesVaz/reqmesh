@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useGuardedNavigate } from './navGuard';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Search } from 'lucide-react';
-import { ENTITY_META } from './entities';
+import { ENTITY_META, entityPath } from './entities';
+import { BACKEND_KIND_TO_ENTITY } from '../lib/searchKinds';
 import { loadEntityIndex, searchEntities, recordEntityVisit, type IndexedEntity } from './entityIndex';
 import { useStore } from '../store';
 import { api, type SearchResult } from '../api/client';
@@ -149,19 +150,19 @@ export default function CommandPalette({ projectId }: { projectId: string }) {
   const pick = useCallback((entity: IndexedEntity | SearchResult) => {
     setOpen(false);
     if ('kind_icon' in entity) {
-      // Backend search result — navigate to the entity
-      const meta = ENTITY_META[entity.kind as keyof typeof ENTITY_META];
-      if (meta) {
-        navigate(meta.path(projectId, entity.id));
+      // Backend search result. Its `kind` is the *backend* name, which is not
+      // always an EntityKind — `change_request` vs `change` — so it has to go
+      // through the same translation SearchPage uses. Indexing ENTITY_META with
+      // it directly silently missed every change request and fell through to
+      // the project-overview fallback below.
+      const ek = BACKEND_KIND_TO_ENTITY[entity.kind];
+      const target = ek ? entityPath(ek, projectId, entity.id) : null;
+      if (target) {
+        navigate(target);
         return;
       }
-      // Fallback for entity kinds without dedicated pages (comments, decisions, baselines)
-      if (entity.kind === 'baseline') {
-        navigate(`/project/${projectId}/baselines`);
-      } else {
-        // Navigate to the project overview as fallback
-        navigate(`/project/${projectId}`);
-      }
+      // Kinds with no page of their own (a comment) land on the overview.
+      navigate(`/project/${projectId}`);
       return;
     }
     // Local entity index result
@@ -169,7 +170,9 @@ export default function CommandPalette({ projectId }: { projectId: string }) {
     setRecentIds(newRecent);
     try { localStorage.setItem(`rt-recent-${projectId}`, JSON.stringify(newRecent)); } catch {}
     recordEntityVisit(entity.id);
-    navigate(ENTITY_META[entity.kind].path(projectId, entity.id));
+    // Kinds with no page of their own stay in the palette but go nowhere.
+    const target = entityPath(entity.kind, projectId, entity.id);
+    if (target) navigate(target);
   }, [navigate, projectId, recentIds]);
 
   const onInputKey = (e: React.KeyboardEvent) => {

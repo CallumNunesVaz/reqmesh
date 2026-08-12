@@ -489,7 +489,7 @@ export interface Component {
   quantity: number;
   satisfies: string[];
   verification_cases: string[];
-  relations: { type: string; target: string }[];
+  relations: { type: string; target: string; reviewed_fingerprint?: string | null }[];
   attributes: { key: string; value: string }[];
   parameters: Parameter[];
   baselines: string[];

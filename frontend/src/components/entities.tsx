@@ -6,20 +6,27 @@ import { copyText } from '../lib/clipboard';
 import {
   ClipboardList, CheckCircle2, Boxes, FileText, GitPullRequest, AlertTriangle,
   Box, Layers, Cog, Binary, Plug, Link2, Check, Scale, Sigma, FlaskConical,
+  History, MessageSquare,
 } from 'lucide-react';
 import { loadEntityIndex, type IndexedEntity } from './entityIndex';
 
 /** Everything in a project that can be referenced from somewhere else. */
 export type EntityKind =
   | 'requirement' | 'verification' | 'component' | 'specification' | 'change' | 'risk'
-  | 'decision' | 'definition' | 'analysis';
+  | 'decision' | 'definition' | 'analysis' | 'baseline' | 'comment';
 
 interface EntityMeta {
   icon: typeof Box;
   cls: string;
   label: string;
-  /** Where a reference to this entity navigates to. */
-  path: (projectId: string, id: string) => string;
+  /**
+   * Where a reference to this entity navigates to, or absent when it has no
+   * page of its own. A comment is that case: search returns its id, author and
+   * text but nothing identifying the entity it hangs off, so there is nowhere
+   * honest to send the reader. `EntityLink` renders those as a plain label
+   * rather than inventing a destination.
+   */
+  path?: (projectId: string, id: string) => string;
 }
 
 /**
@@ -82,7 +89,31 @@ export const ENTITY_META: Record<EntityKind, EntityMeta> = {
     label: 'Analysis Case',
     path: (p, id) => `/project/${p}/analysis?focus=${encodeURIComponent(id)}`,
   },
+  baseline: {
+    icon: History,
+    cls: 'text-cs-yellow',
+    label: 'Baseline',
+    path: (p, id) => `/project/${p}/baselines?focus=${encodeURIComponent(id)}`,
+  },
+  comment: {
+    icon: MessageSquare,
+    cls: 'text-cs-grey',
+    label: 'Comment',
+    // No `path`: see EntityMeta.path. Search gives us no parent entity.
+  },
 };
+
+/**
+ * The deep link for an entity, or `null` for kinds that have no page.
+ *
+ * Prefer this over reaching into `ENTITY_META[kind].path` directly: it forces
+ * the caller to decide what an unlinkable kind should do, which is the whole
+ * reason `path` is optional.
+ */
+export function entityPath(kind: EntityKind, projectId: string, id: string): string | null {
+  const build = ENTITY_META[kind].path;
+  return build ? build(projectId, id) : null;
+}
 
 /** Component types, in the same icon+colour language as requirement types. */
 export const COMPONENT_TYPE_META: Record<string, { icon: typeof Box; cls: string; label: string }> = {
@@ -213,6 +244,20 @@ export function EntityLink({ kind, id, name, projectId, showIcon = true, classNa
   // Outside a project route there is nowhere to link to; still render the id.
   if (!pid) return <span className={`font-mono ${className}`}>{id}</span>;
 
+  // Kinds with no page of their own render as a labelled, unlinked row.
+  if (!pathMeta.path) {
+    return (
+      <span
+        title={`${displayMeta.label} ${id}${name ? ` — ${name}` : ''}`}
+        className={`inline-flex items-center gap-1 ${className}`}
+      >
+        {showIcon && <Icon size={12} className={`${displayMeta.cls} shrink-0`} />}
+        <span className="font-mono whitespace-nowrap">{id}</span>
+        {name && <span className="truncate">{name}</span>}
+      </span>
+    );
+  }
+
   return (
     <GuardedLink
       to={pathMeta.path(pid, id)}
@@ -250,11 +295,14 @@ export function CopyLinkButton({ kind, id, projectId, className = '' }: CopyLink
   useEffect(() => () => clearTimeout(resetTimer.current), []);
 
   if (!pid) return null;
+  // Nothing shareable exists for a kind with no page of its own.
+  const target = entityPath(kind, pid, id);
+  if (!target) return null;
 
   const copy = async (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
-    const url = window.location.origin + ENTITY_META[kind].path(pid, id);
+    const url = window.location.origin + target;
     const ok = await copyText(url);
     // Only claim success when the text actually reached the clipboard. The
     // previous form was `navigator.clipboard?.writeText(...)` followed by an

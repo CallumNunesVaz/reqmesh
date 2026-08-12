@@ -9,7 +9,7 @@ import { matrixToCsv, type MatrixCsvInput } from '../lib/matrixCsv';
 import { useAuthStore } from '../store/auth';
 import { useStore } from '../store';
 import AutocompleteInput from '../components/AutocompleteInput';
-import { ENTITY_META, EntityLink, type EntityKind } from '../components/entities';
+import { EntityLink, entityPath, type EntityKind } from '../components/entities';
 
 // Cell tint per link type. Falls back to a neutral chip for any type not
 // listed here (importers emit types like `verifies`/`traces` too).
@@ -341,7 +341,7 @@ export default function TraceMatrixPage() {
                             // The headers already link both ends; the cell
                             // itself takes you to the target the pairing hits.
                             <Link
-                              to={ENTITY_META[kindOf(tgt)].path(projectId!, tgt)}
+                              to={entityPath(kindOf(tgt), projectId!, tgt) ?? '#'}
                               title={`${src} ${link.type} ${tgt}`}
                               className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-medium hover:ring-1 hover:ring-primary/40 transition-shadow ${LINK_TYPE_COLORS[link.type] || 'bg-muted text-muted-foreground'}`}
                             >

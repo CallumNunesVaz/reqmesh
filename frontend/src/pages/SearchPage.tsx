@@ -3,35 +3,19 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import { Search, X, SlidersHorizontal } from 'lucide-react';
 import { api, type SearchResult } from '../api/client';
 import { ENTITY_META, EntityLink, type EntityKind } from '../components/entities';
+import { BACKEND_KIND_TO_ENTITY, SEARCHABLE_KINDS } from '../lib/searchKinds';
 import { useStore } from '../store';
 
 const TRUNCATION_LIMIT = 50;
-
-const BACKEND_KIND_TO_ENTITY: Record<string, EntityKind | undefined> = {
-  requirement: 'requirement',
-  verification: 'verification',
-  component: 'component',
-  specification: 'specification',
-  change_request: 'change',
-  risk: 'risk',
-  decision: 'decision',
-  definition: 'definition',
-  analysis: 'analysis',
-};
 
 function toEntityKind(backendKind: string): EntityKind | null {
   return BACKEND_KIND_TO_ENTITY[backendKind] ?? null;
 }
 
-// The kinds `services/search.py` actually branches on. Deriving this from
-// ENTITY_META looked equivalent and was not: that map also carries the six
-// component *subtypes* (system, subsystem, assembly, part, software,
-// interface), which the search endpoint has no branch for — so the filter
-// offered six options that silently returned nothing.
-const SEARCHABLE_KINDS = [
-  'requirement', 'component', 'specification', 'verification',
-  'change_request', 'risk', 'comment', 'decision', 'definition', 'analysis',
-] as const;
+// The backend's kind names are not all EntityKind values (change_request vs
+// change), so the search filter must use the backend names rather than
+// ENTITY_META keys. The filter list is explicit instead of derived so it does
+// not accidentally include subtypes like COMPONENT_TYPE_META entries.
 
 const KIND_LABELS: Record<string, string> = {
   change_request: 'Change Request',

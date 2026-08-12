@@ -12,10 +12,14 @@ from app.models.requirement import Requirement
 from app.models.specification import Specification
 from app.models.verification import VerificationCase
 from app.models.trace import TraceMatrix
-from app.models.risk import Risk, Comment, DecisionRecord
+from app.models.risk import Risk
+from app.models.comment import Comment
+from app.models.decision import DecisionRecord
 from app.models.change_request import ChangeRequest
 from app.models.component import Component
 from app.models.baseline import Baseline
+from app.models.definition import Definition
+from app.models.analysis import AnalysisCase
 
 OUT = Path(__file__).resolve().parent.parent / "schemas"
 
@@ -30,6 +34,8 @@ MODELS = {
     "change_request": ChangeRequest,
     "component": Component,
     "baseline": Baseline,
+    "definition": Definition,
+    "analysis": AnalysisCase,
 }
 
 

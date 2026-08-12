@@ -1,27 +1,43 @@
 import { describe, it, expect } from 'vitest';
-import { ENTITY_META, COMPONENT_TYPE_META, entityIconMeta } from '../src/components/entities';
+import { ENTITY_META, COMPONENT_TYPE_META, entityIconMeta, type EntityKind } from '../src/components/entities';
 import { COMPONENT_TYPES } from '../src/api/client';
+
+/**
+ * `path` is optional — a comment has no page of its own — so these assertions
+ * would silently pass on `undefined` without the guard. Fail loudly instead:
+ * every kind named here is one that must stay linkable.
+ */
+function pathOf(kind: EntityKind, projectId: string, id: string): string {
+  const build = ENTITY_META[kind].path;
+  if (!build) throw new Error(`${kind} has no path, but this test requires one`);
+  return build(projectId, id);
+}
 
 describe('entity routes', () => {
   it('sends requirements to their detail page', () => {
-    expect(ENTITY_META.requirement.path('demo', 'REQ-001')).toBe('/project/demo/requirements/REQ-001');
+    expect(pathOf('requirement', 'demo', 'REQ-001')).toBe('/project/demo/requirements/REQ-001');
   });
 
   it('sends components to their detail page', () => {
-    expect(ENTITY_META.component.path('demo', 'SPAR')).toBe('/project/demo/components/SPAR');
+    expect(pathOf('component', 'demo', 'SPAR')).toBe('/project/demo/components/SPAR');
   });
 
   it('deep-links the entity kinds that have no detail page', () => {
     // These only have list pages, so a reference focuses the row.
-    expect(ENTITY_META.verification.path('demo', 'VC-001')).toBe('/project/demo/verification?focus=VC-001');
-    expect(ENTITY_META.specification.path('demo', 'SRS-001')).toBe('/project/demo/specifications?focus=SRS-001');
-    expect(ENTITY_META.change.path('demo', 'CR-001')).toBe('/project/demo/change-requests?focus=CR-001');
-    expect(ENTITY_META.risk.path('demo', 'RSK-001')).toBe('/project/demo/risks?focus=RSK-001');
+    expect(pathOf('verification', 'demo', 'VC-001')).toBe('/project/demo/verification?focus=VC-001');
+    expect(pathOf('specification', 'demo', 'SRS-001')).toBe('/project/demo/specifications?focus=SRS-001');
+    expect(pathOf('change', 'demo', 'CR-001')).toBe('/project/demo/change-requests?focus=CR-001');
+    expect(pathOf('risk', 'demo', 'RSK-001')).toBe('/project/demo/risks?focus=RSK-001');
+    expect(pathOf('baseline', 'demo', 'PDR')).toBe('/project/demo/baselines?focus=PDR');
+  });
+
+  it('leaves a comment unlinked — search gives us no parent entity to point at', () => {
+    expect(ENTITY_META.comment.path).toBeUndefined();
   });
 
   it('encodes ids so a space or slash cannot break the url', () => {
-    expect(ENTITY_META.requirement.path('demo', 'REQ 001/x')).toBe('/project/demo/requirements/REQ%20001%2Fx');
-    expect(ENTITY_META.component.path('demo', 'MAIN SPAR')).toBe('/project/demo/components/MAIN%20SPAR');
+    expect(pathOf('requirement', 'demo', 'REQ 001/x')).toBe('/project/demo/requirements/REQ%20001%2Fx');
+    expect(pathOf('component', 'demo', 'MAIN SPAR')).toBe('/project/demo/components/MAIN%20SPAR');
   });
 
   it('gives every kind an icon, a colour and a label', () => {
