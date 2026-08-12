@@ -129,12 +129,8 @@ export default function GitPanel({ projectId, isAdmin, canEdit, remoteUrl, onRem
   const handlePush = async () => {
     setPushing(true);
     try {
-      const res = await api.gitPush(projectId);
-      if (res.ok) {
-        addToast('success', 'Push succeeded');
-      } else {
-        addToast('error', res.error || 'Push failed');
-      }
+      await api.gitPush(projectId);
+      addToast('success', 'Push succeeded');
       await afterAction();
     } catch (err: any) {
       addToast('error', err.message || 'Push request failed');

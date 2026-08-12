@@ -32,7 +32,7 @@ def get_impact(project_id: str, req_id: str):
     all_reqs = store.list_requirements()
     req = store.get_requirement(req_id)
     if not req:
-        raise HTTPException(status_code=404, detail="Not found")
+        raise HTTPException(status_code=404, detail="Requirement not found")
     dependents = []
     cascades = []
     for r in all_reqs:

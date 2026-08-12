@@ -1236,7 +1236,7 @@ export const api = {
   updateSystemState: (projectId: string, name: string, data: { name?: string; description?: string }) =>
     request<SystemStateDef>(`/projects/${projectId}/system-states/${encodeURIComponent(name)}`, { method: 'PATCH', body: data }),
   deleteSystemState: (projectId: string, name: string) =>
-    request<{ name: string; requirements_affected: number }>(`/projects/${projectId}/system-states/${encodeURIComponent(name)}`, { method: 'DELETE' }),
+    request<{ name: string; requirements_cleared: number }>(`/projects/${projectId}/system-states/${encodeURIComponent(name)}`, { method: 'DELETE' }),
   freezeBaseline: (projectId: string, name: string) =>
     request<{ name: string; symbol: string; description: string; requirements: number }>(
       `/projects/${projectId}/baselines/${encodeURIComponent(name)}/freeze`,
@@ -1495,7 +1495,7 @@ export const api = {
     request<{ initialised: boolean }>(`/projects/${projectId}/git/init`, { method: 'POST' }),
 
   gitPush: (projectId: string) =>
-    request<{ ok: boolean; error: string | null }>(`/projects/${projectId}/git/push`, { method: 'POST' }),
+    request<{ ok: boolean }>(`/projects/${projectId}/git/push`, { method: 'POST' }),
 
   gitDeleteRemote: (projectId: string) =>
     request<{ ok: boolean }>(`/projects/${projectId}/git/remote`, { method: 'DELETE' }),

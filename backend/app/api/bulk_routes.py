@@ -17,6 +17,7 @@ from app.models.change_request import ChangeRequestUpdate
 from app.services.history import record_change
 from app.services.baseline_membership import apply_membership, defined_baseline_names
 from app.services.reparent import apply_reparent, plan_reparent, validate_component_parent
+from app.services.delete_guard import check_deletable
 
 router = APIRouter()
 
@@ -117,13 +118,27 @@ def bulk_update_requirements(project_id: str, data: dict, user: dict = Depends(r
 @router.post("/projects/{project_id}/requirements/bulk-delete")
 def bulk_delete_requirements(project_id: str, data: dict, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
+    force = data.get("force", False)
     deleted = 0
+    refused = []
     for req_id in data.get("ids", []):
         before = store.get_requirement(req_id)
+        if before is None:
+            continue
+        try:
+            check_deletable(store, "requirements", req_id, force)
+        except HTTPException as exc:
+            if exc.status_code == 409:
+                refused.append(exc.detail)
+                continue
+            raise
         if store.delete_requirement(req_id):
             record_change(store, req_id, "delete", before, None, user.get("username", ""))
             deleted += 1
-    return {"deleted": deleted}
+    resp = {"deleted": deleted}
+    if refused:
+        resp["refused"] = refused
+    return resp
 
 
 # ── Components ────────────────────────────────────────────────────────────────
@@ -148,11 +163,20 @@ def bulk_update_components(project_id: str, data: dict, user: dict = Depends(req
 @router.post("/projects/{project_id}/components/bulk-delete")
 def bulk_delete_components(project_id: str, data: dict, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
+    force = data.get("force", False)
     deleted = 0
+    refused = []
     for comp_id in data.get("ids", []):
         before = store.get_component(comp_id)
         if before is None:
             continue
+        try:
+            check_deletable(store, "components", comp_id, force)
+        except HTTPException as exc:
+            if exc.status_code == 409:
+                refused.append(exc.detail)
+                continue
+            raise
         promoted = []
         for child in store.list_components():
             if child.get("parent") == comp_id:
@@ -165,7 +189,10 @@ def bulk_delete_components(project_id: str, data: dict, user: dict = Depends(req
         if store.delete_component(comp_id):
             record_change(store, comp_id, "delete", before, None, user.get("username", ""))
             deleted += 1
-    return {"deleted": deleted}
+    resp = {"deleted": deleted}
+    if refused:
+        resp["refused"] = refused
+    return resp
 
 
 @router.post("/projects/{project_id}/components/bulk-reparent")
@@ -214,8 +241,27 @@ def bulk_update_verification_cases(project_id: str, data: dict, user: dict = Dep
 @router.post("/projects/{project_id}/verification/bulk-delete")
 def bulk_delete_verification_cases(project_id: str, data: dict, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
-    deleted = _bulk_delete(store, data.get("ids", []), store.get_verification_case, store.delete_verification_case, "verification", user.get("username", ""))
-    return {"deleted": deleted}
+    force = data.get("force", False)
+    deleted = 0
+    refused = []
+    for vc_id in data.get("ids", []):
+        before = store.get_verification_case(vc_id)
+        if before is None:
+            continue
+        try:
+            check_deletable(store, "verification_cases", vc_id, force)
+        except HTTPException as exc:
+            if exc.status_code == 409:
+                refused.append(exc.detail)
+                continue
+            raise
+        if store.delete_verification_case(vc_id):
+            record_change(store, vc_id, "delete", before, None, user.get("username", ""))
+            deleted += 1
+    resp = {"deleted": deleted}
+    if refused:
+        resp["refused"] = refused
+    return resp
 
 
 # ── Specifications ────────────────────────────────────────────────────────────
@@ -240,8 +286,27 @@ def bulk_update_specifications(project_id: str, data: dict, user: dict = Depends
 @router.post("/projects/{project_id}/specifications/bulk-delete")
 def bulk_delete_specifications(project_id: str, data: dict, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
-    deleted = _bulk_delete(store, data.get("ids", []), store.get_specification, store.delete_specification, "specification", user.get("username", ""))
-    return {"deleted": deleted}
+    force = data.get("force", False)
+    deleted = 0
+    refused = []
+    for spec_id in data.get("ids", []):
+        before = store.get_specification(spec_id)
+        if before is None:
+            continue
+        try:
+            check_deletable(store, "specifications", spec_id, force)
+        except HTTPException as exc:
+            if exc.status_code == 409:
+                refused.append(exc.detail)
+                continue
+            raise
+        if store.delete_specification(spec_id):
+            record_change(store, spec_id, "delete", before, None, user.get("username", ""))
+            deleted += 1
+    resp = {"deleted": deleted}
+    if refused:
+        resp["refused"] = refused
+    return resp
 
 
 # ── Risks ─────────────────────────────────────────────────────────────────────
@@ -266,15 +331,27 @@ def bulk_update_risks(project_id: str, data: dict, user: dict = Depends(require_
 @router.post("/projects/{project_id}/risks/bulk-delete")
 def bulk_delete_risks(project_id: str, data: dict, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
+    force = data.get("force", False)
     deleted = 0
+    refused = []
     for risk_id in data.get("ids", []):
         before = store.get_item("risks", risk_id)
         if before is None:
             continue
+        try:
+            check_deletable(store, "risks", risk_id, force)
+        except HTTPException as exc:
+            if exc.status_code == 409:
+                refused.append(exc.detail)
+                continue
+            raise
         if store.delete_item("risks", risk_id):
             record_change(store, risk_id, "delete", before, None, user.get("username", ""))
             deleted += 1
-    return {"deleted": deleted}
+    resp = {"deleted": deleted}
+    if refused:
+        resp["refused"] = refused
+    return resp
 
 
 # ── Change Requests ───────────────────────────────────────────────────────────
@@ -299,15 +376,27 @@ def bulk_update_change_requests(project_id: str, data: dict, user: dict = Depend
 @router.post("/projects/{project_id}/change-requests/bulk-delete")
 def bulk_delete_change_requests(project_id: str, data: dict, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
+    force = data.get("force", False)
     deleted = 0
+    refused = []
     for cr_id in data.get("ids", []):
         before = store.get_item("change_requests", cr_id)
         if before is None:
             continue
+        try:
+            check_deletable(store, "change_requests", cr_id, force)
+        except HTTPException as exc:
+            if exc.status_code == 409:
+                refused.append(exc.detail)
+                continue
+            raise
         if store.delete_item("change_requests", cr_id):
             record_change(store, cr_id, "delete", before, None, user.get("username", ""))
             deleted += 1
-    return {"deleted": deleted}
+    resp = {"deleted": deleted}
+    if refused:
+        resp["refused"] = refused
+    return resp
 
 
 # ── Bulk reparent + re-prefix for requirements ────────────────────────────────

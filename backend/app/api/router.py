@@ -1057,6 +1057,8 @@ def list_baselines(project_id: str):
 
 
 @router.post("/projects/{project_id}/baselines")
+# This is an upsert (creates or updates an existing baseline definition), not a
+# pure create, so the status code intentionally stays 200 rather than 201.
 def create_baseline(project_id: str, data: BaselineCreate, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     name = safe_id(data.name, "baseline name")
@@ -1186,7 +1188,18 @@ def rename_baseline(project_id: str, name: str, data: RenameBaseline, user: dict
 
 @router.delete("/projects/{project_id}/baselines/{name}")
 def delete_baseline(project_id: str, name: str, user: dict = Depends(require_maintain)):
+    # No `check_deletable` here, deliberately: `links_into("baselines")` is
+    # empty because `requirement.baselines` holds baseline *names*, not ids, and
+    # the link registry excludes it on purpose (see its module docstring). A
+    # guard here could never fire — it would read as protection that isn't
+    # there. Membership is cleared from every requirement below instead.
     store = get_store(project_id)
+    baseline = store.get_item("baselines", name)
+    meta = store.read_meta()
+    defs = normalize_baseline_defs(meta.get("baselines", []))
+    in_defs = any(d["name"] == name for d in defs)
+    if baseline is None and not in_defs:
+        raise HTTPException(status_code=404, detail="Baseline not found")
     store.delete_item("baselines", name)
     # Remove the baseline definition from project metadata.
     with store.meta_lock():
@@ -1318,7 +1331,14 @@ def update_system_state(project_id: str, name: str, data: SystemStateUpdate,
 @router.delete("/projects/{project_id}/system-states/{name}")
 def delete_system_state(project_id: str, name: str,
                         user: dict = Depends(require_maintain)):
+    # No `check_deletable`: like baselines, nothing in the link registry targets
+    # `system_states`, so the guard could never fire. Membership is cleared from
+    # every requirement below.
     store = get_store(project_id)
+    meta = store.read_meta()
+    defs = normalize_system_states(meta.get("system_states", []))
+    if not any(d["name"] == name for d in defs):
+        raise HTTPException(status_code=404, detail="System state not found")
     with store.meta_lock():
         meta = store.read_meta()
         defs = normalize_system_states(meta.get("system_states", []))
@@ -1332,7 +1352,7 @@ def delete_system_state(project_id: str, name: str,
         if name in (r.get("system_states") or []):
             affected += 1
 
-    return {"name": name, "requirements_affected": affected}
+    return {"name": name, "requirements_cleared": affected}
 
 
 # ── Parametric definitions (reusable constraint / calc defs) ─────────────────
@@ -1375,7 +1395,8 @@ def update_definition(project_id: str, def_id: str, data: DefinitionUpdate,
 def delete_definition(project_id: str, def_id: str, force: bool = False, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     check_deletable(store, "definitions", def_id, force)
-    store.delete_item("definitions", def_id)
+    if not store.delete_item("definitions", def_id):
+        raise HTTPException(status_code=404, detail="Definition not found")
     return {"ok": True}
 
 
@@ -1419,7 +1440,8 @@ def update_analysis_case(project_id: str, case_id: str, data: AnalysisCaseUpdate
 def delete_analysis_case(project_id: str, case_id: str, force: bool = False, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     check_deletable(store, "analysis_cases", case_id, force)
-    store.delete_item("analysis_cases", case_id)
+    if not store.delete_item("analysis_cases", case_id):
+        raise HTTPException(status_code=404, detail="Analysis case not found")
     return {"ok": True}
 
 

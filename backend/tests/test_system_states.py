@@ -113,7 +113,7 @@ def test_delete_state(client, project):
     assert res.status_code == 200
     body = res.json()
     assert body["name"] == "takeoff"
-    assert body["requirements_affected"] == 1
+    assert body["requirements_cleared"] == 1
 
     # The name is now an orphan.
     data = client.get(f"/api/projects/{project}/system-states").json()

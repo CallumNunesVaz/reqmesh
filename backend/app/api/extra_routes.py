@@ -343,7 +343,7 @@ def create_comment(project_id: str, data: CommentCreate, user: dict = Depends(re
 @router.delete("/projects/{project_id}/comments/{comment_id}")
 def delete_comment(project_id: str, comment_id: str, user: dict = Depends(require_edit)):
     if not get_store(project_id).delete_item("comments", comment_id):
-        raise HTTPException(status_code=404, detail="Not found")
+        raise HTTPException(status_code=404, detail="Comment not found")
     return {"ok": True}
 
 
@@ -680,7 +680,7 @@ def git_push(project_id: str, user: dict = Depends(require_maintain)):
     if not ok:
         error = outcome.get("error", "Push failed — check server logs")
         logger.warning("Manual push failed for %s: %s", project_id, error)
-        return {"ok": False, "error": error}
+        raise HTTPException(status_code=502, detail=error)
 
     return {"ok": True, "error": None}
 
@@ -747,14 +747,14 @@ def submit_review(project_id: str, req_id: str, data: ReviewRequest, user: dict 
     store = get_store(project_id)
     req = store.get_requirement(req_id)
     if not req:
-        raise HTTPException(status_code=404, detail="Not found")
+        raise HTTPException(status_code=404, detail="Requirement not found")
     before = dict(req)
 
     from app.services.fingerprint import review_item
 
     result = review_item(store, req_id, reviewer=user.get("username", ""), comment=data.comment)
     if result is None:
-        raise HTTPException(status_code=404, detail="Not found")
+        raise HTTPException(status_code=404, detail="Requirement not found")
     record_change(store, req_id, "review", before, result, user.get("username", ""))
     from app.services.email_service import notify_reviewed, _safe_notify
     _safe_notify(notify_reviewed, store, project_id, req_id, user.get("username", ""), data.comment)

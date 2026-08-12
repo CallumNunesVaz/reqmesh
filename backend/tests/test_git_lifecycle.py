@@ -168,13 +168,12 @@ def test_failed_push_error_is_redacted(client, project, monkeypatch):
     # Attempt a push — it will fail because the remote doesn't exist
     res = client.post(f"/api/projects/{project}/git/push")
     # The push should fail (non-200), but must not 500 either
-    assert res.status_code == 200  # push returns {ok, error} even on failure
+    assert res.status_code == 502  # push now raises HTTPException on failure
 
     body = res.json()
     # Error text must be present but must not contain the raw token
     error_text = str(body)
     assert "token-abc123" not in error_text
-    assert body["ok"] is False
 
 
 # ── push records outcome ──────────────────────────────────────────────────────
@@ -204,8 +203,8 @@ def test_failed_push_records_last_push_outcome(client, project, monkeypatch):
     )
 
     res = client.post(f"/api/projects/{project}/git/push")
-    assert res.status_code == 200
-    assert res.json()["ok"] is False
+    assert res.status_code == 502
+    assert "ok" not in (res.json() or {})  # error responses have `detail`, not `ok`
 
     # Status should now report the failed push
     res = client.get(f"/api/projects/{project}/git/status")
@@ -366,12 +365,12 @@ def test_push_in_offline_mode_records_offline_status(client, project, monkeypatc
     client.post(f"/api/projects/{project}/git/init")
 
     res = client.post(f"/api/projects/{project}/git/push")
-    assert res.status_code == 200
-    assert res.json()["ok"] is False
-    assert "offline" in res.json().get("error", "").lower()
+    assert res.status_code == 502
+    detail = res.json().get("detail", "")
+    assert "offline" in detail.lower()
 
     # Status should also report the push outcome
     res = client.get(f"/api/projects/{project}/git/status")
     body = res.json()
-    if body["last_push"]:
-        assert body["last_push"]["ok"] is False
+    assert body["last_push"] is not None
+    assert body["last_push"]["ok"] is False

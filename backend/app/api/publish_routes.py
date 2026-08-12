@@ -43,7 +43,7 @@ def publish_project(project_id: str, data: PublishRequest, user: dict = Depends(
     elif fmt in ("csv", "tsv"):
         from app.services.table_io import export_table
         return {"format": fmt, "content": export_table(store, fmt)}
-    raise HTTPException(status_code=400, detail=f"Unknown format: {fmt} (use html, pdf, md, latex, csv, tsv, or xlsx)")
+    raise HTTPException(status_code=400, detail=f"Unknown format: {fmt} (use html, md, latex, csv, or tsv; pdf and xlsx are available on the download route)")
 
 
 @router.get("/projects/{project_id}/publish/download")

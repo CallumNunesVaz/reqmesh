@@ -86,8 +86,8 @@ export default function SystemStatesPage() {
     if (!ok) return;
     try {
       const res = await api.deleteSystemState(projectId, name);
-      if (res.requirements_affected > 0) {
-        setError(`Deleted "${name}" — ${res.requirements_affected} requirement${res.requirements_affected !== 1 ? 's' : ''} now reference an undefined state.`);
+      if (res.requirements_cleared > 0) {
+        setError(`Deleted "${name}" — ${res.requirements_cleared} requirement${res.requirements_cleared !== 1 ? 's' : ''} now reference an undefined state.`);
       }
       await load();
     } catch (err: any) {
