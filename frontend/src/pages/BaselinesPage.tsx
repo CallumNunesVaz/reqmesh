@@ -15,6 +15,7 @@ import { DndContext, DragOverlay, closestCenter, PointerSensor, KeyboardSensor, 
 import { useSortable, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import type { CSSProperties } from 'react';
 import { moveInSequence, moveToIndex } from '../lib/reorder';
+import { useConfirm } from '../components/ConfirmDialog';
 
 /**
  * One draggable row.
@@ -61,6 +62,7 @@ export default function BaselinesPage() {
   const editable = useAuthStore((s) => s.canEdit());
   const entityKinds = useEntityKinds(projectId);
   const bumpGraph = useStore((s) => s.bumpGraphVersion);
+  const showConfirm = useConfirm();
   const hiddenBaselines = useStore((s) => s.hiddenBaselines);
   const toggleHiddenBaseline = useStore((s) => s.toggleHiddenBaseline);
   const [activeDragName, setActiveDragName] = useState<string | null>(null);
@@ -144,7 +146,13 @@ export default function BaselinesPage() {
   };
 
   const handleDelete = async (name: string) => {
-    if (!projectId || !confirm(`Delete baseline "${name}"? This will clear it from all requirements.`)) return;
+    if (!projectId) return;
+    const ok = await showConfirm(
+      `Delete baseline "${name}"? This will clear it from all requirements.`,
+      'Delete Baseline',
+      { resultLabel: 'Delete', destructive: true },
+    );
+    if (!ok) return;
     try {
       await api.deleteBaseline(projectId, name);
       await load();

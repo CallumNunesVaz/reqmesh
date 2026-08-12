@@ -9,6 +9,7 @@ import { CopyLinkButton } from '../components/entities';
 import { useFocusedEntity } from '../components/useFocusedEntity';
 import { usePersistedState } from '../hooks/usePersistedState';
 import { useToasts } from '../components/Toast';
+import { useConfirm } from '../components/ConfirmDialog';
 
 /**
  * Reusable SysML v2-style constraint and calc definitions.
@@ -34,6 +35,7 @@ export default function DefinitionsPage() {
   const editable = useAuthStore((s) => s.canEdit());
   const dataVersion = useStore((s) => s.dataVersion);
   const { addToast } = useToasts();
+  const showConfirm = useConfirm();
   const [defs, setDefs] = useState<Definition[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -100,7 +102,8 @@ export default function DefinitionsPage() {
 
   const handleDelete = async (id: string) => {
     if (!projectId) return;
-    if (!confirm(`Delete definition ${id}?`)) return;
+    const ok = await showConfirm(`Delete definition ${id}?`, 'Delete Definition', { resultLabel: 'Delete', destructive: true });
+    if (!ok) return;
     try {
       await api.deleteDefinition(projectId, id);
     } catch (err) {

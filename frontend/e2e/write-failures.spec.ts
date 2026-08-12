@@ -99,9 +99,13 @@ test('a 409 delete guard surfaces the referrer count in the toast', async ({ app
   const deleteBtn = vcCard.locator('[title="Delete"]');
   await deleteBtn.click();
 
-  // Auto-accepted window.confirm — the real server returns a 409 with
-  // the referrer list.  Assert the toast contains the server's message,
-  // not a generic fallback.
+  // The themed confirmation dialog appears — click Delete to confirm.
+  // Restrict to the dialog overlay so we don't match every row's Delete button.
+  const dialog = app.locator('.fixed.inset-0.z-\\[60\\]');
+  await dialog.getByRole('button', { name: 'Delete' }).click();
+
+  // The server returns a 409 with the referrer list.  Assert the toast
+  // contains the server's message, not a generic fallback.
   const alert = app.locator('[role=alert]').last();
   await expect(alert).toBeVisible({ timeout: 10_000 });
   await expect(alert).toContainText(/referenced by \d/);

@@ -5,6 +5,7 @@ import { Users, Plus, Trash2, ShieldCheck, User as UserIcon, KeyRound, X, Loader
 import { api, type ManagedUser } from '../api/client';
 import { useAuthStore } from '../store/auth';
 import BodyPortal from '../components/BodyPortal';
+import { useConfirm } from '../components/ConfirmDialog';
 
 const ROLE_LABELS: Record<string, string> = { admin: 'Administrator', maintainer: 'Maintainer', contributor: 'Contributor', guest: 'Guest' };
 
@@ -54,6 +55,7 @@ export default function UsersPage() {
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const showConfirm = useConfirm();
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [sortBy, setSortBy] = useState<'username' | 'full_name' | 'role' | 'last_active' | 'joined'>('username');
@@ -182,7 +184,8 @@ export default function UsersPage() {
   };
 
   const handleDelete = async (uname: string) => {
-    if (!confirm(`Delete user "${uname}"? This cannot be undone.`)) return;
+    const ok = await showConfirm(`Delete user "${uname}"? This cannot be undone.`, 'Delete User', { resultLabel: 'Delete', destructive: true });
+    if (!ok) return;
     setError('');
     try { await api.deleteUser(uname); load(); }
     catch (err: any) { setError(err.message); }
@@ -199,7 +202,8 @@ export default function UsersPage() {
     catch (err: any) { setError(err.message); }
   };
   const handleForceLogout = async (uname: string) => {
-    if (!confirm(`Sign ${uname} out of all sessions?`)) return;
+    const ok = await showConfirm(`Sign ${uname} out of all sessions?`, 'Force Sign Out');
+    if (!ok) return;
     setError('');
     try { await api.forceLogout(uname); }
     catch (err: any) { setError(err.message); }
@@ -220,7 +224,7 @@ export default function UsersPage() {
 
   const handleBulk = async (action: 'disable' | 'enable' | 'delete' | 'set_role', role?: string) => {
     if (selected.size === 0) return;
-    if (action === 'delete' && !confirm(`Delete ${selected.size} user(s)? This cannot be undone.`)) return;
+    if (action === 'delete' && !await showConfirm(`Delete ${selected.size} user(s)? This cannot be undone.`, 'Delete Users', { resultLabel: 'Delete', destructive: true })) return;
     setError('');
     try {
       const res = await api.bulkUsers([...selected], action, role);
@@ -255,7 +259,8 @@ export default function UsersPage() {
   };
 
   const signOutEverywhere = async () => {
-    if (!confirm('Sign out of all your sessions on every device?')) return;
+    const ok = await showConfirm('Sign out of all your sessions on every device?', 'Sign Out Everywhere');
+    if (!ok) return;
     try { await api.logoutEverywhere(); }
     catch (err: any) { setError(err.message); }
   };

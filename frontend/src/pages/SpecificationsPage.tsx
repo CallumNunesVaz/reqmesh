@@ -121,7 +121,7 @@ export default function SpecificationsPage() {
 
   const handleDelete = async (specId: string) => {
     if (!projectId) return;
-    const ok = await showConfirm(`Delete specification ${specId}?`, 'Delete Specification');
+    const ok = await showConfirm(`Delete specification ${specId}?`, 'Delete Specification', { resultLabel: 'Delete', destructive: true });
     if (!ok) return;
     await api.deleteSpecification(projectId, specId);
     setSpecifications(specifications.filter((s) => s.id !== specId));

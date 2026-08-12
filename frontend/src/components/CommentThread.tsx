@@ -4,6 +4,7 @@ import { Check, Trash2, X } from 'lucide-react';
 import { api, type Comment } from '../api/client';
 import { useAuthStore } from '../store/auth';
 import { useToasts } from './Toast';
+import { useConfirm } from './ConfirmDialog';
 
 /** Read/write comment thread for any entity.
  *
@@ -21,6 +22,7 @@ export function CommentThread({ entityKind, entityId }: {
   const [busy, setBusy] = useState(false);
   const canEdit = useAuthStore((s) => s.canEdit());
   const { addToast } = useToasts();
+  const showConfirm = useConfirm();
 
   const load = () => {
     if (!projectId) return;
@@ -61,6 +63,8 @@ export function CommentThread({ entityKind, entityId }: {
 
   const remove = async (c: Comment) => {
     if (!projectId) return;
+    const ok = await showConfirm('Delete this comment?', 'Delete Comment', { resultLabel: 'Delete', destructive: true });
+    if (!ok) return;
     try {
       await api.deleteComment(projectId, c.id);
       load();

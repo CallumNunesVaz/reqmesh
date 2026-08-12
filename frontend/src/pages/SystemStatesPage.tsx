@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Trash2, Edit3, Check, X, Layers, Loader, AlertTriangle } from 'lucide-react';
 import { api, type SystemStateDef } from '../api/client';
 import { useAuthStore } from '../store/auth';
+import { useConfirm } from '../components/ConfirmDialog';
 
 export default function SystemStatesPage() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -12,6 +13,7 @@ export default function SystemStatesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const editable = useAuthStore((s) => s.canEdit());
+  const showConfirm = useConfirm();
 
   // Create / edit form state
   const [showForm, setShowForm] = useState(false);
@@ -76,7 +78,12 @@ export default function SystemStatesPage() {
 
   const handleDelete = async (name: string) => {
     if (!projectId) return;
-    if (!confirm(`Delete system state "${name}"? This does not remove it from requirements — those will become undefined.`)) return;
+    const ok = await showConfirm(
+      `Delete system state "${name}"? This does not remove it from requirements — those will become undefined.`,
+      'Delete System State',
+      { resultLabel: 'Delete', destructive: true },
+    );
+    if (!ok) return;
     try {
       const res = await api.deleteSystemState(projectId, name);
       if (res.requirements_affected > 0) {

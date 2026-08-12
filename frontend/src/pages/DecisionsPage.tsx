@@ -15,6 +15,7 @@ import { LinkEditor } from '../components/LinkEditor';
 import { HistoryPanel } from '../components/HistoryPanel';
 import { CommentThread } from '../components/CommentThread';
 import { deleteWithReferenceCheck } from '../lib/forceDelete';
+import { useConfirm } from '../components/ConfirmDialog';
 
 /**
  * Architecture decision records.
@@ -57,6 +58,7 @@ export default function DecisionsPage() {
   const [search, setSearch] = usePersistedState(pk('search'), '');
   const [expanded, setExpanded] = usePersistedState<Set<string>>(pk('expanded'), new Set(), setCodec<string>());
   const entityKinds = useEntityKinds(projectId);
+  const showConfirm = useConfirm();
 
   const load = () => {
     if (!projectId) return;
@@ -134,10 +136,11 @@ export default function DecisionsPage() {
 
   const handleDelete = async (id: string) => {
     if (!projectId) return;
-    if (!confirm(`Delete decision ${id}?`)) return;
+    const ok = await showConfirm(`Delete decision ${id}?`, 'Delete Decision', { resultLabel: 'Delete', destructive: true });
+    if (!ok) return;
     const done = await deleteWithReferenceCheck(
       (force) => api.deleteDecision(projectId, id, force),
-      (message) => confirm(message),
+      (message) => showConfirm(message),
     );
     if (done) load();
   };

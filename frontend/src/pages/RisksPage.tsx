@@ -237,7 +237,7 @@ export default function RisksPage() {
 
   const handleDelete = async (id: string) => {
     if (!projectId) return;
-    const ok = await showConfirm('Delete this risk?', 'Delete Risk');
+    const ok = await showConfirm('Delete this risk?', 'Delete Risk', { resultLabel: 'Delete', destructive: true });
     if (!ok) return;
     try {
       const done = await deleteWithReferenceCheck(

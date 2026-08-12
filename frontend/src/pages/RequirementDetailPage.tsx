@@ -576,7 +576,7 @@ export default function RequirementDetailPage() {
 
   const handleDelete = async () => {
     if (!projectId || !reqId || !req) return;
-    const ok = await showConfirm('Delete this requirement?', 'Delete Requirement');
+    const ok = await showConfirm('Delete this requirement?', 'Delete Requirement', { resultLabel: 'Delete', destructive: true });
     if (!ok) return;
     const snap = { ...req };
     try {

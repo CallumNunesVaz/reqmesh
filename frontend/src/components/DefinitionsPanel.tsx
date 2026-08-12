@@ -3,6 +3,7 @@ import { Boxes, Plus, X, Trash2, Play, FlaskConical, Sigma } from 'lucide-react'
 import { api, type Definition, type AnalysisCase, type EvaluationData } from '../api/client';
 import { VerdictBadge } from './parametrics';
 import { useToasts } from './Toast';
+import { useConfirm } from './ConfirmDialog';
 
 /**
  * Admin/editor manager for reusable SysML v2-style parametric definitions
@@ -15,6 +16,7 @@ export function DefinitionsManager({ projectId, editable }: { projectId: string;
     { id: '', type: 'constraint', name: '', parameters: '', expr: '', unit: '' });
   const [error, setError] = useState('');
   const { addToast } = useToasts();
+  const showConfirm = useConfirm();
 
   const load = () => api.listDefinitions(projectId).then(setDefs).catch(() => setDefs([]));
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -37,6 +39,8 @@ export function DefinitionsManager({ projectId, editable }: { projectId: string;
   };
 
   const remove = async (id: string) => {
+    const ok = await showConfirm(`Delete definition ${id}?`, 'Delete Definition', { resultLabel: 'Delete', destructive: true });
+    if (!ok) return;
     try { await api.deleteDefinition(projectId, id); }
     catch (err) { addToast('error', err instanceof Error ? err.message : 'Delete failed'); }
     load();
@@ -117,6 +121,7 @@ export function AnalysisCasesPanel({ projectId, editable }: { projectId: string;
   const [draft, setDraft] = useState({ id: '', name: '', scope: '', overrides: '' });
   const [error, setError] = useState('');
   const { addToast } = useToasts();
+  const showConfirm = useConfirm();
 
   const load = () => api.listAnalysisCases(projectId).then(setCases).catch(() => setCases([]));
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -155,6 +160,8 @@ export function AnalysisCasesPanel({ projectId, editable }: { projectId: string;
   };
 
   const remove = async (id: string) => {
+    const ok = await showConfirm(`Delete analysis case ${id}?`, 'Delete Analysis Case', { resultLabel: 'Delete', destructive: true });
+    if (!ok) return;
     try { await api.deleteAnalysisCase(projectId, id); }
     catch (err) { addToast('error', err instanceof Error ? err.message : 'Delete failed'); }
     if (result?.case.id === id) setResult(null);

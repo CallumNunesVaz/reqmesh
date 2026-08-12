@@ -18,7 +18,7 @@ interface WhatIfActions {
   removeOverride: (ref: string) => void;
   evaluate: () => void;
   clear: () => void;
-  confirm: (projectId: string) => Promise<void>;
+  apply: (projectId: string) => Promise<void>;
   setStepIndex: (i: number) => void;
   setPlaying: (p: boolean) => void;
 }
@@ -35,7 +35,7 @@ const WhatIfCtx = createContext<WhatIfState & WhatIfActions>({
   removeOverride: () => {},
   evaluate: () => {},
   clear: () => {},
-  confirm: async () => {},
+  apply: async () => {},
   setStepIndex: () => {},
   setPlaying: () => {},
 });
@@ -127,7 +127,7 @@ export function WhatIfProvider({ projectId, children }: { projectId: string; chi
     bumpDataVersion();
   }, [bumpGraphVersion, bumpDataVersion]);
 
-  const confirm = useCallback(async (pid: string) => {
+  const apply = useCallback(async (pid: string) => {
     const entries = Object.entries(overrides);
     if (entries.length === 0) return;
     // Group the new values by requirement id. A ref is "REQ.param"; the id has
@@ -180,7 +180,7 @@ export function WhatIfProvider({ projectId, children }: { projectId: string; chi
     removeOverride,
     evaluate,
     clear,
-    confirm,
+    apply,
     setStepIndex,
     setPlaying,
   };

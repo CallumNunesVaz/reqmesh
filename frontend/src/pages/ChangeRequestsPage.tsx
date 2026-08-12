@@ -146,7 +146,7 @@ export default function ChangeRequestsPage() {
   };
 
   const handleDelete = async (crId: string) => {
-    const ok = await showConfirm('Delete this change request?', 'Delete');
+    const ok = await showConfirm('Delete this change request?', 'Delete Change Request', { resultLabel: 'Delete', destructive: true });
     if (!ok) return;
     try {
       await api.deleteChangeRequest(projectId!, crId);

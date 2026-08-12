@@ -244,7 +244,7 @@ export default function RequirementsPage() {
 
   const handleDelete = async (reqId: string) => {
     if (!projectId || !editMode) return;
-    const ok = await showConfirm(`Delete requirement ${reqId}?`, 'Delete Requirement');
+    const ok = await showConfirm(`Delete requirement ${reqId}?`, 'Delete Requirement', { resultLabel: 'Delete', destructive: true });
     if (!ok) return;
     try {
       const before = requirements.find((r) => r.id === reqId);
@@ -282,7 +282,7 @@ export default function RequirementsPage() {
   const handleBulkDelete = async () => {
     if (!projectId) return;
     const ids = [...selectedIds];
-    const ok = await showConfirm(`Delete ${ids.length} requirement(s)?`, 'Bulk Delete');
+    const ok = await showConfirm(`Delete ${ids.length} requirement(s)?`, 'Bulk Delete', { resultLabel: 'Delete', destructive: true });
     if (!ok) return;
     const saved = requirements.filter((r) => ids.includes(r.id)).map((r) => ({ ...r }));
     try {

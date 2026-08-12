@@ -6,7 +6,7 @@ import { useAuthStore } from '../store/auth';
 export default function WhatIfBar(): JSX.Element | null {
   const { projectId } = useParams<{ projectId: string }>();
   const whatIf = useWhatIf();
-  const { impact, overrides, pending, clear, confirm } = whatIf;
+  const { impact, overrides, pending, clear, apply } = whatIf;
   const overrideCount = Object.keys(overrides).length;
   const canEdit = useAuthStore((s) => s.canEdit());
 
@@ -31,7 +31,7 @@ export default function WhatIfBar(): JSX.Element | null {
       <div className="flex-1" />
       {canEdit && (
         <button
-          onClick={() => confirm(projectId!)}
+          onClick={() => apply(projectId!)}
           disabled={pending || overrideCount === 0}
           className="btn-primary flex items-center gap-1 text-[11px] px-2 py-1 disabled:opacity-40 shrink-0"
         >

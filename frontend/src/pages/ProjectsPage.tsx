@@ -6,6 +6,7 @@ import { api, type Project } from '../api/client';
 import { useStore } from '../store';
 import { useAuthStore } from '../store/auth';
 import { useToasts } from '../components/Toast';
+import { useConfirm } from '../components/ConfirmDialog';
 
 export default function ProjectsPage() {
   const navigate = useNavigate();
@@ -19,6 +20,7 @@ export default function ProjectsPage() {
   // who cannot create a project at all.
   const canCreate = useAuthStore((s) => s.user !== null && (s.user.role === 'maintainer' || s.user.role === 'admin'));
   const { addToast } = useToasts();
+  const showConfirm = useConfirm();
   const [showCreate, setShowCreate] = useState(false);
   const [newId, setNewId] = useState('');
   const [newName, setNewName] = useState('');
@@ -65,7 +67,8 @@ export default function ProjectsPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm(`Delete project "${id}" and all its data?`)) return;
+    const ok = await showConfirm(`Delete project "${id}" and all its data?`, 'Delete Project', { resultLabel: 'Delete', destructive: true });
+    if (!ok) return;
     await api.deleteProject(id);
     setProjects(projects.filter((p) => p.id !== id));
   };

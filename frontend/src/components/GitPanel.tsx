@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { api, type GitStatus } from '../api/client';
 import { useToasts } from './Toast';
+import { useConfirm } from './ConfirmDialog';
 
 interface Props {
   projectId: string;
@@ -51,6 +52,7 @@ function remoteHost(redacted: string): string {
 
 export default function GitPanel({ projectId, isAdmin, canEdit, remoteUrl, onRemoteChanged }: Props) {
   const { addToast } = useToasts();
+  const showConfirm = useConfirm();
 
   const [status, setStatus] = useState<GitStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -189,11 +191,13 @@ export default function GitPanel({ projectId, isAdmin, canEdit, remoteUrl, onRem
 
   const handleRestore = async (hash: string) => {
     if (!canEdit) return;
-    if (!confirm(
+    const ok = await showConfirm(
       `Restore project to commit ${hash.slice(0, 8)}? ` +
       'This will restore all files to that state and create a new commit ' +
       'recording the restoration.',
-    )) return;
+      'Restore from History',
+    );
+    if (!ok) return;
     setRestoring(hash);
     try {
       await api.gitRestore(projectId, hash);

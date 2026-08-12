@@ -2,20 +2,29 @@ import { createContext, useContext, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AlertTriangle, X } from 'lucide-react';
 
+interface ConfirmOptions {
+  resultLabel?: string;
+  destructive?: boolean;
+}
+
 interface ConfirmState {
   message: string;
   title?: string;
+  resultLabel?: string;
+  destructive?: boolean;
   resolve: (value: boolean) => void;
 }
 
-const ConfirmCtx = createContext<((message: string, title?: string) => Promise<boolean>) | null>(null);
+type ConfirmFn = (message: string, title?: string, options?: ConfirmOptions) => Promise<boolean>;
+
+const ConfirmCtx = createContext<ConfirmFn | null>(null);
 
 export function ConfirmProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<ConfirmState | null>(null);
 
-  const confirm = useCallback((message: string, title?: string): Promise<boolean> => {
+  const confirm = useCallback((message: string, title?: string, options?: ConfirmOptions): Promise<boolean> => {
     return new Promise((resolve) => {
-      setState({ message, title, resolve });
+      setState({ message, title, resultLabel: options?.resultLabel, destructive: options?.destructive, resolve });
     });
   }, []);
 
@@ -58,7 +67,12 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
               </div>
               <div className="flex justify-end gap-2 mt-5">
                 <button onClick={() => close(false)} className="btn-secondary text-xs">Cancel</button>
-                <button onClick={() => close(true)} className="btn-danger text-xs">Confirm</button>
+                <button
+                  onClick={() => close(true)}
+                  className={state.destructive === false ? 'btn-primary text-xs' : 'btn-danger text-xs'}
+                >
+                  {state.resultLabel || 'Confirm'}
+                </button>
               </div>
             </motion.div>
           </motion.div>

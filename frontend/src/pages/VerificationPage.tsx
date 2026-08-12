@@ -13,6 +13,7 @@ import { AutoLinkText } from '../components/autoLink';
 import MentionTextarea from '../components/MentionTextarea';
 import { useEntityKinds } from '../components/entityIndex';
 import { HelpTip } from '../components/HelpTip';
+import { useConfirm } from '../components/ConfirmDialog';
 import { HistoryPanel } from '../components/HistoryPanel';
 import { CommentThread } from '../components/CommentThread';
 import { useToasts } from '../components/Toast';
@@ -44,6 +45,7 @@ export default function VerificationPage() {
   const { verificationCases, setVerificationCases } = useStore();
   const editable = useAuthStore((s) => s.canEdit());
   const { addToast } = useToasts();
+  const showConfirm = useConfirm();
   const [showCreate, setShowCreate] = useState(false);
   const [newVC, setNewVC] = useState({ id: '', name: '', description: '', method: 'test' });
   const [requirements, setRequirements] = useState<Requirement[]>([]);
@@ -123,7 +125,8 @@ export default function VerificationPage() {
 
   const handleDelete = async (vcId: string) => {
     if (!projectId) return;
-    if (!confirm(`Delete verification case ${vcId}?`)) return;
+    const ok = await showConfirm(`Delete verification case ${vcId}?`, 'Delete Verification Case', { resultLabel: 'Delete', destructive: true });
+    if (!ok) return;
     try {
       await api.deleteVerificationCase(projectId, vcId);
       setVerificationCases(verificationCases.filter((v) => v.id !== vcId));

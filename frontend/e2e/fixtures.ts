@@ -128,9 +128,12 @@ export const test = base.extend<{ app: Page }, { requireAuth: boolean; server: S
     rmSync(server.projects, { recursive: true, force: true });
     cpSync(server.pristine, server.projects, { recursive: true });
 
-    // Every destructive action is a window.confirm, and Playwright auto-
-    // *dismisses* dialogs unless something listens — which silently turns a
-    // delete into a no-op that still reports success.
+    // Destructive actions now use the in-app ConfirmDialog, so a test that
+    // deletes something clicks "Delete" in the overlay itself — see
+    // confirm-dialog.spec.ts. This handler stays for the browser-native dialogs
+    // that remain, chiefly the `beforeunload` the nav guard raises on a dirty
+    // form: Playwright auto-*dismisses* dialogs unless something listens, which
+    // would block the navigation and fail a test somewhere unrelated.
     page.on('dialog', (d) => d.accept().catch(() => {}));
 
     // `waitUntil: 'commit'`, not the default `'load'`.

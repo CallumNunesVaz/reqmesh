@@ -10,6 +10,7 @@ import { useFocusedEntity } from '../components/useFocusedEntity';
 import { usePersistedState, setCodec } from '../hooks/usePersistedState';
 import { LinkEditor } from '../components/LinkEditor';
 import { useToasts } from '../components/Toast';
+import { useConfirm } from '../components/ConfirmDialog';
 
 /**
  * Scoped what-if analysis cases.
@@ -42,6 +43,7 @@ export default function AnalysisPage() {
   const editable = useAuthStore((s) => s.canEdit());
   const dataVersion = useStore((s) => s.dataVersion);
   const { addToast } = useToasts();
+  const showConfirm = useConfirm();
   const [cases, setCases] = useState<AnalysisCase[]>([]);
   const [requirements, setRequirements] = useState<Requirement[]>([]);
   const [components, setComponents] = useState<Component[]>([]);
@@ -131,7 +133,8 @@ export default function AnalysisPage() {
 
   const handleDelete = async (id: string) => {
     if (!projectId) return;
-    if (!confirm(`Delete analysis case ${id}?`)) return;
+    const ok = await showConfirm(`Delete analysis case ${id}?`, 'Delete Analysis Case', { resultLabel: 'Delete', destructive: true });
+    if (!ok) return;
     try {
       await api.deleteAnalysisCase(projectId, id);
     } catch (err) {

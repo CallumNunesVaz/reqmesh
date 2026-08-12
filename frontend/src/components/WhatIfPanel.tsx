@@ -62,7 +62,7 @@ export default function WhatIfPanel(): JSX.Element | null {
   const { projectId } = useParams<{ projectId: string }>();
   const whatIf = useWhatIf();
   const { impact, overrides, base, pending, error,
-    stepIndex, playing, setStepIndex, setPlaying, clear, confirm } = whatIf;
+    stepIndex, playing, setStepIndex, setPlaying, clear, apply } = whatIf;
   const steps = impact?.steps ?? [];
   const affected = impact?.affected ?? [];
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -299,7 +299,7 @@ export default function WhatIfPanel(): JSX.Element | null {
         {canEdit && (
           <button
             onClick={async () => {
-              try { await confirm(projectId!); }
+              try { await apply(projectId!); }
               catch (err) { addToast('error', err instanceof Error ? err.message : 'Save failed'); }
             }}
             disabled={pending || overrideCount === 0}

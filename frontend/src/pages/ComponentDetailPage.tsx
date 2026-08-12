@@ -16,6 +16,7 @@ import { LinkEditor } from '../components/LinkEditor';
 import RichTextEditor from '../components/RichTextEditor';
 import { HistoryPanel } from '../components/HistoryPanel';
 import { CommentThread } from '../components/CommentThread';
+import { useConfirm } from '../components/ConfirmDialog';
 
 /** Registry collection -> the entity kinds EntityLink knows how to render.
  *  Collections without a detail page of their own (decisions, analysis cases)
@@ -52,6 +53,7 @@ export default function ComponentDetailPage() {
   const editable = useAuthStore((s) => s.canEdit());
   const bumpGraphVersion = useStore((s) => s.bumpGraphVersion);
   const entityKinds = useEntityKinds(projectId);
+  const showConfirm = useConfirm();
 
   const [component, setComponent] = useState<Component | null>(null);
   const [allComponents, setAllComponents] = useState<Component[]>([]);
@@ -123,7 +125,8 @@ export default function ComponentDetailPage() {
     const warning = kids
       ? `Delete "${componentId}"? Its ${kids} child component(s) will move up to its parent.`
       : `Delete component "${componentId}"?`;
-    if (!confirm(warning)) return;
+    const ok = await showConfirm(warning, 'Delete Component', { resultLabel: 'Delete', destructive: true });
+    if (!ok) return;
     setError('');
     try {
       await api.deleteComponent(projectId, componentId);
