@@ -1,7 +1,7 @@
 name: ci
 
-# The suites existed long before this workflow did — 786 backend tests, 99
-# frontend, 231 deploy checks — and nothing ran them. A NameError that stopped
+# The suites existed long before this workflow did — backend, frontend and
+# deploy-check suites — and nothing ran them. A NameError that stopped
 # the app importing at all shipped to main because the only automated jobs were
 # security scanners and the release build.
 on:

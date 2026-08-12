@@ -461,28 +461,78 @@ additional fail-safe — but note it covers project data only, never accounts.
 
 ## Environment Variable Reference
 
+Every setting below is read through the `RT_` prefix, which stands for
+**reqmesh**. Defaults are the code defaults in `backend/app/core/config.py`;
+the `personal`, `team` and `hardened` deployment profiles adjust a few of them,
+and any `RT_*` value you set explicitly always wins over both.
+
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `RT_SECRET` | (required) | JWT signing key. Generate with `openssl rand -hex 32` |
-| `RT_ADMIN_PASSWORD` | (required) | Initial admin password |
+| `RT_PROFILE` | `team` | Security posture: `personal`, `team`, or `hardened`. Sets defaults for auth, registration and cookies |
+| `RT_HOST` | `0.0.0.0` | uvicorn bind address |
+| `RT_PORT` | `8000` | uvicorn listen port |
+| `RT_BIND` | `127.0.0.1` (compose) | **Not an app setting.** The compose host bind for the `ports:` mapping — `${RT_BIND:-127.0.0.1}:8000:8000` in `docker-compose.prod.yml`. One letter from `RT_HOST` (the uvicorn bind address), but it only controls which host interface Docker publishes on |
 | `RT_DATA_ROOT` | `~/.reqmesh/projects` | Project data directory |
 | `RT_STATE_DIR` | `~/.reqmesh` | Accounts, signing secret, settings. Must **not** be inside `RT_DATA_ROOT` — the app refuses to start if it is, because git auto-commit would push password hashes |
 | `RT_STATIC_DIR` | `""` | Path to built frontend `/dist`. Set for single-origin serve |
-| `RT_HOST` | `0.0.0.0` | uvicorn bind address |
-| `RT_PORT` | `8000` | uvicorn listen port |
 | `RT_BASE_URL` | `http://localhost:8000` | Public URL for email links |
-| `RT_OFFLINE_MODE` | `false` | Suppress all outbound network calls |
+| `RT_ALLOWED_HOSTS` | `["*"]` | Reject requests whose `Host` header doesn't match (comma-separated) |
+| `RT_CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` | Allowed cross-origin browser origins (comma-separated). Leave empty for a single-origin deployment; the app refuses to start on `*` |
+| `RT_SECRET` | (generated) | JWT signing key. Generate with `openssl rand -hex 32` |
+| `RT_ADMIN_PASSWORD` | (generated) | Initial admin password |
+| `RT_REQUIRE_AUTH` | (per profile) | Require a session for every API route. Defaults `true` in `team`/`hardened`, `false` in `personal` |
+| `RT_ALLOW_SELF_REGISTRATION` | (per profile) | Let users register from the login page. Defaults `false` in `team`/`hardened`, `true` in `personal` |
+| `RT_REQUIRE_EMAIL_VERIFICATION` | `false` | Require email verification for new accounts. Defaults `true` in `hardened` |
+| `RT_REGISTRATION_DOMAIN_ALLOWLIST` | `""` | Self-registration email-domain allowlist (comma-separated). Empty = any domain when registration is enabled |
+| `RT_COOKIE_SECURE` | (per profile) | `Secure` flag on the session cookie. Defaults `true` in `team`/`hardened`, `false` in `personal` (plain HTTP) |
+| `RT_TOKEN_TTL_SECONDS` | `604800` | Session duration in seconds (default 7 days) |
+| `RT_LOCKOUT_MAX_ATTEMPTS` | `5` | Failed login attempts before lockout |
+| `RT_LOCKOUT_WINDOW_MINUTES` | `15` | Lockout duration in minutes after too many failed logins |
+| `RT_RATE_LIMIT_ENABLED` | `true` | Per-IP rate limiting on login, password reset, export and analysis endpoints. Only turn off for the end-to-end suite — a deployment running without it is warned at startup |
+| `RT_MAX_UPLOAD_SIZE_MB` | `50` | Upload size cap for imports and test-result files |
+| `RT_MAX_JSON_BODY_MB` | `10` | JSON request body size cap |
+| `RT_MAX_SSE_CONNS_PER_USER` | `5` | Maximum concurrent SSE connections per user |
+| `RT_MAX_SSE_CONNS_GLOBAL` | `100` | Maximum concurrent SSE connections in total |
+| `RT_PROXY_TRUSTED_CIDR` | `127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16` | Trusted proxy CIDRs whose `X-Forwarded-For` is used for the real client IP. Narrow to your reverse proxy's exact address |
+| `RT_CSP_DEFAULT` | `""` | Content-Security-Policy override. Empty = profile-appropriate default (`hardened` adds `upgrade-insecure-requests`) |
 | `RT_GIT_AUTOCOMMIT` | `true` | Auto-commit changes in project git repos |
 | `RT_GIT_REMOTE_URL` | `""` | Remote to push auto-commits to |
 | `RT_GIT_PUSH_ON_COMMIT` | `false` | Push after each auto-commit |
+| `RT_GIT_PUSH_INTERVAL_MINUTES` | `0` | When set, batch pushes on a timer rather than on every commit |
+| `RT_GIT_COMMIT_SCHEDULE` | `every_change` | When auto-commits fire: `every_change`, `interval`, `changes`, or `both` |
+| `RT_GIT_COMMIT_INTERVAL_HOURS` | `0` | Commit interval in hours when `RT_GIT_COMMIT_SCHEDULE` is `interval` or `both` |
+| `RT_GIT_COMMIT_CHANGES_THRESHOLD` | `0` | Commit after this many mutating requests when `RT_GIT_COMMIT_SCHEDULE` is `changes` or `both` |
+| `RT_SEED_DEMO` | `true` | Create the Cessna 172S example project on first launch |
+| `RT_OFFLINE_MODE` | `false` | Suppress all outbound network calls (git push, SMTP, update checks) |
+| `RT_CODE_ROOT` | `""` | Default source directory for the code-to-requirement tag scanner |
+| `RT_INSTANCE_NAME` | `reqmesh` | Instance name shown on the login/registration UI |
+| `RT_SUPPORT_EMAIL` | `""` | Support address shown on the login/registration UI |
+| `RT_TEAMS` | `["Systems Engineering"]` | Comma-separated list of team names offered when creating accounts |
 | `RT_SMTP_HOST` | `""` | SMTP server. Empty disables email |
 | `RT_SMTP_PORT` | `587` | SMTP port |
 | `RT_SMTP_USERNAME` | `""` | SMTP auth username |
 | `RT_SMTP_PASSWORD` | `""` | SMTP auth password |
 | `RT_SMTP_FROM` | `reqmesh@localhost` | From: address on emails |
-| `RT_ALLOW_SELF_REGISTRATION` | `true` | Let users register from the login page |
-| `RT_REQUIRE_EMAIL_VERIFICATION` | `false` | Require email verification for new accounts |
-| `RT_LOCKOUT_MAX_ATTEMPTS` | `5` | Failed login attempts before lockout (0 to disable) |
-| `RT_TOKEN_TTL_SECONDS` | `604800` | Session duration in seconds (default 7 days) |
-| `RT_SEED_DEMO` | `true` | Create Cessna 172S example project on first launch |
-| `RT_SELF_UPDATE_ENABLED` | `true` | Enable one-click update from UI (needs updater sidecar) |
+| `RT_SMTP_USE_TLS` | `true` | Use TLS for SMTP (set `false` for Mailpit-style local testing) |
+| `RT_REPORT_COMPANY_NAME` | `""` | Company name in published reports |
+| `RT_REPORT_DEPARTMENT` | `""` | Department line in published reports |
+| `RT_REPORT_DOCUMENT_TITLE` | `""` | Document title in published reports |
+| `RT_REPORT_LOGO_URL` | `""` | Logo URL used in published reports |
+| `RT_REPORT_SHOW_GIT_COMMIT` | `false` | Show the git commit hash in published reports |
+| `RT_REPORT_DOCUMENT_NUMBER` | `""` | Document number field in published reports |
+| `RT_REPORT_REVISION` | `""` | Revision field in published reports |
+| `RT_REPORT_CLASSIFICATION` | `""` | Classification field in published reports |
+| `RT_REPORT_STATUS` | `""` | Status field in published reports |
+| `RT_REPORT_PREPARED_BY` | `""` | Prepared-by field in published reports |
+| `RT_REPORT_REVIEWED_BY` | `""` | Reviewed-by field in published reports |
+| `RT_REPORT_APPROVED_BY` | `""` | Approved-by field in published reports |
+| `RT_REPORT_DISTRIBUTION` | `[]` | Distribution list in published reports (comma-separated) |
+| `RT_REPORT_COLOR` | `#2094f3` | Hex accent colour for PDF reports |
+| `RT_GITHUB_REPO` | `CallumNunesVaz/reqmesh` | Repository the self-updater checks against |
+| `RT_GITHUB_TOKEN` | `""` | GitHub token for update checks (avoids rate limiting) |
+| `RT_SELF_UPDATE_ENABLED` | `true` | Enable one-click update from UI (needs the updater sidecar) |
+| `RT_UPDATE_CONTROL_DIR` | `/control` | Directory the app shares with the updater sidecar |
+| `RT_UPDATE_CHECK_TTL_SECONDS` | `3600` | How long update-check results are cached |
+| `RT_MAX_UPDATE_UPLOAD_MB` | `2048` | Size cap for uploaded update archives |
+| `RT_LOG_LEVEL` | `INFO` | Python log level |
+| `RT_DEBUG` | `false` | Show stack traces in error responses |
