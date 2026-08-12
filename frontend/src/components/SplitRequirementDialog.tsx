@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { X, AlertTriangle } from 'lucide-react';
 import { api, type Requirement } from '../api/client';
 import { useUndoStore } from '../store/undo';
 import { splitDescription } from '../lib/splitText';
 import type { SplitCandidate } from '../lib/splitText';
+import Modal from './Modal';
 
 interface Props {
   open: boolean;
@@ -117,29 +117,15 @@ export default function SplitRequirementDialog({ open, onClose, projectId, sourc
   };
 
   return (
-    <AnimatePresence>
-      {open && (
-        <motion.div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-        >
-          <div className="absolute inset-0 bg-black/50" onClick={onDialogClose} />
-          <motion.div
-            className="relative bg-card border rounded-xl shadow-xl w-full max-w-2xl max-h-[85vh] flex flex-col"
-            initial={{ scale: 0.95, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.95, opacity: 0 }}
-          >
-            <div className="flex items-center justify-between p-4 border-b shrink-0">
-              <h2 className="font-semibold text-sm text-card-foreground">
-                Split {source.id} into child requirements
-              </h2>
-              <button onClick={onDialogClose} className="p-1 text-muted-foreground hover:text-foreground" disabled={busy}>
-                <X size={16} />
-              </button>
-            </div>
+    <Modal open={open} onClose={onDialogClose} panelClassName="w-full max-w-2xl max-h-[85vh] flex flex-col">
+      <div className="flex items-center justify-between p-4 border-b shrink-0">
+        <h2 className="font-semibold text-sm text-card-foreground">
+          Split {source.id} into child requirements
+        </h2>
+        <button onClick={onDialogClose} className="p-1 text-muted-foreground hover:text-foreground" disabled={busy}>
+          <X size={16} />
+        </button>
+      </div>
 
             <div className="p-4 text-xs text-muted-foreground shrink-0">
               {source.id} keeps its current description. Nothing is removed from it.
@@ -204,9 +190,6 @@ export default function SplitRequirementDialog({ open, onClose, projectId, sourc
                 </button>
               </div>
             </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+    </Modal>
   );
 }

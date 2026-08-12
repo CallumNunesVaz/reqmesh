@@ -18,6 +18,7 @@ import { CommentThread } from '../components/CommentThread';
 import { useRangeSelection } from '../hooks/useRangeSelection';
 import { useConfirm } from '../components/ConfirmDialog';
 import { useBulkActions } from '../hooks/useBulkActions';
+import BulkActionBar from '../components/BulkActionBar';
 import LoadingSplash from '../components/LoadingSplash';
 
 export default function SpecificationsPage() {
@@ -381,12 +382,13 @@ export default function SpecificationsPage() {
         </div>
       )}
       {selectedIds.size > 0 && editable && (
-        <div className="sticky bottom-6 z-40 mx-auto w-fit max-w-full flex flex-wrap items-center justify-center gap-3 bg-card border rounded-xl shadow-2xl px-4 py-3">
-          <span className="text-xs font-medium text-foreground">{selectedIds.size} selected</span>
+        <BulkActionBar
+          count={selectedIds.size}
+          onSelectAll={selectAllSpecs}
+          onClear={clearSpecSelection}
+        >
           <button onClick={handleBulkSpecDelete} className="btn-danger text-xs"><Trash2 size={13} /> Delete</button>
-          <button onClick={selectAllSpecs} className="text-[10px] text-muted-foreground hover:text-foreground">Select all</button>
-          <button onClick={clearSpecSelection} className="text-[10px] text-muted-foreground hover:text-foreground"><X size={13} /></button>
-        </div>
+        </BulkActionBar>
       )}
     </div>
   );

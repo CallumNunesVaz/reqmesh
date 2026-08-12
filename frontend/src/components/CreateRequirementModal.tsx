@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { X, ArrowUp } from 'lucide-react';
 import { api, type Requirement } from '../api/client';
 import { useUndoStore } from '../store/undo';
 import { useSelectedReq } from '../components/Layout';
 import { REQUIREMENT_TYPES, REQUIREMENT_TYPE_META } from '../lib/requirementTypes';
-import BodyPortal from '../components/BodyPortal';
+import Modal from './Modal';
 
 export type CreateIntent =
   | { mode: 'blank' }
@@ -121,29 +120,14 @@ export default function CreateRequirementModal({
     : 'New Requirement';
 
   return (
-    <BodyPortal>
-    <AnimatePresence>
-      {open && (
-        <motion.div
-          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-[2px] flex items-start justify-center pt-[12vh] px-4"
-          onClick={onClose}
-        >
-          <motion.form
-            initial={{ opacity: 0, y: 12, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 8, scale: 0.98 }}
-            transition={{ duration: 0.15 }}
-            onSubmit={submit}
-            onClick={(e) => e.stopPropagation()}
-            className="card w-full max-w-lg p-5 shadow-xl"
-          >
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-semibold text-foreground">{heading}</h2>
-              <button type="button" onClick={onClose} className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent">
-                <X size={15} />
-              </button>
-            </div>
+    <Modal open={open} onClose={onClose} align="top" topOffset="pt-[12vh]" panelClassName="w-full max-w-lg p-5">
+      <form onSubmit={submit}>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-semibold text-foreground">{heading}</h2>
+          <button type="button" onClick={onClose} className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent">
+            <X size={15} />
+          </button>
+        </div>
 
             <div className="space-y-3">
               <div>
@@ -213,10 +197,7 @@ export default function CreateRequirementModal({
                 {busy ? 'Creating…' : 'Create requirement'}
               </button>
             </div>
-          </motion.form>
-        </motion.div>
-      )}
-    </AnimatePresence>
-    </BodyPortal>
+      </form>
+    </Modal>
   );
 }

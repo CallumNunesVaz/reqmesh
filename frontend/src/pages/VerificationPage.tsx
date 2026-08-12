@@ -18,6 +18,7 @@ import { HistoryPanel } from '../components/HistoryPanel';
 import { CommentThread } from '../components/CommentThread';
 import { useToasts } from '../components/Toast';
 import { useBulkActions } from '../hooks/useBulkActions';
+import BulkActionBar from '../components/BulkActionBar';
 import LoadingSplash from '../components/LoadingSplash';
 
 const statusBadges: Record<string, string> = {
@@ -416,30 +417,24 @@ export default function VerificationPage() {
       </div>
 
       {selectedVcs.size > 0 && (
-        <div className="mb-4 px-4 py-2 rounded-lg bg-primary/10 border border-primary/20 flex items-center gap-3 text-sm">
-          <span className="text-xs text-foreground">{selectedVcs.size} selected</span>
-          <select className="input text-xs w-28" value={bulkStatus} onChange={(e) => setBulkStatus(e.target.value)}>
-            <option value="pending">pending</option>
-            <option value="in_progress">in_progress</option>
-            <option value="passed">passed</option>
-            <option value="failed">failed</option>
+        <BulkActionBar
+          count={selectedVcs.size}
+          onSelectAll={() => setSelectedVcs(new Set(filteredVCs.map(v => v.id)))}
+          onClear={() => setSelectedVcs(new Set())}
+        >
+          <select className="select text-xs py-1 w-28" value={bulkStatus} onChange={(e) => setBulkStatus(e.target.value)}>
+            <option value="pending">Pending</option>
+            <option value="in_progress">In Progress</option>
+            <option value="passed">Passed</option>
+            <option value="failed">Failed</option>
           </select>
           <button
             onClick={() => handleBulkStatus(bulkStatus)}
-            className="btn-primary text-xs px-3 py-1"
+            className="btn-primary text-xs"
           >
             Apply
           </button>
-          <button
-            onClick={() => setSelectedVcs(new Set(filteredVCs.map(v => v.id)))}
-            className="btn-ghost text-xs px-2 py-1"
-          >
-            Select all
-          </button>
-          <button onClick={() => setSelectedVcs(new Set())} className="btn-ghost text-xs px-2 py-1 ml-auto">
-            Clear
-          </button>
-        </div>
+        </BulkActionBar>
       )}
 
       <AnimatePresence>

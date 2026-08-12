@@ -100,8 +100,8 @@ test('a 409 delete guard surfaces the referrer count in the toast', async ({ app
   await deleteBtn.click();
 
   // The themed confirmation dialog appears — click Delete to confirm.
-  // Restrict to the dialog overlay so we don't match every row's Delete button.
-  const dialog = app.locator('.fixed.inset-0.z-\\[60\\]');
+  // Restrict to the dialog so we don't match every row's Delete button.
+  const dialog = app.getByRole('dialog');
   await dialog.getByRole('button', { name: 'Delete' }).click();
 
   // The server returns a 409 with the referrer list.  Assert the toast

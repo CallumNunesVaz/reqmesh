@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useGuardedNavigate } from './navGuard';
-import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Search } from 'lucide-react';
 import { ENTITY_META, entityPath } from './entities';
 import { BACKEND_KIND_TO_ENTITY } from '../lib/searchKinds';
 import { loadEntityIndex, searchEntities, recordEntityVisit, type IndexedEntity } from './entityIndex';
 import { useStore } from '../store';
 import { api, type SearchResult } from '../api/client';
+import Modal from './Modal';
 
 function highlightMatch(text: string, query: string): React.ReactNode {
   if (!query.trim()) return text;
@@ -193,30 +193,19 @@ export default function CommandPalette({ projectId }: { projectId: string }) {
   };
 
   return (
-    <AnimatePresence>
-      {open && (
-        <motion.div
-          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.12 }}
-          className="fixed inset-0 z-[90] bg-black/40 backdrop-blur-[2px] flex items-start justify-center pt-[14vh]"
-          onMouseDown={(e) => { if (e.target === e.currentTarget) setOpen(false); }}
-        >
-          <motion.div
-            initial={{ opacity: 0, y: -8, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -8, scale: 0.98 }} transition={{ duration: 0.12 }}
-            className="card w-full max-w-xl shadow-2xl overflow-hidden"
-          >
-            <div className="flex items-center gap-2 px-3 border-b">
-              <Search size={15} className="text-muted-foreground shrink-0" />
-              <input
-                ref={inputRef}
-                className="flex-1 bg-transparent py-3 text-sm text-foreground outline-none placeholder:text-muted-foreground"
-                placeholder="Jump to a requirement, verification, component…"
-                value={query}
-                onChange={(e) => { setQuery(e.target.value); setCursor(0); }}
-                onKeyDown={onInputKey}
-              />
-              <kbd className="text-[10px] text-muted-foreground border rounded px-1.5 py-0.5 shrink-0">esc</kbd>
-            </div>
+    <Modal open={open} onClose={() => setOpen(false)} closeOnEscape align="top" topOffset="pt-[14vh]" panelClassName="w-full max-w-xl overflow-hidden">
+      <div className="flex items-center gap-2 px-3 border-b">
+        <Search size={15} className="text-muted-foreground shrink-0" />
+        <input
+          ref={inputRef}
+          className="flex-1 bg-transparent py-3 text-sm text-foreground outline-none placeholder:text-muted-foreground"
+          placeholder="Jump to a requirement, verification, component…"
+          value={query}
+          onChange={(e) => { setQuery(e.target.value); setCursor(0); }}
+          onKeyDown={onInputKey}
+        />
+        <kbd className="text-[10px] text-muted-foreground border rounded px-1.5 py-0.5 shrink-0">esc</kbd>
+      </div>
 
             <div ref={listRef} className="max-h-[50vh] overflow-y-auto p-1.5">
               {recentEntities.length > 0 && !query.trim() && (
@@ -337,9 +326,6 @@ export default function CommandPalette({ projectId }: { projectId: string }) {
               <span><kbd className="border rounded px-1">↵</kbd> open</span>
               <span className="ml-auto">{entities.length} entities indexed</span>
             </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+    </Modal>
   );
 }

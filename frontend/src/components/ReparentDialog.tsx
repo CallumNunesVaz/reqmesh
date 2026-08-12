@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { AlertTriangle, ArrowRight, CornerUpLeft, Loader, Search, X } from 'lucide-react';
 import { validParents, type Node } from '../lib/hierarchy';
+import Modal from './Modal';
 
 export interface ReparentTarget extends Node {
   name?: string;
@@ -108,30 +108,18 @@ export default function ReparentDialog({
     : `${parent}${items.find((i) => i.id === parent)?.name ? ` — ${items.find((i) => i.id === parent)!.name}` : ''}`;
 
   return (
-    <AnimatePresence>
-      {open && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center px-4">
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={onClose}
-          />
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 10 }}
-            className="relative bg-card border rounded-xl shadow-2xl w-full max-w-lg p-6"
-          >
-            <button
-              onClick={onClose}
-              title="Close"
-              className="absolute right-4 top-4 text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <X size={18} />
-            </button>
+    <Modal open={open} onClose={onClose} panelClassName="w-full max-w-lg p-6">
+      <button
+        onClick={onClose}
+        title="Close"
+        className="absolute right-4 top-4 text-muted-foreground hover:text-foreground transition-colors"
+      >
+        <X size={18} />
+      </button>
 
-            <h2 className="text-lg font-bold text-foreground mb-1">
-              Move {movingIds.length} {movingIds.length === 1 ? 'item' : 'items'}
-            </h2>
+      <h2 className="text-lg font-bold text-foreground mb-1">
+        Move {movingIds.length} {movingIds.length === 1 ? 'item' : 'items'}
+      </h2>
 
             {!chosen ? (
               <>
@@ -252,9 +240,6 @@ export default function ReparentDialog({
                 </div>
               </>
             )}
-          </motion.div>
-        </div>
-      )}
-    </AnimatePresence>
+    </Modal>
   );
 }

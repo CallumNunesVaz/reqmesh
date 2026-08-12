@@ -35,7 +35,7 @@ test('creating and deleting a decision each raise a success toast', async ({ app
   await row.hover();
   await row.locator('[title="Delete"]').click();
 
-  const dialog = app.locator('.fixed.inset-0.z-\\[60\\]');
+  const dialog = app.getByRole('dialog');
   await expect(dialog).toBeVisible();
   await dialog.getByRole('button', { name: 'Delete' }).click();
   await expect(dialog).toBeHidden();

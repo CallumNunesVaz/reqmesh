@@ -3,7 +3,6 @@ import CreateRequirementModal, { type CreateIntent } from '../components/CreateR
 import { usePersistedState, setCodec } from '../hooks/usePersistedState';
 import { useRangeSelection } from '../hooks/useRangeSelection';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus, Search, X, Trash2, ChevronRight, ChevronDown, ChevronsDownUp, ChevronsUpDown,
   Inbox, Square, CheckSquare, ArrowUp, SlidersHorizontal, Copy, AlertTriangle,
@@ -19,7 +18,8 @@ import { useConfirm } from '../components/ConfirmDialog';
 import { deleteWithReferenceCheck } from '../lib/forceDelete';
 import { countMessage } from '../lib/feedback';
 import { REQUIREMENT_TYPES, REQUIREMENT_TYPE_META, reqTypeClass, reqTypeIcon } from '../lib/requirementTypes';
-import BodyPortal from '../components/BodyPortal';
+import Modal from '../components/Modal';
+import BulkActionBar from '../components/BulkActionBar';
 import { useToasts } from '../components/Toast';
 import TruncationBanner from '../components/TruncationBanner';
 import ReparentDialog from '../components/ReparentDialog';
@@ -679,8 +679,11 @@ export default function RequirementsPage() {
       </div>
 
       {selectedIds.size > 0 && editMode && (
-        <div className="sticky bottom-6 z-40 mx-auto w-fit max-w-full flex flex-wrap items-center justify-center gap-3 bg-card border rounded-xl shadow-2xl px-4 py-3">
-          <span className="text-xs font-medium text-foreground">{selectedIds.size} selected</span>
+        <BulkActionBar
+          count={selectedIds.size}
+          onSelectAll={selectAllVisible}
+          onClear={clearSelection}
+        >
           <button onClick={() => setShowBulkEdit(true)} className="btn-primary text-xs">
             <SlidersHorizontal size={13} /> Bulk Edit
           </button>
@@ -706,11 +709,7 @@ export default function RequirementsPage() {
           <button onClick={handleBulkDelete} className="btn-danger text-xs">
             <Trash2 size={13} /> Delete
           </button>
-          <button onClick={selectAllVisible} className="text-[10px] text-muted-foreground hover:text-foreground">Select all</button>
-          <button onClick={clearSelection} className="text-[10px] text-muted-foreground hover:text-foreground">
-            <X size={13} />
-          </button>
-        </div>
+        </BulkActionBar>
       )}
 
       <ReparentDialog
@@ -862,36 +861,21 @@ function BulkEditModal({
   }).length;
 
   return (
-    <BodyPortal>
-    <AnimatePresence>
-      {open && (
-        <motion.div
-          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-[2px] flex items-start justify-center pt-[4vh] px-4"
-          onClick={onClose}
-        >
-          <motion.form
-            initial={{ opacity: 0, y: 12, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 8, scale: 0.98 }}
-            transition={{ duration: 0.15 }}
-            onSubmit={handleSubmit}
-            onClick={(e) => e.stopPropagation()}
-            className="card w-full max-w-2xl p-6 shadow-xl max-h-[92vh] overflow-y-auto"
-          >
-            <div className="flex items-center justify-between mb-5 sticky top-0 bg-card z-10 pb-3 border-b border-border/50">
-              <div>
-                <h2 className="text-sm font-semibold text-foreground">Bulk Edit Requirements</h2>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {selectedIds.length} requirement(s) selected — only filled-in fields will be changed
-                </p>
-              </div>
-              <button type="button" onClick={onClose} className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent">
-                <X size={16} />
-              </button>
-            </div>
+    <Modal open={open} onClose={onClose} align="top" topOffset="pt-[4vh]" panelClassName="w-full max-w-2xl p-6 max-h-[92vh] overflow-y-auto">
+      <form onSubmit={handleSubmit}>
+        <div className="flex items-center justify-between mb-5 sticky top-0 bg-card z-10 pb-3 border-b border-border/50">
+          <div>
+            <h2 className="text-sm font-semibold text-foreground">Bulk Edit Requirements</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {selectedIds.length} requirement(s) selected — only filled-in fields will be changed
+            </p>
+          </div>
+          <button type="button" onClick={onClose} className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent">
+            <X size={16} />
+          </button>
+        </div>
 
-            <div className="space-y-5">
+        <div className="space-y-5">
               {/* Row 1: Type / Priority / Status */}
               <div className="grid grid-cols-3 gap-3">
                 <div>
@@ -1099,10 +1083,7 @@ function BulkEditModal({
                 </button>
               </div>
             </div>
-          </motion.form>
-        </motion.div>
-      )}
-    </AnimatePresence>
-    </BodyPortal>
+      </form>
+    </Modal>
   );
 }

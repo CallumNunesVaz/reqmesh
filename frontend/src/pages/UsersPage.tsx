@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Users, Plus, Trash2, ShieldCheck, User as UserIcon, KeyRound, X, Loader, Search, Filter, Pencil, Check, Clock, Ban, CircleCheck, Unlock, LogOut, UserPlus, Download, Upload, Copy, Lock, MoreHorizontal } from 'lucide-react';
 import { api, type ManagedUser } from '../api/client';
 import { useAuthStore } from '../store/auth';
-import BodyPortal from '../components/BodyPortal';
+import Modal from '../components/Modal';
 import { useConfirm } from '../components/ConfirmDialog';
 import { useToasts } from '../components/Toast';
 import { countMessage } from '../lib/feedback';
@@ -602,106 +602,83 @@ export default function UsersPage() {
       )}
 
       {/* Invite modal */}
-      <BodyPortal>
-      <AnimatePresence>
-        {showInvite && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={() => setShowInvite(false)} />
-            <motion.form initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 10 }} onSubmit={handleInvite} className="relative bg-card border rounded-xl shadow-2xl w-full max-w-md p-6 mx-4">
-              <button type="button" onClick={() => setShowInvite(false)} className="absolute right-4 top-4 text-muted-foreground hover:text-foreground"><X size={18} /></button>
-              <h2 className="text-lg font-bold text-foreground mb-1 flex items-center gap-2"><UserPlus size={18} /> Invite a user</h2>
-              <p className="text-xs text-muted-foreground mb-4">Creates an account and emails a set-password link (shown here if email isn't configured).</p>
-              {inviteLink ? (
-                <div className="space-y-3">
-                  <p className="text-xs text-emerald-500 flex items-center gap-1"><Check size={13} /> Account created. Share this set-password link:</p>
-                  <div className="flex gap-1">
-                    <input readOnly className="input text-xs font-mono flex-1" value={inviteLink} onFocus={(e) => e.target.select()} autoFocus={inviteCopyFailed} />
-                    <button type="button" onClick={async () => { if (!await copyText(inviteLink)) setInviteCopyFailed(true); }} className="btn-secondary shrink-0 p-2" title="Copy"><Copy size={13} /></button>
-                    {inviteCopyFailed && (
-                      <span className="text-[10px] text-cs-amber shrink-0">Copy blocked — select the link above</span>
-                    )}
-                  </div>
-                  <button type="button" onClick={() => { setShowInvite(false); setInviteLink(null); }} className="btn-primary w-full justify-center">Done</button>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <div><label className="label text-[10px]">Username *</label><input className="input text-sm" value={invite.username} onChange={(e) => setInvite({ ...invite, username: e.target.value })} placeholder="jdoe" autoFocus /></div>
-                  <div><label className="label text-[10px]">Email</label><input className="input text-sm" value={invite.email} onChange={(e) => setInvite({ ...invite, email: e.target.value })} placeholder="jane@example.com" /></div>
-                  <div><label className="label text-[10px]">Full name</label><input className="input text-sm" value={invite.full_name} onChange={(e) => setInvite({ ...invite, full_name: e.target.value })} placeholder="Jane Doe" /></div>
-                  <div><label className="label text-[10px]">Role</label>
-                    <select className="input text-sm" value={invite.role} onChange={(e) => setInvite({ ...invite, role: e.target.value })}>
-                      <RoleOptions />
-                    </select>
-                  </div>
-                  <button type="submit" className="btn-primary w-full justify-center" disabled={inviting || !invite.username.trim()}>
-                    {inviting ? <><Loader size={14} className="animate-spin" /> Inviting</> : 'Send invite'}
-                  </button>
-                </div>
-              )}
-            </motion.form>
-          </div>
-        )}
-      </AnimatePresence>
-      </BodyPortal>
+      <Modal open={showInvite} onClose={() => setShowInvite(false)} panelClassName="w-full max-w-md p-6">
+        <form onSubmit={handleInvite}>
+          <button type="button" onClick={() => setShowInvite(false)} className="absolute right-4 top-4 text-muted-foreground hover:text-foreground"><X size={18} /></button>
+          <h2 className="text-lg font-bold text-foreground mb-1 flex items-center gap-2"><UserPlus size={18} /> Invite a user</h2>
+          <p className="text-xs text-muted-foreground mb-4">Creates an account and emails a set-password link (shown here if email isn't configured).</p>
+          {inviteLink ? (
+            <div className="space-y-3">
+              <p className="text-xs text-emerald-500 flex items-center gap-1"><Check size={13} /> Account created. Share this set-password link:</p>
+              <div className="flex gap-1">
+                <input readOnly className="input text-xs font-mono flex-1" value={inviteLink} onFocus={(e) => e.target.select()} autoFocus={inviteCopyFailed} />
+                <button type="button" onClick={async () => { if (!await copyText(inviteLink)) setInviteCopyFailed(true); }} className="btn-secondary shrink-0 p-2" title="Copy"><Copy size={13} /></button>
+                {inviteCopyFailed && (
+                  <span className="text-[10px] text-cs-amber shrink-0">Copy blocked — select the link above</span>
+                )}
+              </div>
+              <button type="button" onClick={() => { setShowInvite(false); setInviteLink(null); }} className="btn-primary w-full justify-center">Done</button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div><label className="label text-[10px]">Username *</label><input className="input text-sm" value={invite.username} onChange={(e) => setInvite({ ...invite, username: e.target.value })} placeholder="jdoe" autoFocus /></div>
+              <div><label className="label text-[10px]">Email</label><input className="input text-sm" value={invite.email} onChange={(e) => setInvite({ ...invite, email: e.target.value })} placeholder="jane@example.com" /></div>
+              <div><label className="label text-[10px]">Full name</label><input className="input text-sm" value={invite.full_name} onChange={(e) => setInvite({ ...invite, full_name: e.target.value })} placeholder="Jane Doe" /></div>
+              <div><label className="label text-[10px]">Role</label>
+                <select className="input text-sm" value={invite.role} onChange={(e) => setInvite({ ...invite, role: e.target.value })}>
+                  <RoleOptions />
+                </select>
+              </div>
+              <button type="submit" className="btn-primary w-full justify-center" disabled={inviting || !invite.username.trim()}>
+                {inviting ? <><Loader size={14} className="animate-spin" /> Inviting</> : 'Send invite'}
+              </button>
+            </div>
+          )}
+        </form>
+      </Modal>
 
       {/* CSV import modal */}
-      <BodyPortal>
-      <AnimatePresence>
-        {importText !== null && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={() => setImportText(null)} />
-            <motion.div initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 10 }} className="relative bg-card border rounded-xl shadow-2xl w-full max-w-lg p-6 mx-4">
-              <button type="button" onClick={() => setImportText(null)} className="absolute right-4 top-4 text-muted-foreground hover:text-foreground"><X size={18} /></button>
-              <h2 className="text-lg font-bold text-foreground mb-1 flex items-center gap-2"><Upload size={18} /> Import users (CSV)</h2>
-              <p className="text-xs text-muted-foreground mb-3">Columns: <code className="bg-muted px-1 rounded">username,full_name,email,role</code>. Each new user is invited to set a password.</p>
-              {importResult ? (
-                <div className="space-y-2 text-xs">
-                  <p className="text-emerald-500">Created {importResult.created.length}: {importResult.created.join(', ') || '—'}</p>
-                  {importResult.skipped.length > 0 && <p className="text-amber-500">Skipped: {importResult.skipped.join(', ')}</p>}
-                  {importResult.invites.length > 0 && (
-                    <div className="max-h-40 overflow-auto border rounded p-2 bg-muted/30 font-mono">
-                      {importResult.invites.map((iv) => <div key={iv.username} className="truncate">{iv.username}: {iv.invite_link}</div>)}
-                    </div>
-                  )}
-                  <button onClick={() => setImportText(null)} className="btn-primary w-full justify-center mt-2">Done</button>
-                </div>
-              ) : (
-                <>
-                  <textarea className="input font-mono text-xs h-40 resize-none w-full" placeholder={'username,full_name,email,role\njdoe,Jane Doe,jane@example.com,editor'} value={importText} onChange={(e) => setImportText(e.target.value)} autoFocus />
-                  <div className="flex gap-2 mt-3">
-                    <button onClick={handleImport} className="btn-primary flex-1 justify-center" disabled={!importText.trim()}>Import</button>
-                    <button onClick={() => setImportText(null)} className="btn-secondary">Cancel</button>
-                  </div>
-                </>
-              )}
-            </motion.div>
+      <Modal open={importText !== null} onClose={() => setImportText(null)} panelClassName="w-full max-w-lg p-6">
+        <button type="button" onClick={() => setImportText(null)} className="absolute right-4 top-4 text-muted-foreground hover:text-foreground"><X size={18} /></button>
+        <h2 className="text-lg font-bold text-foreground mb-1 flex items-center gap-2"><Upload size={18} /> Import users (CSV)</h2>
+        <p className="text-xs text-muted-foreground mb-3">Columns: <code className="bg-muted px-1 rounded">username,full_name,email,role</code>. Each new user is invited to set a password.</p>
+        {importResult ? (
+          <div className="space-y-2 text-xs">
+            <p className="text-emerald-500">Created {importResult.created.length}: {importResult.created.join(', ') || '—'}</p>
+            {importResult.skipped.length > 0 && <p className="text-amber-500">Skipped: {importResult.skipped.join(', ')}</p>}
+            {importResult.invites.length > 0 && (
+              <div className="max-h-40 overflow-auto border rounded p-2 bg-muted/30 font-mono">
+                {importResult.invites.map((iv) => <div key={iv.username} className="truncate">{iv.username}: {iv.invite_link}</div>)}
+              </div>
+            )}
+            <button onClick={() => setImportText(null)} className="btn-primary w-full justify-center mt-2">Done</button>
           </div>
+        ) : (
+          <>
+            <textarea className="input font-mono text-xs h-40 resize-none w-full" placeholder={'username,full_name,email,role\njdoe,Jane Doe,jane@example.com,editor'} value={importText ?? ''} onChange={(e) => setImportText(e.target.value)} autoFocus />
+            <div className="flex gap-2 mt-3">
+              <button onClick={handleImport} className="btn-primary flex-1 justify-center" disabled={!importText?.trim()}>Import</button>
+              <button onClick={() => setImportText(null)} className="btn-secondary">Cancel</button>
+            </div>
+          </>
         )}
-      </AnimatePresence>
-      </BodyPortal>
+      </Modal>
 
       {/* Reset password modal */}
-      <BodyPortal>
-      <AnimatePresence>
-        {resetFor && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={() => setResetFor(null)} />
-            <motion.form initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 10 }} onSubmit={handleResetPassword} className="relative bg-card border rounded-xl shadow-2xl w-full max-w-sm p-6 mx-4">
-              <button type="button" onClick={() => setResetFor(null)} className="absolute right-4 top-4 text-muted-foreground hover:text-foreground"><X size={18} /></button>
-              <h2 className="text-lg font-bold text-foreground mb-1 flex items-center gap-2"><KeyRound size={18} /> Reset password</h2>
-              <p className="text-xs text-muted-foreground mb-4">Set a new password for <b>{resetFor}</b></p>
-              <input className="input mb-4" type="password" placeholder="New password (min 12 chars)" value={resetPassword} onChange={(e) => setResetPassword(e.target.value)} autoFocus />
-              <div className="flex gap-2">
-                <button type="submit" className="btn-primary flex-1 justify-center" disabled={resetting}>
-                  {resetting ? <><Loader size={14} className="animate-spin" /> Saving</> : 'Set password'}
-                </button>
-                <button type="button" onClick={() => setResetFor(null)} className="btn-secondary">Cancel</button>
-              </div>
-            </motion.form>
+      <Modal open={resetFor !== null} onClose={() => setResetFor(null)} panelClassName="w-full max-w-sm p-6">
+        <form onSubmit={handleResetPassword}>
+          <button type="button" onClick={() => setResetFor(null)} className="absolute right-4 top-4 text-muted-foreground hover:text-foreground"><X size={18} /></button>
+          <h2 className="text-lg font-bold text-foreground mb-1 flex items-center gap-2"><KeyRound size={18} /> Reset password</h2>
+          <p className="text-xs text-muted-foreground mb-4">Set a new password for <b>{resetFor}</b></p>
+          <input className="input mb-4" type="password" placeholder="New password (min 12 chars)" value={resetPassword} onChange={(e) => setResetPassword(e.target.value)} autoFocus />
+          <div className="flex gap-2">
+            <button type="submit" className="btn-primary flex-1 justify-center" disabled={resetting}>
+              {resetting ? <><Loader size={14} className="animate-spin" /> Saving</> : 'Set password'}
+            </button>
+            <button type="button" onClick={() => setResetFor(null)} className="btn-secondary">Cancel</button>
           </div>
-        )}
-      </AnimatePresence>
-      </BodyPortal>
+        </form>
+      </Modal>
     </div>
   );
 }

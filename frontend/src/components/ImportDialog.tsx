@@ -1,8 +1,8 @@
 import { useCallback, useRef, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { X, FileUp, UploadCloud, Loader, CheckCircle2, AlertTriangle, Eye, Clipboard } from 'lucide-react';
 import { api, type ImportSummary } from '../api/client';
 import { useStore } from '../store';
+import Modal from './Modal';
 
 interface ImportDialogProps {
   open: boolean;
@@ -106,27 +106,15 @@ export default function ImportDialog({ open, onClose, projectId }: ImportDialogP
   };
 
   return (
-    <AnimatePresence>
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={close}
-          />
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 10 }}
-            className="relative bg-card border rounded-xl shadow-2xl w-full max-w-lg p-6 mx-4"
-          >
-            <button onClick={close} className="absolute right-4 top-4 text-muted-foreground hover:text-foreground transition-colors">
-              <X size={18} />
-            </button>
+    <Modal open={open} onClose={close} panelClassName="w-full max-w-lg p-6">
+      <button onClick={close} className="absolute right-4 top-4 text-muted-foreground hover:text-foreground transition-colors">
+        <X size={18} />
+      </button>
 
-            <h2 className="text-lg font-bold text-foreground mb-1 flex items-center gap-2">
-              <FileUp size={18} /> Import Requirements
-            </h2>
-            <p className="text-xs text-muted-foreground mb-5">Load a ReqIF, SysML v2 or spreadsheet into this project</p>
+      <h2 className="text-lg font-bold text-foreground mb-1 flex items-center gap-2">
+        <FileUp size={18} /> Import Requirements
+      </h2>
+      <p className="text-xs text-muted-foreground mb-5">Load a ReqIF, SysML v2 or spreadsheet into this project</p>
 
             <div className="space-y-5">
               <div>
@@ -331,9 +319,6 @@ export default function ImportDialog({ open, onClose, projectId }: ImportDialogP
                 <button onClick={close} className="btn-secondary justify-center">Close</button>
               </div>
             </div>
-          </motion.div>
-        </div>
-      )}
-    </AnimatePresence>
+    </Modal>
   );
 }

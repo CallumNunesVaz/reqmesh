@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, type ReactNode } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { REQUIREMENT_TYPES, REQUIREMENT_TYPE_META, reqTypeClass } from '../lib/requirementTypes';
 import { X, BookOpen, Boxes, FileText, CheckCircle2, GitBranch, Sigma, Sparkles, ShieldCheck, TrendingUp, Keyboard, Terminal, Globe, Search, Info, AlertTriangle, Lightbulb, ArrowUpCircle, Calendar, GitPullRequest, Link2 } from 'lucide-react';
+import Modal from './Modal';
 
 type DocSection = { id: string; icon: typeof BookOpen; title: string; keywords: string; render: () => ReactNode };
 
@@ -924,13 +924,6 @@ export default function DocumentationPanel({ open, onClose }: { open: boolean; o
     if (open) contentRef.current?.scrollTo(0, 0);
   }, [open, activeId]);
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } };
-    document.addEventListener('keydown', onKey, true);
-    return () => document.removeEventListener('keydown', onKey, true);
-  }, [open, onClose]);
-
   const activeTopic = DOCS.find((t) => t.id === activeId);
 
   // Match titles first, then section keywords, so a search for "reqif" or
@@ -941,25 +934,14 @@ export default function DocumentationPanel({ open, onClose }: { open: boolean; o
   const filteredResults = q ? DOCS.filter(matches) : DOCS;
 
   return (
-    <AnimatePresence>
-      {open && (
-        <div
-          className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 backdrop-blur-sm pt-[8vh]"
-          onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-        >
-          <motion.div
-            initial={{ opacity: 0, scale: 0.96, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.96, y: 20 }}
-            className="bg-card border rounded-2xl shadow-2xl w-full max-w-5xl max-h-[82vh] mx-4 flex flex-col overflow-hidden"
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between px-5 py-3 border-b shrink-0">
-              <div className="flex items-center gap-2">
-                <BookOpen size={16} className="text-primary" />
-                <h2 className="text-sm font-semibold text-card-foreground">Documentation</h2>
-                <span className="text-[10px] text-muted-foreground/50">— press F1 to open</span>
-              </div>
+    <Modal open={open} onClose={onClose} closeOnEscape align="top" topOffset="pt-[8vh]" panelClassName="w-full max-w-5xl max-h-[82vh] flex flex-col overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between px-5 py-3 border-b shrink-0">
+        <div className="flex items-center gap-2">
+          <BookOpen size={16} className="text-primary" />
+          <h2 className="text-sm font-semibold text-card-foreground">Documentation</h2>
+          <span className="text-[10px] text-muted-foreground/50">— press F1 to open</span>
+        </div>
               <div className="flex items-center gap-2 flex-1 max-w-xs ml-4">
                 <div className="relative flex-1">
                   <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -1015,9 +997,6 @@ export default function DocumentationPanel({ open, onClose }: { open: boolean; o
                 </div>
               </div>
             </div>
-          </motion.div>
-        </div>
-      )}
-    </AnimatePresence>
+    </Modal>
   );
 }

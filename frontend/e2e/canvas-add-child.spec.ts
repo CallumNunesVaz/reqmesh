@@ -101,7 +101,7 @@ test('clicking + opens the create form with the correct parent', async ({ app, s
   await expect(app.getByRole('heading', { name: new RegExp(`New child of ${parentId}`) })).toBeVisible();
   await expect(app).not.toHaveURL(/new=1/);
 
-  const parentSelect = app.locator('form.card select').first();
+  const parentSelect = app.locator('[role="dialog"] select').first();
   await expect(parentSelect).toHaveValue(parentId!);
 });
 
@@ -122,7 +122,7 @@ test('creating from the + button sets the correct parent', async ({ app, server 
 
   await expect(app.getByRole('heading', { name: new RegExp(`New child of ${parentId}`) })).toBeVisible();
 
-  const idInput = app.locator('form.card input.font-mono');
+  const idInput = app.locator('[role="dialog"] input.font-mono');
   const newId = await idInput.inputValue();
   expect(newId).toBeTruthy();
 

@@ -15,6 +15,7 @@ import { useRangeSelection } from '../hooks/useRangeSelection';
 import { useBulkActions } from '../hooks/useBulkActions';
 import { useUndoStore } from '../store/undo';
 import ReparentDialog from '../components/ReparentDialog';
+import BulkActionBar from '../components/BulkActionBar';
 import { DndContext, DragOverlay, closestCenter } from '@dnd-kit/core';
 import { useTreeDrag, TOP_LEVEL_ID } from '../hooks/useTreeDrag';
 import { DropRow, DragGrip, TopLevelDropZone } from '../components/TreeDragRow';
@@ -401,8 +402,11 @@ export default function ComponentsPage() {
       />
 
       {selectedIds.size > 0 && editable && (
-        <div className="sticky bottom-6 z-40 mx-auto w-fit max-w-full flex flex-wrap items-center justify-center gap-3 bg-card border rounded-xl shadow-2xl px-4 py-3">
-          <span className="text-xs font-medium text-foreground">{selectedIds.size} selected</span>
+        <BulkActionBar
+          count={selectedIds.size}
+          onSelectAll={selectAllComponents}
+          onClear={clearComponentSelection}
+        >
           <select
             className="select text-xs py-1 w-32"
             onChange={(e) => { if (e.target.value) { handleBulkSetType(e.target.value); e.target.value = ''; } }}
@@ -413,9 +417,7 @@ export default function ComponentsPage() {
           </select>
           <button onClick={() => setMovingIds([...selectedIds])} className="btn-secondary text-xs">Move to...</button>
           <button onClick={handleBulkDelete} className="btn-danger text-xs"><Trash2 size={13} /> Delete</button>
-          <button onClick={selectAllComponents} className="text-[10px] text-muted-foreground hover:text-foreground">Select all</button>
-          <button onClick={clearComponentSelection} className="text-[10px] text-muted-foreground hover:text-foreground"><X size={13} /></button>
-        </div>
+        </BulkActionBar>
       )}
     </div>
       <AnimatePresence>

@@ -26,11 +26,11 @@ test('add child from tree row prefills parent and a fresh id', async ({ app, ser
 
   await expect(app.getByRole('heading', { name: /New child of/ })).toBeVisible();
 
-  const parentSelect = app.locator('form.card select').first();
+  const parentSelect = app.locator('[role="dialog"] select').first();
   const parentValue = await parentSelect.inputValue();
   expect(parentValue).not.toBe('');
 
-  const idInput = app.locator('form.card input.font-mono');
+  const idInput = app.locator('[role="dialog"] input.font-mono');
   const newId = await idInput.inputValue();
   expect(newId).toBeTruthy();
 
@@ -50,7 +50,7 @@ test('creating a child from a tree row sets the correct parent', async ({ app, s
   await app.locator('[title="Add child requirement"]').first().click();
   await expect(app.getByRole('heading', { name: /New child of/ })).toBeVisible();
 
-  const idInput = app.locator('form.card input.font-mono');
+  const idInput = app.locator('[role="dialog"] input.font-mono');
   const newId = await idInput.inputValue();
   expect(newId).toBeTruthy();
 
@@ -74,19 +74,19 @@ test('duplicate from tree row copies name, type and priority', async ({ app, ser
   await app.locator('[title="Duplicate requirement"]').first().click();
   await expect(app.getByRole('heading', { name: /Duplicate/ })).toBeVisible();
 
-  const idInput = app.locator('form.card input.font-mono');
+  const idInput = app.locator('[role="dialog"] input.font-mono');
   const newId = await idInput.inputValue();
   expect(newId).toBeTruthy();
   expect(newId).not.toBe(source);
 
-  const nameInput = app.locator('form.card input[placeholder="Requirement name"]');
+  const nameInput = app.locator('[role="dialog"] input[placeholder="Requirement name"]');
   const nameValue = await nameInput.inputValue();
   expect(nameValue).toContain('(copy)');
 
   const sourceReq = await getReq(app, source!);
   expect(sourceReq).not.toBeNull();
 
-  const cardSelects = app.locator('form.card select');
+  const cardSelects = app.locator('[role="dialog"] select');
   const typeValue = await cardSelects.nth(1).inputValue();
   expect(typeValue).toBe(sourceReq.type);
 
@@ -103,7 +103,7 @@ test('duplicated requirement carries no relations', async ({ app, server }) => {
   await app.locator('[title="Duplicate requirement"]').first().click();
   await expect(app.getByRole('heading', { name: /Duplicate/ })).toBeVisible();
 
-  const idInput = app.locator('form.card input.font-mono');
+  const idInput = app.locator('[role="dialog"] input.font-mono');
   const newId = await idInput.inputValue();
   expect(newId).toBeTruthy();
 
@@ -121,7 +121,7 @@ test('add child from detail page navigates to the new requirement', async ({ app
   await app.locator('[title="Add child requirement"]').click();
   await expect(app.getByRole('heading', { name: /New child of/ })).toBeVisible();
 
-  const idInput = app.locator('form.card input.font-mono');
+  const idInput = app.locator('[role="dialog"] input.font-mono');
   const newId = await idInput.inputValue();
   expect(newId).toBeTruthy();
 

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { X, FileDown, FileText, FileCode, File, Download, Loader, FileSpreadsheet, Globe, FileType, AlertTriangle, History } from 'lucide-react';
 import { api, type RequirementTreeNode } from '../api/client';
+import Modal from './Modal';
 
 interface ExportDialogProps {
   open: boolean;
@@ -213,25 +213,13 @@ export default function ExportDialog({ open, onClose, projectId }: ExportDialogP
   };
 
   return (
-    <AnimatePresence>
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={onClose}
-          />
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 10 }}
-            className="relative bg-card border rounded-xl shadow-2xl w-full max-w-2xl p-6 mx-4 max-h-[85vh] overflow-y-auto"
-          >
-            <button onClick={onClose} className="absolute right-4 top-4 text-muted-foreground hover:text-foreground transition-colors">
-              <X size={18} />
-            </button>
+    <Modal open={open} onClose={onClose} panelClassName="w-full max-w-2xl p-6 max-h-[85vh] overflow-y-auto">
+      <button onClick={onClose} className="absolute right-4 top-4 text-muted-foreground hover:text-foreground transition-colors">
+        <X size={18} />
+      </button>
 
-            <h2 className="text-lg font-bold text-foreground mb-1">Export</h2>
-            <p className="text-xs text-muted-foreground mb-5">Download a report or export requirements in an interchange format</p>
+      <h2 className="text-lg font-bold text-foreground mb-1">Export</h2>
+      <p className="text-xs text-muted-foreground mb-5">Download a report or export requirements in an interchange format</p>
 
             <div className="space-y-5">
               {/* --- Report formats --- */}
@@ -494,9 +482,6 @@ export default function ExportDialog({ open, onClose, projectId }: ExportDialogP
                 <button onClick={onClose} className="btn-secondary">Cancel</button>
               </div>
             </div>
-          </motion.div>
-        </div>
-      )}
-    </AnimatePresence>
+    </Modal>
   );
 }

@@ -17,6 +17,7 @@ import { CommentThread } from '../components/CommentThread';
 import { useToasts } from '../components/Toast';
 import { useRangeSelection } from '../hooks/useRangeSelection';
 import { useBulkActions } from '../hooks/useBulkActions';
+import BulkActionBar from '../components/BulkActionBar';
 import { useSelectedReq, useContextPane } from '../components/Layout';
 import LoadingSplash from '../components/LoadingSplash';
 
@@ -512,8 +513,11 @@ export default function ChangeRequestsPage() {
       </div>
       )}
       {selectedIds.size > 0 && canBulk && (
-        <div className="sticky bottom-6 z-40 mx-auto w-fit max-w-full flex flex-wrap items-center justify-center gap-3 bg-card border rounded-xl shadow-2xl px-4 py-3">
-          <span className="text-xs font-medium text-foreground">{selectedIds.size} selected</span>
+        <BulkActionBar
+          count={selectedIds.size}
+          onSelectAll={selectAllCRs}
+          onClear={clearCRSelection}
+        >
           <select
             className="select text-xs py-1 w-32"
             onChange={(e) => { if (e.target.value) { handleBulkCRStatus(e.target.value); e.target.value = ''; } }}
@@ -526,9 +530,7 @@ export default function ChangeRequestsPage() {
             <option value="rejected">Rejected</option>
           </select>
           <button onClick={handleBulkCRDelete} className="btn-danger text-xs"><Trash2 size={13} /> Delete</button>
-          <button onClick={selectAllCRs} className="text-[10px] text-muted-foreground hover:text-foreground">Select all</button>
-          <button onClick={clearCRSelection} className="text-[10px] text-muted-foreground hover:text-foreground"><X size={13} /></button>
-        </div>
+        </BulkActionBar>
       )}
     </div>
   );

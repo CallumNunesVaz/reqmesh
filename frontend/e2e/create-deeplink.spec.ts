@@ -27,10 +27,10 @@ test('?new=1&parent=<id> opens child form with parent selected', async ({ app, s
 
   await expect(app.getByRole('heading', { name: new RegExp(parentId!) })).toBeVisible();
 
-  const parentSelect = app.locator('form.card select').first();
+  const parentSelect = app.locator('[role="dialog"] select').first();
   await expect(parentSelect).toHaveValue(parentId!);
 
-  const idInput = app.locator('form.card input.font-mono');
+  const idInput = app.locator('[role="dialog"] input.font-mono');
   const newId = await idInput.inputValue();
   expect(newId).toBeTruthy();
   expect(newId).not.toBe(parentId);

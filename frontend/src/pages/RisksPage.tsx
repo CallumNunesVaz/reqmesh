@@ -19,6 +19,7 @@ import { useToasts } from '../components/Toast';
 import { useRangeSelection } from '../hooks/useRangeSelection';
 import { useConfirm } from '../components/ConfirmDialog';
 import { useBulkActions } from '../hooks/useBulkActions';
+import BulkActionBar from '../components/BulkActionBar';
 import LoadingSplash from '../components/LoadingSplash';
 
 const formatLevel = (s: string) => s.replace(/_/g, ' ');
@@ -575,8 +576,11 @@ export default function RisksPage() {
       </div>
       )}
       {selectedIds.size > 0 && canBulk && (
-        <div className="sticky bottom-6 z-40 mx-auto w-fit max-w-full flex flex-wrap items-center justify-center gap-3 bg-card border rounded-xl shadow-2xl px-4 py-3">
-          <span className="text-xs font-medium text-foreground">{selectedIds.size} selected</span>
+        <BulkActionBar
+          count={selectedIds.size}
+          onSelectAll={selectAllRisks}
+          onClear={clearRiskSelection}
+        >
           <select
             className="select text-xs py-1 w-32"
             onChange={(e) => { if (e.target.value) { handleBulkRiskStatus(e.target.value); e.target.value = ''; } }}
@@ -588,9 +592,7 @@ export default function RisksPage() {
             <option value="mitigated">Mitigated</option>
           </select>
           <button onClick={handleBulkRiskDelete} className="btn-danger text-xs"><Trash2 size={13} /> Delete</button>
-          <button onClick={selectAllRisks} className="text-[10px] text-muted-foreground hover:text-foreground">Select all</button>
-          <button onClick={clearRiskSelection} className="text-[10px] text-muted-foreground hover:text-foreground"><X size={13} /></button>
-        </div>
+        </BulkActionBar>
       )}
     </div>
   );

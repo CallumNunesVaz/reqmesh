@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { X, User, Lock, Eye, EyeOff, LogIn, UserPlus } from 'lucide-react';
 import { api } from '../api/client';
 import { useAuthStore } from '../store/auth';
+import Modal from './Modal';
 
 interface LoginModalProps {
   open: boolean;
@@ -49,31 +49,16 @@ export default function LoginModal({ open, onClose }: LoginModalProps) {
   };
 
   return (
-    <AnimatePresence>
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="absolute inset-0 bg-background/80 backdrop-blur-sm"
-            onClick={onClose}
-          />
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 10 }}
-            className="relative bg-card border rounded-xl shadow-2xl w-full max-w-sm p-6 mx-4"
-          >
-            <button onClick={onClose} className="absolute right-4 top-4 text-muted-foreground hover:text-foreground">
-              <X size={18} />
-            </button>
+    <Modal open={open} onClose={onClose} panelClassName="w-full max-w-sm p-6">
+      <button onClick={onClose} className="absolute right-4 top-4 text-muted-foreground hover:text-foreground">
+        <X size={18} />
+      </button>
 
-            <img src="/reqmesh-logo.svg" alt="reqmesh" className="w-32 mx-auto mb-4" />
+      <img src="/reqmesh-logo.svg" alt="reqmesh" className="w-32 mx-auto mb-4" />
 
-            <h2 className="text-lg font-bold text-foreground mb-6">
-              {mode === 'login' ? 'Sign In' : 'Create Account'}
-            </h2>
+      <h2 className="text-lg font-bold text-foreground mb-6">
+        {mode === 'login' ? 'Sign In' : 'Create Account'}
+      </h2>
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
@@ -118,9 +103,6 @@ export default function LoginModal({ open, onClose }: LoginModalProps) {
                 {mode === 'login' ? "Don't have an account? Register" : 'Already have an account? Sign in'}
               </button>
             </div>
-          </motion.div>
-        </div>
-      )}
-    </AnimatePresence>
+    </Modal>
   );
 }

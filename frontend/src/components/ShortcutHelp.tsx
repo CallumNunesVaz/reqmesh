@@ -1,7 +1,6 @@
-import { useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 import { LIST_ROUTES, DETAIL_ROUTES } from '../lib/keyboardShortcuts';
+import Modal from './Modal';
 
 interface ShortcutGroup { section: string; pages?: readonly string[]; items: { keys: string; description: string }[] }
 
@@ -60,27 +59,14 @@ const SHORTCUTS: ShortcutGroup[] = [
 ];
 
 export default function ShortcutHelp({ open, onClose }: { open: boolean; onClose: () => void }) {
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } };
-    document.addEventListener('keydown', onKey, true);
-    return () => document.removeEventListener('keydown', onKey, true);
-  }, [open, onClose]);
-
   return (
-    <AnimatePresence>
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-            className="bg-card border rounded-2xl shadow-2xl w-full max-w-lg max-h-[80vh] overflow-auto mx-4"
-          >
-            <div className="flex items-center justify-between px-5 py-4 border-b">
-              <h2 className="text-sm font-semibold text-card-foreground">Keyboard Shortcuts</h2>
-              <button onClick={onClose} className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent">
-                <X size={16} />
-              </button>
-            </div>
+    <Modal open={open} onClose={onClose} closeOnEscape panelClassName="w-full max-w-lg max-h-[80vh] overflow-auto">
+      <div className="flex items-center justify-between px-5 py-4 border-b">
+        <h2 className="text-sm font-semibold text-card-foreground">Keyboard Shortcuts</h2>
+        <button onClick={onClose} className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent">
+          <X size={16} />
+        </button>
+      </div>
             <div className="p-5 space-y-5">
               {SHORTCUTS.map((group) => (
                 <div key={group.section}>
@@ -102,9 +88,6 @@ export default function ShortcutHelp({ open, onClose }: { open: boolean; onClose
             <div className="px-5 py-3 border-t text-[10px] text-muted-foreground/50">
               Tip: shortcuts don't fire when you're typing in a text field (except save).
             </div>
-          </motion.div>
-        </div>
-      )}
-    </AnimatePresence>
+    </Modal>
   );
 }

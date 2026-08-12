@@ -9,12 +9,8 @@ const P = DEMO_PROJECT;
  * native prompt before: the dialog appears, Cancel is genuinely a no-op, and
  * the confirm button is labelled for the action rather than saying "Confirm".
  *
- * The overlay is matched by its z-index utility class rather than a role,
- * because no modal in the app declares `role="dialog"` yet. When that changes,
- * this selector should become `getByRole('dialog')`.
+ * The dialog is matched by its role now that `Modal` declares `role="dialog"`.
  */
-const OVERLAY = '.fixed.inset-0.z-\\[60\\]';
-
 async function openDecisions(app: any, server: any) {
   await signIn(app);
   // Edit mode after the navigation, not before: a full page load resets it to
@@ -32,7 +28,7 @@ test('cancelling the delete dialog leaves the record alone', async ({ app, serve
 
   await app.locator(`[title="Delete"]`).first().click();
 
-  const dialog = app.locator(OVERLAY);
+  const dialog = app.getByRole('dialog');
   await expect(dialog).toBeVisible();
   // The action button names the action — it said "Confirm" for every dialog.
   await expect(dialog.getByRole('button', { name: 'Delete' })).toBeVisible();
@@ -54,7 +50,7 @@ test('confirming the delete dialog removes the record', async ({ app, server }) 
 
   await app.locator(`[title="Delete"]`).first().click();
 
-  const dialog = app.locator(OVERLAY);
+  const dialog = app.getByRole('dialog');
   await expect(dialog).toBeVisible();
   await dialog.getByRole('button', { name: 'Delete' }).click();
   await expect(dialog).toBeHidden();

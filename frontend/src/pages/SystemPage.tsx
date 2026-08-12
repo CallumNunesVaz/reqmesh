@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { api, type SystemInfo, type UpdateCheck, type UpdateStatus, type BuildInfo } from '../api/client';
 import { useAuthStore } from '../store/auth';
-import BodyPortal from '../components/BodyPortal';
+import Modal from '../components/Modal';
 
 /** States during which the update is actively running and we should poll. */
 const ACTIVE = new Set(['preparing', 'requested', 'in_progress']);
@@ -544,114 +544,90 @@ export default function SystemPage() {
       )}
 
       {/* ── Confirm dialog ───────────────────────────────────────── */}
-      {confirming && (
-        <BodyPortal>
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setConfirming(false)}>
-          <div className="card p-6 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
-            <h3 className="font-semibold flex items-center gap-2"><Download size={18} /> Update to v{check?.latest}?</h3>
-            <ul className="text-sm text-muted-foreground mt-3 space-y-1.5 list-disc pl-5">
-              <li>All project data is backed up (a git tag per project) first.</li>
-              <li>The app is recreated on the new image — expect a short restart.</li>
-              <li>Project data is preserved; data migrations run automatically.</li>
-            </ul>
-            <div className="flex justify-end gap-2 mt-5">
-              <button className="btn-ghost" onClick={() => setConfirming(false)}>Cancel</button>
-              <button className="btn-primary" onClick={startUpdate} disabled={starting}>
-                {starting ? <Loader size={15} className="animate-spin" /> : <Download size={15} />} Update now
-              </button>
-            </div>
-          </div>
+      <Modal open={confirming} onClose={() => setConfirming(false)} panelClassName="p-6 max-w-md w-full">
+        <h3 className="font-semibold flex items-center gap-2"><Download size={18} /> Update to v{check?.latest}?</h3>
+        <ul className="text-sm text-muted-foreground mt-3 space-y-1.5 list-disc pl-5">
+          <li>All project data is backed up (a git tag per project) first.</li>
+          <li>The app is recreated on the new image — expect a short restart.</li>
+          <li>Project data is preserved; data migrations run automatically.</li>
+        </ul>
+        <div className="flex justify-end gap-2 mt-5">
+          <button className="btn-ghost" onClick={() => setConfirming(false)}>Cancel</button>
+          <button className="btn-primary" onClick={startUpdate} disabled={starting}>
+            {starting ? <Loader size={15} className="animate-spin" /> : <Download size={15} />} Update now
+          </button>
         </div>
-        </BodyPortal>
-      )}
+      </Modal>
 
       {/* ── Confirm restart ──────────────────────────────────────── */}
-      {confirmReseed && (
-        <BodyPortal>
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setConfirmReseed(false)}>
-          <div className="card p-6 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
-            <h3 className="font-semibold flex items-center gap-2">
-              <AlertTriangle size={18} className="text-amber-500" />
-              {demo?.exists ? 'Replace the example project?' : 'Load the example project?'}
-            </h3>
-            <p className="text-sm text-muted-foreground mt-3">
-              {demo?.exists
-                ? `${demo.name} currently holds ${demo.requirements} requirements. Re-seeding deletes the project and rebuilds it from the bundled copy — every change made to it, and its git history, is lost. Other projects are untouched.`
-                : `${demo?.name ?? 'The example project'} will be created from the bundled copy.`}
-            </p>
-            <div className="flex justify-end gap-2 mt-5">
-              <button className="btn-ghost" onClick={() => setConfirmReseed(false)}>Cancel</button>
-              <button className="btn-primary" onClick={doReseed} disabled={reseeding}>
-                {reseeding ? <Loader size={15} className="animate-spin" /> : <RefreshCw size={15} />}
-                {demo?.exists ? 'Replace it' : 'Load it'}
-              </button>
-            </div>
-          </div>
+      <Modal open={confirmReseed} onClose={() => setConfirmReseed(false)} panelClassName="p-6 max-w-md w-full">
+        <h3 className="font-semibold flex items-center gap-2">
+          <AlertTriangle size={18} className="text-amber-500" />
+          {demo?.exists ? 'Replace the example project?' : 'Load the example project?'}
+        </h3>
+        <p className="text-sm text-muted-foreground mt-3">
+          {demo?.exists
+            ? `${demo.name} currently holds ${demo.requirements} requirements. Re-seeding deletes the project and rebuilds it from the bundled copy — every change made to it, and its git history, is lost. Other projects are untouched.`
+            : `${demo?.name ?? 'The example project'} will be created from the bundled copy.`}
+        </p>
+        <div className="flex justify-end gap-2 mt-5">
+          <button className="btn-ghost" onClick={() => setConfirmReseed(false)}>Cancel</button>
+          <button className="btn-primary" onClick={doReseed} disabled={reseeding}>
+            {reseeding ? <Loader size={15} className="animate-spin" /> : <RefreshCw size={15} />}
+            {demo?.exists ? 'Replace it' : 'Load it'}
+          </button>
         </div>
-        </BodyPortal>
-      )}
-      {confirmRestart && (
-        <BodyPortal>
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setConfirmRestart(false)}>
-          <div className="card p-6 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
-            <h3 className="font-semibold flex items-center gap-2"><Power size={18} /> Restart the application?</h3>
-            <p className="text-sm text-muted-foreground mt-3">
-              The app will be unavailable for a few seconds while it restarts, disconnecting anyone currently using it.
-              {staged ? ' The staged update will be applied on the way back up.' : ''}
-            </p>
-            <div className="flex justify-end gap-2 mt-5">
-              <button className="btn-ghost" onClick={() => setConfirmRestart(false)}>Cancel</button>
-              <button className="btn-primary" onClick={restart} disabled={restarting}>
-                {restarting ? <Loader size={15} className="animate-spin" /> : <Power size={15} />} Restart now
-              </button>
-            </div>
-          </div>
+      </Modal>
+      <Modal open={confirmRestart} onClose={() => setConfirmRestart(false)} panelClassName="p-6 max-w-md w-full">
+        <h3 className="font-semibold flex items-center gap-2"><Power size={18} /> Restart the application?</h3>
+        <p className="text-sm text-muted-foreground mt-3">
+          The app will be unavailable for a few seconds while it restarts, disconnecting anyone currently using it.
+          {staged ? ' The staged update will be applied on the way back up.' : ''}
+        </p>
+        <div className="flex justify-end gap-2 mt-5">
+          <button className="btn-ghost" onClick={() => setConfirmRestart(false)}>Cancel</button>
+          <button className="btn-primary" onClick={restart} disabled={restarting}>
+            {restarting ? <Loader size={15} className="animate-spin" /> : <Power size={15} />} Restart now
+          </button>
         </div>
-        </BodyPortal>
-      )}
+      </Modal>
 
       {/* ── Install dependency modal ──────────────────────────────── */}
-      {installDep && (
-        <BodyPortal>
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-[2px] p-4" onClick={() => setInstallDep(null)}>
-          <div className="card p-5 max-w-lg w-full shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                  <DownloadCloud size={16} className="text-primary" />
-                  Install {installDep.label}
-                </h3>
-                <p className="text-xs text-muted-foreground mt-0.5">Run these commands on the server to install this dependency.</p>
-              </div>
-              <button onClick={() => setInstallDep(null)} className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-accent">
-                <X size={15} />
-              </button>
-            </div>
-            <div className="bg-muted rounded-lg p-3 relative">
-              <pre className="text-xs font-mono text-foreground whitespace-pre-wrap">{installDep.guide}</pre>
-              <button
-                onClick={async () => {
-                  // navigator.clipboard is undefined outside a secure context,
-                  // so the unguarded call this replaces threw a TypeError on any
-                  // plain-HTTP deployment and the .catch(() => {}) hid it.
-                  if (await copyText(installDep.guide)) {
-                    setCopiedId(installDep.id);
-                    setTimeout(() => setCopiedId(null), 2000);
-                  }
-                }}
-                className="absolute top-2 right-2 p-1.5 rounded bg-card border text-muted-foreground hover:text-foreground transition-colors"
-                title="Copy to clipboard"
-              >
-                {copiedId === installDep.id ? <CheckCircle2 size={14} className="text-cs-green" /> : <Copy size={14} />}
-              </button>
-            </div>
-            <div className="flex justify-end mt-4">
-              <button onClick={() => setInstallDep(null)} className="btn-secondary text-xs">Close</button>
-            </div>
+      <Modal open={installDep !== null} onClose={() => setInstallDep(null)} panelClassName="p-5 max-w-lg w-full">
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+              <DownloadCloud size={16} className="text-primary" />
+              Install {installDep?.label}
+            </h3>
+            <p className="text-xs text-muted-foreground mt-0.5">Run these commands on the server to install this dependency.</p>
           </div>
+          <button onClick={() => setInstallDep(null)} className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-accent">
+            <X size={15} />
+          </button>
         </div>
-        </BodyPortal>
-      )}
+        <div className="bg-muted rounded-lg p-3 relative">
+          <pre className="text-xs font-mono text-foreground whitespace-pre-wrap">{installDep?.guide}</pre>
+          <button
+            onClick={async () => {
+              // navigator.clipboard is undefined outside a secure context,
+              // so the unguarded call this replaces threw a TypeError on any
+              // plain-HTTP deployment and the .catch(() => {}) hid it.
+              if (installDep && await copyText(installDep.guide)) {
+                setCopiedId(installDep.id);
+                setTimeout(() => setCopiedId(null), 2000);
+              }
+            }}
+            className="absolute top-2 right-2 p-1.5 rounded bg-card border text-muted-foreground hover:text-foreground transition-colors"
+            title="Copy to clipboard"
+          >
+            {installDep && copiedId === installDep.id ? <CheckCircle2 size={14} className="text-cs-green" /> : <Copy size={14} />}
+          </button>
+        </div>
+        <div className="flex justify-end mt-4">
+          <button onClick={() => setInstallDep(null)} className="btn-secondary text-xs">Close</button>
+        </div>
+      </Modal>
     </div>
   );
 }
