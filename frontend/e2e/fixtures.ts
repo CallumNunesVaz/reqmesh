@@ -109,8 +109,10 @@ export const test = base.extend<{ app: Page }, { requireAuth: boolean; server: S
       await use({ port, baseURL: `http://127.0.0.1:${port}`, projects, pristine });
     } finally {
       proc.kill('SIGKILL');
-      rmSync(dataRoot, { recursive: true, force: true });
-      rmSync(home, { recursive: true, force: true });
+      // Same retry reasoning as the per-test restore below: SIGKILL does not
+      // wait for the process to release what it was writing.
+      rmSync(dataRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
+      rmSync(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
     }
   }, { scope: 'worker' }],
 
@@ -125,7 +127,18 @@ export const test = base.extend<{ app: Page }, { requireAuth: boolean; server: S
     //
     // The store caches parses by mtime, and a fresh copy has new mtimes, so
     // the restore invalidates it without needing a server restart.
-    rmSync(server.projects, { recursive: true, force: true });
+    //
+    // `maxRetries`, because this races the backend. The server is worker-scoped
+    // and may still be finishing a write from the previous test when the next
+    // one wipes the data root: rmSync walks the tree, a file reappears
+    // underneath it, and the final rmdir fails with
+    //   ENOTEMPTY: directory not empty, rmdir '…/projects/cessna-172'
+    // which failed the test in ~150ms, before it had done anything. That was
+    // the suite's last standing flake — it recovered on retry, so it cost a
+    // rerun rather than a red build, until a slow runner lost twice.
+    // Node retries this error class with a linear backoff; the alternative is
+    // waiting for the server to go idle, which it does not report.
+    rmSync(server.projects, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
     cpSync(server.pristine, server.projects, { recursive: true });
 
     // Destructive actions now use the in-app ConfirmDialog, so a test that
