@@ -51,7 +51,7 @@ def publish_project(project_id: str, data: PublishRequest, user: dict = Depends(
 
 @router.get("/projects/{project_id}/publish/download")
 def download_report(project_id: str, format: str = "html", subsystems: str | None = None,
-                          components: str | None = None,
+                          components: str | None = None, baselines: str | None = None,
                           sections: str | None = None, changelog_from: str = "", changelog_to: str = "",
                           # Buckets are keyed by path, and every format shares this
                           # one — so the old budget of 5 blocked a user who simply
@@ -62,7 +62,8 @@ def download_report(project_id: str, format: str = "html", subsystems: str | Non
     store = get_store(project_id)
     sub_list = [s.strip() for s in subsystems.split(",") if s.strip()] if subsystems is not None else None
     comp_list = [s.strip() for s in components.split(",") if s.strip()] if components is not None else None
-    pub = Publisher(store, sub_list, comp_list)
+    base_list = [s.strip() for s in baselines.split(",") if s.strip()] if baselines is not None else None
+    pub = Publisher(store, sub_list, comp_list, base_list)
     ext_map = {"html": "html", "pdf": "pdf", "md": "md", "latex": "tex", "reqif": "xml", "sysml": "sysml", "csv": "csv", "tsv": "tsv", "xlsx": "xlsx"}
     if format not in ext_map:
         raise HTTPException(status_code=400, detail=f"Unknown format: {format}")

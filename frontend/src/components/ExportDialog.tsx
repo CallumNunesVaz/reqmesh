@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { X, FileDown, FileText, FileCode, File, Download, Loader, FileSpreadsheet, Globe, FileType, AlertTriangle, History } from 'lucide-react';
-import { api, type RequirementTreeNode } from '../api/client';
+import { api, baselineNames, type Component, type RequirementTreeNode } from '../api/client';
 import Modal from './Modal';
 
 interface ExportDialogProps {
@@ -102,6 +102,12 @@ export default function ExportDialog({ open, onClose, projectId }: ExportDialogP
   const [tree, setTree] = useState<RequirementTreeNode[]>([]);
   const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set());
   const [groupSelectAll, setGroupSelectAll] = useState(true);
+  const [components, setComponents] = useState<Component[]>([]);
+  const [selectedComponents, setSelectedComponents] = useState<Set<string>>(new Set());
+  const [componentSelectAll, setComponentSelectAll] = useState(true);
+  const [baselines, setBaselines] = useState<string[]>([]);
+  const [selectedBaselines, setSelectedBaselines] = useState<Set<string>>(new Set());
+  const [baselineSelectAll, setBaselineSelectAll] = useState(true);
   const [latexAvail, setLatexAvail] = useState(false);
   // Changelog ("diff report"): opt-in, with its own date window. Defaults to
   // the last 30 days ending today.
@@ -124,6 +130,17 @@ export default function ExportDialog({ open, onClose, projectId }: ExportDialogP
       setTree(t);
       setSelectedGroups(new Set(t.map(n => n.id)));
       setGroupSelectAll(true);
+    }).catch(console.error);
+    api.listComponents(projectId).then(cs => {
+      setComponents(cs);
+      setSelectedComponents(new Set(cs.map(c => c.id)));
+      setComponentSelectAll(true);
+    }).catch(console.error);
+    api.getProject(projectId).then(p => {
+      const names = baselineNames(p.baselines);
+      setBaselines(names);
+      setSelectedBaselines(new Set(names));
+      setBaselineSelectAll(true);
     }).catch(console.error);
   }, [open, projectId]);
 
@@ -156,8 +173,53 @@ export default function ExportDialog({ open, onClose, projectId }: ExportDialogP
     setGroupSelectAll(false);
   };
 
+  const toggleComponent = (id: string) => {
+    setSelectedComponents(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) { next.delete(id); } else { next.add(id); }
+      setComponentSelectAll(next.size === components.length);
+      return next;
+    });
+  };
+
+  const handleSelectAllComponents = () => {
+    setSelectedComponents(new Set(components.map(c => c.id)));
+    setComponentSelectAll(true);
+  };
+
+  const handleSelectNoneComponents = () => {
+    setSelectedComponents(new Set());
+    setComponentSelectAll(false);
+  };
+
+  const toggleBaseline = (name: string) => {
+    setSelectedBaselines(prev => {
+      const next = new Set(prev);
+      if (next.has(name)) { next.delete(name); } else { next.add(name); }
+      setBaselineSelectAll(next.size === baselines.length);
+      return next;
+    });
+  };
+
+  const handleSelectAllBaselines = () => {
+    setSelectedBaselines(new Set(baselines));
+    setBaselineSelectAll(true);
+  };
+
+  const handleSelectNoneBaselines = () => {
+    setSelectedBaselines(new Set());
+    setBaselineSelectAll(false);
+  };
+
   const selectedCount = subtreeIds.size;
   const totalCount = flatTree.length;
+  const scoped = isReportFormat(format);
+  // An explicit empty scope filter exports nothing — worth a disabled button
+  // rather than a silently empty download.
+  const emptyScope =
+    selectedCount === 0 ||
+    (!componentSelectAll && selectedComponents.size === 0) ||
+    (!baselineSelectAll && selectedBaselines.size === 0);
 
   const handleDownload = async () => {
     setError('');
@@ -176,17 +238,23 @@ export default function ExportDialog({ open, onClose, projectId }: ExportDialogP
       // the filter is explicit and must be sent even when it's empty — an
       // omitted param and an empty one mean very different things to the
       // backend (all requirements vs. none), and collapsing them here used
-      // to silently export everything when the user picked "None".
+      // to silently export everything when the user picked "None". The same
+      // distinction applies to the component and baseline filters.
       const hasGroupFilter = !groupSelectAll;
-      const subsystems = [...selectedGroups].join(',');
+      const hasComponentFilter = !componentSelectAll;
+      const hasBaselineFilter = !baselineSelectAll;
       const wanted = changelogOn ? [...sections, CHANGELOG_SECTION] : sections;
       const secsParam = isReportFormat(format) ? `&sections=${encodeURIComponent(wanted.join(','))}` : '';
       const logParam = (isReportFormat(format) && changelogOn)
         ? `&changelog_from=${encodeURIComponent(changelogFrom)}&changelog_to=${encodeURIComponent(changelogTo)}`
         : '';
-      const qs = hasGroupFilter
-        ? `?format=${format}&subsystems=${encodeURIComponent(subsystems)}${secsParam}${logParam}`
-        : `?format=${format}${secsParam}${logParam}`;
+      // Scope filters (subsystems/components/baselines) only apply to report
+      // formats; for data/interchange formats the backend exports everything,
+      // so the pickers are greyed out and no scope param is sent.
+      const subParam = (scoped && hasGroupFilter) ? `&subsystems=${encodeURIComponent([...selectedGroups].join(','))}` : '';
+      const compParam = (scoped && hasComponentFilter) ? `&components=${encodeURIComponent([...selectedComponents].join(','))}` : '';
+      const baseParam = (scoped && hasBaselineFilter) ? `&baselines=${encodeURIComponent([...selectedBaselines].join(','))}` : '';
+      const qs = `?format=${format}${subParam}${compParam}${baseParam}${secsParam}${logParam}`;
       // Auth is an HttpOnly cookie now — no bearer token to attach.
       const res = await fetch(`/api/projects/${projectId}/publish/download${qs}`, { credentials: 'include' });
       if (!res.ok) throw new Error((await res.json().catch(() => ({ detail: 'Export failed' }))).detail || 'Export failed');
@@ -405,13 +473,14 @@ export default function ExportDialog({ open, onClose, projectId }: ExportDialogP
                   <div>
                     <span className="label">Sections</span>
                     <p className="text-xs text-muted-foreground mt-1">
-                      Section selection applies to report formats only. {format === 'reqif' ? 'ReqIF exports all requirements.' : format === 'sysml' ? 'SysML v2 exports all requirements.' : 'Data exports include all requirements in flat table form.'}
+                      Section selection and the Subsystems / Components / Baselines filters apply to report formats only. {format === 'reqif' ? 'ReqIF exports all requirements.' : format === 'sysml' ? 'SysML v2 exports all requirements.' : 'Data exports include all requirements in flat table form.'}
                     </p>
                   </div>
                 )}
 
-                {/* Subsystems — always shown */}
-                <div>
+                {/* Subsystems — greyed out for non-report formats, which ignore
+                    scope filters and always export everything. */}
+                <div className={scoped ? '' : 'opacity-50 pointer-events-none'}>
                   <div className="flex items-center justify-between mb-1">
                     <span className="label">Subsystems</span>
                     <div className="flex gap-2">
@@ -446,6 +515,79 @@ export default function ExportDialog({ open, onClose, projectId }: ExportDialogP
                     {selectedCount} of {totalCount} requirements selected
                   </p>
                 </div>
+
+                {/* Components */}
+                <div className={scoped ? '' : 'opacity-50 pointer-events-none'}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="label">Components</span>
+                    <div className="flex gap-2">
+                      <button onClick={handleSelectAllComponents} title="Select all components" className="text-[10px] text-muted-foreground hover:text-foreground">All</button>
+                      <button onClick={handleSelectNoneComponents} title="Select no components" className="text-[10px] text-muted-foreground hover:text-foreground">None</button>
+                    </div>
+                  </div>
+                  <div className="space-y-0.5 max-h-48 overflow-y-auto">
+                    {components.length === 0 ? (
+                      <p className="text-xs text-muted-foreground py-2">Loading...</p>
+                    ) : (
+                      components.map((comp) => (
+                        <label
+                          key={comp.id}
+                          className={`flex items-center gap-2 px-2 py-1 rounded-md cursor-pointer text-xs transition-colors ${
+                            selectedComponents.has(comp.id) ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-accent'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedComponents.has(comp.id)}
+                            onChange={() => toggleComponent(comp.id)}
+                            className="rounded"
+                          />
+                          <span className="font-mono text-[10px] opacity-60 w-20 shrink-0 truncate">{comp.id}</span>
+                          <span className="truncate">{comp.name || comp.id}</span>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    {selectedComponents.size} of {components.length} components selected
+                  </p>
+                </div>
+
+                {/* Baselines */}
+                <div className={scoped ? '' : 'opacity-50 pointer-events-none'}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="label">Baselines</span>
+                    <div className="flex gap-2">
+                      <button onClick={handleSelectAllBaselines} title="Select all baselines" className="text-[10px] text-muted-foreground hover:text-foreground">All</button>
+                      <button onClick={handleSelectNoneBaselines} title="Select no baselines" className="text-[10px] text-muted-foreground hover:text-foreground">None</button>
+                    </div>
+                  </div>
+                  <div className="space-y-0.5 max-h-48 overflow-y-auto">
+                    {baselines.length === 0 ? (
+                      <p className="text-xs text-muted-foreground py-2">No baselines defined</p>
+                    ) : (
+                      baselines.map((name) => (
+                        <label
+                          key={name}
+                          className={`flex items-center gap-2 px-2 py-1 rounded-md cursor-pointer text-xs transition-colors ${
+                            selectedBaselines.has(name) ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-accent'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedBaselines.has(name)}
+                            onChange={() => toggleBaseline(name)}
+                            className="rounded"
+                          />
+                          <span className="font-mono text-[10px] opacity-60 w-20 shrink-0 truncate">{name}</span>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    {selectedBaselines.size} of {baselines.length} baselines selected
+                  </p>
+                </div>
               </div>
 
               {error && <p className="text-xs text-destructive">{error}</p>}
@@ -470,9 +612,9 @@ export default function ExportDialog({ open, onClose, projectId }: ExportDialogP
               <div className="flex gap-2 pt-2 border-t">
                 <button
                   onClick={handleDownload}
-                  disabled={downloading || selectedCount === 0 || datesInvalid}
+                  disabled={downloading || emptyScope || datesInvalid}
                   className="btn-primary flex-1 justify-center"
-                  title={selectedCount === 0 ? 'Select at least one subsystem'
+                  title={emptyScope ? 'Select at least one of each scope filter'
                     : datesInvalid ? 'Fix the changelog date range' : undefined}
                 >
                   {downloading ? (

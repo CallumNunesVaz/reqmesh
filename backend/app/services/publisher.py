@@ -40,7 +40,29 @@ class Publisher:
     ]
 
     def __init__(self, store, subsystems: list[str] | None = None,
-                 components: list[str] | None = None):
+                 components: list[str] | None = None,
+                 baselines: list[str] | None = None):
+        """Build a publisher over a project store, optionally scoped.
+
+        Three scope filters narrow which requirements are exported:
+
+        * ``subsystems`` — requirement-tree roots (each is expanded downward);
+        * ``components`` — component-tree roots, resolved to the requirements
+          they (and their descendants) satisfy;
+        * ``baselines`` — baseline *names*, matched against the names held by
+          ``requirement.baselines`` (a baseline is a label, not a record).
+
+        Each filter is either ``None`` (omitted — everything passes) or a list,
+        which may be empty (the filter passes nothing). Omitted and empty are
+        deliberately different: a caller that says "no components" (``[]``) must
+        get zero requirements, not "forget the filter and give me everything".
+
+        The filters combine by **intersection**: a requirement is exported only
+        if it passes every filter that is present. ``subsystems ∩ components``
+        already behaved that way; ``baselines`` joins them on the same rule, so
+        e.g. ``components=["YOKE"]`` + ``baselines=["SRR"]`` yields exactly the
+        requirements in both, never the union.
+        """
         self.store = store
         self.project_id = store.root.name
         self.meta = store.read_meta()
@@ -67,6 +89,18 @@ class Publisher:
         for s in self.specs:
             self._project_ids.add(s["id"])
 
+        # ── Subsystem scope: expand each requirement-tree root downward ──────
+        sub_ids: set[str] | None = None
+        if subsystems is not None:
+            sub_ids = set()
+            def collect(root_id):
+                sub_ids.add(root_id)
+                for r in all_reqs:
+                    if r.get("parent") == root_id:
+                        collect(r["id"])
+            for sid in subsystems:
+                collect(sid)
+
         # ── Component scope: expand the component tree, collect satisfied reqs ──
         comp_req_ids: set[str] | None = None
         if components is not None:
@@ -90,19 +124,17 @@ class Publisher:
                     for rid in c.get("satisfies", []):
                         comp_req_ids.add(rid)
 
-        if subsystems is not None:
-            ids = set()
-            def collect(root_id):
-                ids.add(root_id)
-                for r in all_reqs:
-                    if r.get("parent") == root_id:
-                        collect(r["id"])
-            for sid in subsystems:
-                collect(sid)
+        # ── Baseline scope: match the baseline *names* requirements carry ─────
+        base_req_ids: set[str] | None = None
+        if baselines is not None:
+            wanted = set(baselines)
+            base_req_ids = {r["id"] for r in all_reqs
+                            if wanted & set(r.get("baselines", []))}
 
-            if comp_req_ids is not None:
-                ids &= comp_req_ids
-
+        # The three filters intersect — see the __init__ docstring.
+        present = [s for s in (sub_ids, comp_req_ids, base_req_ids) if s is not None]
+        if present:
+            ids = set.intersection(*present)
             self.reqs = [r for r in all_reqs if r["id"] in ids]
             self.traces = {
                 "links": [l for l in self.traces.get("links", [])
@@ -110,15 +142,6 @@ class Publisher:
             }
             self.vcs = [v for v in self.vcs if any(
                 rid in ids for rid in v.get("verified_requirements", [])
-            )]
-        elif comp_req_ids is not None:
-            self.reqs = [r for r in all_reqs if r["id"] in comp_req_ids]
-            self.traces = {
-                "links": [l for l in self.traces.get("links", [])
-                          if l.get("source") in comp_req_ids and l.get("target") in comp_req_ids]
-            }
-            self.vcs = [v for v in self.vcs if any(
-                rid in comp_req_ids for rid in v.get("verified_requirements", [])
             )]
         else:
             self.reqs = all_reqs
