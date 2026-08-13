@@ -1,6 +1,7 @@
 import { memo, useMemo } from 'react';
 import { BaseEdge, EdgeLabelRenderer, type EdgeProps } from '@xyflow/react';
 import { roundedPath, type Pt } from './orthoRoute';
+import { useGraphSelection } from './GraphPane';
 
 // Renders a pre-routed orthogonal edge (see orthoRoute.ts). The whole
 // diagram's paths are planned together, so this component only turns its
@@ -8,9 +9,16 @@ import { roundedPath, type Pt } from './orthoRoute';
 // longest segment and, when the edge is part of the active selection, a
 // slow traveling pulse that shows the link's direction.
 
+// Stable "no points" sentinel so `data?.points ?? EMPTY_PTS` does not mint a
+// fresh array per render and churn the `path` memo below.
+const EMPTY_PTS: Pt[] = [];
+
 function OrthoEdge({ id, data, style, markerEnd }: EdgeProps) {
-// eslint-disable-next-line react-hooks/exhaustive-deps
-  const pts = (data?.points as Pt[] | undefined) ?? [];
+  // EMPTY_PTS, not a fresh `[]`: a new array every render invalidates the
+  // useMemo below on each pass, which is what exhaustive-deps was complaining
+  // about. A stable reference fixes it properly instead of silencing it.
+  const pts = (data?.points as Pt[] | undefined) ?? EMPTY_PTS;
+  const { selectedReqId } = useGraphSelection();
 
   const { path, labelX, labelY } = useMemo(() => {
     if (pts.length < 2) return { path: '', labelX: 0, labelY: 0 };
@@ -40,6 +48,7 @@ function OrthoEdge({ id, data, style, markerEnd }: EdgeProps) {
         path={path}
         style={{ ...style, stroke: edgeColor, fill: 'none', strokeLinecap: 'round', ...(active ? { cursor: 'pointer', pointerEvents: 'auto' as any } : {}) }}
         markerEnd={markerEnd}
+        interactionWidth={selectedReqId ? 20 : 0}
       />
       {active && (
         // Direction pulse: a dot glides source → target along the exact path.

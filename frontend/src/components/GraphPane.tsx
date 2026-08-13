@@ -307,6 +307,7 @@ async function elkLayout(
 function FloatingEdge({ id, source, target, data, style, markerEnd }: EdgeProps) {
   const sourceNode = useInternalNode(source);
   const targetNode = useInternalNode(target);
+  const { selectedReqId } = useGraphSelection();
   if (!sourceNode || !targetNode) return null;
 
   const sw = sourceNode.measured?.width ?? 32;
@@ -347,6 +348,7 @@ function FloatingEdge({ id, source, target, data, style, markerEnd }: EdgeProps)
         path={edgePath}
         style={{ ...style, stroke: edgeColor, fill: 'none', strokeLinecap: 'round' }}
         markerEnd={markerEnd}
+        interactionWidth={selectedReqId ? 20 : 0}
       />
       {showLabel && (
         <EdgeLabelRenderer>
@@ -913,7 +915,6 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
 
     const wfEval = whatIf.impact?.evaluation;
     const wfRoots = whatIf.impact?.roots ?? [];
-    const wfAffected = new Set(whatIf.impact?.affected ?? []);
     const wfStepOwner = whatIf.impact?.steps[whatIf.stepIndex]?.owner ?? null;
     const wfRootOwners = new Set(wfRoots.map((r) => r.split('.')[0]));
 
@@ -1106,6 +1107,29 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const rfRef = useRef<ReactFlowInstance | null>(null);
   const graphBoxRef = useRef<HTMLDivElement>(null);
+
+  // React Flow stamps every edge `<g>` with the `nopan` class so a click-drag
+  // that starts on an edge never pans the view. Here an edge is neither
+  // draggable nor reconnectable, and an edge click is a no-op unless a
+  // requirement is already selected — so the class only blocks the very pan it
+  // was meant to leave alone. Strip it from edge groups (NOT from the edge
+  // label badges, which use `nopan` deliberately to stay interactive). React
+  // Flow re-applies the class whenever the edge store updates, so watch for
+  // mutations rather than relying on a single pass.
+  useEffect(() => {
+    const strip = () => {
+      graphBoxRef.current
+        ?.querySelectorAll<SVGGElement>('.react-flow__edge.nopan')
+        .forEach((el) => el.classList.remove('nopan'));
+    };
+    strip();
+    const root = graphBoxRef.current;
+    if (!root) return;
+    const observer = new MutationObserver(strip);
+    observer.observe(root, { subtree: true, childList: true, attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
+
   // The "Reset view" action: frame all currently-visible nodes.
   const resetView = useCallback(() => {
     rfRef.current?.fitView({ padding: 0.12, maxZoom: gs.maxZoom, duration: 400 });
@@ -1359,7 +1383,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
           }
 
           const edgeLenFn = (e: Edge) => edgeLen.get(e.id) ?? 600;
-          const maxLen = Math.max(1, ...[...edgeLen.values()]);
+          const maxLen = Math.max(1, ...edgeLen.values());
           const retractMs = (len: number) => Math.max(60, Math.round((len / maxLen) * 300));
           const retractAnimStyle = (len: number) => ({
             '--edge-len': String(len),
@@ -1378,7 +1402,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
             setNodes(initialNodes.map((n) => {
               const p = positions.get(n.id);
               const isNew = newIds.has(n.id);
-              return p ? { ...n, position: { x: p.x, y: p.y }, data: { ...n.data, elkHeight: heights.get(n.id) ?? BASE_NODE_H }, style: { ...(n.style as any || {}), opacity: isNew ? 0 : undefined, transition: 'transform 0.35s ease-out' } } : n;
+              return p ? { ...n, position: { x: p.x, y: p.y }, data: { ...n.data, elkHeight: heights.get(n.id) ?? BASE_NODE_H }, style: { ...(n.style as any), opacity: isNew ? 0 : undefined, transition: 'transform 0.35s ease-out' } } : n;
             }));
             // Phase 3 — after nodes settle, grow new edges + fade children.
             schedule(() => {
@@ -1523,7 +1547,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
       timers.push(setTimeout(() => {
         setNodes(nds => nds.map((n, i) => ({
           ...n,
-          style: { ...(n.style || {}), opacity: 1, transition: `opacity 0.3s ease-out ${Math.min(i * 4, 250)}ms` },
+          style: { ...n.style, opacity: 1, transition: `opacity 0.3s ease-out ${Math.min(i * 4, 250)}ms` },
         })));
         setEntranceDone(true);
       }, 40));
@@ -1838,7 +1862,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
         // Highlighted dashed relations drift slowly along their direction.
         className: connected && dashed && !perfMode ? 'rt-drift' : undefined,
         style: {
-          ...((e.style as Record<string, any>) || {}),
+          ...(e.style as Record<string, any>),
           opacity: connected ? Math.max((e.style as any)?.opacity || 0.55, 0.9) : 0.04,
           // A hint of bloom on active edges — just enough to trace them.
           // (Skipped in perf mode: SVG filters force slow re-rasterisation.)
