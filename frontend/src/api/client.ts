@@ -151,6 +151,9 @@ export interface Project {
   /** Only present on `getProject`. Normalized server-side. */
   system_states?: SystemStateDef[];
   risk_matrix?: RiskMatrix;
+  /** Per-collection naming scheme (prefix/separator/suffix). Read by the CR
+   *  form to validate a proposed requirement id before it is submitted. */
+  naming?: Record<string, unknown>;
 }
 
 export interface BaselineDef {

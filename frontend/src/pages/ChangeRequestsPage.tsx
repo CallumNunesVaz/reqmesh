@@ -3,7 +3,7 @@ import { usePersistedState } from '../hooks/usePersistedState';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Trash2, GitPullRequest, Square, CheckSquare, X, Search, Play, Edit3, Ban } from 'lucide-react';
-import { api, type ChangeRequest, type Component, type CRRedline, CR_URGENCIES } from '../api/client';
+import { api, type ChangeRequest, type Component, type CRRedline, type Project, type Requirement, CR_URGENCIES } from '../api/client';
 import { useAuthStore } from '../store/auth';
 import { useStore } from '../store';
 import { CopyLinkButton, EntityLink } from '../components/entities';
@@ -36,6 +36,39 @@ const urgencyBadges: Record<string, string> = {
   high: 'border-amber-500/30 bg-amber-500/10 text-amber-400',
   emergency: 'border-red-500/30 bg-red-500/10 text-red-400',
 };
+
+interface RequirementNamingRule {
+  separator?: string;
+  suffix_type?: string;
+}
+
+// The same grammar as `core.ids.safe_id`, so an id the authoring form refuses
+// is one `safe_id` would refuse too.
+const SAFE_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._ -]*$/;
+
+/** Reason a proposed new-requirement id cannot be created, or null when valid.
+ *  Mirrors `safe_id` + `services.rename.matches_scheme` so a proposed id is
+ *  refused here exactly the way execute and rename would refuse it later. */
+function proposedIdError(id: string, naming: RequirementNamingRule | undefined, existing: Set<string>): string | null {
+  const trimmed = id.trim();
+  if (!trimmed) return "'id' is empty";
+  if (trimmed.includes('..') || !SAFE_ID_RE.test(trimmed)) {
+    return `'${trimmed}' is not a valid requirement id`;
+  }
+  if (existing.has(trimmed)) {
+    return `'${trimmed}' already exists`;
+  }
+  const separator = naming?.separator ?? '';
+  const suffixType = naming?.suffix_type ?? 'numeric';
+  if (separator && !trimmed.includes(separator)) {
+    return `'${trimmed}' is missing the '${separator}' between its prefix and number`;
+  }
+  const tail = separator ? trimmed.split(separator).pop() ?? trimmed : trimmed;
+  if (suffixType === 'numeric' && !/\d$/.test(tail)) {
+    return `'${trimmed}' must end in a number`;
+  }
+  return null;
+}
 
 /** Render a single diff field: before strikethrough, after marked. */
 function DiffField({ field, before, after }: { field: string; before: unknown; after: unknown }) {
@@ -73,6 +106,12 @@ export default function ChangeRequestsPage() {
   const canMaintain = useAuthStore((s) => s.canEdit());
   const { addToast } = useToasts();
   const [components, setComponents] = useState<Component[]>([]);
+  const [project, setProject] = useState<Project | null>(null);
+  const [requirements, setRequirements] = useState<Requirement[]>([]);
+  // Proposed new requirements on the in-progress CR, plus any authoring-time
+  // id error, held separately so a bad id never reaches the API.
+  const [proposals, setProposals] = useState<{ id: string; name: string; description: string }[]>([{ id: '', name: '', description: '' }]);
+  const [proposalError, setProposalError] = useState('');
   const dataVersion = useStore((s) => s.dataVersion);
   const entityKinds = useEntityKinds(projectId);
   const showConfirm = useConfirm();
@@ -97,6 +136,25 @@ export default function ChangeRequestsPage() {
     api.listComponents(projectId)
       .then((v) => { if (alive) setComponents(v); })
       .catch(() => { if (alive) setComponents([]); });
+    return () => { alive = false; };
+  }, [projectId, dataVersion]);
+
+  // The naming scheme (for id validation) and the existing ids (to refuse a
+  // collision) both come from the project; fetched together because the form
+  // needs both before a proposal can be judged.
+  useEffect(() => {
+    if (!projectId) return;
+    let alive = true;
+    Promise.all([
+      api.getProject(projectId),
+      api.listRequirements(projectId),
+    ])
+      .then(([p, reqs]) => {
+        if (!alive) return;
+        setProject(p);
+        setRequirements(reqs);
+      })
+      .catch(() => {});
     return () => { alive = false; };
   }, [projectId, dataVersion]);
 
@@ -135,6 +193,22 @@ export default function ChangeRequestsPage() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!projectId || !form.id.trim()) return;
+    const naming = (project?.naming as Record<string, RequirementNamingRule> | undefined)?.requirements;
+    const existing = new Set(requirements.map((r) => r.id));
+    const filled = proposals.filter((p) => p.id.trim());
+    for (const p of filled) {
+      const reason = proposedIdError(p.id, naming, existing);
+      if (reason) {
+        setProposalError(`Proposed requirement ${reason}`);
+        return;
+      }
+    }
+    const changes: Record<string, Record<string, unknown>> = {};
+    const creates: string[] = [];
+    for (const p of filled) {
+      changes[p.id.trim()] = { name: p.name, description: p.description };
+      creates.push(p.id.trim());
+    }
     try {
       await api.createChangeRequest(projectId, {
         id: form.id.trim(),
@@ -142,11 +216,23 @@ export default function ChangeRequestsPage() {
         description: form.description,
         rationale: form.rationale,
         urgency: form.urgency,
+        affected_requirements: creates,
+        changes,
+        creates,
       });
       setShowCreate(false);
       setForm({ id: '', title: '', description: '', rationale: '', urgency: 'normal' });
+      setProposals([{ id: '', name: '', description: '' }]);
+      setProposalError('');
       load();
     } catch (err: any) { setError(err.message || 'Failed to create'); }
+  };
+
+  const addProposal = () => setProposals((prev) => [...prev, { id: '', name: '', description: '' }]);
+  const removeProposal = (index: number) => setProposals((prev) => prev.filter((_, i) => i !== index));
+  const updateProposal = (index: number, field: 'id' | 'name' | 'description', value: string) => {
+    setProposals((prev) => prev.map((p, i) => (i === index ? { ...p, [field]: value } : p)));
+    setProposalError('');
   };
 
   const handleDelete = async (crId: string) => {
@@ -335,7 +421,7 @@ export default function ChangeRequestsPage() {
           <motion.form initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
             onSubmit={handleCreate} className="card p-4 mb-4 overflow-hidden">
             <div className="flex items-end gap-3">
-              <div className="w-32"><label className="label">ID <input className="input font-mono" placeholder="CR-001" value={form.id} onChange={e => setForm({...form, id: e.target.value})} autoFocus /></label></div>
+              <div className="w-32"><label className="label">ID <input className="input font-mono" placeholder="CR-001" value={form.id} onChange={e => setForm({...form, id: e.target.value})} /></label></div>
               <div className="flex-1"><label className="label">Title <input className="input" placeholder="Change request title" value={form.title} onChange={e => setForm({...form, title: e.target.value})} /></label></div>
               <div className="w-28">
                 <label className="label">Urgency <select className="select" value={form.urgency} onChange={e => setForm({...form, urgency: e.target.value})}>
@@ -350,6 +436,25 @@ export default function ChangeRequestsPage() {
             </div>
             <div className="mt-2">
               <label className="label">Rationale <input className="input" placeholder="Why the change is needed" value={form.rationale} onChange={e => setForm({...form, rationale: e.target.value})} /></label>
+            </div>
+            <div className="mt-3 pt-3 border-t border-border">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Proposed new requirements</div>
+                <button type="button" onClick={addProposal} className="btn-secondary text-xs py-1 px-2"><Plus size={13} /> Add</button>
+              </div>
+              {proposals.map((p, i) => (
+                <div key={i} className="flex items-end gap-2 mb-2">
+                  <div className="w-44"><label className="label">ID <input className="input font-mono" placeholder="REQ0001" value={p.id} onChange={e => updateProposal(i, 'id', e.target.value)} /></label></div>
+                  <div className="flex-1"><label className="label">Name <input className="input" placeholder="Proposed requirement name" value={p.name} onChange={e => updateProposal(i, 'name', e.target.value)} /></label></div>
+                  <div className="flex-1"><label className="label">Description <input className="input" placeholder="What the requirement says" value={p.description} onChange={e => updateProposal(i, 'description', e.target.value)} /></label></div>
+                  {proposals.length > 1 && (
+                    <button type="button" onClick={() => removeProposal(i)} className="btn-secondary shrink-0" title="Remove proposal"><X size={14} /></button>
+                  )}
+                </div>
+              ))}
+              {proposalError && (
+                <div className="text-xs text-destructive bg-destructive/10 rounded-lg px-3 py-2">{proposalError}</div>
+              )}
             </div>
           </motion.form>
         )}
