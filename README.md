@@ -4,6 +4,13 @@
   <img src="media/reqmesh-logo.svg" alt="reqmesh Logo" width="500">
 </p>
 
+![The requirements workspace: the hierarchy tree, the graph canvas and the inspector open on a selected requirement — its relations, verification, allocation, quality score and attributes](docs/screenshots/requirements-inspector.png)
+
+*One screen: the requirement tree on the left, the model as a graph in the
+middle, and the selected requirement open in the inspector on the right —
+relations, verification cases, the components it is allocated to, a quality
+score with specific writing feedback, and its attributes.*
+
 An open-source, web-based requirements management tool with:
 
 - **Git-native storage** — every entity is one human-readable YAML file; no databases or binary artifacts in your project directory
@@ -19,7 +26,9 @@ An open-source, web-based requirements management tool with:
 - **Quality linting** — inline requirement writing feedback (weak words, placeholders, measurability checks) based on INCOSE / EARS / ISO 29148
 - **Risk management** — two-dimensional risk matrix (severity × likelihood, re-tunable project-wide), bingo grid of risk counts, and bi-directional requirement links (threatens / mitigated-by)
 - **Baselines** — ordered, dated milestones with freeze/diff; a baseline is not a label — definitions carry a sequence and due date, and orphans are surfaced rather than hidden
-- **Change control** — formal change requests with before/after redlines; executing a request whose target has changed since it was raised is refused to prevent overwriting unseen edits
+- **Change control** — formal change requests with before/after redlines; a request can propose *new* requirements as well as edits to existing ones, and executing a request whose target has changed since it was raised is refused to prevent overwriting unseen edits
+- **Scoped publishing** — export a document narrowed to the requirement groups, components and baselines you choose, intersecting; "the avionics document" or "everything frozen at SRR" rather than the whole project
+- **Accessible by default** — every form field is programmatically labelled, dialogs trap focus and declare themselves, and everything clickable is keyboard-operable; twelve lint rules gate it so it stays that way
 - **Planning & estimation** — per-stakeholder priority (0-5 slider) rolled into a Pugh matrix, prioritized backlog, and decision records
 - **Rich text editing** — TipTap editor with image support, paste sanitization, and live word count
 - **Guided mode** — toggleable contextual help for every section of the application
@@ -173,11 +182,24 @@ oxlint rather than ESLint because `@typescript-eslint`'s parser does not
 support TypeScript 7 (it declares `>=4.8.4 <6.1.0`), and the compiler is not
 the thing to downgrade to accommodate a linter.
 
-Accessibility rules sit at **warn**. `jsx-a11y/control-has-associated-label`
-in particular reports empty `<th>` spacer cells, `<td>` swatches and datalist
-`<option>` elements alongside genuine unlabelled controls, so it cannot be
-made a gate without either blocking CI on layout markup or adding meaningless
-labels to it. The genuinely unlabelled controls it found have been named.
+**oxlint reports zero warnings, and twelve rules are gates.** That includes the
+accessibility set: `label-has-associated-control`, `control-has-associated-label`,
+`no-static-element-interactions`, `click-events-have-key-events`,
+`prefer-tag-over-role`, and both `no-noninteractive-*` rules all fail the build.
+Getting there meant associating every form field with its control, and replacing
+clickable `<div>`s with real `<button>`s so they are keyboard-operable and
+correctly announced — not adding `onKeyDown` to a `<div>`, which reproduces with
+three attributes what one element already does.
+
+Two rules stay at **warn**, deliberately:
+
+- `no-autofocus` — thirteen inline forms that yanked focus on load lost it; four
+  dialogs keep it, because a dialog the user explicitly opened should focus its
+  primary field rather than its close button. A rule at `error` with four
+  disables would say less than a rule at `warn`.
+- `react-hooks/exhaustive-deps` — adding a missing dependency can turn a
+  run-once effect into a render loop, so each case needs reading rather than
+  satisfying.
 
 ## Authentication
 
@@ -300,6 +322,14 @@ everywhere they could surface, including push error messages.
 Requirements round-trip through **ReqIF 1.2**, **SysML v2**, **CSV**, **TSV**, and **XLSX**:
 
 - **Export** — from the Export dialog, `POST /api/projects/{id}/publish/download?format=reqif|sysml|csv|tsv|xlsx`, or CLI `export -f reqif`.
+  Report formats (html/pdf/md/latex) also take `subsystems=`, `components=` and
+  `baselines=` to scope the document. The three intersect, so
+  `components=YOKE&baselines=SRR` yields exactly the requirements in both. An
+  omitted parameter means "no filter"; an empty one means "nothing" — they are
+  deliberately different. Data and interchange formats always export everything,
+  and the dialog greys the pickers out rather than offering a control the chosen
+  format would ignore: filtering ReqIF would emit a file dangling references to
+  the requirements it excluded.
 - **Import** — from the Import dialog (file upload or paste), `POST /api/projects/{id}/import`, or CLI `import -i <file>`. Format is auto-detected; `mode=merge` (default) creates/updates; `mode=replace` wipes existing first. CSV import supports column aliases (e.g. `"Requirement ID"` → `id`). Add `dry_run=true` (CSV, TSV and XLSX only) to preview the change — the response reports `would_create`, `would_update` and `would_delete` without writing anything.
 
 ## Project Overview
