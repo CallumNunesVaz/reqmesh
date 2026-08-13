@@ -6,7 +6,28 @@ cross-imports from each other.
 from __future__ import annotations
 
 
-from fastapi import HTTPException, UploadFile
+from fastapi import HTTPException, Request, UploadFile
+
+
+def check_precondition(request: Request, current: dict) -> None:
+    """409 if the record moved since the client loaded it.
+
+    Opt-in: no If-Match means no check, so existing partial-update callers are
+    unaffected. ``modified`` is the version token because yaml_store already
+    stamps it on every write — introducing a separate counter would give two
+    sources of truth for the same question.
+    """
+    if_match = request.headers.get("If-Match")
+    if if_match is None:
+        return
+    stored_modified = current.get("modified", "")
+    if if_match != stored_modified:
+        entity_id = current.get("id", "item")
+        raise HTTPException(
+            status_code=409,
+            detail=f"{entity_id} was changed at {stored_modified}. "
+                   f"Reload to see their version before saving yours.",
+        )
 
 
 def sorted_by_modified(items: list[dict], key: str = "modified") -> list[dict]:

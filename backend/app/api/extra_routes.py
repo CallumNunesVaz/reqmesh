@@ -19,8 +19,8 @@ from app.core.config import settings
 from app.core.dependencies import get_store, require_edit, require_maintain, require_admin
 from app.core.rate_limit import rate_limit
 from app.core.ids import safe_id
-from app.api.router import normalize_baseline_defs, _check_precondition
-from app.api._utils import sorted_by_modified, read_upload_capped, paginate
+from app.services.meta_defs import normalize_baseline_defs
+from app.api._utils import sorted_by_modified, read_upload_capped, paginate, check_precondition
 from app.models.change_request import ChangeRequestCreate, ChangeRequestUpdate
 from app.models.requirement import RequirementCreate
 from app.services.change_requests import redline as compute_redline
@@ -91,7 +91,7 @@ def update_change_request(project_id: str, cr_id: str, data: ChangeRequestUpdate
     before = store.get_item("change_requests", cr_id)
     if before is None:
         raise HTTPException(status_code=404, detail="Change request not found")
-    _check_precondition(request, before)
+    check_precondition(request, before)
     result = store.update_item("change_requests", cr_id, data.model_dump(mode="json", exclude_unset=True))
     if result is None:
         raise HTTPException(status_code=404, detail="Change request not found")
@@ -297,7 +297,7 @@ def update_risk(project_id: str, risk_id: str, data: RiskUpdate,
     before = store.get_item("risks", risk_id)
     if before is None:
         raise HTTPException(status_code=404, detail="Risk not found")
-    _check_precondition(request, before)
+    check_precondition(request, before)
     result = store.update_item("risks", risk_id, data.model_dump(mode="json", exclude_unset=True))
     if result is None:
         raise HTTPException(status_code=404, detail="Risk not found")
@@ -434,7 +434,7 @@ def update_decision(project_id: str, dec_id: str, data: DecisionRecordUpdate,
     before = store.get_item("decisions", dec_id)
     if before is None:
         raise HTTPException(status_code=404, detail="Decision not found")
-    _check_precondition(request, before)
+    check_precondition(request, before)
     result = store.update_item("decisions", dec_id, data.model_dump(mode="json", exclude_unset=True))
     if result is None:
         raise HTTPException(status_code=404, detail="Decision not found")

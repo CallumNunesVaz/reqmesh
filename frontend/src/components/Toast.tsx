@@ -47,7 +47,7 @@ function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: (id: number) =
     return () => clearTimeout(t);
   }, [toast.id, toast.kind, onRemove]);
 
-  const bg = toast.kind === 'success' ? 'bg-emerald-600' : 'bg-red-600';
+  const bg = toast.kind === 'success' ? 'bg-cs-green' : 'bg-destructive';
 
   return (
     <div

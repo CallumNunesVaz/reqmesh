@@ -17,9 +17,14 @@ from app.core.tree_utils import build_flat_tree
 from app.models.baseline import DUE_DATE_RE
 from app.models.requirement import Requirement, RequirementCreate, RequirementUpdate
 from app.services.load_guard import is_safe_id, validate_on_load
+from app.services.meta_defs import (
+    normalize_baseline_defs,
+    normalize_stakeholders,
+    normalize_system_states,
+    serialize_meta_defs,
+)
 from app.services.rename import matches_scheme, rename_requirement, suggest_id
-from app.services.sanitize import sanitize_html
-from app.api._utils import paginate
+from app.api._utils import check_precondition, paginate
 from app.models.specification import SpecificationCreate, SpecificationUpdate
 from app.models.definition import DefinitionCreate, DefinitionUpdate
 from app.models.analysis import AnalysisCaseCreate, AnalysisCaseUpdate
@@ -36,27 +41,6 @@ from app.services.verification_links import (
 )
 
 
-def _check_precondition(request: Request, current: dict) -> None:
-    """409 if the record moved since the client loaded it.
-
-    Opt-in: no If-Match means no check, so existing partial-update callers are
-    unaffected. ``modified`` is the version token because yaml_store already
-    stamps it on every write — introducing a separate counter would give two
-    sources of truth for the same question.
-    """
-    if_match = request.headers.get("If-Match")
-    if if_match is None:
-        return
-    stored_modified = current.get("modified", "")
-    if if_match != stored_modified:
-        entity_id = current.get("id", "item")
-        raise HTTPException(
-            status_code=409,
-            detail=f"{entity_id} was changed at {stored_modified}. "
-                   f"Reload to see their version before saving yours.",
-        )
-
-
 class ProjectCreate(BaseModel):
     id: str
     name: str
@@ -68,130 +52,6 @@ class BaselineDefItem(BaseModel):
     symbol: str = ""
     description: str = ""
     due_date: str = ""
-
-
-def normalize_baseline_defs(baselines: list) -> list[dict]:
-    """Normalize baseline definitions to {name, symbol, description, due_date,
-    order}.
-
-    Accepts the legacy bare-string form as well as the object form, mirroring
-    normalize_stakeholders.
-
-    **List position is the sequence.** ``order`` is derived here as a 1-based
-    index rather than read from the item, so a hand-edited `_meta.yaml` cannot
-    express a sequence that disagrees with itself. Callers that reorder rewrite
-    the list; they never write an ``order`` key back.
-
-    A ``due_date`` that is not ``YYYY-MM-DD`` degrades to "". `_meta.yaml` is
-    hand-editable and arrives by git pull, so one bad date must not take down
-    every listing that reads baselines — the same reasoning as the is_safe_id
-    guard in list_baselines.
-
-    ``description`` is sanitised here for the same reason, and it matters more:
-    it is rich text that ends up in the baselines page, exports and published
-    documents, and `_meta.yaml` never passes through
-    ``load_guard.validate_on_load`` — that runs only on the per-collection read
-    path, so meta-held HTML had no sanitiser on either the read or the write
-    side. Doing it in this function covers both, because every route that reads
-    or writes baseline definitions goes through it. (The baselines page used to
-    inject it with ``dangerouslySetInnerHTML``, which made this the only guard;
-    it now renders through ``AutoLinkHtml``, so this is the outer of two.)
-    """
-    result: list[dict] = []
-    for item in (baselines or []):
-        if isinstance(item, str):
-            item = {"name": item}
-        if not isinstance(item, dict):
-            continue
-        due = str(item.get("due_date", "") or "").strip()
-        if due and not DUE_DATE_RE.match(due):
-            due = ""
-        result.append({
-            "name": item.get("name", ""),
-            "symbol": item.get("symbol", ""),
-            "description": sanitize_html(item.get("description", "")),
-            "due_date": due,
-            "order": len(result) + 1,
-        })
-    return result
-
-
-def normalize_system_states(states: list) -> list[dict]:
-    """Normalize project system-state definitions to {name, description, order}.
-
-    Mirrors normalize_baseline_defs, including its reasoning: a bare string is
-    accepted so a project that listed state names before they had descriptions
-    keeps working, and ``order`` is the list position rather than a stored field,
-    so `_meta.yaml` cannot express a sequence that disagrees with itself.
-
-    States are what a requirement's ``system_states`` refers to by name. Defining
-    them on the project is what lets the requirement editor offer a list instead
-    of a comma-separated free-text box, where a typo silently creates a state
-    nobody can find again.
-    """
-    result: list[dict] = []
-    for item in (states or []):
-        if isinstance(item, str):
-            item = {"name": item}
-        if not isinstance(item, dict):
-            continue
-        name = str(item.get("name", "")).strip()
-        if not name:
-            continue
-        result.append({
-            "name": name,
-            "description": item.get("description", ""),
-            "order": len(result) + 1,
-        })
-    return result
-
-
-def _serialize_meta_defs(defs: list[dict]) -> list[dict]:
-    """The `_meta.yaml` form of normalized definitions (baselines and system states).
-
-    Drops ``order`` — it is the list position, derived on read, and writing it
-    back would create a second copy of the sequence free to disagree with the
-    first. Empty optional fields are omitted so a project that never set a
-    symbol or a due date keeps a clean `_meta.yaml`.
-    """
-    return [
-        {k: v for k, v in d.items() if k != "order" and (k == "name" or v)}
-        for d in defs
-    ]
-
-
-def serialize_system_states(defs: list[dict]) -> list[dict]:
-    """Alias of :func:`_serialize_meta_defs` for project system states."""
-    return _serialize_meta_defs(defs)
-
-
-def normalize_stakeholders(stakeholders: list) -> list[dict]:
-    """Normalize project stakeholder definitions to {name, weight}.
-
-    Accepts a bare string (weight defaults to 1.0) so a project that listed
-    stakeholder names before weights existed keeps working, mirroring how
-    normalize_baseline_defs tolerates legacy string baselines.
-
-    Weights are relative, not required to sum to anything: the value shown per
-    requirement is a weighted mean, so adding a stakeholder does not silently
-    rescale every existing score.
-    """
-    result: list[dict] = []
-    for item in (stakeholders or []):
-        if isinstance(item, str):
-            result.append({"name": item, "weight": 1.0})
-        elif isinstance(item, dict) and item.get("name"):
-            try:
-                weight = float(item.get("weight", 1.0))
-            except (TypeError, ValueError):
-                weight = 1.0
-            result.append({"name": item["name"], "weight": max(0.0, weight)})
-    return result
-
-
-def serialize_baseline_defs(defs: list[dict]) -> list[dict]:
-    """Alias of :func:`_serialize_meta_defs` for baseline definitions."""
-    return _serialize_meta_defs(defs)
 
 
 def _baseline_def_by_name(baselines: list, name: str) -> dict | None:
@@ -436,7 +296,7 @@ def update_project_settings(project_id: str, data: ProjectSettings, user: dict =
             # project until someone hand-edited _meta.yaml.
             for d in defs:
                 safe_id(d["name"], "baseline name")
-            updates["baselines"] = serialize_baseline_defs(defs)
+            updates["baselines"] = serialize_meta_defs(defs)
         if "stakeholders" in updates and updates["stakeholders"] is not None:
             updates["stakeholders"] = normalize_stakeholders(updates["stakeholders"])
         if "risk_matrix" in updates and updates["risk_matrix"] is not None:
@@ -692,7 +552,7 @@ def update_requirement(project_id: str, req_id: str, data: RequirementUpdate,
     before = store.get_requirement(req_id)
     if before is None:
         raise HTTPException(status_code=404, detail="Requirement not found")
-    _check_precondition(request, before)
+    check_precondition(request, before)
 
     # Reparenting must not create a loop: nothing prevented A.parent=B and
     # B.parent=A, which made both (and everything under them) unreachable in
@@ -971,7 +831,7 @@ def update_specification(project_id: str, spec_id: str, data: SpecificationUpdat
     before = store.get_specification(spec_id)
     if before is None:
         raise HTTPException(status_code=404, detail="Specification not found")
-    _check_precondition(request, before)
+    check_precondition(request, before)
     update_dict = data.model_dump(mode="json", exclude_unset=True)
     result = store.update_specification(spec_id, update_dict)
     if result is None:
@@ -1076,7 +936,7 @@ def create_baseline(project_id: str, data: BaselineCreate, user: dict = Depends(
         else:
             defs.append({"name": name, "symbol": data.symbol, "description": data.description,
                          "due_date": data.due_date})
-        serialized = serialize_baseline_defs(defs)
+        serialized = serialize_meta_defs(defs)
         # Validate the proposed list before writing — a rejected write must
         # leave _meta.yaml untouched.
         _validate_due_dates(serialized)
@@ -1115,12 +975,12 @@ def reorder_baselines(project_id: str, data: ReorderBaselines, user: dict = Depe
 
         # Build the new list in the requested order, preserving other fields.
         by_name = {d["name"]: d for d in current_defs}
-        # `order` is left alone here: serialize_baseline_defs is the one place it is
+        # `order` is left alone here: serialize_meta_defs is the one place it is
         # dropped, and duplicating that responsibility is how the derived value and
         # the list position start to disagree.
         reordered = [dict(by_name[nm]) for nm in data.names]
 
-        serialized = serialize_baseline_defs(reordered)
+        serialized = serialize_meta_defs(reordered)
         # Validate due dates in the new order before writing.
         _validate_due_dates(serialized)
         meta["baselines"] = serialized
@@ -1152,7 +1012,7 @@ def rename_baseline(project_id: str, name: str, data: RenameBaseline, user: dict
                     d["description"] = data.description
                 if data.due_date is not None:
                     d["due_date"] = data.due_date
-        serialized = serialize_baseline_defs(defs)
+        serialized = serialize_meta_defs(defs)
         # Validate before writing — a rejected write must leave _meta.yaml untouched.
         _validate_due_dates(serialized)
         meta["baselines"] = serialized
@@ -1207,7 +1067,7 @@ def delete_baseline(project_id: str, name: str, user: dict = Depends(require_mai
         meta = store.read_meta()
         defs = normalize_baseline_defs(meta.get("baselines", []))
         defs = [d for d in defs if d["name"] != name]
-        serialized = serialize_baseline_defs(defs)
+        serialized = serialize_meta_defs(defs)
         meta["baselines"] = serialized
         store._write_meta_unlocked(meta)
     updated = 0
@@ -1282,7 +1142,7 @@ def create_system_state(project_id: str, data: SystemStateCreate,
                                 detail="A system state with that name already exists")
 
         defs.append({"name": name, "description": data.description})
-        meta["system_states"] = serialize_system_states(defs)
+        meta["system_states"] = serialize_meta_defs(defs)
         store._write_meta_unlocked(meta)
 
     return {"name": name, "description": data.description, "order": len(defs)}
@@ -1319,7 +1179,7 @@ def update_system_state(project_id: str, name: str, data: SystemStateUpdate,
         if data.description is not None:
             target["description"] = data.description
 
-        meta["system_states"] = serialize_system_states(defs)
+        meta["system_states"] = serialize_meta_defs(defs)
         store._write_meta_unlocked(meta)
 
     # Rename cascades to every requirement that referenced the old name.
@@ -1354,7 +1214,7 @@ def delete_system_state(project_id: str, name: str,
         meta = store.read_meta()
         defs = normalize_system_states(meta.get("system_states", []))
         defs = [d for d in defs if d["name"] != name]
-        meta["system_states"] = serialize_system_states(defs)
+        meta["system_states"] = serialize_meta_defs(defs)
         store._write_meta_unlocked(meta)
 
     # Count how many requirements still carry the name — they become orphans.
@@ -1408,7 +1268,7 @@ def update_definition(project_id: str, def_id: str, data: DefinitionUpdate,
     existing = store.get_item("definitions", def_id)
     if existing is None:
         raise HTTPException(status_code=404, detail="Definition not found")
-    _check_precondition(request, existing)
+    check_precondition(request, existing)
     updates = {k: v for k, v in data.model_dump().items() if v is not None}
     result = store.update_item("definitions", def_id, updates)
     if result is None:
@@ -1470,7 +1330,7 @@ def update_analysis_case(project_id: str, case_id: str, data: AnalysisCaseUpdate
     existing = store.get_item("analysis_cases", case_id)
     if existing is None:
         raise HTTPException(status_code=404, detail="Analysis case not found")
-    _check_precondition(request, existing)
+    check_precondition(request, existing)
     updates = {k: v for k, v in data.model_dump().items() if v is not None}
     result = store.update_item("analysis_cases", case_id, updates)
     if result is None:
@@ -1544,7 +1404,7 @@ def update_verification_case(project_id: str, vc_id: str, data: VerificationCase
     before = store.get_verification_case(vc_id)
     if before is None:
         raise HTTPException(status_code=404, detail="Verification case not found")
-    _check_precondition(request, before)
+    check_precondition(request, before)
     update_dict = data.model_dump(mode="json", exclude_unset=True)
     result = store.update_verification_case(vc_id, update_dict)
     if result is None:

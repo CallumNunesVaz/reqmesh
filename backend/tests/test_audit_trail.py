@@ -98,7 +98,7 @@ def test_definition_stale_if_match_returns_409(client, project):
     """The optimistic-concurrency guard works for definitions.
 
     Before the fix definitions were written via ``write_item``, which stamps no
-    ``modified`` token, so ``_check_precondition`` could never match and the
+    ``modified`` token, so ``check_precondition`` could never match and the
     guard was dead code.
     """
     res = client.post(

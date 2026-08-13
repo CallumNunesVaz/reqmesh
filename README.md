@@ -489,6 +489,18 @@ than a value someone typed once.
 Evaluation happens from the parametrics surface, which owns the solver and the
 verdict rendering; this page is where cases are written and scoped.
 
+## System States
+
+The operational modes a system moves through — standby, cruise, safe, whatever
+the domain calls them — defined once per project and tagged onto the
+requirements that apply in each. A requirement's `system_states` says *when* it
+holds, which is the difference between "the pump runs at 40%" and "the pump runs
+at 40% in cruise".
+
+States are held in project metadata rather than as their own records: they are
+labels a requirement points at, so renaming one is a project-level edit and
+deleting one clears it from every requirement that referenced it.
+
 ## Cross-linking
 
 Every entity reference is a hyperlink to that entity, wherever it appears. Each kind carries its own colour-coded icon.

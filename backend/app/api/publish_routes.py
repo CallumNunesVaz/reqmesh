@@ -2,6 +2,7 @@
 """
 from __future__ import annotations
 
+import logging
 import os
 import tempfile
 from pathlib import Path
@@ -18,6 +19,8 @@ from app.core.rate_limit import rate_limit
 from app.services.publisher import Publisher, compile_latex_to_pdf
 
 router = APIRouter()
+
+logger = logging.getLogger(__name__)
 
 
 class PublishRequest(BaseModel):
@@ -85,8 +88,7 @@ def download_report(project_id: str, format: str = "html", subsystems: str | Non
                 # and the only previous signal was a response header the browser
                 # threw away — so a deployment could render degraded PDFs for
                 # months with nothing in the logs to say why.
-                import logging
-                logging.getLogger(__name__).error(
+                logger.error(
                     "PDF report for %s fell back to weasyprint: no working LaTeX engine. "
                     "Reports will omit tables, badges and the table of contents until "
                     "tectonic is installed and its package cache warmed "

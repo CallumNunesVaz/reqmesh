@@ -114,7 +114,7 @@ def test_risk_detection_levels_are_spread(demo):
 
 
 def test_stakeholder_scores_have_stakeholders_to_weight_against(demo):
-    from app.api.router import normalize_stakeholders
+    from app.services.meta_defs import normalize_stakeholders
     from app.services.stakeholder_value import rank_requirements
 
     stakeholders = normalize_stakeholders(demo.read_meta().get("stakeholders", []))

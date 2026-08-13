@@ -19,7 +19,7 @@ from app.core.filelock import file_lock
 from app.core.rate_limit import rate_limit
 from app.api._utils import read_upload_capped
 from app.services.link_registry import COLLECTION_LABELS, LINKS
-from app.api.router import normalize_baseline_defs
+from app.services.meta_defs import normalize_baseline_defs
 
 router = APIRouter()
 

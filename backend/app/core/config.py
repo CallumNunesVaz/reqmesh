@@ -1,10 +1,16 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import get_args, get_origin
 
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, DotEnvSettingsSource, EnvSettingsSource
+
+#: Security warnings share the ``security`` named channel (see ``app.main``'s
+#: lifespan checks) rather than this module's ``__name__``, so they surface in
+#: the same place an operator already watches for misconfiguration.
+logger = logging.getLogger("security")
 
 
 # Per-profile defaults, applied in `Settings.model_post_init` to any field the
@@ -258,8 +264,7 @@ class Settings(BaseSettings):
         """
         preset = PROFILE_PRESETS.get(self.profile)
         if preset is None:
-            import logging
-            logging.getLogger("security").warning(
+            logger.warning(
                 "Unknown RT_PROFILE %r — falling back to 'team'. Valid: %s",
                 self.profile, ", ".join(PROFILES),
             )

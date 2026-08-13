@@ -10,6 +10,10 @@ describe('glow', () => {
     expect(glow('hsl(0, 0%, 0%)', 1)).toBe('hsla(0, 0%, 0%, 1)');
   });
 
+  it('turns a token colour into slash-alpha hsl, not mixed comma/space syntax', () => {
+    expect(glow('hsl(var(--cs-blue))', 0.4)).toBe('hsl(var(--cs-blue) / 0.4)');
+  });
+
   it('passes through a colour it cannot parse', () => {
     expect(glow('#ff0000', 0.5)).toBe('#ff0000');
   });

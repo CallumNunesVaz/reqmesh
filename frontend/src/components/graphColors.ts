@@ -2,8 +2,13 @@
 // legacy comma-separated `hsl(h,s%,l%)`, which these keep working with.
 
 /** Turn an `hsl(h,s%,l%)` status colour into a translucent glow colour so nodes
- *  can cast a soft, status-tinted bloom. Legacy comma-hsl in → hsla out. */
+ *  can cast a soft, status-tinted bloom. Legacy comma-hsl in → hsla out; token
+ *  colours (`hsl(var(--cs-*))`) use the slash-alpha form, which is the only
+ *  valid syntax once the space-separated variable is substituted. */
 export function glow(hslColor: string, alpha: number): string {
+  if (hslColor.includes('var(')) {
+    return hslColor.replace(/\)$/, ` / ${alpha})`);
+  }
   return hslColor.replace('hsl(', 'hsla(').replace(/\)$/, `, ${alpha})`);
 }
 

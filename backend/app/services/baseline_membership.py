@@ -8,7 +8,7 @@ picking "PDR" silently dropped every other baseline those rows carried.
 The read-modify-write lives here rather than in the client because the client
 merges against the snapshot from its last load. A collaborator adding a
 baseline in between would be clobbered by the merged write, and the bulk
-endpoints have no precondition path (``_check_precondition`` guards only the
+endpoints have no precondition path (``check_precondition`` guards only the
 single-item PUTs) for the client to notice with.
 """
 from __future__ import annotations
@@ -21,9 +21,10 @@ def defined_baseline_names(meta: dict) -> set[str]:
     """The baseline names declared in ``_meta.yaml``.
 
     Accepts the legacy bare-string form alongside the object form, matching
-    ``normalize_baseline_defs``. That function is not reused here because it
-    lives in the API layer, and a service importing from ``app.api`` would
-    invert the dependency.
+    ``normalize_baseline_defs``. That function is not reused here because a
+    membership scan only needs the non-empty names; it does not need the
+    description sanitising, due-date normalising or ``order`` deriving the full
+    normalizer performs.
     """
     names: set[str] = set()
     for item in (meta.get("baselines") or []):

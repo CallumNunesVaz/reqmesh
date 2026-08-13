@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import logging
 import os
 import tempfile
 import threading
@@ -19,6 +20,8 @@ from app.core.ids import safe_id
 # Re-exported under the original private name so existing call sites keep
 # working; the implementation moved to core so core.auth can share it.
 _file_lock = file_lock
+
+logger = logging.getLogger(__name__)
 
 def _round_trip_yaml() -> YAML:
     """A round-trip YAML for exactly one load or dump.
@@ -177,8 +180,7 @@ class YamlStore:
         try:
             return self._parse_yaml(path)
         except Exception as exc:
-            import logging
-            logging.getLogger(__name__).warning("Failed to read YAML %s: %s", path, exc)
+            logger.warning("Failed to read YAML %s: %s", path, exc)
             return {}
 
     def _write_yaml(self, path: Path, data: dict) -> None:
@@ -299,12 +301,10 @@ class YamlStore:
             try:
                 item = self._parse_fast(f)
             except Exception as exc:
-                import logging
-                logging.getLogger(__name__).warning("Skipping corrupt YAML %s: %s", f, exc)
+                logger.warning("Skipping corrupt YAML %s: %s", f, exc)
                 continue
             if not item.get("id"):
-                import logging
-                logging.getLogger(__name__).warning("Skipping %s: no 'id' field", f)
+                logger.warning("Skipping %s: no 'id' field", f)
                 continue
             # Disk is not a trusted input: these dicts may have arrived by a
             # direct edit or a `git pull` rather than through the API. Doing
@@ -312,8 +312,7 @@ class YamlStore:
             # store gets it and the cost is paid once per directory generation.
             checked = validate_on_load(d.name, item)
             if checked is None:
-                import logging
-                logging.getLogger(__name__).warning(
+                logger.warning(
                     "Skipping %s: unusable 'id' %r", f, item.get("id"))
                 continue
             items.append(checked)

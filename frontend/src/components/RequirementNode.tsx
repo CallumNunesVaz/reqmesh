@@ -5,13 +5,13 @@ import { useGraphSelection } from './GraphPane';
 import { glow } from './graphColors';
 
 export const statusColors: Record<string, { fill: string; text: string }> = {
-  proposed: { fill: 'hsl(207,90%,64%)', text: '#93c5fd' },
-  in_review: { fill: 'hsl(45,90%,55%)', text: '#fcd34d' },
-  approved: { fill: 'hsl(145,55%,42%)', text: '#4ade80' },
-  implemented: { fill: 'hsl(260,100%,78%)', text: '#c4b5fd' },
-  verified: { fill: 'hsl(179,100%,31%)', text: '#2dd4bf' },
-  rejected: { fill: 'hsl(0,84%,68%)', text: '#fca5a5' },
-  deprecated: { fill: 'hsl(195,6%,62%)', text: '#a1a1aa' },
+  proposed: { fill: 'hsl(var(--cs-blue))', text: 'hsl(var(--cs-blue))' },
+  in_review: { fill: 'hsl(var(--cs-yellow))', text: 'hsl(var(--cs-yellow))' },
+  approved: { fill: 'hsl(var(--cs-green))', text: 'hsl(var(--cs-green))' },
+  implemented: { fill: 'hsl(var(--cs-purple))', text: 'hsl(var(--cs-purple))' },
+  verified: { fill: 'hsl(var(--cs-teal))', text: 'hsl(var(--cs-teal))' },
+  rejected: { fill: 'hsl(var(--cs-red))', text: 'hsl(var(--cs-red))' },
+  deprecated: { fill: 'hsl(var(--cs-grey))', text: 'hsl(var(--cs-grey))' },
 };
 
 // Priority as a lucide arrow ramp rather than unicode circles — the direction

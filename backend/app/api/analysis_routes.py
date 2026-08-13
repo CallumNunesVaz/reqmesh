@@ -322,7 +322,7 @@ def risk_bingo_endpoint(project_id: str, _rate: None = Depends(rate_limit(20, 60
 @router.get("/projects/{project_id}/backlog")
 def prioritized_backlog(project_id: str, sort: str = "priority", _rate: None = Depends(rate_limit(20, 60))):
     """Requirements ranked by weighted stakeholder value, best first."""
-    from app.api.router import normalize_stakeholders
+    from app.services.meta_defs import normalize_stakeholders
     from app.services.stakeholder_value import rank_requirements
 
     store = get_store(project_id)
@@ -346,7 +346,7 @@ def prioritized_backlog(project_id: str, sort: str = "priority", _rate: None = D
 @router.get("/projects/{project_id}/requirements/{req_id}/value")
 def requirement_value(project_id: str, req_id: str):
     """The weighted stakeholder value of one requirement, and its rank."""
-    from app.api.router import normalize_stakeholders
+    from app.services.meta_defs import normalize_stakeholders
     from app.services.stakeholder_value import rank_requirements
 
     store = get_store(project_id)
@@ -378,7 +378,7 @@ def pugh_matrix_endpoint(
     relative to a chosen datum. Stakeholders are the criteria; their weights
     scale the comparison so a heavier stakeholder moves the `weighted` total
     further than a light one."""
-    from app.api.router import normalize_stakeholders
+    from app.services.meta_defs import normalize_stakeholders
     from app.services.stakeholder_value import pugh_matrix
 
     store = get_store(project_id)

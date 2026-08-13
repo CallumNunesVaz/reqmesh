@@ -19,21 +19,21 @@ const statusColors: Record<string, string> = {
 };
 
 const priorityColors: Record<string, string> = {
-  low: '#95a5a6',
-  medium: '#539fe6',
-  high: '#f59e0b',
-  critical: '#ef4444',
+  low: 'hsl(var(--cs-grey))',
+  medium: 'hsl(var(--cs-blue))',
+  high: 'hsl(var(--cs-orange))',
+  critical: 'hsl(var(--cs-red))',
 };
 
 
 
 
 const qualityColors: Record<string, string> = {
-  description: '#539fe6',
-  rationale: '#29ad55',
-  source: '#f59e0b',
-  allocation: '#b291ff',
-  traceability: '#ec4899',
+  description: 'hsl(var(--cs-blue))',
+  rationale: 'hsl(var(--cs-green))',
+  source: 'hsl(var(--cs-orange))',
+  allocation: 'hsl(var(--cs-purple))',
+  traceability: 'hsl(var(--cs-pink))',
 };
 
 interface ProjectStats {
@@ -153,7 +153,7 @@ export default function ProjectOverview() {
 
   const priorityData = Object.entries(stats.priorityCounts)
     .sort(([a], [b]) => ['critical', 'high', 'medium', 'low'].indexOf(a) - ['critical', 'high', 'medium', 'low'].indexOf(b))
-    .map(([k, v]) => ({ name: k, count: v, fill: priorityColors[k] || '#64748b' }));
+    .map(([k, v]) => ({ name: k, count: v, fill: priorityColors[k] || 'hsl(var(--cs-grey))' }));
 
   const typeData = Object.entries(stats.typeCounts)
     .map(([k, v]) => ({ key: k, name: formatReqType(k), count: v, fill: reqTypeColor(k) }));

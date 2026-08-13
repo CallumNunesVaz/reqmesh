@@ -1,6 +1,6 @@
 """Weighted stakeholder value (see services/stakeholder_value.py)."""
 
-from app.api.router import normalize_stakeholders
+from app.services.meta_defs import normalize_stakeholders
 from app.services.stakeholder_value import compute_value, rank_requirements
 
 SH = [

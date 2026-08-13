@@ -13,7 +13,7 @@ import io
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import Response
 
-from app.api.router import _check_precondition
+from app.api._utils import check_precondition
 from app.core.dependencies import get_store, require_maintain
 from app.core.ids import safe_id
 from app.core.tree_utils import build_flat_tree
@@ -163,7 +163,7 @@ def update_component(
         raise HTTPException(status_code=404, detail="Component not found")
     # Components are edited from a full-record form the same way requirements
     # are, so they carry the same opt-in lost-update guard.
-    _check_precondition(request, before)
+    check_precondition(request, before)
 
     update = data.model_dump(mode="json", exclude_unset=True)
     if "parent" in update:
