@@ -12,6 +12,13 @@
 
   /* Cloudscape Dark Mode */
   .dark {
+    /* Tells the browser the page is dark so it paints *native* UI to match:
+       scrollbars above all, plus form-control internals and the canvas behind
+       the page. Without it Chromium renders light scrollbars over the dark
+       app — reported as "white bars" on the scroll panes. The custom
+       properties below only reach what our own CSS paints; this is the one
+       declaration the browser itself reads. */
+    color-scheme: dark;
     --background: 215 25% 12%;
     --foreground: 210 20% 92%;
     --card: 215 25% 14%;
@@ -68,6 +75,7 @@
 
   /* Cloudscape Light Mode */
   .light {
+    color-scheme: light;   /* see .dark — keeps native UI in step with the theme */
     --background: 210 20% 98%;
     --foreground: 215 25% 16%;
     --card: 0 0% 100%;
