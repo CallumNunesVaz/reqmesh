@@ -87,6 +87,10 @@ export default function MentionPicker({
   }
 
   return createPortal(
+    // A combobox popup rendered at the caret; focus stays in the editor, so the
+    // listbox/option roles are the ARIA 1.2 active-descendant pattern, not a
+    // native select — there is no native element that stays unfocused here.
+    /* oxlint-disable jsx-a11y/prefer-tag-over-role */
     <div
       ref={listRef}
       role="listbox"
@@ -120,6 +124,7 @@ export default function MentionPicker({
         );
       })}
     </div>,
+    /* oxlint-enable jsx-a11y/prefer-tag-over-role */
     document.body,
   );
 }

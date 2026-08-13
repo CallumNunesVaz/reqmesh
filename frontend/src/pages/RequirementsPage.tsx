@@ -512,12 +512,11 @@ export default function RequirementsPage() {
             {editMode && rows.length > 0 && (
               // The whole row toggles, not just the 13px icon — the label sat
               // next to a checkbox and looked clickable while doing nothing.
-              <div
-                role="button"
-                tabIndex={0}
+              <button
+                type="button"
                 onClick={() => selectedIds.size === rows.length ? clearSelection() : selectAllVisible()}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectedIds.size === rows.length ? clearSelection() : selectAllVisible(); } }}
-                className="flex items-center gap-2 px-3 py-2 border-b border-border/60 bg-muted/30 cursor-pointer hover:bg-muted/50"
+                aria-pressed={selectedIds.size === rows.length && rows.length > 0}
+                className="flex items-center gap-2 px-3 py-2 w-full border-b border-border/60 bg-muted/30 cursor-pointer hover:bg-muted/50"
               >
                 <span className="shrink-0 mr-0.5">
                   {selectedIds.size === rows.length && rows.length > 0 ? (
@@ -527,7 +526,7 @@ export default function RequirementsPage() {
                   )}
                 </span>
                 <span className="text-[11px] text-muted-foreground">Select all</span>
-              </div>
+              </button>
             )}
             <DndContext
               sensors={sensors}
@@ -550,20 +549,34 @@ export default function RequirementsPage() {
                 valid={dropIsValid}
               >
               <div
+                role="treeitem"
+                tabIndex={0}
                 onClick={() => navigate(`/project/${projectId}/requirements/${req.id}`)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    navigate(`/project/${projectId}/requirements/${req.id}`);
+                  }
+                }}
                 className={`group flex items-center gap-2 pr-3 py-[7px] cursor-pointer transition-colors hover:bg-accent/40 ${dimByFilter ? 'opacity-45' : ''} ${draggingIds.includes(req.id) ? 'opacity-40' : ''}`}
                 style={{ paddingLeft: `${12 + depth * 22}px` }}
               >
                 {editMode && <DragGrip id={req.id} label={req.id} />}
                 {/* Selection checkbox */}
                 {editMode && (
-                  <span className="shrink-0 mr-0.5" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); toggleSelect(req.id, e); }}
+                    aria-pressed={selectedIds.has(req.id)}
+                    aria-label="Select requirement"
+                    className="shrink-0 mr-0.5 cursor-pointer"
+                  >
                     {selectedIds.has(req.id) ? (
-                      <CheckSquare size={13} className="text-primary cursor-pointer" onClick={(e) => { e.stopPropagation(); toggleSelect(req.id, e); }} />
+                      <CheckSquare size={13} className="text-primary" />
                     ) : (
-                      <Square size={13} className="text-muted-foreground/40 cursor-pointer hover:text-muted-foreground" onClick={(e) => { e.stopPropagation(); toggleSelect(req.id, e); }} />
+                      <Square size={13} className="text-muted-foreground/40 hover:text-muted-foreground" />
                     )}
-                  </span>
+                  </button>
                 )}
 
                 {/* Expand / collapse */}

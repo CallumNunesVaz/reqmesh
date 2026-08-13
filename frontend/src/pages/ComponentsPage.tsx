@@ -338,19 +338,33 @@ export default function ComponentsPage() {
         <DropRow id={node.id} disabled={!editable} isOver={overId === node.id} valid={dropIsValid}>
         <div
           id={`entity-${node.id}`}
+          role="treeitem"
+          tabIndex={-1}
           onClick={() => navigate(`/project/${projectId}/components/${node.id}`)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              navigate(`/project/${projectId}/components/${node.id}`);
+            }
+          }}
           className={`group flex items-center gap-2 px-2 py-2 rounded-lg cursor-pointer transition-colors hover:bg-accent ${isFocused ? 'bg-accent ring-1 ring-ring/30' : ''} ${draggingIds.includes(node.id) ? 'opacity-40' : ''}`}
           style={{ paddingLeft: depth * 20 + 8 }}
         >
           {editable && <DragGrip id={node.id} label={node.id} />}
           {editable && (
-            <span className="shrink-0" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); toggleComponent(node.id, e); }}
+              aria-pressed={selectedIds.has(node.id)}
+              aria-label="Select component"
+              className="shrink-0 cursor-pointer"
+            >
               {selectedIds.has(node.id) ? (
-                <CheckSquare size={13} className="text-primary cursor-pointer" onClick={(e) => { e.stopPropagation(); toggleComponent(node.id, e); }} />
+                <CheckSquare size={13} className="text-primary" />
               ) : (
-                <Square size={13} className="text-muted-foreground/40 cursor-pointer hover:text-muted-foreground" onClick={(e) => { e.stopPropagation(); toggleComponent(node.id, e); }} />
+                <Square size={13} className="text-muted-foreground/40 hover:text-muted-foreground" />
               )}
-            </span>
+            </button>
           )}
           {hasKids ? (
             <button
@@ -538,7 +552,7 @@ export default function ComponentsPage() {
           <button className="text-xs text-primary hover:underline mt-2" onClick={() => { setSearch(''); setFilterType(''); }}>Clear filters</button>
         </div>
       ) : (
-        <div className="card p-2 flex-1 min-w-[280px]" tabIndex={0} ref={treeContainerRef} onKeyDown={handleTreeKeyDown}>
+        <div className="card p-2 flex-1 min-w-[280px]" role="tree" tabIndex={0} ref={treeContainerRef} onKeyDown={handleTreeKeyDown}>
           <DndContext sensors={sensors} collisionDetection={closestCenter} {...dndHandlers}>
             {editable && <TopLevelDropZone active={isDragging} isOver={overId === TOP_LEVEL_ID} />}
             {tree.map((node) => renderNode(node, 0))}

@@ -326,42 +326,55 @@ export default function AnalysisPage() {
                   focusId === c.id || selectedId === c.id ? 'ring-2 ring-primary/50' : ''
                 }`}
               >
-                <div className="flex items-center gap-3 p-4 cursor-pointer" onClick={() => toggleExpand(c.id)}>
-                  {editable && (
-                    <span className="shrink-0" onClick={(e) => e.stopPropagation()}>
-                      {selectedIds.has(c.id) ? (
-                        <CheckSquare size={14} className="text-primary cursor-pointer" onClick={(e) => toggleSelect(c.id, e)} />
-                      ) : (
-                        <Square size={14} className="text-muted-foreground/40 cursor-pointer hover:text-muted-foreground" onClick={(e) => toggleSelect(c.id, e)} />
-                      )}
-                    </span>
-                  )}
-                  <div className="w-9 h-9 bg-cs-purple/10 text-cs-purple rounded-lg flex items-center justify-center">
-                    <FlaskConical size={18} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs text-muted-foreground">{c.id}</span>
-                      <h3 className="font-medium text-card-foreground">{c.name || 'Untitled'}</h3>
-                      <CopyLinkButton kind="analysis" id={c.id} className="opacity-0 group-hover:opacity-100" />
+                <div className="flex items-center gap-3 p-4">
+                    {editable && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); toggleSelect(c.id, e); }}
+                        aria-pressed={selectedIds.has(c.id)}
+                        aria-label="Select analysis case"
+                        className="shrink-0 cursor-pointer"
+                      >
+                        {selectedIds.has(c.id) ? (
+                          <CheckSquare size={14} className="text-primary" />
+                        ) : (
+                          <Square size={14} className="text-muted-foreground/40 hover:text-muted-foreground" />
+                        )}
+                      </button>
+                    )}
+                  <button
+                    type="button"
+                    onClick={() => toggleExpand(c.id)}
+                    aria-expanded={isExpanded}
+                    className="flex flex-1 min-w-0 items-center gap-3 text-left cursor-pointer"
+                  >
+                    <div className="w-9 h-9 bg-cs-purple/10 text-cs-purple rounded-lg flex items-center justify-center shrink-0">
+                      <FlaskConical size={18} />
                     </div>
-                    <div className="flex gap-4 mt-1 text-xs text-muted-foreground">
-                      <span>{(c.scope || []).length} requirement{(c.scope || []).length === 1 ? '' : 's'}</span>
-                      <span>{(c.scope_components || []).length} component{(c.scope_components || []).length === 1 ? '' : 's'}</span>
-                      <span>{overrideCount} override{overrideCount === 1 ? '' : 's'}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs text-muted-foreground">{c.id}</span>
+                        <h3 className="font-medium text-card-foreground">{c.name || 'Untitled'}</h3>
+                        <CopyLinkButton kind="analysis" id={c.id} className="opacity-0 group-hover:opacity-100" />
+                      </div>
+                      <div className="flex gap-4 mt-1 text-xs text-muted-foreground">
+                        <span>{(c.scope || []).length} requirement{(c.scope || []).length === 1 ? '' : 's'}</span>
+                        <span>{(c.scope_components || []).length} component{(c.scope_components || []).length === 1 ? '' : 's'}</span>
+                        <span>{overrideCount} override{overrideCount === 1 ? '' : 's'}</span>
+                      </div>
                     </div>
-                  </div>
+                  </button>
                   {editable && (
                     <>
                       <button
-                        onClick={(e) => { e.stopPropagation(); openEdit(c); }}
+                        onClick={() => openEdit(c)}
                         className="p-1.5 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-all"
                         title="Edit"
                       >
                         <Edit3 size={14} />
                       </button>
                       <button
-                        onClick={(e) => { e.stopPropagation(); handleDelete(c.id); }}
+                        onClick={() => handleDelete(c.id)}
                         className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
                         title="Delete"
                       >
@@ -369,10 +382,18 @@ export default function AnalysisPage() {
                       </button>
                     </>
                   )}
-                  <ChevronDown
-                    size={15}
-                    className={`text-muted-foreground transition-transform duration-200 shrink-0 ${isExpanded ? 'rotate-180' : ''}`}
-                  />
+                  <button
+                    type="button"
+                    onClick={() => toggleExpand(c.id)}
+                    aria-expanded={isExpanded}
+                    aria-label={isExpanded ? 'Collapse' : 'Expand'}
+                    className="shrink-0 p-0.5 -m-0.5 rounded"
+                  >
+                    <ChevronDown
+                      size={15}
+                      className={`text-muted-foreground transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+                    />
+                  </button>
                 </div>
 
                 <AnimatePresence initial={false}>

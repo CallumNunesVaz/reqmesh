@@ -12,7 +12,7 @@ import { useWhatIf } from './WhatIfContext';
 /** Shared <datalist> of known units for parameter-unit autocomplete. */
 const UNITS_LIST_ID = 'rm-known-units';
 export function UnitsDatalist() {
-  return <datalist id={UNITS_LIST_ID}>{KNOWN_UNITS.map((u) => <option key={u} value={u} />)}</datalist>;
+  return <datalist id={UNITS_LIST_ID}>{KNOWN_UNITS.map((u) => <option key={u} value={u}>{u}</option>)}</datalist>;
 }
 
 /** Small amber warning chip for a dimensional-consistency issue. */

@@ -327,7 +327,12 @@ export default function RichTextEditor({ content, onChange, onBlur, disabled = f
   );
 
   return (
-    <div className={`border rounded-lg overflow-hidden ${!disabled ? 'focus-within:ring-2 focus-within:ring-ring/20 focus-within:border-ring/30' : 'opacity-70'} transition-all`} onClick={handleEditorClick}>
+    <>
+      {/* The onClick is click-delegation for the [[ID]] mention chips rendered
+          inside the contenteditable; the wrapper is not itself a control and the
+          chips cannot be real links without changing the stored format. */}
+      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events */}
+      <div className={`border rounded-lg overflow-hidden ${!disabled ? 'focus-within:ring-2 focus-within:ring-ring/20 focus-within:border-ring/30' : 'opacity-70'} transition-all`} onClick={handleEditorClick}>
       {!disabled && (
       <div className="flex items-center gap-0.5 px-2 py-1.5 border-b bg-muted/50">
         <ToolbarButton label="Bold" active={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()}>
@@ -382,5 +387,6 @@ export default function RichTextEditor({ content, onChange, onBlur, disabled = f
         </div>
       )}
     </div>
+    </>
   );
 }

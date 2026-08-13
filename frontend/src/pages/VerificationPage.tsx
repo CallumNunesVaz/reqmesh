@@ -530,46 +530,49 @@ export default function VerificationPage() {
                   focusId === vc.id ? 'ring-2 ring-primary/50' : ''
                 }`}
               >
-                <div
-                  className="flex items-center gap-3 p-4 cursor-pointer"
-                  onClick={() => toggleExpand(vc.id)}
-                >
-                  <div className="flex items-center gap-2">
-                    {editable && (
-                      <input
-                        type="checkbox"
-                        checked={selectedVcs.has(vc.id)}
-                        onChange={(e) => {
-                          e.stopPropagation();
-                          setSelectedVcs(p => { const n = new Set(p); e.target.checked ? n.add(vc.id) : n.delete(vc.id); return n; });
-                        }}
-                        className="w-4 h-4 rounded border-muted-foreground/30 shrink-0"
-                      />
-                    )}
-                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${statusIconColors[vc.status] || 'bg-muted text-muted-foreground'}`}>
-                    <StatusIcon size={18} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs text-muted-foreground">{vc.id}</span>
-                      <h3 className="font-medium text-card-foreground">{vc.name || 'Untitled'}</h3>
-                      <span className={`badge border ${statusBadges[vc.status] || ''}`}>
-                        {vc.status}
-                      </span>
-                      <CopyLinkButton kind="verification" id={vc.id} className="opacity-0 group-hover:opacity-100" />
+                <div className="flex items-center gap-3 p-4">
+                  {editable && (
+                    <input
+                      type="checkbox"
+                      checked={selectedVcs.has(vc.id)}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        setSelectedVcs(p => { const n = new Set(p); e.target.checked ? n.add(vc.id) : n.delete(vc.id); return n; });
+                      }}
+                      aria-label={`Select ${vc.id}`}
+                      className="w-4 h-4 rounded border-muted-foreground/30 shrink-0"
+                    />
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => toggleExpand(vc.id)}
+                    aria-expanded={isExpanded}
+                    className="flex flex-1 min-w-0 items-center gap-3 text-left cursor-pointer"
+                  >
+                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${statusIconColors[vc.status] || 'bg-muted text-muted-foreground'}`}>
+                      <StatusIcon size={18} />
                     </div>
-                    {vc.description && (
-                      <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2">
-                        <AutoLinkText text={vc.description} kinds={entityKinds} />
-                      </p>
-                    )}
-                    <div className="flex gap-3 mt-2 text-xs text-muted-foreground">
-                      <span>Method: <strong className="text-foreground">{vc.method}</strong></span>
-                      <span>{linkedCount} linked requirement{linkedCount !== 1 ? 's' : ''}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs text-muted-foreground">{vc.id}</span>
+                        <h3 className="font-medium text-card-foreground">{vc.name || 'Untitled'}</h3>
+                        <span className={`badge border ${statusBadges[vc.status] || ''}`}>
+                          {vc.status}
+                        </span>
+                        <CopyLinkButton kind="verification" id={vc.id} className="opacity-0 group-hover:opacity-100" />
+                      </div>
+                      {vc.description && (
+                        <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2">
+                          <AutoLinkText text={vc.description} kinds={entityKinds} />
+                        </p>
+                      )}
+                      <div className="flex gap-3 mt-2 text-xs text-muted-foreground">
+                        <span>Method: <strong className="text-foreground">{vc.method}</strong></span>
+                        <span>{linkedCount} linked requirement{linkedCount !== 1 ? 's' : ''}</span>
+                      </div>
                     </div>
-                  </div>
-                  </div>
-                  <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                  </button>
+                  <div className="flex items-center gap-1">
                     <select
                       className="select text-xs py-1 w-28"
                       value={vc.status}
@@ -600,10 +603,18 @@ export default function VerificationPage() {
                     </button>
                     )}
                   </div>
-                  <ChevronDown
-                    size={15}
-                    className={`text-muted-foreground transition-transform duration-200 shrink-0 ${isExpanded ? 'rotate-180' : ''}`}
-                  />
+                  <button
+                    type="button"
+                    onClick={() => toggleExpand(vc.id)}
+                    aria-expanded={isExpanded}
+                    aria-label={isExpanded ? 'Collapse' : 'Expand'}
+                    className="shrink-0 p-0.5 -m-0.5 rounded"
+                  >
+                    <ChevronDown
+                      size={15}
+                      className={`text-muted-foreground transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+                    />
+                  </button>
                 </div>
 
                 <AnimatePresence initial={false}>

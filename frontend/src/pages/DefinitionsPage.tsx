@@ -328,48 +328,61 @@ export default function DefinitionsPage() {
                 focusId === d.id || selectedId === d.id ? 'ring-2 ring-primary/50' : ''
               }`}
             >
-              <div className="flex items-center gap-3 p-4 cursor-pointer" onClick={() => toggleExpand(d.id)}>
-                {editable && (
-                  <span className="shrink-0" onClick={(e) => e.stopPropagation()}>
-                    {selectedIds.has(d.id) ? (
-                      <CheckSquare size={14} className="text-primary cursor-pointer" onClick={(e) => toggleSelect(d.id, e)} />
-                    ) : (
-                      <Square size={14} className="text-muted-foreground/40 cursor-pointer hover:text-muted-foreground" onClick={(e) => toggleSelect(d.id, e)} />
-                    )}
-                  </span>
-                )}
-                <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${
-                  d.type === 'calc' ? 'bg-cs-purple/10 text-cs-purple' : 'bg-cs-teal/10 text-cs-teal'
-                }`}>
-                  {d.type === 'calc' ? <Sigma size={18} /> : <Boxes size={18} />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className={`badge border ${
-                      d.type === 'calc' ? 'text-cs-purple border-cs-purple/30' : 'text-cs-teal border-cs-teal/30'
-                    }`}>{d.type}</span>
-                    <span className="font-mono text-xs text-muted-foreground">{d.id}</span>
-                    <h3 className="font-medium text-card-foreground">{d.name || 'Untitled'}</h3>
-                    <CopyLinkButton kind="definition" id={d.id} className="opacity-0 group-hover:opacity-100" />
+              <div className="flex items-center gap-3 p-4">
+                  {editable && (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); toggleSelect(d.id, e); }}
+                      aria-pressed={selectedIds.has(d.id)}
+                      aria-label="Select definition"
+                      className="shrink-0 cursor-pointer"
+                    >
+                      {selectedIds.has(d.id) ? (
+                        <CheckSquare size={14} className="text-primary" />
+                      ) : (
+                        <Square size={14} className="text-muted-foreground/40 hover:text-muted-foreground" />
+                      )}
+                    </button>
+                  )}
+                <button
+                  type="button"
+                  onClick={() => toggleExpand(d.id)}
+                  aria-expanded={isExpanded}
+                  className="flex flex-1 min-w-0 items-center gap-3 text-left cursor-pointer"
+                >
+                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                    d.type === 'calc' ? 'bg-cs-purple/10 text-cs-purple' : 'bg-cs-teal/10 text-cs-teal'
+                  }`}>
+                    {d.type === 'calc' ? <Sigma size={18} /> : <Boxes size={18} />}
                   </div>
-                  {/* The expression is the substance — mono, like the parametrics card. */}
-                  <p className="font-mono text-sm text-foreground mt-1 break-words">
-                    ({(d.parameters || []).join(', ')}) = {d.expr}
-                    {d.unit ? <span className="text-muted-foreground"> [{d.unit}]</span> : null}
-                  </p>
-                  {d.doc && <p className="text-xs text-muted-foreground mt-1">{d.doc}</p>}
-                </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`badge border ${
+                        d.type === 'calc' ? 'text-cs-purple border-cs-purple/30' : 'text-cs-teal border-cs-teal/30'
+                      }`}>{d.type}</span>
+                      <span className="font-mono text-xs text-muted-foreground">{d.id}</span>
+                      <h3 className="font-medium text-card-foreground">{d.name || 'Untitled'}</h3>
+                      <CopyLinkButton kind="definition" id={d.id} className="opacity-0 group-hover:opacity-100" />
+                    </div>
+                    {/* The expression is the substance — mono, like the parametrics card. */}
+                    <p className="font-mono text-sm text-foreground mt-1 break-words">
+                      ({(d.parameters || []).join(', ')}) = {d.expr}
+                      {d.unit ? <span className="text-muted-foreground"> [{d.unit}]</span> : null}
+                    </p>
+                    {d.doc && <p className="text-xs text-muted-foreground mt-1">{d.doc}</p>}
+                  </div>
+                </button>
                 {editable && (
                   <>
                     <button
-                      onClick={(e) => { e.stopPropagation(); openEdit(d); }}
+                      onClick={() => openEdit(d)}
                       className="p-1.5 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-all"
                       title="Edit"
                     >
                       <Edit3 size={14} />
                     </button>
                     <button
-                      onClick={(e) => { e.stopPropagation(); handleDelete(d.id); }}
+                      onClick={() => handleDelete(d.id)}
                       className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
                       title="Delete"
                     >
@@ -377,10 +390,18 @@ export default function DefinitionsPage() {
                     </button>
                   </>
                 )}
-                <ChevronDown
-                  size={15}
-                  className={`text-muted-foreground transition-transform duration-200 shrink-0 ${isExpanded ? 'rotate-180' : ''}`}
-                />
+                <button
+                  type="button"
+                  onClick={() => toggleExpand(d.id)}
+                  aria-expanded={isExpanded}
+                  aria-label={isExpanded ? 'Collapse' : 'Expand'}
+                  className="shrink-0 p-0.5 -m-0.5 rounded"
+                >
+                  <ChevronDown
+                    size={15}
+                    className={`text-muted-foreground transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+                  />
+                </button>
               </div>
 
               <AnimatePresence initial={false}>

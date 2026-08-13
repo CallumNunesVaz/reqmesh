@@ -264,7 +264,7 @@ export default function MetricsPage() {
               <table className="text-xs border-collapse">
                 <thead>
                   <tr>
-                    <th className="p-1"></th>
+                    <th className="p-1" aria-label="Severity"></th>
                     {bingo.likelihoods.map((l) => (
                       <th key={l} className="p-1.5 text-muted-foreground font-medium text-center whitespace-nowrap">
                         {l.replace(/_/g, ' ')}

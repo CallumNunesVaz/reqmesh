@@ -210,32 +210,40 @@ export default function AllocationMatrixPage() {
 
         {/* Row source selector — visible only on the baselines tab. */}
         {axis === 'baselines' && (
-          <div className="flex items-center gap-0.5 mt-2 text-xs" role="radiogroup" aria-label="Rows">
+          <div className="flex items-center gap-0.5 mt-2 text-xs">
             <span className="text-muted-foreground mr-1.5">Rows:</span>
-            <button
-              role="radio"
-              aria-checked={rows === 'requirements'}
-              onClick={() => setRows('requirements')}
-              className={`px-2 py-0.5 rounded transition-colors ${
+            <label className="cursor-pointer">
+              <input
+                type="radio"
+                name="rows"
+                checked={rows === 'requirements'}
+                onChange={() => setRows('requirements')}
+                className="peer sr-only"
+              />
+              <span className={`px-2 py-0.5 rounded transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-primary/50 ${
                 rows === 'requirements'
                   ? 'bg-primary/10 text-primary font-medium'
                   : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-              }`}
-            >
-              Requirements
-            </button>
-            <button
-              role="radio"
-              aria-checked={rows === 'components'}
-              onClick={() => setRows('components')}
-              className={`px-2 py-0.5 rounded transition-colors ${
+              }`}>
+                Requirements
+              </span>
+            </label>
+            <label className="cursor-pointer">
+              <input
+                type="radio"
+                name="rows"
+                checked={rows === 'components'}
+                onChange={() => setRows('components')}
+                className="peer sr-only"
+              />
+              <span className={`px-2 py-0.5 rounded transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-primary/50 ${
                 rows === 'components'
                   ? 'bg-primary/10 text-primary font-medium'
                   : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-              }`}
-            >
-              Components
-            </button>
+              }`}>
+                Components
+              </span>
+            </label>
           </div>
         )}
 

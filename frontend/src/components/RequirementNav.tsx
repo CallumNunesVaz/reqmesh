@@ -70,12 +70,8 @@ function TreeNode({
 
   return (
     <div id={`nav-${node.id}`}>
-      <button
-        onClick={() => {
-          onSelect(node.id);
-          navigate(`/project/${projectId}/requirements/${node.id}`);
-        }}
-        className={`flex items-center gap-1.5 w-full pr-2 py-1 text-xs rounded-md transition-all group ${
+      <div
+        className={`flex items-center gap-1.5 w-full pr-2 py-1 text-xs rounded-md transition-all ${
           isSelected
             ? 'bg-primary/10 text-primary'
             : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent'
@@ -83,22 +79,30 @@ function TreeNode({
         style={{ paddingLeft: `${8 + depth * 14}px` }}
       >
         {hasChildren ? (
-          <span
-            onClick={(e) => {
-              e.stopPropagation();
-              setExpanded(!expanded);
-            }}
+          <button
+            type="button"
+            onClick={() => setExpanded(!expanded)}
+            aria-expanded={expanded}
             className="p-0.5 rounded hover:bg-sidebar-accent shrink-0 text-muted-foreground"
           >
             {expanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
-          </span>
+          </button>
         ) : (
           <span className="w-4 shrink-0" />
         )}
-        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusDots[node.status] || 'bg-zinc-400'}`} />
-        <span className="font-mono shrink-0 text-[10px] opacity-50">{node.id}</span>
-        <span className="truncate flex-1 text-left pl-1">{node.name || 'Untitled'}</span>
-      </button>
+        <button
+          type="button"
+          onClick={() => {
+            onSelect(node.id);
+            navigate(`/project/${projectId}/requirements/${node.id}`);
+          }}
+          className="flex items-center gap-1.5 flex-1 min-w-0 text-left"
+        >
+          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusDots[node.status] || 'bg-zinc-400'}`} />
+          <span className="font-mono shrink-0 text-[10px] opacity-50">{node.id}</span>
+          <span className="truncate flex-1 text-left pl-1">{node.name || 'Untitled'}</span>
+        </button>
+      </div>
       {expanded && hasChildren && (
         <div>
           {node.children.map((child) => (
@@ -197,28 +201,35 @@ function PanelNode({ item, depth, navigate, focusId }: {
 
   return (
     <div>
-      <button
-        onClick={() => navigate(item.to)}
+      <div
         className={`flex items-center gap-1.5 w-full pr-2 py-1 text-xs rounded-md transition-all ${
           isSelected ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent'
         }`}
         style={{ paddingLeft: `${8 + depth * 14}px` }}
       >
         {hasChildren ? (
-          <span
-            onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
+          <button
+            type="button"
+            onClick={() => setExpanded(!expanded)}
+            aria-expanded={expanded}
             className="p-0.5 rounded hover:bg-sidebar-accent shrink-0 text-muted-foreground"
           >
             {expanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
-          </span>
+          </button>
         ) : (
           <span className="w-4 shrink-0" />
         )}
-        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${item.dot}`} />
-        {item.showId !== false && <span className="font-mono shrink-0 text-[10px] opacity-50">{item.id}</span>}
-        <span className="truncate flex-1 text-left pl-1">{item.label}</span>
-        {item.sub && <span className="shrink-0 text-[9px] text-muted-foreground opacity-70">{item.sub}</span>}
-      </button>
+        <button
+          type="button"
+          onClick={() => navigate(item.to)}
+          className="flex items-center gap-1.5 flex-1 min-w-0 text-left"
+        >
+          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${item.dot}`} />
+          {item.showId !== false && <span className="font-mono shrink-0 text-[10px] opacity-50">{item.id}</span>}
+          <span className="truncate flex-1 text-left pl-1">{item.label}</span>
+          {item.sub && <span className="shrink-0 text-[9px] text-muted-foreground opacity-70">{item.sub}</span>}
+        </button>
+      </div>
       {expanded && hasChildren && (
         <div>
           {item.children.map((child) => (

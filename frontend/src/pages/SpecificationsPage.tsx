@@ -277,63 +277,76 @@ export default function SpecificationsPage() {
                 focusId === spec.id ? 'ring-2 ring-primary/50' : ''
               }`}
             >
-              <div className="flex items-center gap-3 p-4 cursor-pointer" onClick={() => toggleExpand(spec.id)}>
+              <div className="flex items-center gap-3 p-4">
                 {editable && (
-                  <span className="shrink-0" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); toggleSpec(spec.id, e); }}
+                    aria-pressed={selectedIds.has(spec.id)}
+                    aria-label="Select specification"
+                    className="shrink-0 cursor-pointer"
+                  >
                     {selectedIds.has(spec.id) ? (
-                      <CheckSquare size={14} className="text-primary cursor-pointer" onClick={(e) => toggleSpec(spec.id, e)} />
+                      <CheckSquare size={14} className="text-primary" />
                     ) : (
-                      <Square size={14} className="text-muted-foreground/40 cursor-pointer hover:text-muted-foreground" onClick={(e) => toggleSpec(spec.id, e)} />
+                      <Square size={14} className="text-muted-foreground/40 hover:text-muted-foreground" />
                     )}
-                  </span>
+                  </button>
                 )}
-                <div className="w-9 h-9 bg-amber-500/10 text-amber-400 rounded-lg flex items-center justify-center">
-                  <FileText size={18} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs text-muted-foreground">{spec.id}</span>
-                    <h3 className="font-medium text-card-foreground">{spec.name || 'Untitled'}</h3>
-                    <CopyLinkButton kind="specification" id={spec.id} className="opacity-0 group-hover:opacity-100" />
+                <button
+                  type="button"
+                  onClick={() => toggleExpand(spec.id)}
+                  aria-expanded={isExpanded}
+                  className="flex flex-1 min-w-0 items-center gap-3 text-left cursor-pointer"
+                >
+                  <div className="w-9 h-9 bg-amber-500/10 text-amber-400 rounded-lg flex items-center justify-center shrink-0">
+                    <FileText size={18} />
                   </div>
-                  {spec.description && (
-                    <p className="text-sm text-muted-foreground mt-0.5 line-clamp-1">
-                      <AutoLinkText text={spec.description} kinds={entityKinds} />
-                    </p>
-                  )}
-                  <div className="flex gap-4 mt-2 text-xs text-muted-foreground">
-                    <span>{spec.requirements.length} requirements</span>
-                    <span>{spec.children.length} sub-specs</span>
-                    {spec.url && isSafeExternalUrl(spec.url) && (
-                      <a
-                        href={spec.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-primary hover:underline inline-flex items-center gap-1"
-                      >
-                        <ExternalLink size={12} /> Source
-                      </a>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-xs text-muted-foreground">{spec.id}</span>
+                      <h3 className="font-medium text-card-foreground">{spec.name || 'Untitled'}</h3>
+                      <CopyLinkButton kind="specification" id={spec.id} className="opacity-0 group-hover:opacity-100" />
+                    </div>
+                    {spec.description && (
+                      <p className="text-sm text-muted-foreground mt-0.5 line-clamp-1">
+                        <AutoLinkText text={spec.description} kinds={entityKinds} />
+                      </p>
                     )}
+                    <div className="flex gap-4 mt-2 text-xs text-muted-foreground">
+                      <span>{spec.requirements.length} requirements</span>
+                      <span>{spec.children.length} sub-specs</span>
+                      {spec.url && isSafeExternalUrl(spec.url) && (
+                        <a
+                          href={spec.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary hover:underline inline-flex items-center gap-1"
+                        >
+                          <ExternalLink size={12} /> Source
+                        </a>
+                      )}
+                    </div>
                   </div>
-                </div>
+                </button>
                 {editable && (
                   <>
                 <button
-                  onClick={(e) => { e.stopPropagation(); handleDuplicate(spec); }}
+                  onClick={() => handleDuplicate(spec)}
                   className="p-1.5 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-all"
                   title="Duplicate specification"
                 >
                   <Copy size={14} />
                 </button>
                 <button
-                  onClick={(e) => { e.stopPropagation(); openEdit(spec); }}
+                  onClick={() => openEdit(spec)}
                   className="p-1.5 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-all"
                   title="Edit"
                 >
                   <Edit3 size={14} />
                 </button>
                 <button
-                  onClick={(e) => { e.stopPropagation(); handleDelete(spec.id); }}
+                  onClick={() => handleDelete(spec.id)}
                   className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
                   title="Delete"
                 >
@@ -341,10 +354,18 @@ export default function SpecificationsPage() {
                 </button>
                   </>
                 )}
-                <ChevronDown
-                  size={15}
-                  className={`text-muted-foreground transition-transform duration-200 shrink-0 ${isExpanded ? 'rotate-180' : ''}`}
-                />
+                <button
+                  type="button"
+                  onClick={() => toggleExpand(spec.id)}
+                  aria-expanded={isExpanded}
+                  aria-label={isExpanded ? 'Collapse' : 'Expand'}
+                  className="shrink-0 p-0.5 -m-0.5 rounded"
+                >
+                  <ChevronDown
+                    size={15}
+                    className={`text-muted-foreground transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+                  />
+                </button>
               </div>
 
               <AnimatePresence initial={false}>

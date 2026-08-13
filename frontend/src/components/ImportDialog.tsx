@@ -188,24 +188,7 @@ export default function ImportDialog({ open, onClose, projectId }: ImportDialogP
               </div>
 
               {source === 'file' ? (
-                <div
-                  onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-                  onDragLeave={() => setDragging(false)}
-                  onDrop={onDrop}
-                  onClick={() => inputRef.current?.click()}
-                  className={`flex flex-col items-center justify-center gap-2 py-8 rounded-lg border-2 border-dashed cursor-pointer transition-colors ${
-                    dragging ? 'border-primary bg-primary/5' : 'border-border hover:border-ring/40'
-                  }`}
-                >
-                  <UploadCloud size={28} className="text-muted-foreground" />
-                  {file ? (
-                    <span className="text-sm text-foreground font-medium">{file.name}</span>
-                  ) : (
-                    <>
-                      <span className="text-sm text-muted-foreground">Drop a file here, or click to browse</span>
-                      <span className="text-[10px] text-muted-foreground">.xml (ReqIF) · .sysml (SysML v2) · .csv · .tsv · .xlsx</span>
-                    </>
-                  )}
+                <>
                   <input
                     ref={inputRef}
                     type="file"
@@ -216,7 +199,28 @@ export default function ImportDialog({ open, onClose, projectId }: ImportDialogP
                       if (f) { setFile(f); setError(''); setResult(null); }
                     }}
                   />
-                </div>
+                  <button
+                    type="button"
+                    onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+                    onDragLeave={() => setDragging(false)}
+                    onDrop={onDrop}
+                    onClick={() => inputRef.current?.click()}
+                    aria-label={file ? 'Change file' : 'Upload a file'}
+                    className={`flex flex-col items-center justify-center gap-2 py-8 w-full rounded-lg border-2 border-dashed cursor-pointer transition-colors ${
+                      dragging ? 'border-primary bg-primary/5' : 'border-border hover:border-ring/40'
+                    }`}
+                  >
+                    <UploadCloud size={28} className="text-muted-foreground" />
+                    {file ? (
+                      <span className="text-sm text-foreground font-medium">{file.name}</span>
+                    ) : (
+                      <>
+                        <span className="text-sm text-muted-foreground">Drop a file here, or click to browse</span>
+                        <span className="text-[10px] text-muted-foreground">.xml (ReqIF) · .sysml (SysML v2) · .csv · .tsv · .xlsx</span>
+                      </>
+                    )}
+                  </button>
+                </>
               ) : (
                 <textarea
                   placeholder='"id","type","name","description","status","priority","verification_method","parent","relations","verification_cases","rationale","source","allocated_to","baselines"'

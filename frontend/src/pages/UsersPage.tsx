@@ -471,7 +471,7 @@ export default function UsersPage() {
                     <th className="px-4 py-2.5"><span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Status</span></th>
                     <th className="px-4 py-2.5 hidden @4xl:table-cell"><SortHead col="last_active" label="Last active" /></th>
                     <th className="px-4 py-2.5 hidden @4xl:table-cell"><SortHead col="joined" label="Joined" /></th>
-                    <th className="px-4 py-2.5 w-0" />
+                    <th className="px-4 py-2.5 w-0" aria-label="Actions" />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -542,7 +542,7 @@ export default function UsersPage() {
                                 <MoreHorizontal size={14} />
                               </button>
                               {menuUser === u.username && (
-                                <div className="absolute right-0 top-full mt-1 z-50 bg-popover border rounded-lg shadow-xl py-1 min-w-[160px]" onMouseDown={(e) => e.stopPropagation()}>
+                                <div className="absolute right-0 top-full mt-1 z-50 bg-popover border rounded-lg shadow-xl py-1 min-w-[160px]" role="menu" tabIndex={-1} onMouseDown={(e) => e.stopPropagation()}>
                                   <button
                                     onClick={() => { setResetFor(u.username); setResetPassword(''); setError(''); setMenuUser(null); }}
                                     className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-popover-foreground hover:bg-accent text-left"

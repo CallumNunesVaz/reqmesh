@@ -457,7 +457,7 @@ export default function ChangeRequestsPage() {
               </div>
               <div className="flex items-center gap-1 shrink-0">
                 {editingCrId === cr.id ? (
-                  <div className="flex flex-col gap-1 items-end" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex flex-col gap-1 items-end">
                     <input className="input text-xs w-36" placeholder="Title" value={editForm.title} onChange={e => setEditForm({...editForm, title: e.target.value})} />
                     <select className="select text-xs w-36" value={editForm.urgency} onChange={e => setEditForm({...editForm, urgency: e.target.value})}>
                       {CR_URGENCIES.map((u) => <option key={u} value={u}>{u}</option>)}

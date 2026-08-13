@@ -275,7 +275,7 @@ export default function TraceMatrixPage() {
                 <th className="text-left px-4 py-2.5 font-semibold text-xs text-muted-foreground uppercase tracking-wider">Source</th>
                 <th className="text-left px-4 py-2.5 font-semibold text-xs text-muted-foreground uppercase tracking-wider">Type</th>
                 <th className="text-left px-4 py-2.5 font-semibold text-xs text-muted-foreground uppercase tracking-wider">Target</th>
-                <th className="w-10" />
+                <th className="w-10" aria-label="Actions" />
               </tr>
             </thead>
             <tbody>

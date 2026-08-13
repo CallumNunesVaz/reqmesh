@@ -155,7 +155,7 @@ export default function WhatIfPanel(): JSX.Element | null {
   );
 
   return (
-    <div ref={cardRef} className="card p-5" tabIndex={-1} onKeyDown={handleKeyDown}>
+    <div ref={cardRef} className="card p-5">
       <div className="flex items-start justify-between mb-3">
         <div>
           <h2 className="text-sm font-semibold text-card-foreground">Live What-If Preview</h2>
@@ -252,14 +252,16 @@ export default function WhatIfPanel(): JSX.Element | null {
                   ? 'bg-red-500/5'
                   : '';
               return (
-              <div
+              <button
+                type="button"
                 key={i}
-                className={`p-2 rounded border transition-colors cursor-pointer border-l-2 ${verdictBorder} ${verdictBg} ${
+                className={`p-2 w-full text-left rounded border transition-colors cursor-pointer border-l-2 ${verdictBorder} ${verdictBg} ${
                   i === stepIndex
                     ? 'border-primary/60 bg-primary/5'
                     : 'border-transparent hover:bg-accent'
                 }`}
                 onClick={() => { setStepIndex(i); setPlaying(false); }}
+                onKeyDown={handleKeyDown}
               >
                 <div className="flex items-center gap-1.5 mb-1">
                   {/* The verdict in words as well as colour. A tint alone is
@@ -288,7 +290,7 @@ export default function WhatIfPanel(): JSX.Element | null {
                 ) : (
                   <ConstraintStep step={step} />
                 )}
-              </div>
+              </button>
               );
             })}
           </div>

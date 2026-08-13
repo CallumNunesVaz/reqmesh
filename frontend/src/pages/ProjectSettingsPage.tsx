@@ -382,7 +382,7 @@ export default function ProjectSettingsPage() {
                         </td>
                       );
                     })}
-                    {editable && <td />}
+                    {editable && <td aria-hidden="true" />}
                   </tr>
                 ))}
                 {editable && (

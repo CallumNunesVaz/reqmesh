@@ -131,7 +131,7 @@ const DOCS: DocSection[] = [
               <tr key={`${ck}-${i}`} className="hover:bg-accent/30">
                 <td className="px-3 py-1.5 text-[10px] text-muted-foreground">{group}</td>
                 <td className="px-3 py-1.5 text-[10px]"><span className="font-mono text-muted-foreground">{clause}</span> <span className="text-card-foreground">{process}</span></td>
-                <td className="px-3 py-1.5"><span className={`inline-block w-3 h-3 rounded-sm border ${level === 2 ? 'bg-emerald-500/30 border-emerald-500/40' : level === 1 ? 'bg-amber-500/30 border-amber-500/40' : 'bg-muted border-border'}`} /></td>
+                <td className="px-3 py-1.5" aria-label={`Coverage level ${level}`}><span className={`inline-block w-3 h-3 rounded-sm border ${level === 2 ? 'bg-emerald-500/30 border-emerald-500/40' : level === 1 ? 'bg-amber-500/30 border-amber-500/40' : 'bg-muted border-border'}`} /></td>
                 <td className="px-3 py-1.5 text-[10px] text-card-foreground/60">{notes}</td>
               </tr>
             );

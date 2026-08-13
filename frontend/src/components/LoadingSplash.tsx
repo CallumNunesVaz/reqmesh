@@ -16,9 +16,8 @@ export default function LoadingSplash({ label, fullscreen = false, leaving = fal
   const tagline = useLoadingMessage();
 
   return (
-    <div
+    <output
       className={`${fullscreen ? 'fixed' : 'absolute'} inset-0 z-[70] flex flex-col items-center justify-center gap-3 bg-background/40 backdrop-blur-sm rm-splash ${leaving ? 'rm-splash-leave' : ''}`}
-      role="status"
       aria-label={label || 'Loading'}
     >
       <img src="/reqmesh-mark.png" alt="" className="w-12 h-12 rm-splash-spin" draggable={false} />
@@ -57,6 +56,6 @@ export default function LoadingSplash({ label, fullscreen = false, leaving = fal
           to { opacity: 1; transform: translateY(0); }
         }
       `}</style>
-    </div>
+    </output>
   );
 }
