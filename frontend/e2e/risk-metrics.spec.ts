@@ -41,7 +41,7 @@ test('re-banding a matrix cell moves the metrics without touching any risk', asy
   const before = (await api<any>(app, `/projects/${P}/metrics`)).risks;
 
   // Pick a cell that actually rates something: use a real risk's own inputs.
-  const risk = (await api<any[]>(app, `/projects/${P}/risks`)).find((r) => r.rating?.band);
+  const risk = (await api<{ items: any[] }>(app, `/projects/${P}/risks`)).items.find((r) => r.rating?.band);
   expect(risk, 'the demo project should contain at least one rateable risk').toBeTruthy();
 
   const matrix = await api<any>(app, `/projects/${P}/risk-matrix`);

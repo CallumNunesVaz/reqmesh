@@ -56,13 +56,16 @@ def paginate(items: list[dict], offset: int | None = None,
              max_limit: int = 2000) -> dict:
     """Apply offset/limit pagination to a list, returning a typed page.
 
-    When both *offset* and *limit* are ``None``, returns all items capped at
-    *max_limit*. Used by every list endpoint in the API.
+    Always returns the ``{items, total, offset, limit}`` envelope, whether or
+    not the caller asked for a page. When both *offset* and *limit* are
+    ``None``, ``items`` is everything capped at *max_limit* and ``offset``/``limit``
+    report what was actually returned. Used by every list endpoint in the API.
     """
     if offset is None and limit is None:
-        return items[:max_limit]
-    off = offset or 0
-    lim = limit or default_limit
+        off, lim = 0, max_limit
+    else:
+        off = offset or 0
+        lim = limit or default_limit
     total = len(items)
     return {"items": items[off:off + lim], "total": total, "offset": off, "limit": lim}
 

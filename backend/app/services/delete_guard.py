@@ -22,6 +22,7 @@ from __future__ import annotations
 
 from fastapi import HTTPException
 
+from app.services.errors import error_envelope
 from app.services.link_registry import COLLECTION_LABELS, find_referrers
 
 
@@ -51,15 +52,15 @@ def check_deletable(store, collection: str, item_id: str, force: bool = False) -
     label = COLLECTION_LABELS.get(collection, collection)
     raise HTTPException(
         status_code=409,
-        detail={
-            "error": "referenced",
-            "message": (
+        detail=error_envelope(
+            "referenced",
+            (
                 f"This {label} is referenced by {_describe(referrers)}. "
                 f"Deleting it will leave those references pointing at nothing. "
                 f"Retry with force=true to delete anyway."
             ),
-            "id": item_id,
-            "collection": collection,
-            "referrers": referrers,
-        },
+            id=item_id,
+            collection=collection,
+            referrers=referrers,
+        ),
     )

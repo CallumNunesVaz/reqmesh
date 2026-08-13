@@ -1259,7 +1259,8 @@ export const api = {
     request<BaselineDiff>(`/projects/${projectId}/baselines/${encodeURIComponent(name)}/diff${against ? `?against=${encodeURIComponent(against)}` : ''}`),
 
   // Specifications
-  listSpecifications: (projectId: string) => request<Specification[]>(`/projects/${projectId}/specifications`),
+  listSpecifications: async (projectId: string) =>
+    (await request<Paged<Specification>>(`/projects/${projectId}/specifications`)).items,
   createSpecification: (projectId: string, data: SpecificationCreate) =>
     request<Specification>(`/projects/${projectId}/specifications`, { method: 'POST', body: data }),
   updateSpecification: (projectId: string, specId: string, data: SpecificationUpdate) =>
@@ -1268,7 +1269,8 @@ export const api = {
     request<{ok?: true} | undefined>(`/projects/${projectId}/specifications/${specId}${force ? '?force=true' : ''}`, { method: 'DELETE' }),
 
   // Verification Cases
-  listVerificationCases: (projectId: string) => request<VerificationCase[]>(`/projects/${projectId}/verification`),
+  listVerificationCases: async (projectId: string) =>
+    (await request<Paged<VerificationCase>>(`/projects/${projectId}/verification`)).items,
   createVerificationCase: (projectId: string, data: VerificationCaseCreate) =>
     request<VerificationCase>(`/projects/${projectId}/verification`, { method: 'POST', body: data }),
   updateVerificationCase: (projectId: string, vcId: string, data: VerificationCaseUpdate) =>
@@ -1287,7 +1289,8 @@ export const api = {
     request<{ links: TraceModelLink[]; total: number }>(`/projects/${projectId}/trace-model`),
 
   // Change Requests
-  listChangeRequests: (projectId: string) => request<ChangeRequest[]>(`/projects/${projectId}/change-requests`),
+  listChangeRequests: async (projectId: string) =>
+    (await request<Paged<ChangeRequest>>(`/projects/${projectId}/change-requests`)).items,
   getChangeRequest: (projectId: string, crId: string) =>
     request<ChangeRequest>(`/projects/${projectId}/change-requests/${crId}`),
   createChangeRequest: (projectId: string, data: ChangeRequestCreate) =>
@@ -1308,7 +1311,8 @@ export const api = {
   // Risks
   getBacklinks: (projectId: string, entityId: string) =>
     request<Backlinks>(`/projects/${projectId}/entities/${entityId}/backlinks`),
-  listRisks: (projectId: string) => request<Risk[]>(`/projects/${projectId}/risks`),
+  listRisks: async (projectId: string) =>
+    (await request<Paged<Risk>>(`/projects/${projectId}/risks`)).items,
   getRisk: (projectId: string, riskId: string) =>
     request<Risk>(`/projects/${projectId}/risks/${riskId}`),
   getRiskMatrix: (projectId: string) => request<RiskMatrix>(`/projects/${projectId}/risk-matrix`),
@@ -1321,9 +1325,9 @@ export const api = {
     request<{ok?: true} | undefined>(`/projects/${projectId}/risks/${riskId}${force ? '?force=true' : ''}`, { method: 'DELETE' }),
 
   // Comments
-  listComments: (projectId: string, entityKind: string, entityId: string) => {
+  listComments: async (projectId: string, entityKind: string, entityId: string) => {
     const qs = `?entity_kind=${encodeURIComponent(entityKind)}&entity_id=${encodeURIComponent(entityId)}`;
-    return request<Comment[]>(`/projects/${projectId}/comments${qs}`);
+    return (await request<Paged<Comment>>(`/projects/${projectId}/comments${qs}`)).items;
   },
   createComment: (projectId: string, data: { entity_kind: string; entity_id: string; text: string }) =>
     request<Comment>(`/projects/${projectId}/comments`, { method: 'POST', body: data }),
@@ -1333,7 +1337,8 @@ export const api = {
     request<Comment>(`/projects/${projectId}/comments/${commentId}`, { method: 'PATCH', body: data }),
 
   // Decisions
-  listDecisions: (projectId: string) => request<DecisionRecord[]>(`/projects/${projectId}/decisions`),
+  listDecisions: async (projectId: string) =>
+    (await request<Paged<DecisionRecord>>(`/projects/${projectId}/decisions`)).items,
   getDecision: (projectId: string, decId: string) =>
     request<DecisionRecord>(`/projects/${projectId}/decisions/${decId}`),
   createDecision: (projectId: string, data: DecisionRecordCreate) =>
@@ -1365,8 +1370,8 @@ export const api = {
     request<EvaluationData>(`/projects/${projectId}/evaluation`),
 
   // Reusable parametric definitions (constraint def / calc def)
-  listDefinitions: (projectId: string) =>
-    request<Definition[]>(`/projects/${projectId}/definitions`),
+  listDefinitions: async (projectId: string) =>
+    (await request<Paged<Definition>>(`/projects/${projectId}/definitions`)).items,
   getDefinition: (projectId: string, defId: string) =>
     request<Definition>(`/projects/${projectId}/definitions/${encodeURIComponent(defId)}`),
   createDefinition: (projectId: string, data: DefinitionCreate) =>
@@ -1377,8 +1382,8 @@ export const api = {
     request<{ ok: boolean }>(`/projects/${projectId}/definitions/${encodeURIComponent(defId)}`, { method: 'DELETE' }),
 
   // Analysis cases (scoped, parameterised what-if evaluation)
-  listAnalysisCases: (projectId: string) =>
-    request<AnalysisCase[]>(`/projects/${projectId}/analysis`),
+  listAnalysisCases: async (projectId: string) =>
+    (await request<Paged<AnalysisCase>>(`/projects/${projectId}/analysis`)).items,
   getAnalysisCase: (projectId: string, caseId: string) =>
     request<AnalysisCase>(`/projects/${projectId}/analysis/${encodeURIComponent(caseId)}`),
   createAnalysisCase: (projectId: string, data: AnalysisCaseCreate) =>
@@ -1422,7 +1427,7 @@ export const api = {
 
   // Bulk — Requirements
   bulkUpdateRequirements: (projectId: string, ids: string[], updates: Record<string, unknown>) =>
-    request<{ updated: number; ids: string[] }>(`/projects/${projectId}/requirements/bulk`, { method: 'POST', body: { ids, updates } }),
+    request<{ updated: number }>(`/projects/${projectId}/requirements/bulk`, { method: 'POST', body: { ids, updates } }),
   /** Add and/or remove baselines without disturbing the rest of each row's list.
    *  `updates.baselines` replaces the list; this does not. Returns the ids that
    *  actually changed, so an undo built from it cannot strip a baseline a row

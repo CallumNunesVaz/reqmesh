@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, RootModel
 
 from app.core.config import settings
 from app.core.dependencies import require_admin
@@ -27,6 +27,16 @@ class TestEmailRequest(BaseModel):
     to: str
 
 
+class SettingsPatch(RootModel):
+    """A flat patch of runtime-setting overrides, keyed by setting name.
+
+    Only keys declared in ``settings_store.OVERRIDABLE`` take effect; the store
+    coerces each value to that key's declared type and ignores unknown and
+    env-locked keys.
+    """
+    root: dict[str, str | int | float | bool | list[str] | None]
+
+
 # ── Application settings (runtime, admin-editable) ────────────────────────────
 
 @router.get("/settings")
@@ -37,10 +47,10 @@ async def get_settings(admin: dict = Depends(require_admin)):
 
 
 @router.patch("/settings")
-async def patch_settings(patch: dict, admin: dict = Depends(require_admin)):
+async def patch_settings(patch: SettingsPatch, admin: dict = Depends(require_admin)):
     """Update runtime settings. Env-locked and blank-secret keys are ignored."""
     from app.core.settings_store import set_overrides
-    return set_overrides(patch)
+    return set_overrides(patch.root)
 
 
 @router.post("/settings/test-email")

@@ -307,20 +307,3 @@ operation; a path served by several methods therefore appears several times.
 Routes below accept an untyped JSON body (`data: dict`) and so carry no request schema in the OpenAPI output. They are real routes with thinner entries than the rest:
 
 - `POST /api/projects/{project_id}/requirements/{req_id}/rename`
-- `POST /api/projects/{project_id}/change-requests/bulk`
-- `POST /api/projects/{project_id}/change-requests/bulk-delete`
-- `POST /api/projects/{project_id}/components/bulk`
-- `POST /api/projects/{project_id}/components/bulk-delete`
-- `POST /api/projects/{project_id}/components/bulk-reparent`
-- `POST /api/projects/{project_id}/requirements/bulk`
-- `POST /api/projects/{project_id}/requirements/bulk-delete`
-- `POST /api/projects/{project_id}/requirements/bulk-reparent`
-- `POST /api/projects/{project_id}/risks/bulk`
-- `POST /api/projects/{project_id}/risks/bulk-delete`
-- `POST /api/projects/{project_id}/specifications/bulk`
-- `POST /api/projects/{project_id}/specifications/bulk-delete`
-- `POST /api/projects/{project_id}/verification/bulk`
-- `POST /api/projects/{project_id}/verification/bulk-delete`
-- `POST /api/projects/{project_id}/git/restore`
-- `POST /api/projects/{project_id}/git/test-remote`
-- `PATCH /api/system/settings`

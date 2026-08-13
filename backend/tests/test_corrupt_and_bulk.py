@@ -33,7 +33,7 @@ class TestBulkChangeRequests:
                           json={"ids": ["CR-1", "CR-2"], "updates": {"status": "approved"}})
         assert res.status_code == 200, res.text
         assert res.json()["updated"] == 2
-        listed = client.get(f"/api/projects/{project}/change-requests").json()
+        listed = client.get(f"/api/projects/{project}/change-requests").json()["items"]
         assert {c["status"] for c in listed} == {"approved"}
 
     def test_bulk_delete_succeeds(self, client, project):
@@ -43,7 +43,7 @@ class TestBulkChangeRequests:
                           json={"ids": ["CR-1", "CR-2"]})
         assert res.status_code == 200, res.text
         assert res.json()["deleted"] == 2
-        assert client.get(f"/api/projects/{project}/change-requests").json() == []
+        assert client.get(f"/api/projects/{project}/change-requests").json()["items"] == []
 
     def test_bulk_delete_records_history(self, client, project):
         self._mk(client, project, "CR-1")

@@ -9,13 +9,11 @@ const P = DEMO_PROJECT;
 test('mitigated-by persists and does not overwrite threatens', async ({ app, server }) => {
   await signIn(app);
 
-  // Get the list of risks and requirements to pick IDs.
-  // list_requirements returns {items, total, offset, limit} (offset=0, limit=500
-  // are defaults), while list_risks returns a plain array when no offset/limit
-  // are passed.
+  // Get the list of risks and requirements to pick IDs. Both list endpoints
+  // return a {items, total, offset, limit} page now, so unwrap `items`.
   const risks: any[] = await app.evaluate(async (project: string) => {
     const r = await fetch(`/api/projects/${project}/risks`, { credentials: 'include' });
-    return r.json();
+    return (await r.json()).items;
   }, P);
 
   const reqsPage: any = await app.evaluate(async (project: string) => {
@@ -58,7 +56,7 @@ test('mitigated-by persists and does not overwrite threatens', async ({ app, ser
   await expect(async () => {
     const current: any[] = await app.evaluate(async (project: string) => {
       const r = await fetch(`/api/projects/${project}/risks`, { credentials: 'include' });
-      return r.json();
+      return (await r.json()).items;
     }, P);
     const updated = current.find((r2: any) => r2.id === risk.id);
     expect(updated?.linked_requirements).toContain(threatenedReq.id);
@@ -72,7 +70,7 @@ test('mitigated-by persists and does not overwrite threatens', async ({ app, ser
   // The reloaded risk should have both lists independently.
   const reloaded: any[] = await app.evaluate(async (project: string) => {
     const r = await fetch(`/api/projects/${project}/risks`, { credentials: 'include' });
-    return r.json();
+    return (await r.json()).items;
   }, P);
 
   const reloadedRisk = reloaded.find((r: any) => r.id === risk.id);

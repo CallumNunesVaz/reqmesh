@@ -5,7 +5,7 @@ from __future__ import annotations
 
 
 from fastapi import APIRouter, HTTPException, Depends
-from pydantic import ValidationError
+from pydantic import BaseModel, Field, ValidationError
 
 from app.core.dependencies import get_store, require_maintain
 from app.models.requirement import RequirementUpdate
@@ -14,6 +14,7 @@ from app.models.risk import RiskUpdate
 from app.models.specification import SpecificationUpdate
 from app.models.verification import VerificationCaseUpdate
 from app.models.change_request import ChangeRequestUpdate
+from app.services.errors import error_envelope
 from app.services.history import record_change
 from app.services.baseline_membership import apply_membership, defined_baseline_names
 from app.services.reparent import apply_reparent, plan_reparent, validate_component_parent
@@ -22,22 +23,48 @@ from app.services.delete_guard import check_deletable
 router = APIRouter()
 
 
+class BulkRequest(BaseModel):
+    """Body for a bulk update: the ids to change plus the per-kind patch.
+
+    ``updates`` stays an untyped ``dict`` on purpose — the payload is
+    heterogeneous by design and is validated per-kind through the matching
+    ``*Update`` model in each handler.
+    """
+    ids: list[str]
+    updates: dict = Field(default_factory=dict)
+    # Additive baseline membership, used only by the requirements bulk bar.
+    baselines_add: list[str] = Field(default_factory=list)
+    baselines_remove: list[str] = Field(default_factory=list)
+
+
+class BulkDeleteRequest(BaseModel):
+    ids: list[str]
+    force: bool = False
+
+
+class BulkReparentRequest(BaseModel):
+    ids: list[str]
+    parent: str | None = None
+    re_prefix: bool = False
+    dry_run: bool = False
+
+
 # ── Requirements ──────────────────────────────────────────────────────────────
 
 @router.post("/projects/{project_id}/requirements/bulk")
-def bulk_update_requirements(project_id: str, data: dict, user: dict = Depends(require_maintain)):
+def bulk_update_requirements(project_id: str, data: BulkRequest, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
-    ids = data.get("ids", [])
+    ids = data.ids
 
     # Additive baseline membership. `updates.baselines` replaces the list, which
     # is right for the edit modal (it says so) but wrong for the one-click bulk
     # bar, where it silently dropped every other baseline a row carried.
-    add = data.get("baselines_add") or []
-    remove = data.get("baselines_remove") or []
+    add = data.baselines_add
+    remove = data.baselines_remove
     if add or remove:
         if not ids:
             raise HTTPException(status_code=400, detail="ids required")
-        if "baselines" in (data.get("updates") or {}):
+        if "baselines" in data.updates:
             raise HTTPException(
                 status_code=409,
                 detail="baselines_add/baselines_remove cannot be combined with updates.baselines",
@@ -52,9 +79,13 @@ def bulk_update_requirements(project_id: str, data: dict, user: dict = Depends(r
         return apply_membership(store, ids, add, remove, user.get("username", ""))
 
     try:
-        updates = RequirementUpdate.model_validate(data.get("updates", {})).model_dump(mode="json", exclude_unset=True)
+        updates = RequirementUpdate.model_validate(data.updates).model_dump(mode="json", exclude_unset=True)
     except ValidationError as exc:
-        raise HTTPException(status_code=422, detail=exc.errors()) from exc
+        errors = exc.errors()
+        raise HTTPException(
+            status_code=422,
+            detail=error_envelope("validation", errors[0]["msg"], errors=errors),
+        ) from exc
     if not ids or not updates:
         raise HTTPException(status_code=400, detail="ids and updates required")
 
@@ -77,8 +108,7 @@ def bulk_update_requirements(project_id: str, data: dict, user: dict = Depends(r
                         detail=f"{req_id}: {err}",
                     )
 
-    updated = []
-    skipped = []
+    updated = 0
     for req_id in ids:
         before = store.get_requirement(req_id)
         if before is None:
@@ -86,17 +116,17 @@ def bulk_update_requirements(project_id: str, data: dict, user: dict = Depends(r
         result = store.update_requirement(req_id, updates)
         if result:
             record_change(store, req_id, "update", before, result, user.get("username", ""))
-            updated.append(req_id)
-    return {"updated": len(updated), "ids": updated, "skipped": skipped}
+            updated += 1
+    return {"updated": updated}
 
 
 @router.post("/projects/{project_id}/requirements/bulk-delete")
-def bulk_delete_requirements(project_id: str, data: dict, user: dict = Depends(require_maintain)):
+def bulk_delete_requirements(project_id: str, data: BulkDeleteRequest, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
-    force = data.get("force", False)
+    force = data.force
     deleted = 0
     refused = []
-    for req_id in data.get("ids", []):
+    for req_id in data.ids:
         before = store.get_requirement(req_id)
         if before is None:
             continue
@@ -119,13 +149,17 @@ def bulk_delete_requirements(project_id: str, data: dict, user: dict = Depends(r
 # ── Components ────────────────────────────────────────────────────────────────
 
 @router.post("/projects/{project_id}/components/bulk")
-def bulk_update_components(project_id: str, data: dict, user: dict = Depends(require_maintain)):
+def bulk_update_components(project_id: str, data: BulkRequest, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
-    ids = data.get("ids", [])
+    ids = data.ids
     try:
-        updates = ComponentUpdate.model_validate(data.get("updates", {})).model_dump(mode="json", exclude_unset=True)
+        updates = ComponentUpdate.model_validate(data.updates).model_dump(mode="json", exclude_unset=True)
     except ValidationError as exc:
-        raise HTTPException(status_code=422, detail=exc.errors()) from exc
+        errors = exc.errors()
+        raise HTTPException(
+            status_code=422,
+            detail=error_envelope("validation", errors[0]["msg"], errors=errors),
+        ) from exc
     if not ids or not updates:
         raise HTTPException(status_code=400, detail="ids and updates required")
     updated = 0
@@ -136,12 +170,12 @@ def bulk_update_components(project_id: str, data: dict, user: dict = Depends(req
 
 
 @router.post("/projects/{project_id}/components/bulk-delete")
-def bulk_delete_components(project_id: str, data: dict, user: dict = Depends(require_maintain)):
+def bulk_delete_components(project_id: str, data: BulkDeleteRequest, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
-    force = data.get("force", False)
+    force = data.force
     deleted = 0
     refused = []
-    for comp_id in data.get("ids", []):
+    for comp_id in data.ids:
         before = store.get_component(comp_id)
         if before is None:
             continue
@@ -171,11 +205,11 @@ def bulk_delete_components(project_id: str, data: dict, user: dict = Depends(req
 
 
 @router.post("/projects/{project_id}/components/bulk-reparent")
-def bulk_reparent_components(project_id: str, data: dict, user: dict = Depends(require_maintain)):
+def bulk_reparent_components(project_id: str, data: BulkReparentRequest, user: dict = Depends(require_maintain)):
     """Assign multiple components to a new parent (set parent=None to detach)."""
     store = get_store(project_id)
-    ids = data.get("ids", [])
-    parent = data.get("parent", None) or None
+    ids = data.ids
+    parent = data.parent or None
 
     # The single-item PUT has always refused a cycle; this path did not, so the
     # move the API rejects one at a time was accepted in a batch — detaching the
@@ -197,13 +231,17 @@ def bulk_reparent_components(project_id: str, data: dict, user: dict = Depends(r
 # ── Verification Cases ────────────────────────────────────────────────────────
 
 @router.post("/projects/{project_id}/verification/bulk")
-def bulk_update_verification_cases(project_id: str, data: dict, user: dict = Depends(require_maintain)):
+def bulk_update_verification_cases(project_id: str, data: BulkRequest, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
-    ids = data.get("ids", [])
+    ids = data.ids
     try:
-        updates = VerificationCaseUpdate.model_validate(data.get("updates", {})).model_dump(mode="json", exclude_unset=True)
+        updates = VerificationCaseUpdate.model_validate(data.updates).model_dump(mode="json", exclude_unset=True)
     except ValidationError as exc:
-        raise HTTPException(status_code=422, detail=exc.errors()) from exc
+        errors = exc.errors()
+        raise HTTPException(
+            status_code=422,
+            detail=error_envelope("validation", errors[0]["msg"], errors=errors),
+        ) from exc
     if not ids or not updates:
         raise HTTPException(status_code=400, detail="ids and updates required")
     updated = 0
@@ -219,12 +257,12 @@ def bulk_update_verification_cases(project_id: str, data: dict, user: dict = Dep
 
 
 @router.post("/projects/{project_id}/verification/bulk-delete")
-def bulk_delete_verification_cases(project_id: str, data: dict, user: dict = Depends(require_maintain)):
+def bulk_delete_verification_cases(project_id: str, data: BulkDeleteRequest, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
-    force = data.get("force", False)
+    force = data.force
     deleted = 0
     refused = []
-    for vc_id in data.get("ids", []):
+    for vc_id in data.ids:
         before = store.get_verification_case(vc_id)
         if before is None:
             continue
@@ -247,13 +285,17 @@ def bulk_delete_verification_cases(project_id: str, data: dict, user: dict = Dep
 # ── Specifications ────────────────────────────────────────────────────────────
 
 @router.post("/projects/{project_id}/specifications/bulk")
-def bulk_update_specifications(project_id: str, data: dict, user: dict = Depends(require_maintain)):
+def bulk_update_specifications(project_id: str, data: BulkRequest, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
-    ids = data.get("ids", [])
+    ids = data.ids
     try:
-        updates = SpecificationUpdate.model_validate(data.get("updates", {})).model_dump(mode="json", exclude_unset=True)
+        updates = SpecificationUpdate.model_validate(data.updates).model_dump(mode="json", exclude_unset=True)
     except ValidationError as exc:
-        raise HTTPException(status_code=422, detail=exc.errors()) from exc
+        errors = exc.errors()
+        raise HTTPException(
+            status_code=422,
+            detail=error_envelope("validation", errors[0]["msg"], errors=errors),
+        ) from exc
     if not ids or not updates:
         raise HTTPException(status_code=400, detail="ids and updates required")
     updated = 0
@@ -269,12 +311,12 @@ def bulk_update_specifications(project_id: str, data: dict, user: dict = Depends
 
 
 @router.post("/projects/{project_id}/specifications/bulk-delete")
-def bulk_delete_specifications(project_id: str, data: dict, user: dict = Depends(require_maintain)):
+def bulk_delete_specifications(project_id: str, data: BulkDeleteRequest, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
-    force = data.get("force", False)
+    force = data.force
     deleted = 0
     refused = []
-    for spec_id in data.get("ids", []):
+    for spec_id in data.ids:
         before = store.get_specification(spec_id)
         if before is None:
             continue
@@ -297,13 +339,17 @@ def bulk_delete_specifications(project_id: str, data: dict, user: dict = Depends
 # ── Risks ─────────────────────────────────────────────────────────────────────
 
 @router.post("/projects/{project_id}/risks/bulk")
-def bulk_update_risks(project_id: str, data: dict, user: dict = Depends(require_maintain)):
+def bulk_update_risks(project_id: str, data: BulkRequest, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
-    ids = data.get("ids", [])
+    ids = data.ids
     try:
-        updates = RiskUpdate.model_validate(data.get("updates", {})).model_dump(mode="json", exclude_unset=True)
+        updates = RiskUpdate.model_validate(data.updates).model_dump(mode="json", exclude_unset=True)
     except ValidationError as exc:
-        raise HTTPException(status_code=422, detail=exc.errors()) from exc
+        errors = exc.errors()
+        raise HTTPException(
+            status_code=422,
+            detail=error_envelope("validation", errors[0]["msg"], errors=errors),
+        ) from exc
     if not ids or not updates:
         raise HTTPException(status_code=400, detail="ids and updates required")
     updated = 0
@@ -319,12 +365,12 @@ def bulk_update_risks(project_id: str, data: dict, user: dict = Depends(require_
 
 
 @router.post("/projects/{project_id}/risks/bulk-delete")
-def bulk_delete_risks(project_id: str, data: dict, user: dict = Depends(require_maintain)):
+def bulk_delete_risks(project_id: str, data: BulkDeleteRequest, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
-    force = data.get("force", False)
+    force = data.force
     deleted = 0
     refused = []
-    for risk_id in data.get("ids", []):
+    for risk_id in data.ids:
         before = store.get_item("risks", risk_id)
         if before is None:
             continue
@@ -347,13 +393,17 @@ def bulk_delete_risks(project_id: str, data: dict, user: dict = Depends(require_
 # ── Change Requests ───────────────────────────────────────────────────────────
 
 @router.post("/projects/{project_id}/change-requests/bulk")
-def bulk_update_change_requests(project_id: str, data: dict, user: dict = Depends(require_maintain)):
+def bulk_update_change_requests(project_id: str, data: BulkRequest, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
-    ids = data.get("ids", [])
+    ids = data.ids
     try:
-        updates = ChangeRequestUpdate.model_validate(data.get("updates", {})).model_dump(mode="json", exclude_unset=True)
+        updates = ChangeRequestUpdate.model_validate(data.updates).model_dump(mode="json", exclude_unset=True)
     except ValidationError as exc:
-        raise HTTPException(status_code=422, detail=exc.errors()) from exc
+        errors = exc.errors()
+        raise HTTPException(
+            status_code=422,
+            detail=error_envelope("validation", errors[0]["msg"], errors=errors),
+        ) from exc
     if not ids or not updates:
         raise HTTPException(status_code=400, detail="ids and updates required")
     updated = 0
@@ -369,12 +419,12 @@ def bulk_update_change_requests(project_id: str, data: dict, user: dict = Depend
 
 
 @router.post("/projects/{project_id}/change-requests/bulk-delete")
-def bulk_delete_change_requests(project_id: str, data: dict, user: dict = Depends(require_maintain)):
+def bulk_delete_change_requests(project_id: str, data: BulkDeleteRequest, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
-    force = data.get("force", False)
+    force = data.force
     deleted = 0
     refused = []
-    for cr_id in data.get("ids", []):
+    for cr_id in data.ids:
         before = store.get_item("change_requests", cr_id)
         if before is None:
             continue
@@ -397,7 +447,7 @@ def bulk_delete_change_requests(project_id: str, data: dict, user: dict = Depend
 # ── Bulk reparent + re-prefix for requirements ────────────────────────────────
 
 @router.post("/projects/{project_id}/requirements/bulk-reparent")
-def bulk_reparent_requirements(project_id: str, data: dict, user: dict = Depends(require_maintain)):
+def bulk_reparent_requirements(project_id: str, data: BulkReparentRequest, user: dict = Depends(require_maintain)):
     """Move selected requirements under a new parent and optionally re-prefix IDs.
 
     With ``re_prefix`` set and the new parent's prefix differing from a moved
@@ -412,10 +462,10 @@ def bulk_reparent_requirements(project_id: str, data: dict, user: dict = Depends
     the preview cannot drift from what actually happens.
     """
     store = get_store(project_id)
-    ids = data.get("ids", [])
-    new_parent = data.get("parent", None) or None
-    re_prefix = data.get("re_prefix", False)
-    dry_run = bool(data.get("dry_run", False))
+    ids = data.ids
+    new_parent = data.parent or None
+    re_prefix = data.re_prefix
+    dry_run = bool(data.dry_run)
 
     plan = plan_reparent(store.list_requirements(), ids, new_parent, re_prefix)
 

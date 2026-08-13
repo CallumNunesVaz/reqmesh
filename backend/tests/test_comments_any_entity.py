@@ -51,7 +51,7 @@ def _list_comments(client, project_id, *, entity_kind=None, entity_id=None):
     if entity_id:
         qs_parts.append(f"entity_id={entity_id}")
     qs = "?" + "&".join(qs_parts) if qs_parts else ""
-    return client.get(f"/api/projects/{project_id}/comments{qs}").json()
+    return client.get(f"/api/projects/{project_id}/comments{qs}").json()["items"]
 
 
 # ── round-trips ──────────────────────────────────────────────────────────────
@@ -121,7 +121,7 @@ def test_list_by_legacy_requirement_id_is_ignored(client, project):
     # comments come back, not just the one on REQ-OLDQ.
     res = client.get(f"/api/projects/{project}/comments?requirement_id=REQ-OLDQ")
     assert res.status_code == 200
-    body = res.json()
+    body = res.json()["items"]
     assert isinstance(body, list)
     ids = {x["id"] for x in body}
     assert c1["id"] in ids  # present, but because *all* comments are returned

@@ -24,7 +24,7 @@ test.describe('risk matrix', () => {
       .selectOption('critical');
     // Wait for the severity PATCH to land before touching the likelihood select.
     await expect(async () => {
-      const risks = await api<any[]>(app, `/projects/${P}/risks`);
+      const risks = (await api<{ items: any[] }>(app, `/projects/${P}/risks`)).items;
       const r = risks.find((r2: any) => r2.id === 'RSK00006');
       expect(r?.severity).toBe('critical');
     }).toPass({ timeout: 10_000 });
@@ -32,12 +32,12 @@ test.describe('risk matrix', () => {
       .selectOption('possible');
     // Wait for the likelihood PATCH to land before checking the rating.
     await expect(async () => {
-      const risks = await api<any[]>(app, `/projects/${P}/risks`);
+      const risks = (await api<{ items: any[] }>(app, `/projects/${P}/risks`)).items;
       const r = risks.find((r2: any) => r2.id === 'RSK00006');
       expect(r?.rating?.likelihood).toBe('possible');
     }).toPass({ timeout: 10_000 });
 
-    const before = (await api<any[]>(app, `/projects/${P}/risks`)).find((r) => r.id === 'RSK00006');
+    const before = (await api<{ items: any[] }>(app, `/projects/${P}/risks`)).items.find((r) => r.id === 'RSK00006');
     expect(before.severity).toBe('critical');
     expect(before.rating.likelihood).toBe('possible');
     const bandBefore = before.rating.band;
@@ -68,7 +68,7 @@ test.describe('risk matrix', () => {
     const criticalRow = stored.cells[stored.severities.length - 1];
     expect(criticalRow[2]).not.toBe('high');
 
-    const after = (await api<any[]>(app, `/projects/${P}/risks`)).find((r) => r.id === 'RSK00006');
+    const after = (await api<{ items: any[] }>(app, `/projects/${P}/risks`)).items.find((r) => r.id === 'RSK00006');
     expect(after.rating.band).not.toBe(bandBefore);
 
     // And the severity indicator on the card follows the matrix rather than a

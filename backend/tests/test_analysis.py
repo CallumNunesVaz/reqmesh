@@ -44,7 +44,7 @@ def test_analysis_case_api_and_run(client, project):
 
     body = {"id": "heavy", "name": "Heavy", "scope": ["R1"], "overrides": {"R1.mass": 200.0}}
     assert client.post(f"/api/projects/{project}/analysis", json=body).status_code == 201
-    assert client.get(f"/api/projects/{project}/analysis").json()[0]["id"] == "heavy"
+    assert client.get(f"/api/projects/{project}/analysis").json()["items"][0]["id"] == "heavy"
 
     run = client.get(f"/api/projects/{project}/analysis/heavy/run").json()
     assert run["requirements"][0]["verdict"] == "fail"

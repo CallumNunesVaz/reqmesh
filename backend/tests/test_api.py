@@ -265,8 +265,7 @@ def test_bulk_update_allows_all_transitions(client, project):
     res = client.post(f"/api/projects/{project}/requirements/bulk",
                       json={"ids": ["SYST0001", "SYST0002"], "updates": {"status": "approved"}})
     body = res.json()
-    assert body["ids"] == ["SYST0001", "SYST0002"]
-    assert body["skipped"] == []
+    assert body["updated"] == 2
 
 
 # ── Published reports escape user content ────────────────────────────────────
@@ -331,7 +330,7 @@ def test_demo_project_seeded_on_first_launch(workspace, monkeypatch):
         assert len(reqs) >= 50
         tree = c.get("/api/projects/cessna-172/requirements/tree").json()
         assert tree[0]["id"] == "ACFT0000"
-        assert len(c.get("/api/projects/cessna-172/verification").json()) >= 7
+        assert len(c.get("/api/projects/cessna-172/verification").json()["items"]) >= 7
         validate_result = c.get("/api/projects/cessna-172/validate").json()
         assert "issues" in validate_result
         assert "valid" in validate_result

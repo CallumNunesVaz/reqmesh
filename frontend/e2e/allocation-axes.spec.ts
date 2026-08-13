@@ -70,12 +70,12 @@ test('a cell on the risks matrix writes the risk, and survives a reload', async 
   await row.locator('td').nth(colIndex + 1).click();
   // Poll the API until the cell toggle lands — no fixed sleep.
   await expect(async () => {
-    const risk = (await api<any[]>(app, `/projects/${P}/risks`)).find((r2: any) => r2.id === riskId);
+    const risk = (await api<{ items: any[] }>(app, `/projects/${P}/risks`)).items.find((r2: any) => r2.id === riskId);
     expect(risk?.linked_requirements).toContain(reqId);
   }).toPass({ timeout: 10_000 });
 
   // Written to the risk itself — the field the rest of the app reads.
-  const risk = (await api<any[]>(app, `/projects/${P}/risks`)).find((r) => r.id === riskId);
+  const risk = (await api<{ items: any[] }>(app, `/projects/${P}/risks`)).items.find((r) => r.id === riskId);
   expect(risk.linked_requirements).toContain(reqId);
 
   await app.reload();

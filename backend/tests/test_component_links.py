@@ -30,7 +30,7 @@ def test_risk_round_trips_both_component_fields(client):
     client.put(f"/api/projects/{p}/risks/RSK-1", json={
         "linked_components": ["C-1"], "mitigating_components": ["C-2"]})
 
-    got = next(r for r in client.get(f"/api/projects/{p}/risks").json() if r["id"] == "RSK-1")
+    got = next(r for r in client.get(f"/api/projects/{p}/risks").json()["items"] if r["id"] == "RSK-1")
     assert got["linked_components"] == ["C-1"]
     assert got["mitigating_components"] == ["C-2"]
 
@@ -43,7 +43,7 @@ def test_change_request_round_trips_affected_components(client):
     client.put(f"/api/projects/{p}/change-requests/CR-1",
                json={"affected_components": ["C-1"]})
 
-    got = next(c for c in client.get(f"/api/projects/{p}/change-requests").json()
+    got = next(c for c in client.get(f"/api/projects/{p}/change-requests").json()["items"]
                if c["id"] == "CR-1")
     assert got["affected_components"] == ["C-1"]
 
@@ -55,7 +55,7 @@ def test_decision_round_trips_linked_components(client):
 
     client.put(f"/api/projects/{p}/decisions/DEC-1", json={"linked_components": ["C-1"]})
 
-    got = next(d for d in client.get(f"/api/projects/{p}/decisions").json()
+    got = next(d for d in client.get(f"/api/projects/{p}/decisions").json()["items"]
                if d["id"] == "DEC-1")
     assert got["linked_components"] == ["C-1"]
 
@@ -69,9 +69,9 @@ def test_specification_and_analysis_round_trip(client):
     client.put(f"/api/projects/{p}/specifications/SPEC-1", json={"components": ["C-1"]})
     client.put(f"/api/projects/{p}/analysis/AC-1", json={"scope_components": ["C-1"]})
 
-    spec = next(s for s in client.get(f"/api/projects/{p}/specifications").json()
+    spec = next(s for s in client.get(f"/api/projects/{p}/specifications").json()["items"]
                 if s["id"] == "SPEC-1")
-    case = next(a for a in client.get(f"/api/projects/{p}/analysis").json()
+    case = next(a for a in client.get(f"/api/projects/{p}/analysis").json()["items"]
                 if a["id"] == "AC-1")
     assert spec["components"] == ["C-1"]
     assert case["scope_components"] == ["C-1"]
@@ -140,10 +140,10 @@ def test_risk_without_the_new_fields_still_loads(client):
     p = _project(client, "cl8")
     client.post(f"/api/projects/{p}/risks", json={"id": "RSK-1", "title": "r"})
 
-    got = next(r for r in client.get(f"/api/projects/{p}/risks").json() if r["id"] == "RSK-1")
+    got = next(r for r in client.get(f"/api/projects/{p}/risks").json()["items"] if r["id"] == "RSK-1")
     assert not got.get("linked_components")
     assert not got.get("mitigating_components")
 
     # And setting one afterwards works, so the absence is not a stuck state.
     client.put(f"/api/projects/{p}/risks/RSK-1", json={"linked_components": []})
-    assert client.get(f"/api/projects/{p}/risks").json()[0].get("linked_components") == []
+    assert client.get(f"/api/projects/{p}/risks").json()["items"][0].get("linked_components") == []

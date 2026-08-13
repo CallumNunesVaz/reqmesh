@@ -76,8 +76,8 @@ def test_definition_crud_api(client, project):
     body = {"id": "Budget", "type": "constraint", "parameters": ["a", "b"], "expr": "a <= b"}
     res = client.post(f"/api/projects/{project}/definitions", json=body)
     assert res.status_code == 201
-    assert client.get(f"/api/projects/{project}/definitions").json()[0]["id"] == "Budget"
+    assert client.get(f"/api/projects/{project}/definitions").json()["items"][0]["id"] == "Budget"
     res = client.put(f"/api/projects/{project}/definitions/Budget", json={"expr": "a < b"})
     assert res.json()["expr"] == "a < b"
     assert client.delete(f"/api/projects/{project}/definitions/Budget").json() == {"ok": True}
-    assert client.get(f"/api/projects/{project}/definitions").json() == []
+    assert client.get(f"/api/projects/{project}/definitions").json()["items"] == []

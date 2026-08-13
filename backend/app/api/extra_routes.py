@@ -42,6 +42,14 @@ class ReviewRequest(BaseModel):
     comment: str = ""
 
 
+class GitRestoreRequest(BaseModel):
+    hash: str = ""
+
+
+class GitTestRemoteRequest(BaseModel):
+    remote_url: str = ""
+
+
 router = APIRouter()
 
 
@@ -337,12 +345,7 @@ def list_comments(
     if entity_id:
         comments = [c for c in comments if c.get("entity_id") == entity_id]
     comments = sorted_by_modified(comments, key="created")
-    if offset is None and limit is None:
-        return comments
-    off = offset or 0
-    lim = limit or 500
-    total = len(comments)
-    return {"items": comments[off:off + lim], "total": total, "offset": off, "limit": lim}
+    return paginate(comments, offset, limit)
 
 
 @router.post("/projects/{project_id}/comments", status_code=201)
@@ -620,10 +623,10 @@ def git_log(project_id: str, limit: int = Query(50, ge=1, le=500)):
 
 
 @router.post("/projects/{project_id}/git/restore")
-def git_restore(project_id: str, data: dict, user: dict = Depends(require_maintain)):
+def git_restore(project_id: str, data: GitRestoreRequest, user: dict = Depends(require_maintain)):
     from app.services import git_service
 
-    commit_hash = data.get("hash", "").strip()
+    commit_hash = data.hash.strip()
     if not commit_hash:
         raise HTTPException(status_code=400, detail="hash is required")
 
@@ -641,7 +644,7 @@ def git_restore(project_id: str, data: dict, user: dict = Depends(require_mainta
 
 
 @router.post("/projects/{project_id}/git/test-remote")
-def git_test_remote(project_id: str, data: dict, user: dict = Depends(require_admin)):
+def git_test_remote(project_id: str, data: GitTestRemoteRequest, user: dict = Depends(require_admin)):
     """Check that a candidate remote is reachable before it is saved.
 
     Admin-only, matching `router._guard_git_settings`: this makes the server
@@ -652,7 +655,7 @@ def git_test_remote(project_id: str, data: dict, user: dict = Depends(require_ad
     """
     from app.services import git_service
 
-    remote_url = str(data.get("remote_url", "")).strip()
+    remote_url = data.remote_url.strip()
     if not remote_url:
         raise HTTPException(status_code=400, detail="remote_url is required")
     if not git_service.is_allowed_remote(remote_url):

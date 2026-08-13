@@ -118,7 +118,7 @@ def test_risks_are_served_with_a_rating(client, project):
         "id": "RSK1", "title": "Wing flutter", "severity": "critical",
         "likelihood": "rare"})
 
-    listed = client.get(f"/api/projects/{project}/risks").json()
+    listed = client.get(f"/api/projects/{project}/risks").json()["items"]
     entry = next(r for r in listed if r["id"] == "RSK1")
     assert entry["rating"]["band"] == "medium"
     assert entry["rating"]["color"].startswith("#")
@@ -128,14 +128,14 @@ def test_retuning_the_matrix_rerates_existing_risks(client, project):
     """Ratings are derived, not stored — the point of computing on read."""
     client.post(f"/api/projects/{project}/risks", json={
         "id": "RSK2", "title": "T", "severity": "critical", "likelihood": "rare"})
-    before = next(r for r in client.get(f"/api/projects/{project}/risks").json()
+    before = next(r for r in client.get(f"/api/projects/{project}/risks").json()["items"]
                   if r["id"] == "RSK2")["rating"]["band"]
 
     m = default_matrix()
     m["cells"][3][0] = "extreme"          # critical + rare -> extreme
     assert client.patch(f"/api/projects/{project}", json={"risk_matrix": m}).status_code == 200
 
-    after = next(r for r in client.get(f"/api/projects/{project}/risks").json()
+    after = next(r for r in client.get(f"/api/projects/{project}/risks").json()["items"]
                  if r["id"] == "RSK2")["rating"]["band"]
     assert before == "medium" and after == "extreme"
 
@@ -170,7 +170,7 @@ def test_legacy_risk_on_disk_still_rates(client, project):
     store.create_item("risks", {"id": "OLD1", "title": "Legacy",
                                 "severity": "high", "probability": "medium"})
 
-    entry = next(r for r in client.get(f"/api/projects/{project}/risks").json()
+    entry = next(r for r in client.get(f"/api/projects/{project}/risks").json()["items"]
                  if r["id"] == "OLD1")
     assert entry["rating"]["likelihood"] == "possible"
     assert entry["rating"]["band"] == "high"

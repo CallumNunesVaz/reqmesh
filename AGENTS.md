@@ -61,3 +61,16 @@ do not report completion on the strength of reading the code.
    comment density in the file you are editing rather than importing a new style.
 6. **Stay inside the task's stated scope.** Do not opportunistically refactor
    neighbouring code; note it instead and move on.
+7. **Error `detail` has one of two shapes.** A plain string (the message), or a
+   structured envelope `{"error": <discriminator>, "message": <string>, ...}` for
+   errors that carry data (the delete guard's referrer list, a validation
+   error's field list). Build the envelope with
+   `app/services/errors.error_envelope` so the shapes cannot drift; a client
+   switches on `error` and renders `message`. FastAPI's own request-validation
+   errors are the one unavoidable exception — they are a list of error objects
+   and we do not control them.
+8. **PUT means partial update.** Nine entity kinds update via PUT and four via
+   PATCH (projects, baselines, system states, comments), and the PUT handlers
+   apply `exclude_unset` partial semantics throughout, so PUT here is a partial
+   update, not a replace. That is a misnomer, but unifying the verbs would break
+   every existing client — do not change any method.
