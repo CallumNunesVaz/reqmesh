@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Trash2, Edit3, Check, X, Layers, Loader, AlertTriangle, Square, CheckSquare } from 'lucide-react';
+import { Plus, Trash2, Edit3, Check, Layers, Loader, AlertTriangle, Square, CheckSquare } from 'lucide-react';
 import { api, type SystemStateDef } from '../api/client';
 import { useAuthStore } from '../store/auth';
 import { useConfirm } from '../components/ConfirmDialog';

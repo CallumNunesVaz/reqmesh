@@ -1,7 +1,7 @@
-import { test, expect, signIn, DEMO_PROJECT } from './fixtures';
+import { test, expect, signIn } from './fixtures';
 
 test.describe('session expiry', () => {
-  test('a 401 on project data redirects to sign-in, not an empty project', async ({ app, server }) => {
+  test('a 401 on project data redirects to sign-in, not an empty project', async ({ app }) => {
     await signIn(app);
 
     // Wait for the projects list to render — the test user is signed in

@@ -45,7 +45,7 @@ const BOX_H = 62;
 const HEADER_H = 20;
 const FOOTER_H = 14;
 
-function RequirementNode({ data, selected }: NodeProps) {
+function RequirementNode({ data }: NodeProps) {
   const nodeData = data as unknown as RequirementNodeData;
   const [hover, setHover] = useState(false);
   const { connectedIds, selectedReqId, hasSelection } = useGraphSelection();
@@ -84,14 +84,6 @@ function RequirementNode({ data, selected }: NodeProps) {
       ? nodeData.name.slice(0, 26) + '\u2026'
       : nodeData.name
     : 'Untitled';
-
-  // Soft, status-tinted bloom on every node; brightest when selected, then on
-  // hover, then a gentle resting glow so the whole graph feels lit.
-  const glowFilter = isSelected
-    ? `drop-shadow(0 0 9px ${glow(colors.fill, 0.4)}) drop-shadow(0 3px 8px rgba(0,0,0,0.35)) brightness(1.03)`
-    : hover
-      ? `drop-shadow(0 0 7px ${glow(colors.fill, 0.28)}) drop-shadow(0 2px 6px rgba(0,0,0,0.3)) brightness(1.06)`
-      : `drop-shadow(0 0 3px ${glow(colors.fill, 0.13)}) drop-shadow(0 1px 3px rgba(0,0,0,0.22))`;
 
   return (
     <div

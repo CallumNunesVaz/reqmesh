@@ -65,7 +65,8 @@ export default function SpecificationsPage() {
   const toggleExpand = (specId: string) =>
     setExpanded((prev) => {
       const next = new Set(prev);
-      next.has(specId) ? next.delete(specId) : next.add(specId);
+      if (next.has(specId)) next.delete(specId);
+      else next.add(specId);
       return next;
     });
 
@@ -230,7 +231,7 @@ export default function SpecificationsPage() {
             <div className="flex items-end gap-3">
               <div className="w-40">
                 <label className="label">ID
-                  <input className="input font-mono" placeholder="SRS-001" value={newSpec.id} onChange={(e) => setNewSpec({ ...newSpec, id: e.target.value })} autoFocus disabled={!!editingId} />
+                  <input className="input font-mono" placeholder="SRS-001" value={newSpec.id} onChange={(e) => setNewSpec({ ...newSpec, id: e.target.value })} disabled={!!editingId} />
                 </label>
               </div>
               <div className="flex-1">

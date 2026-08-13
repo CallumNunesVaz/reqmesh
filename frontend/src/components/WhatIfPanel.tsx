@@ -1,12 +1,16 @@
 import { useMemo, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
-import { Play, Pause, SkipBack, SkipForward, Check, RotateCcw, Loader2, X, FlaskConical, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Check, RotateCcw, Loader2, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useWhatIf } from './WhatIfContext';
 import { VerdictBadge, MarginTag } from './parametrics';
 import { requirementVerdict } from '../lib/whatIfVerdict';
 import { useAuthStore } from '../store/auth';
 import { useToasts } from './Toast';
 import type { ImpactStepParam, ImpactStepConstraint, ConstraintStatus } from '../api/client';
+
+// A stable "no roots yet" sentinel so `impact?.roots ?? EMPTY_ROOTS` does not
+// mint a fresh array on every render and churn the `rootLines` memo below.
+const EMPTY_ROOTS: string[] = [];
 
 function ParamStep({ step }: { step: ImpactStepParam }) {
   return (
@@ -65,8 +69,7 @@ export default function WhatIfPanel(): JSX.Element | null {
     stepIndex, playing, setStepIndex, setPlaying, clear, apply } = whatIf;
   const steps = impact?.steps ?? [];
   const affected = impact?.affected ?? [];
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const roots = impact?.roots ?? [];
+  const roots = impact?.roots ?? EMPTY_ROOTS;
   const overrideCount = Object.keys(overrides).length;
   const timerRef = useRef<ReturnType<typeof setInterval>>();
   const stepRef = useRef(stepIndex);

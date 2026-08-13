@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { X, FileDown, FileText, FileCode, File, Download, Loader, FileSpreadsheet, Globe, FileType, AlertTriangle, History } from 'lucide-react';
 import { api, baselineNames, type Component, type RequirementTreeNode } from '../api/client';
 import Modal from './Modal';

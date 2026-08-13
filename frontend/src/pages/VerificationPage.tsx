@@ -469,7 +469,7 @@ export default function VerificationPage() {
             <div className="flex items-end gap-3">
               <div className="w-40">
                 <label className="label">ID
-                  <input className="input font-mono" placeholder="VC-001" value={newVC.id} onChange={(e) => setNewVC({ ...newVC, id: e.target.value })} autoFocus />
+                  <input className="input font-mono" placeholder="VC-001" value={newVC.id} onChange={(e) => setNewVC({ ...newVC, id: e.target.value })} />
                 </label>
               </div>
               <div className="flex-1">
@@ -537,7 +537,7 @@ export default function VerificationPage() {
                       checked={selectedVcs.has(vc.id)}
                       onChange={(e) => {
                         e.stopPropagation();
-                        setSelectedVcs(p => { const n = new Set(p); e.target.checked ? n.add(vc.id) : n.delete(vc.id); return n; });
+                        setSelectedVcs(p => { const n = new Set(p); if (e.target.checked) n.add(vc.id); else n.delete(vc.id); return n; });
                       }}
                       aria-label={`Select ${vc.id}`}
                       className="w-4 h-4 rounded border-muted-foreground/30 shrink-0"

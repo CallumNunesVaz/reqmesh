@@ -2,13 +2,12 @@ import { useEffect, useState, useCallback, useId } from 'react';
 import { usePersistedState, setCodec } from '../hooks/usePersistedState';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Trash2, Edit3, Check, X, Snowflake, History, GitBranch, Clock, Layers, ArrowRight, ChevronDown, ChevronUp, ChevronRight, Loader, Eye, EyeOff, Calendar, GripVertical } from 'lucide-react';
+import { Plus, Trash2, Edit3, Check, X, Snowflake, GitBranch, Clock, Layers, ArrowRight, ChevronDown, ChevronUp, ChevronRight, Loader, Eye, EyeOff, Calendar, GripVertical } from 'lucide-react';
 import { api, type BaselineInfo, type BaselineDiff } from '../api/client';
 import { EntityLink } from '../components/entities';
 import RichTextEditor from '../components/RichTextEditor';
 import { AutoLinkHtml } from '../components/autoLink';
 import { useEntityKinds } from '../components/entityIndex';
-import { HelpTip } from '../components/HelpTip';
 import { useAuthStore } from '../store/auth';
 import { useStore } from '../store';
 import { DndContext, DragOverlay, closestCenter, PointerSensor, KeyboardSensor, useSensor, useSensors, type DragStartEvent, type DragEndEvent } from '@dnd-kit/core';
@@ -204,12 +203,20 @@ export default function BaselinesPage() {
   // Re-fetch when the comparison target changes — including back to undefined,
   // which is "current state". Bailing on a falsy `diffAgainst` left the previous
   // baseline-to-baseline result on screen while the select claimed otherwise.
+  //
+  // `projectId` and `diffResult.baseline` are read but deliberately omitted from
+  // the deps: this effect calls `setDiffResult`, so including either would
+  // re-run it on its own output. `diffResult.baseline` is the name of the
+  // baseline being diffed (stable across a re-fetch), and `projectId` is a
+  // route param that only changes on navigation; both are correct in the
+  // closure at the moment `diffAgainst` changes.
   useEffect(() => {
     if (!projectId || !diffResult) return;
     setError('');
     api.diffBaseline(projectId, diffResult.baseline, diffAgainst)
       .then(setDiffResult)
       .catch((err: any) => setError(err.message || 'Diff failed'));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [diffAgainst]);
 
   const commitReorder = async (newOrder: string[]) => {

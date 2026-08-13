@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useId } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Trash2, ArrowLeft, Save, X, ChevronRight, AlertTriangle } from 'lucide-react';
 import { api, baselineNames, COMPONENT_TYPES, type Component, type Requirement, type VerificationCase, type Backlinks } from '../api/client';

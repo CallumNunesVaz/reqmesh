@@ -42,9 +42,12 @@ test('baseline diff selects another baseline to compare', async ({ app, server }
   // Select PDR from the dropdown.
   await diffPanel.locator('select').selectOption('PDR');
 
-  // The diff should re-fetch — the result text should change (or at least we
-  // should not have errored).
-  await expect(diffPanel).toBeVisible({ timeout: 10_000 });
+  // The diff should re-fetch — the change count text must differ from the
+  // against-current count captured above.
+  await expect.poll(
+    () => diffPanel.locator('[class*="text-muted-foreground"]').first().textContent(),
+    { timeout: 10_000 },
+  ).not.toBe(initialText);
   // The heading should still mention SRR.
   await expect(diffPanel.locator('h3')).toContainText('SRR');
 });

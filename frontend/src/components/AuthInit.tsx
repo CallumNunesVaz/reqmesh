@@ -4,7 +4,7 @@ import { useAuthStore } from '../store/auth';
 import LoadingSplash from './LoadingSplash';
 
 export default function AuthInit({ children }: { children: React.ReactNode }) {
-  const { csrfToken, setUser, login, loginGuest, logout } = useAuthStore();
+  const { login, loginGuest } = useAuthStore();
   const [ready, setReady] = useState(false);
 
   useEffect(() => {

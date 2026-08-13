@@ -101,7 +101,7 @@ export default function SplitRequirementDialog({ open, onClose, projectId, sourc
           }
         },
         redo: async () => {
-          for (const { id, data } of createdData) {
+          for (const { data } of createdData) {
             await api.createRequirement(projectId, data);
           }
         },

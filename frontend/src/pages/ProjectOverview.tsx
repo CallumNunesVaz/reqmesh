@@ -6,7 +6,7 @@ import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveCo
 import LoadingSplash from '../components/LoadingSplash';
 import { api, type Requirement, type VerificationCase } from '../api/client';
 import { useAuthStore } from '../store/auth';
-import { formatReqType, reqTypeColor, reqTypeIcon } from '../lib/requirementTypes';
+import { formatReqType, reqTypeColor } from '../lib/requirementTypes';
 
 const statusColors: Record<string, string> = {
   proposed: 'border-blue-500/50 bg-blue-500/10 text-blue-400',
@@ -327,7 +327,6 @@ export default function ProjectOverview() {
               </ResponsiveContainer>
               <div className="flex-1 space-y-1.5">
                 {typeData.map((t) => {
-                  const Icon = reqTypeIcon(t.key);
                   return (
                     <div key={t.name} className="flex items-center justify-between gap-3 text-xs">
                       <div className="flex items-center gap-1.5 min-w-0">

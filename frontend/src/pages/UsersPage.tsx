@@ -149,7 +149,7 @@ export default function UsersPage() {
 
   const allSelected = filtered.length > 0 && filtered.every((u) => selected.has(u.username));
   const toggleSelect = (uname: string) => setSelected((s) => {
-    const n = new Set(s); n.has(uname) ? n.delete(uname) : n.add(uname); return n;
+    const n = new Set(s); if (n.has(uname)) n.delete(uname); else n.add(uname); return n;
   });
   const toggleSelectAll = () => setSelected(allSelected ? new Set() : new Set(filtered.map((u) => u.username)));
 
@@ -342,7 +342,7 @@ export default function UsersPage() {
           {editingSelf ? (
             <form onSubmit={saveProfile} className="flex flex-wrap items-end gap-3">
               <div>
-                <label className="label text-[10px]">Full name<input className="input text-sm" value={selfForm.full_name} onChange={(e) => setSelfForm({ ...selfForm, full_name: e.target.value })} placeholder="Your name" autoFocus /></label>
+                <label className="label text-[10px]">Full name<input className="input text-sm" value={selfForm.full_name} onChange={(e) => setSelfForm({ ...selfForm, full_name: e.target.value })} placeholder="Your name" /></label>
               </div>
               <div>
                 <label className="label text-[10px]">Email<input className="input text-sm" value={selfForm.email} onChange={(e) => setSelfForm({ ...selfForm, email: e.target.value })} placeholder="you@example.com" /></label>
@@ -382,7 +382,7 @@ export default function UsersPage() {
                 className="card p-4 mb-6 flex items-end gap-3 flex-wrap"
               >
                 <div className="min-w-[140px]">
-                  <label className="label text-[10px]">Username *<input className="input text-sm" placeholder="jdoe" value={newUsername} onChange={(e) => setNewUsername(e.target.value)} autoFocus /></label>
+                  <label className="label text-[10px]">Username *<input className="input text-sm" placeholder="jdoe" value={newUsername} onChange={(e) => setNewUsername(e.target.value)} /></label>
                 </div>
                 <div className="min-w-[140px]">
                   <label className="label text-[10px]">Full name<input className="input text-sm" placeholder="Jane Doe" value={newFullName} onChange={(e) => setNewFullName(e.target.value)} /></label>
@@ -496,7 +496,7 @@ export default function UsersPage() {
                         </td>
                         <td className="px-4 py-2.5 text-xs text-card-foreground">
                           {isEditing ? (
-                            <input className="input text-xs !py-1 w-full" value={editForm.full_name} onChange={(e) => setEditForm({ ...editForm, full_name: e.target.value })} autoFocus />
+                            <input className="input text-xs !py-1 w-full" value={editForm.full_name} onChange={(e) => setEditForm({ ...editForm, full_name: e.target.value })} />
                           ) : (u.full_name || <span className="text-muted-foreground/40 italic">—</span>)}
                         </td>
                         <td className="px-4 py-2.5 text-xs text-card-foreground hidden @3xl:table-cell">
@@ -603,7 +603,7 @@ export default function UsersPage() {
             <div className="space-y-3">
               <p className="text-xs text-emerald-500 flex items-center gap-1"><Check size={13} /> Account created. Share this set-password link:</p>
               <div className="flex gap-1">
-                <input readOnly className="input text-xs font-mono flex-1" value={inviteLink} onFocus={(e) => e.target.select()} autoFocus={inviteCopyFailed} />
+                <input readOnly className="input text-xs font-mono flex-1" value={inviteLink} onFocus={(e) => e.target.select()} />
                 <button type="button" onClick={async () => { if (!await copyText(inviteLink)) setInviteCopyFailed(true); }} className="btn-secondary shrink-0 p-2" title="Copy"><Copy size={13} /></button>
                 {inviteCopyFailed && (
                   <span className="text-[10px] text-cs-amber shrink-0">Copy blocked — select the link above</span>
@@ -613,6 +613,9 @@ export default function UsersPage() {
             </div>
           ) : (
             <div className="space-y-3">
+              {/* The username is the primary field of the invite dialog the user
+                  just opened; Modal otherwise lands focus on the close button. */}
+              {/* oxlint-disable-next-line jsx-a11y/no-autofocus */}
               <div><label className="label text-[10px]">Username *<input className="input text-sm" value={invite.username} onChange={(e) => setInvite({ ...invite, username: e.target.value })} placeholder="jdoe" autoFocus /></label></div>
               <div><label className="label text-[10px]">Email<input className="input text-sm" value={invite.email} onChange={(e) => setInvite({ ...invite, email: e.target.value })} placeholder="jane@example.com" /></label></div>
               <div><label className="label text-[10px]">Full name<input className="input text-sm" value={invite.full_name} onChange={(e) => setInvite({ ...invite, full_name: e.target.value })} placeholder="Jane Doe" /></label></div>
@@ -646,6 +649,9 @@ export default function UsersPage() {
           </div>
         ) : (
           <>
+            {/* The textarea is the primary field of the import dialog the user
+                just opened; Modal otherwise lands focus on the close button. */}
+            {/* oxlint-disable-next-line jsx-a11y/no-autofocus */}
             <textarea className="input font-mono text-xs h-40 resize-none w-full" placeholder={'username,full_name,email,role\njdoe,Jane Doe,jane@example.com,editor'} value={importText ?? ''} onChange={(e) => setImportText(e.target.value)} autoFocus />
             <div className="flex gap-2 mt-3">
               <button onClick={handleImport} className="btn-primary flex-1 justify-center" disabled={!importText?.trim()}>Import</button>
@@ -661,6 +667,9 @@ export default function UsersPage() {
           <button type="button" onClick={() => setResetFor(null)} className="absolute right-4 top-4 text-muted-foreground hover:text-foreground"><X size={18} /></button>
           <h2 className="text-lg font-bold text-foreground mb-1 flex items-center gap-2"><KeyRound size={18} /> Reset password</h2>
           <p className="text-xs text-muted-foreground mb-4">Set a new password for <b>{resetFor}</b></p>
+          {/* The password field is the primary (only) field of the reset dialog
+              the user just opened; Modal otherwise lands focus on the close button. */}
+          {/* oxlint-disable-next-line jsx-a11y/no-autofocus */}
           <input className="input mb-4" type="password" placeholder="New password (min 12 chars)" value={resetPassword} onChange={(e) => setResetPassword(e.target.value)} autoFocus />
           <div className="flex gap-2">
             <button type="submit" className="btn-primary flex-1 justify-center" disabled={resetting}>

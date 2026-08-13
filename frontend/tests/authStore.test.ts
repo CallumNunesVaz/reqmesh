@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 
 /**
  * The auth store no longer uses localStorage — tokens are in HttpOnly cookies.

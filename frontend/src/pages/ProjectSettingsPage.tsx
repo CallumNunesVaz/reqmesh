@@ -1,7 +1,7 @@
 import { useEffect, useId, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Save, Settings, X, Plus, RotateCw } from 'lucide-react';
+import { ArrowLeft, Save, Settings, X, Plus } from 'lucide-react';
 import { api, type StakeholderDef, type RiskMatrix } from '../api/client';
 import { useAuthStore } from '../store/auth';
 import { useToasts } from '../components/Toast';
@@ -116,7 +116,7 @@ export default function ProjectSettingsPage() {
       const incoming = p.naming || {};
       const merged: Record<string, NamingRule> = {};
       for (const [key, def] of Object.entries(DEFAULT_NAMING)) {
-        merged[key] = { ...def, ...(incoming[key] || {}) };
+        merged[key] = { ...def, ...incoming[key] };
       }
       setNaming(merged);
       const git = p.git || {};

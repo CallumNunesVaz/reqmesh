@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo, useRef, useCallback, useId } from 'react'
 import { useParams, useNavigate } from 'react-router-dom';
 import { GuardedLink as Link } from '../components/navGuard';
 import { motion } from 'framer-motion';
-import { Trash2, ArrowLeft, Plus, X, ArrowRight, ArrowLeftRight, Sparkles, ShieldCheck, ExternalLink, ChevronRight, Waypoints, AlertTriangle, CheckCircle2, GitFork, Loader, Save, Undo2, GitPullRequest, Ban, Tag, Copy, Split } from 'lucide-react';
+import { Trash2, ArrowLeft, Plus, X, ArrowRight, ArrowLeftRight, Sparkles, ShieldCheck, ExternalLink, ChevronRight, Waypoints, AlertTriangle, CheckCircle2, GitFork, Loader, Save, Undo2, GitPullRequest, Tag, Copy, Split } from 'lucide-react';
 import { api, baselineNames, CR_URGENCIES, type StakeholderDef, type SystemStateDef, type RequirementValue, type Requirement, type VerificationCase, type QualityItem, type Component, type Specification, type ChangeRequest, type Risk, type EvaluatedRequirement, type Definition, type DecisionRecord, type Backlinks } from '../api/client';
 import { ParametricsCard } from '../components/parametrics';
 import WhatIfPanel from '../components/WhatIfPanel';
@@ -1482,7 +1482,7 @@ export default function RequirementDetailPage() {
                             className="w-16 h-7 shrink-0 cursor-pointer"
                             value={score != null && score > 5 ? 5 : (score ?? 0)}
                             onChange={(e) => {
-                              const next = { ...(req.priorities || {}) };
+                              const next = { ...req.priorities };
                               const v = Number(e.target.value);
                               if (v === 0) delete next[s.name];
                               else next[s.name] = v;
@@ -1511,7 +1511,7 @@ export default function RequirementDetailPage() {
                             className="hover:text-destructive shrink-0"
                             title="Remove this score"
                             onClick={() => {
-                              const next = { ...(req.priorities || {}) };
+                              const next = { ...req.priorities };
                               delete next[name];
                               save({ priorities: next });
                             }}

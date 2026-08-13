@@ -107,7 +107,8 @@ export default function DefinitionsPage() {
   const toggleExpand = (id: string) =>
     setExpanded((prev) => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
 
@@ -242,7 +243,7 @@ export default function DefinitionsPage() {
                 <label className="label">ID
                   <input className="input font-mono" placeholder="MassBudget" value={draft.id}
                     onChange={(e) => setDraft({ ...draft, id: e.target.value })}
-                    autoFocus disabled={!!editingId} />
+                    disabled={!!editingId} />
                 </label>
               </div>
               <div className="flex-1 min-w-[10rem]">

@@ -19,7 +19,7 @@ async function putViaApp(app: any, path: string, body: any) {
   }, { path, body, csrf: csrfResp });
 }
 
-test('restore restores the name via API and records audit', async ({ app, server }) => {
+test('restore restores the name via API and records audit', async ({ app }) => {
   await signIn(app);
 
   const original = await api(app, `/projects/${P}/requirements/AFRM0001`);

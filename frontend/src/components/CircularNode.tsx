@@ -48,7 +48,7 @@ const verdictColors: Record<string, string> = {
   unknown: 'hsl(45,90%,55%)',
 };
 
-function CircularNode({ data, selected }: NodeProps) {
+function CircularNode({ data }: NodeProps) {
   const nodeData = data as unknown as CircularNodeData;
   const [hover, setHover] = useState(false);
   const canEdit = useAuthStore((s) => s.canEdit());

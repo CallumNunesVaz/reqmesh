@@ -85,7 +85,7 @@ export function HistoryPanel({ itemId, defaultOpen = false, onRestored }: {
 
   return (
     <div className="space-y-2">
-      {entries.map((entry, i) => {
+      {entries.map((entry) => {
         const ts = new Date(entry.timestamp).toLocaleString();
         const fieldNames = Object.keys(entry.changes);
         return (

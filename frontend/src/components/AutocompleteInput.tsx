@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback, useId } from 'react';
 
 interface Suggestion {
   id: string;
@@ -27,8 +27,9 @@ export default function AutocompleteInput({
   const [open, setOpen] = useState(false);
   const [highlightIdx, setHighlightIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
-  const listRef = useRef<HTMLUListElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const listboxId = useId();
 
   const filtered = useMemo(() => {
     if (!value) return suggestions;
@@ -103,15 +104,26 @@ export default function AutocompleteInput({
         placeholder={placeholder}
         autoComplete="off"
         disabled={disabled}
+        role="combobox"
+        aria-expanded={open && filtered.length > 0}
+        aria-controls={listboxId}
+        aria-autocomplete="list"
       />
       {open && filtered.length > 0 && (
-        <ul
+        /* oxlint-disable jsx-a11y/prefer-tag-over-role -- a combobox popup: there
+           is no native element that reproduces a filterable suggestion list. */
+        <div
           ref={listRef}
+          id={listboxId}
+          role="listbox"
           className="absolute z-50 left-0 min-w-full mt-1 max-h-52 overflow-y-auto rounded-lg border bg-popover shadow-lg"
         >
           {filtered.map((s, i) => (
-            <li
+            <div
               key={s.id}
+              role="option"
+              aria-selected={i === highlightIdx}
+              tabIndex={-1}
               onMouseDown={(e) => {
                 e.preventDefault();
                 handleSelect(s.id);
@@ -125,9 +137,10 @@ export default function AutocompleteInput({
             >
               <span className="font-mono text-[10px] opacity-50 shrink-0">{s.id}</span>
               <span className="whitespace-nowrap">{s.label}</span>
-            </li>
+            </div>
           ))}
-        </ul>
+        </div>
+        /* oxlint-enable jsx-a11y/prefer-tag-over-role */
       )}
     </div>
   );

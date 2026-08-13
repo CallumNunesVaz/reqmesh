@@ -242,7 +242,8 @@ export default function ComponentsPage() {
   const toggle = (id: string) =>
     setCollapsed((prev) => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
 
@@ -478,7 +479,7 @@ export default function ComponentsPage() {
             <div className="flex items-end gap-3 flex-wrap">
               <div className="w-36">
                 <label className="label">ID <input className="input font-mono" placeholder="C-001" value={draft.id}
-                  onChange={(e) => setDraft({ ...draft, id: e.target.value })} autoFocus /></label>
+                  onChange={(e) => setDraft({ ...draft, id: e.target.value })} /></label>
               </div>
               <div className="flex-1 min-w-[160px]">
                 <label className="label">Name <input className="input" placeholder="Fuel pump" value={draft.name}

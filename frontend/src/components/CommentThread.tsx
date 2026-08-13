@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Check, Trash2, X } from 'lucide-react';
+import { Check, X } from 'lucide-react';
 import { api, type Comment } from '../api/client';
 import { useAuthStore } from '../store/auth';
 import { useToasts } from './Toast';

@@ -1,6 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
-import { motion } from 'framer-motion';
 import { Search, Grid3X3, Check, Loader, ArrowUpDown, Download } from 'lucide-react';
 import { api, type AllocationMatrixData, type MatrixAxis } from '../api/client';
 import { EntityLink, type EntityKind } from '../components/entities';

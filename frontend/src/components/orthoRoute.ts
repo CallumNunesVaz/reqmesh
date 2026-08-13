@@ -115,7 +115,7 @@ export function findCorridor(
 export function assignLanes(segments: { lo: number; hi: number }[]): { lanes: number[]; count: number } {
   const order = segments.map((_, i) => i).sort((a, b) => segments[a].lo - segments[b].lo);
   const laneEnds: number[] = [];
-  const lanes = new Array(segments.length).fill(0);
+  const lanes = Array.from({ length: segments.length }, () => 0);
   for (const i of order) {
     const s = segments[i];
     let lane = laneEnds.findIndex((end) => end <= s.lo);

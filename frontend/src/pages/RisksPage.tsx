@@ -351,7 +351,7 @@ export default function RisksPage() {
           <motion.form initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
             onSubmit={handleCreate} className="card p-4 mb-4 overflow-hidden">
             <div className="flex flex-wrap items-end gap-3">
-              <div className="w-32"><label className="label">ID <input className="input font-mono" placeholder="RSK-001" value={form.id} onChange={e => setForm({...form, id: e.target.value})} autoFocus disabled={!!editingId} /></label></div>
+              <div className="w-32"><label className="label">ID <input className="input font-mono" placeholder="RSK-001" value={form.id} onChange={e => setForm({...form, id: e.target.value})} disabled={!!editingId} /></label></div>
               <div className="flex-1 min-w-[12rem]"><label className="label">Title <input className="input" placeholder="Risk title" value={form.title} onChange={e => setForm({...form, title: e.target.value})} /></label></div>
               <div className="w-36"><label className="label">Severity <select className="select" value={form.severity} onChange={e => setForm({...form, severity: e.target.value})}>
                 {(matrix?.severities ?? []).map((sv) => <option key={sv} value={sv}>{formatLevel(sv)}</option>)}

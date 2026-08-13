@@ -24,7 +24,7 @@ export default function CreateRequirementModal({
   const [form, setForm] = useState({ id: '', name: '', type: 'functional', priority: 'medium', parent: '', description: '' });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const { selectedReqId, selectReq } = useSelectedReq();
+  const { selectedReqId } = useSelectedReq();
   const parentId = useId();
 
   useEffect(() => {
@@ -154,6 +154,11 @@ export default function CreateRequirementModal({
                   <label className="label">ID <input className="input font-mono" value={form.id} onChange={(e) => setForm({ ...form, id: e.target.value })} /></label>
                 </div>
                 <div>
+                  {/* The name is the primary field of a create dialog the user just
+                      opened — the id is auto-generated and the parent pre-selected,
+                      so the name is what they type first. Modal otherwise lands focus
+                      on the close button. */}
+                  {/* oxlint-disable-next-line jsx-a11y/no-autofocus */}
                   <label className="label">Name <input className="input" placeholder="Requirement name" value={form.name} autoFocus
                     onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>
                 </div>

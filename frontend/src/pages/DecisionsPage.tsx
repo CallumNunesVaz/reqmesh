@@ -94,7 +94,8 @@ export default function DecisionsPage() {
   const toggleExpand = (id: string) =>
     setExpanded((prev) => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
 
@@ -266,7 +267,7 @@ export default function DecisionsPage() {
               <div className="w-44">
                 <label className="label">ID <input className="input font-mono" placeholder="ADR-001" value={draft.id}
                   onChange={(e) => setDraft({ ...draft, id: e.target.value })}
-                  autoFocus disabled={!!editingId} /></label>
+                  disabled={!!editingId} /></label>
               </div>
               <div className="flex-1">
                 <label className="label">Title <input className="input" placeholder="Decision title" value={draft.title}

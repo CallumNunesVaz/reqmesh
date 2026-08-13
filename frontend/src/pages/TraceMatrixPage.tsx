@@ -86,6 +86,7 @@ export default function TraceMatrixPage() {
 
   const addLink = async () => {
     if (!projectId || !newLink.source || !newLink.target) return;
+    setError('');
     try {
       const newEntry: TraceModelLink = { ...newLink, holder: 'traces', target_collection: 'traces', stored: true };
       const updated = [...links, newEntry];
@@ -103,6 +104,7 @@ export default function TraceMatrixPage() {
     if (!projectId) return;
     const updated = removeTraceLink(links, link);
     if (updated === links) return;
+    setError('');
     try {
       const stored = updated.filter((l) => l.stored !== false).map(({ stored, holder, target_collection, ...rest }) => rest);
       await api.updateTraces(projectId, { links: stored });
@@ -179,6 +181,8 @@ export default function TraceMatrixPage() {
           </button>
         </div>
       </motion.div>
+
+      {error && <div className="mb-4 text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">{error}</div>}
 
       <div className="sticky top-0 z-10 -mx-2 px-2 py-2 bg-background/95 backdrop-blur-sm mb-4 mt-4">
         <div className="flex gap-2">

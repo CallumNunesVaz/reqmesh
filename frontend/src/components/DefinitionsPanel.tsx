@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Boxes, Plus, X, Trash2, Play, FlaskConical, Sigma } from 'lucide-react';
+import { Boxes, Plus, Trash2, Play, FlaskConical, Sigma } from 'lucide-react';
 import { api, type Definition, type AnalysisCase, type EvaluationData } from '../api/client';
 import { VerdictBadge } from './parametrics';
 import { useToasts } from './Toast';

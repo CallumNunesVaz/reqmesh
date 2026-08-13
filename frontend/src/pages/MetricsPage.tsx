@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Trash2, CheckCircle2, AlertTriangle, Search, TrendingUp, Shield, GitBranch, FileWarning, Sparkles, Sigma, Flame, ShieldCheck, Table } from 'lucide-react';
-import { api, type MetricsData, type ImpactResult, type GapItem, type QualityItem, type EvaluationData, type PughMatrix, type RiskBingo } from '../api/client';
+import { motion } from 'framer-motion';
+import { AlertTriangle, Search, TrendingUp, Shield, GitBranch, FileWarning, Sparkles, Sigma, Flame, ShieldCheck, Table } from 'lucide-react';
+import { api, type MetricsData, type GapItem, type QualityItem, type EvaluationData, type PughMatrix, type RiskBingo } from '../api/client';
 import { EntityLink } from '../components/entities';
 import { VerdictBadge } from '../components/parametrics';
 import { DefinitionsManager, AnalysisCasesPanel } from '../components/DefinitionsPanel';
@@ -405,7 +405,7 @@ export default function MetricsPage() {
                 </tr>
               </thead>
               <tbody>
-                {pugh.stakeholders.map((s, si) => (
+                {pugh.stakeholders.map((s) => (
                   <tr key={s.name} className="border-b border-border/50 hover:bg-accent/30">
                     <td className="py-1.5 px-2 text-foreground">
                       <span className="font-medium">{s.name}</span>

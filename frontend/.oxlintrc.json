@@ -11,20 +11,20 @@
     "correctness": "error"
   },
   "rules": {
-    "no-unused-vars": "warn",
-    "no-unused-expressions": "warn",
+    "no-unused-vars": ["error", { "ignoreRestSiblings": true }],
+    "no-unused-expressions": "error",
     "react-hooks/exhaustive-deps": "warn",
     "jsx-a11y/label-has-associated-control": "error",
-    "unicorn/no-useless-fallback-in-spread": "warn",
-    "unicorn/no-useless-spread": "warn",
-    "unicorn/no-new-array": "warn",
+    "unicorn/no-useless-fallback-in-spread": "error",
+    "unicorn/no-useless-spread": "error",
+    "unicorn/no-new-array": "error",
     "jsx-a11y/control-has-associated-label": ["error", { "depth": 3 }],
     "jsx-a11y/no-static-element-interactions": "error",
     "jsx-a11y/click-events-have-key-events": "error",
     "jsx-a11y/no-autofocus": "warn",
     "jsx-a11y/prefer-tag-over-role": "error",
-    "jsx-a11y/no-noninteractive-tabindex": "warn",
-    "jsx-a11y/no-noninteractive-element-interactions": "warn"
+    "jsx-a11y/no-noninteractive-tabindex": "error",
+    "jsx-a11y/no-noninteractive-element-interactions": "error"
   },
   "ignorePatterns": [
     "dist",

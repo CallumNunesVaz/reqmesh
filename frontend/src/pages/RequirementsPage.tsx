@@ -5,7 +5,7 @@ import { useRangeSelection } from '../hooks/useRangeSelection';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Plus, Search, X, Trash2, ChevronRight, ChevronDown, ChevronsDownUp, ChevronsUpDown,
-  Inbox, Square, CheckSquare, ArrowUp, SlidersHorizontal, Copy, AlertTriangle,
+  Inbox, Square, CheckSquare, SlidersHorizontal, Copy, AlertTriangle,
 } from 'lucide-react';
 import { api, baselineNames, getTruncationInfo, type Requirement, type EvalVerdict, type TruncationInfo } from '../api/client';
 import { useStore } from '../store';
@@ -239,7 +239,8 @@ export default function RequirementsPage() {
   const toggleCollapse = (id: string) =>
     setCollapsed((prev) => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
 

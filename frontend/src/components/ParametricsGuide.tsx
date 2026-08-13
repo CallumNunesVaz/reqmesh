@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { BookOpen, ChevronDown, ChevronRight, Sigma, CheckCircle2, XCircle, HelpCircle, AlertTriangle, FlaskConical, Layers, ArrowRightLeft, Ruler, Boxes } from 'lucide-react';
+import { BookOpen, ChevronDown, ChevronRight, Sigma, FlaskConical, Layers, ArrowRightLeft, Ruler, Boxes } from 'lucide-react';
 import { useStore } from '../store';
 
 const sections = [
