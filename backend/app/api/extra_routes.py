@@ -112,7 +112,7 @@ def delete_change_request(project_id: str, cr_id: str, force: bool = False, user
     return {"ok": True}
 
 
-@router.get("/projects/{project_id}/change-requests/{cr_id}/redline")
+@router.get("/projects/{project_id}/change-requests/{cr_id}/redline", summary="Change request redline")
 def get_cr_redline(
     project_id: str,
     cr_id: str,
@@ -792,7 +792,7 @@ def submit_review(project_id: str, req_id: str, data: ReviewRequest, user: dict 
     return result
 
 
-@router.post("/projects/{project_id}/review-all")
+@router.post("/projects/{project_id}/review-all", summary="Review all requirements")
 def review_all_endpoint(project_id: str, user: dict = Depends(require_maintain)):
     from app.services.fingerprint import review_all
     return review_all(get_store(project_id), user.get("username", ""))

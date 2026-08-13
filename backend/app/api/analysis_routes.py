@@ -308,7 +308,7 @@ def project_metrics(project_id: str, _rate: None = Depends(rate_limit(20, 60))):
     }
 
 
-@router.get("/projects/{project_id}/risk-bingo")
+@router.get("/projects/{project_id}/risk-bingo", summary="Risk bingo grid")
 def risk_bingo_endpoint(project_id: str, _rate: None = Depends(rate_limit(20, 60))):
     """Severity × likelihood grid of risk counts per the project matrix."""
     from app.services.risk_matrix import risk_bingo, normalize_matrix
@@ -367,7 +367,7 @@ def requirement_value(project_id: str, req_id: str):
 
 # ── Pugh Matrix ───────────────────────────────────────────────────────────────
 
-@router.get("/projects/{project_id}/pugh")
+@router.get("/projects/{project_id}/pugh", summary="Pugh matrix")
 def pugh_matrix_endpoint(
     project_id: str,
     datum: Optional[str] = Query(None),

@@ -285,7 +285,7 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-@router.get("/version")
+@router.get("/version", summary="Build metadata")
 def api_version():
     """Build metadata for this instance (also served at /version for probes)."""
     from app.core.version import get_build_info
@@ -485,7 +485,7 @@ def get_requirement_tree(project_id: str):
     })
 
 
-@router.post("/projects/{project_id}/requirements/{req_id}/rename")
+@router.post("/projects/{project_id}/requirements/{req_id}/rename", summary="Rename a requirement")
 def rename_requirement_route(project_id: str, req_id: str, data: dict,
                              user: dict = Depends(require_maintain)):
     """Rename a requirement, repointing children and relations project-wide.
@@ -520,7 +520,7 @@ def rename_requirement_route(project_id: str, req_id: str, data: dict,
     return result
 
 
-@router.get("/projects/{project_id}/requirements/next-uid")
+@router.get("/projects/{project_id}/requirements/next-uid", summary="Next free UID")
 def next_uid(project_id: str, parent: str | None = None):
     store = get_store(project_id)
     reqs = store.list_requirements()
@@ -1490,7 +1490,7 @@ def delete_analysis_case(project_id: str, case_id: str, force: bool = False, use
     return {"ok": True}
 
 
-@router.get("/projects/{project_id}/analysis/{case_id}/run")
+@router.get("/projects/{project_id}/analysis/{case_id}/run", summary="Run an analysis case")
 def run_analysis_case_endpoint(project_id: str, case_id: str):
     store = get_store(project_id)
     case = store.get_item("analysis_cases", case_id)

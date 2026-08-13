@@ -540,8 +540,8 @@ filtering or collapsing a branch changes what it covers, and because the clicked
 row decides the range's state, Shift+click clears a block as readily as it
 selects one.
 
-The bulk actions themselves are exposed as API endpoints — see
-[Bulk Operations](#bulk-operations) below.
+The bulk actions themselves are exposed as API endpoints — see the
+[bulk operations](docs/api.md#bulk-operations) section of the API reference.
 
 ## Guided Mode (Helpers)
 
@@ -629,199 +629,15 @@ complete reference, including every `RT_*` setting the app reads, is in
 
 ## API
 
-### Core CRUD
+The complete API reference — every route the app registers, with its method and
+description — is generated from the OpenAPI schema and lives in
+**[docs/api.md](docs/api.md)**. It is generated rather than hand-written, so it
+cannot drift from the code: `backend/gen_api_reference.py` renders it from the
+live route table, and CI regenerates and diffs the file on every push.
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET/POST | `/api/projects` | List/create projects |
-| GET/PATCH/DELETE | `/api/projects/{id}` | Get/update settings/delete project |
-| GET | `/api/projects/{id}/workflow` | Workflow status-transition config |
-| GET/POST | `/api/projects/{id}/requirements` | List/search or create |
-| GET/PUT/DELETE | `/api/projects/{id}/requirements/{req_id}` | Get/update/delete requirement |
-| GET | `/api/projects/{id}/requirements/tree` | Requirement hierarchy |
-| GET | `/api/projects/{id}/requirements/next-uid` | Next free UID |
-| POST | `/api/projects/{id}/requirements/{req_id}/rename` | Rename a requirement, repointing children and relations (omit `new_id` to just get a suggestion) |
-| POST | `/api/projects/{id}/requirements/{req_id}/cascade` | Cascade to children |
-| POST | `/api/projects/{id}/requirements/{req_id}/break-cascade` | Break cascade link |
-| GET/POST | `/api/projects/{id}/specifications` | List/create specifications |
-| GET/PUT/DELETE | `/api/projects/{id}/specifications/{spec_id}` | Get/update/delete specification |
-| GET/POST | `/api/projects/{id}/components` | List/create components |
-| GET/PUT/DELETE | `/api/projects/{id}/components/{component_id}` | Get/update/delete component |
-| GET | `/api/projects/{id}/components/tree` | Component hierarchy |
-| GET | `/api/projects/{id}/components/export/bom` | Bill of materials export |
-| GET/POST | `/api/projects/{id}/verification` | List/create verification cases |
-| GET/PUT/DELETE | `/api/projects/{id}/verification/{vc_id}` | Get/update/delete verification case |
-| POST | `/api/projects/{id}/verification/{vc_id}/run` | Record a test execution |
-| GET | `/api/projects/{id}/requirements/{req_id}/components` | Components that claim to satisfy a requirement |
-| GET | `/api/projects/{id}/verification/{vc_id}/components` | Components a verification case exercises |
-| GET/POST | `/api/projects/{id}/baselines` | List/create baselines |
-| PATCH/DELETE | `/api/projects/{id}/baselines/{name}` | Rename/delete baseline |
-| PUT | `/api/projects/{id}/baselines/order` | Rewrite the baseline sequence |
-| GET/POST | `/api/projects/{id}/system-states` | List (including orphans)/create system states |
-| PATCH/DELETE | `/api/projects/{id}/system-states/{name}` | Rename/delete system state (rename cascades) |
-| GET/POST | `/api/projects/{id}/definitions` | List/create SysML constraint/calc definitions |
-| PUT/DELETE | `/api/projects/{id}/definitions/{def_id}` | Update/delete definition |
-| GET/POST | `/api/projects/{id}/analysis` | List/create analysis cases |
-| PUT/DELETE | `/api/projects/{id}/analysis/{case_id}` | Update/delete analysis case |
-| GET | `/api/projects/{id}/analysis/{case_id}/run` | Run an analysis case |
-| GET/PUT | `/api/projects/{id}/traces` | Get/update the trace matrix |
-| GET | `/api/projects/{id}/trace-model` | Every declared relationship in the project |
-
-### Change Control
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET/POST | `/api/projects/{id}/change-requests` | List/create change requests |
-| PUT/DELETE | `/api/projects/{id}/change-requests/{cr_id}` | Update/delete change request |
-| GET | `/api/projects/{id}/change-requests/{cr_id}/redline` | Before/after per affected target |
-| POST | `/api/projects/{id}/change-requests/{cr_id}/execute` | Apply a change request |
-| POST | `/api/projects/{id}/change-requests/{cr_id}/reject` | Reject a change request |
-| GET/POST | `/api/projects/{id}/comments` | List/create comments |
-| PATCH/DELETE | `/api/projects/{id}/comments/{comment_id}` | Resolve/delete comment |
-| GET/POST | `/api/projects/{id}/decisions` | List/create decision records |
-| PUT/DELETE | `/api/projects/{id}/decisions/{dec_id}` | Update/delete decision |
-| POST | `/api/projects/{id}/requirements/{req_id}/review` | Fingerprint baseline a requirement |
-| POST | `/api/projects/{id}/review-all` | Baseline all requirements |
-| GET | `/api/projects/{id}/unreviewed` | Requirements whose content changed since review |
-| GET | `/api/projects/{id}/requirements/{req_id}/fingerprint` | Current review fingerprint |
-| POST | `/api/projects/{id}/scan` | Scan source files for `[impl->REQ-ID]` coverage tags |
-| GET | `/api/projects/{id}/references/freshness` | Stale reference file detection |
-
-### Bulk Operations
-
-The API counterpart to the [Selecting & Bulk Editing](#selecting--bulk-editing) UI: each mutable collection has a bulk update and a bulk delete, and requirements and components can also be bulk-reparented.
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/projects/{id}/requirements/bulk` | Apply a partial update to many requirements (accepts `baselines_add` / `baselines_remove`) |
-| POST | `/api/projects/{id}/requirements/bulk-delete` | Delete many requirements |
-| POST | `/api/projects/{id}/requirements/bulk-reparent` | Move requirements under a new parent, optionally re-prefixing IDs (`dry_run` previews) |
-| POST | `/api/projects/{id}/components/bulk` | Apply a partial update to many components |
-| POST | `/api/projects/{id}/components/bulk-delete` | Delete many components (children promoted to their parent) |
-| POST | `/api/projects/{id}/components/bulk-reparent` | Assign components to a new parent |
-| POST | `/api/projects/{id}/verification/bulk` | Apply a partial update to many verification cases |
-| POST | `/api/projects/{id}/verification/bulk-delete` | Delete many verification cases |
-| POST | `/api/projects/{id}/specifications/bulk` | Apply a partial update to many specifications |
-| POST | `/api/projects/{id}/specifications/bulk-delete` | Delete many specifications |
-| POST | `/api/projects/{id}/risks/bulk` | Apply a partial update to many risks |
-| POST | `/api/projects/{id}/risks/bulk-delete` | Delete many risks |
-| POST | `/api/projects/{id}/change-requests/bulk` | Apply a partial update to many change requests |
-| POST | `/api/projects/{id}/change-requests/bulk-delete` | Delete many change requests |
-
-### Risks
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET/POST | `/api/projects/{id}/risks` | List/create risks |
-| PUT/DELETE | `/api/projects/{id}/risks/{risk_id}` | Update/delete risk |
-| GET | `/api/projects/{id}/risk-matrix` | Project risk matrix (severity × likelihood) |
-| GET | `/api/projects/{id}/risk-bingo` | Severity × likelihood grid of risk counts |
-
-### Analysis & Validation
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/projects/{id}/validate` | Integrity checks (dangling links, cycles, unreviewed, cascades…) |
-| GET | `/api/projects/{id}/coverage` | Shallow + deep coverage analysis |
-| GET | `/api/projects/{id}/metrics` | Quality, traceability, status distribution |
-| GET | `/api/projects/{id}/gap-analysis` | Missing descriptions, rationales, sources, links |
-| GET | `/api/projects/{id}/conflicts` | Explicit conflicts + duplicate names |
-| GET | `/api/projects/{id}/compliance` | Compliance status across standards |
-| GET | `/api/projects/{id}/quality` | Per-requirement quality scores and findings |
-| GET | `/api/projects/{id}/pugh` | Pugh matrix over the best-valued requirements |
-| GET | `/api/projects/{id}/backlog` | Prioritized backlog |
-| GET | `/api/projects/{id}/evaluation` | Parametric constraint evaluation (design + measured) |
-| POST | `/api/projects/{id}/evaluation/impact` | What-if preview: re-evaluate with hypothetical overrides + dependency-ordered impact trace |
-| GET | `/api/projects/{id}/requirements/{rid}/impact` | Impact analysis (dependents + cascades) |
-| GET | `/api/projects/{id}/history/{item_id}` | Field-level change history for any entity |
-| POST | `/api/projects/{id}/requirements/{req_id}/history/{entry_id}/restore` | Restore a requirement to the state before a chosen update entry |
-| GET | `/api/projects/{id}/activity` | Audit activity bucketed by date and entity kind (`since`, `until`, `bucket=day\|week`) |
-| GET | `/api/projects/{id}/suspect-links` | Links whose target changed since review |
-| POST | `/api/projects/{id}/suspect-links/clear` | Re-baseline every link, clearing suspect flags |
-| GET | `/api/projects/{id}/entities/{entity_id}/backlinks` | Everything in the project that points at an entity, grouped by kind |
-| GET | `/api/coverage-needs` | The obligation kinds a requirement may declare in `needs` |
-| GET | `/api/projects/{id}/requirements/{req_id}/value` | A requirement's weighted stakeholder value and rank |
-| GET | `/api/projects/{id}/search` | Full-text search across all entities |
-
-### Allocation Matrix
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/projects/{id}/allocation-matrix` | Requirements against components, verification cases, risks, or baselines (`axis`, `rows`) |
-| POST | `/api/projects/{id}/allocation` | Allocate or de-allocate one cell of any matrix |
-
-### Publishing & Interchange
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/projects/{id}/publish` | Generate report (html, md, latex, pdf, csv, tsv, xlsx) |
-| GET | `/api/projects/{id}/publish/download` | Download report or export file |
-| POST | `/api/projects/{id}/import` | Import ReqIF, SysML, CSV, TSV, or XLSX (`mode=merge/replace`, `dry_run=true` to preview) |
-| POST | `/api/projects/{id}/baselines/{name}/freeze` | Freeze a baseline snapshot |
-| GET | `/api/projects/{id}/baselines/{name}/diff` | Diff current state against baseline |
-
-### Real-time, Git & Auth
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/projects/{id}/events` | SSE stream of live changes + presence |
-| GET | `/api/projects/{id}/presence` | Current project viewers |
-| GET | `/api/projects/{id}/git/log` | Recent commits |
-| POST | `/api/projects/{id}/git/test-remote` | Test connectivity to the configured remote |
-| GET | `/api/projects/{id}/git/status` | Repository state — branch, dirty, commits ahead, last push outcome (no network access) |
-| POST | `/api/projects/{id}/git/init` | Initialise a repository for a project that has none |
-| POST | `/api/projects/{id}/git/push` | Push now, returning the real outcome |
-| POST | `/api/projects/{id}/git/restore` | Restore the working tree to a previous commit |
-| DELETE | `/api/projects/{id}/git/remote` | Disconnect the remote (admin only) |
-| POST | `/api/projects/{id}/hooks/install` | Install the pre-commit hook (validates requirements before a commit) |
-| POST | `/api/projects/{id}/hooks/uninstall` | Remove the pre-commit hook |
-| POST | `/auth/login` | Authenticate (rate-limited 5/min) |
-| POST | `/auth/guest` | Sign in as a read-only guest (requires `RT_REQUIRE_AUTH=false`) |
-| GET | `/auth/whoami` | Current session's user, role and profile |
-| POST | `/auth/logout` | End the current session |
-| PATCH | `/auth/profile` | Update own name, email or password |
-| POST | `/auth/logout-everywhere` | Invalidate all of the caller's own sessions |
-| POST | `/auth/register` | Self-registration |
-| POST | `/auth/forgot-password` | Request password reset email |
-| POST | `/auth/reset-password` | Reset password with token |
-| POST | `/auth/verify-email` | Verify email address |
-| POST | `/auth/resend-verification` | Re-send verification email |
-
-### System (admin)
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET/PATCH | `/api/system/settings` | Read / update runtime settings (secrets redacted) |
-| POST | `/api/system/settings/test-email` | Send a test email using current SMTP settings |
-| GET | `/api/system/public-config` | Non-sensitive instance info for the login UI (no auth) |
-| GET | `/api/system/latex-status` | Whether a LaTeX engine is available for PDF reports |
-| GET | `/api/system/info` | Runtime facts (host, IPs, OS, uptime, version) for the admin UI |
-| GET | `/api/system/update/check` | Latest GitHub release vs the running version |
-| GET | `/api/system/update/status` | Current update progress |
-| POST | `/api/system/update` | Back up data and signal the updater sidecar to move to a release |
-| POST | `/api/system/update/upload` | Update from an uploaded Docker image archive (offline) |
-| POST | `/api/system/update/bundle` | Stage an uploaded release bundle for a bare-metal install |
-| POST | `/api/system/restart` | Restart in place (bare-metal); applies a staged bundle |
-| POST | `/api/system/update/dismiss` | Clear a completed/failed update's control files |
-| GET | `/api/system/dependencies` | Availability of git, LaTeX engines, weasyprint, openpyxl |
-| POST | `/api/system/dependencies/{dep_id}/test` | Run an end-to-end check for a dependency |
-| GET | `/api/system/demo-project` | Whether the bundled example is loaded, and how many requirements re-seeding would replace |
-| POST | `/api/system/demo-project/reseed` | Re-seed the bundled example. 409 unless `force` is sent once the project exists — re-seeding deletes it, git history included |
-
-### CI Test Results
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/projects/{id}/test-results/sample` | Sample JUnit XML showing the expected CI import format |
-| POST | `/api/projects/{id}/test-results/import` | Import CI results (JUnit XML, CTRF JSON, TAP) and update verification-case statuses (`dry_run` previews) |
-
-### Health & Version
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/version` | Build metadata for this instance (also served at `/version`) |
-| GET | `/health` | Liveness probe — status, version and profile |
-| GET | `/version` | Build metadata (no `/api` prefix) |
+When adding or changing a route, give it a `summary=` on the decorator (that is
+the row's description in the reference) and run
+`backend/.venv/bin/python backend/gen_api_reference.py`.
 
 PUT/PATCH endpoints apply partial updates: only fields present in the body change, and explicitly sending `null` clears a nullable field. PATCH on `/comments` supports `{"resolved": true}`. List endpoints return `{"items": [...], "total": N, "offset": O, "limit": L}` for pagination.
 

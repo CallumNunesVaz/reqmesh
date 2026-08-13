@@ -465,8 +465,10 @@ additional fail-safe — but note it covers project data only, never accounts.
 
 ## Environment Variable Reference
 
-Every setting below is read through the `RT_` prefix, which stands for
-**reqmesh**. Defaults are the code defaults in `backend/app/core/config.py`;
+Every setting below is read through the `RT_` prefix, a leftover from an
+earlier name of the product — the letters no longer expand to anything, and
+today they simply mark a **reqmesh** setting. Defaults are the code defaults in
+`backend/app/core/config.py`;
 the `personal`, `team` and `hardened` deployment profiles adjust a few of them,
 and any `RT_*` value you set explicitly always wins over both.
 

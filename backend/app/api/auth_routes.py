@@ -138,7 +138,7 @@ def login_as_guest(response: Response):
     return {"username": "guest", "role": "guest", "csrf_token": csrf_token}
 
 
-@router.get("/auth/whoami")
+@router.get("/auth/whoami", summary="Current user and role")
 def whoami(request: Request, response: Response,
                  user: dict = Depends(get_current_user),
                  authorization: Optional[str] = Header(None)):
@@ -279,7 +279,7 @@ class VerifyEmailRequest(BaseModel):
     token: str
 
 
-@router.post("/auth/verify-email")
+@router.post("/auth/verify-email", summary="Verify email address")
 def verify_email_endpoint(data: VerifyEmailRequest, _rate: None = Depends(rate_limit(5, 300))):
     username = verify_email(data.token)
     # Uniform response regardless of token validity to prevent enumeration
@@ -544,7 +544,7 @@ def bulk_user_action(data: BulkUserRequest, admin: dict = Depends(require_admin)
 
 # ── CSV import / export ───────────────────────────────────────────────────────
 
-@router.get("/auth/users/export")
+@router.get("/auth/users/export", summary="Export users as CSV")
 def export_users_csv(admin: dict = Depends(require_admin)):
     import csv
     import io
@@ -564,7 +564,7 @@ class ImportUsersRequest(BaseModel):
     csv: str
 
 
-@router.post("/auth/users/import")
+@router.post("/auth/users/import", summary="Import users from CSV")
 def import_users_csv(data: ImportUsersRequest, admin: dict = Depends(require_admin)):
     """Create accounts from CSV rows (username, full_name, email, role). Each new
     user is invited (set-password link); existing usernames are skipped."""
