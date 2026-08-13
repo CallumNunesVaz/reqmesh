@@ -59,9 +59,10 @@ are assigned lower severity.
 
 ## Known Issues
 
-A running list of known, accepted limitations is maintained in
-[AUDIT.md](docs/internal/AUDIT.md) — see §6.2 for the open items. Before reporting, check
-whether the finding is already tracked there.
+A running list of known, accepted limitations is maintained internally and is
+not published, because it records unfixed findings in enough detail to act on
+them. If you want to know whether something you have found is already tracked,
+raise it through the process above and you will be told.
 
 ## Supported Versions
 
