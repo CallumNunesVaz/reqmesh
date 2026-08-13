@@ -156,8 +156,11 @@ test('deselecting a row means that child is not created', async ({ app, server }
 
   const dialog = app.locator('.fixed.inset-0.z-50');
   const dialogCheckboxes = dialog.locator('input[type="checkbox"]');
+  // `count()` samples, it does not wait. The visibility check above waits for a
+  // text node, and the clause rows can render after it — so on a loaded machine
+  // this counted zero and failed instantly. Poll for the condition instead.
+  await expect.poll(() => dialogCheckboxes.count(), { timeout: 10_000 }).toBeGreaterThan(1);
   const count = await dialogCheckboxes.count();
-  expect(count).toBeGreaterThan(1);
 
   // Deselect the first row's checkbox by clicking at its position
   const firstCheckbox = dialogCheckboxes.first();

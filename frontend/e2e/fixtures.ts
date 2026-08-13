@@ -1,6 +1,6 @@
 import { test as base, expect, type Page } from '@playwright/test';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { cpSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync, renameSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -128,17 +128,28 @@ export const test = base.extend<{ app: Page }, { requireAuth: boolean; server: S
     // The store caches parses by mtime, and a fresh copy has new mtimes, so
     // the restore invalidates it without needing a server restart.
     //
-    // `maxRetries`, because this races the backend. The server is worker-scoped
-    // and may still be finishing a write from the previous test when the next
-    // one wipes the data root: rmSync walks the tree, a file reappears
+    // Rename out of the way rather than delete in place, because this races the
+    // backend. The server is worker-scoped and can still be finishing a write
+    // from the previous test: rmSync walks the tree, a file reappears
     // underneath it, and the final rmdir fails with
     //   ENOTEMPTY: directory not empty, rmdir '…/projects/cessna-172'
-    // which failed the test in ~150ms, before it had done anything. That was
-    // the suite's last standing flake — it recovered on retry, so it cost a
-    // rerun rather than a red build, until a slow runner lost twice.
-    // Node retries this error class with a linear backoff; the alternative is
-    // waiting for the server to go idle, which it does not report.
-    rmSync(server.projects, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
+    // failing whichever test drew the short straw before it had done anything.
+    //
+    // `maxRetries` was tried first and does not fix it — retrying waits for a
+    // writer that has not stopped, so it turns a 150ms failure into a 2.9s one
+    // and still fails. `renameSync` is atomic and does not care what is inside
+    // the directory or who holds it open: an in-flight write lands in the
+    // renamed copy, which nothing reads again. Only the fresh tree at
+    // `server.projects` matters, and it exists before the next line returns.
+    //
+    // The stale copy is not deleted here, deliberately. Deleting it added a
+    // synchronous recursive rm to the start of every test, and on a
+    // CPU-constrained run that I/O was enough to make two split-requirement
+    // tests flake that never had before. The seeded project is ~900 KB, so
+    // ~100 tests leave under 90 MB per worker, and the worker teardown wipes
+    // the whole data root regardless. Cheap disk beats a slower hot path.
+    const stale = `${server.projects}.stale-${Date.now()}`;
+    renameSync(server.projects, stale);
     cpSync(server.pristine, server.projects, { recursive: true });
 
     // Destructive actions now use the in-app ConfirmDialog, so a test that
