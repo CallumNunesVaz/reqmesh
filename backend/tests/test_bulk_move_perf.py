@@ -92,16 +92,18 @@ def test_relations_rewritten_from_inside_and_outside(client, project):
     store = get_store(project)
     make_req(client, project, "NEW-001", name="Parent")
 
+    # Subtree root with a child, both referencing each other. Created in
+    # dependency order: a relation names a target that must already exist.
+    make_req(client, project, "SYS-2", name="Subtree child")
+    make_req(client, project, "SYS-1", name="Subtree root",
+             relations=[{"type": "refines", "target": "SYS-2"}])
+    client.put(f"/api/projects/{project}/requirements/SYS-2",
+               json={"relations": [{"type": "refines", "target": "SYS-1"}]})
+    store.update_requirement("SYS-2", {"parent": "SYS-1"})
+
     # Outside requirement that references a to-be-renamed id.
     make_req(client, project, "EXT-REF", name="External reference",
              relations=[{"type": "refines", "target": "SYS-1"}])
-
-    # Subtree root with a child, both referencing each other.
-    make_req(client, project, "SYS-1", name="Subtree root",
-             relations=[{"type": "refines", "target": "SYS-2"}])
-    make_req(client, project, "SYS-2", name="Subtree child",
-             relations=[{"type": "refines", "target": "SYS-1"}])
-    store.update_requirement("SYS-2", {"parent": "SYS-1"})
 
     resp = client.post(
         f"/api/projects/{project}/requirements/bulk-reparent",

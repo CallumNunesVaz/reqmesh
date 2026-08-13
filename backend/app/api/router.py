@@ -39,6 +39,7 @@ from app.services.verification_links import (
     attach as attach_verification_cases,
     sync_from_requirement as sync_verification_from_requirement,
 )
+from app.services.link_validation import first_missing, first_missing_relation
 
 
 class ProjectCreate(BaseModel):
@@ -530,6 +531,9 @@ def create_requirement(project_id: str, data: RequirementCreate, user: dict = De
     safe_id(data.id, "requirement id")
     if store.get_requirement(data.id):
         raise HTTPException(status_code=409, detail="Requirement already exists")
+    reason = first_missing_relation(store, data.relations)
+    if reason:
+        raise HTTPException(status_code=400, detail=reason)
     req_dict = data.model_dump(mode="json")
     req_dict.setdefault("attributes", [])
     req_dict.setdefault("relations", [])
@@ -553,6 +557,10 @@ def update_requirement(project_id: str, req_id: str, data: RequirementUpdate,
     if before is None:
         raise HTTPException(status_code=404, detail="Requirement not found")
     check_precondition(request, before)
+
+    reason = first_missing_relation(store, data.relations)
+    if reason:
+        raise HTTPException(status_code=400, detail=reason)
 
     # Reparenting must not create a loop: nothing prevented A.parent=B and
     # B.parent=A, which made both (and everything under them) unreachable in
@@ -832,6 +840,9 @@ def update_specification(project_id: str, spec_id: str, data: SpecificationUpdat
     if before is None:
         raise HTTPException(status_code=404, detail="Specification not found")
     check_precondition(request, before)
+    reason = first_missing(store, [("requirements", data.requirements)])
+    if reason:
+        raise HTTPException(status_code=400, detail=reason)
     update_dict = data.model_dump(mode="json", exclude_unset=True)
     result = store.update_specification(spec_id, update_dict)
     if result is None:

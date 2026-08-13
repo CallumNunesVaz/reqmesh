@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Sigma, Boxes, Trash2, X, Search, Edit3, ChevronDown } from 'lucide-react';
+import { Plus, Sigma, Boxes, Trash2, X, Search, Edit3, ChevronDown, Square, CheckSquare } from 'lucide-react';
 import { api, type Definition } from '../api/client';
 import { useStore } from '../store';
 import { useAuthStore } from '../store/auth';
@@ -14,6 +14,9 @@ import { useToasts } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmDialog';
 import { useKeyboardShortcuts } from '../components/useKeyboardShortcuts';
 import { useListSelection } from '../hooks/useListSelection';
+import { useRangeSelection } from '../hooks/useRangeSelection';
+import { useBulkActions } from '../hooks/useBulkActions';
+import BulkActionBar from '../components/BulkActionBar';
 import LoadingSplash from '../components/LoadingSplash';
 
 /**
@@ -130,6 +133,32 @@ export default function DefinitionsPage() {
     }
     addToast('success', `Definition ${id} deleted`);
     load();
+  };
+
+  // `filtered` is the list as displayed, which is the only ordering a
+  // Shift range may span.
+  const { selectedIds, select: toggleSelect, setSelectedIds } =
+    useRangeSelection(useMemo(() => filtered.map((d) => d.id), [filtered]));
+  const clearSelection = () => setSelectedIds(new Set());
+  const selectAll = () => setSelectedIds(new Set(filtered.map((d) => d.id)));
+
+  const { runBulkDelete } = useBulkActions({
+    clearSelection,
+    reload: load,
+  });
+
+  const handleBulkDelete = async () => {
+    if (!projectId) return;
+    const ids = [...selectedIds];
+    const saved = defs.filter((d) => selectedIds.has(d.id)).map((d) => ({ ...d }));
+    await runBulkDelete({
+      noun: 'definition',
+      ids,
+      saved,
+      idOf: (d) => d.id,
+      remove: (idsToRemove) => api.bulkDeleteDefinitions(projectId, idsToRemove),
+      recreate: (item) => api.createDefinition(projectId, item),
+    });
   };
 
   const { focusId: selectedId, onListDown, onListUp, onListOpen, onListEscape } = useListSelection(
@@ -300,6 +329,15 @@ export default function DefinitionsPage() {
               }`}
             >
               <div className="flex items-center gap-3 p-4 cursor-pointer" onClick={() => toggleExpand(d.id)}>
+                {editable && (
+                  <span className="shrink-0" onClick={(e) => e.stopPropagation()}>
+                    {selectedIds.has(d.id) ? (
+                      <CheckSquare size={14} className="text-primary cursor-pointer" onClick={(e) => toggleSelect(d.id, e)} />
+                    ) : (
+                      <Square size={14} className="text-muted-foreground/40 cursor-pointer hover:text-muted-foreground" onClick={(e) => toggleSelect(d.id, e)} />
+                    )}
+                  </span>
+                )}
                 <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${
                   d.type === 'calc' ? 'bg-cs-purple/10 text-cs-purple' : 'bg-cs-teal/10 text-cs-teal'
                 }`}>
@@ -371,6 +409,15 @@ export default function DefinitionsPage() {
             );
           })}
         </div>
+      )}
+      {selectedIds.size > 0 && editable && (
+        <BulkActionBar
+          count={selectedIds.size}
+          onSelectAll={selectAll}
+          onClear={clearSelection}
+        >
+          <button onClick={handleBulkDelete} className="btn-danger text-xs"><Trash2 size={13} /> Delete</button>
+        </BulkActionBar>
       )}
     </div>
   );

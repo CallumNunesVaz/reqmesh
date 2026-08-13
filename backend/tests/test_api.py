@@ -2,6 +2,7 @@ import subprocess
 from pathlib import Path
 
 from app.core.config import settings
+from app.services.yaml_store import YamlStore
 
 from .conftest import make_req
 
@@ -206,9 +207,11 @@ def test_baseline_freeze_and_diff(client, project):
 
 
 def test_validate_flags_dangling_relation(client, project):
+    """A relation to a missing target can no longer be written through the API,
+    but it can still arrive by git pull or hand-edit — /validate surfaces it."""
     make_req(client, project, "SYST0001", name="A")
-    client.put(f"/api/projects/{project}/requirements/SYST0001",
-               json={"relations": [{"type": "refines", "target": "GHOST9999"}]})
+    store = YamlStore(Path(settings.data_root) / project)
+    store.update_requirement("SYST0001", {"relations": [{"type": "refines", "target": "GHOST9999"}]})
     res = client.get(f"/api/projects/{project}/validate").json()
     assert res["valid"] is False
     assert any(i["type"] == "dangling_link" for i in res["issues"])

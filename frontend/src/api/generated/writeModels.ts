@@ -100,6 +100,7 @@ export interface CommentCreate {
 }
 
 export interface ComponentCreate {
+  attributes?: AttributeValue[];
   baselines?: string[];
   description?: string;
   id: string;
@@ -116,9 +117,14 @@ export interface ComponentCreate {
 }
 
 export interface DecisionRecordCreate {
+  consequences?: string;
   context?: string;
   decision?: string;
   id: string;
+  linked_components?: string[];
+  linked_requirements?: string[];
+  rationale?: string;
+  status?: string;
   title?: string;
 }
 

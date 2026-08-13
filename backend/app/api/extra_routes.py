@@ -29,6 +29,7 @@ from app.services.history import record_change
 from app.services.delete_guard import check_deletable
 from app.services.integrity import IntegrityChecker
 from app.services.git_hooks import install_hook, uninstall_hook
+from app.services.link_validation import first_missing
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +81,10 @@ def create_change_request(project_id: str, data: ChangeRequestCreate, user: dict
     safe_id(data.id, "change request id")
     if store.get_item("change_requests", data.id):
         raise HTTPException(status_code=409, detail="Change request already exists")
+    reason = first_missing(store, [("requirements", data.affected_requirements)],
+                           allowed=set(data.creates))
+    if reason:
+        raise HTTPException(status_code=400, detail=reason)
     cr = data.model_dump(mode="json")
     cr.setdefault("status", "submitted")
     cr.setdefault("submitted_by", user.get("username", ""))
@@ -100,6 +105,10 @@ def update_change_request(project_id: str, cr_id: str, data: ChangeRequestUpdate
     if before is None:
         raise HTTPException(status_code=404, detail="Change request not found")
     check_precondition(request, before)
+    reason = first_missing(store, [("requirements", data.affected_requirements)],
+                           allowed=set(data.creates or []))
+    if reason:
+        raise HTTPException(status_code=400, detail=reason)
     result = store.update_item("change_requests", cr_id, data.model_dump(mode="json", exclude_unset=True))
     if result is None:
         raise HTTPException(status_code=404, detail="Change request not found")
@@ -306,6 +315,9 @@ def update_risk(project_id: str, risk_id: str, data: RiskUpdate,
     if before is None:
         raise HTTPException(status_code=404, detail="Risk not found")
     check_precondition(request, before)
+    reason = first_missing(store, [("requirements", data.linked_requirements)])
+    if reason:
+        raise HTTPException(status_code=400, detail=reason)
     result = store.update_item("risks", risk_id, data.model_dump(mode="json", exclude_unset=True))
     if result is None:
         raise HTTPException(status_code=404, detail="Risk not found")
@@ -417,6 +429,9 @@ def create_decision(project_id: str, data: DecisionRecordCreate, user: dict = De
     safe_id(data.id, "decision id")
     if store.get_item("decisions", data.id):
         raise HTTPException(status_code=409, detail="Decision already exists")
+    reason = first_missing(store, [("requirements", data.linked_requirements)])
+    if reason:
+        raise HTTPException(status_code=400, detail=reason)
     d = data.model_dump(mode="json")
     d.setdefault("rationale", "")
     d.setdefault("consequences", "")
@@ -438,6 +453,9 @@ def update_decision(project_id: str, dec_id: str, data: DecisionRecordUpdate,
     if before is None:
         raise HTTPException(status_code=404, detail="Decision not found")
     check_precondition(request, before)
+    reason = first_missing(store, [("requirements", data.linked_requirements)])
+    if reason:
+        raise HTTPException(status_code=400, detail=reason)
     result = store.update_item("decisions", dec_id, data.model_dump(mode="json", exclude_unset=True))
     if result is None:
         raise HTTPException(status_code=404, detail="Decision not found")

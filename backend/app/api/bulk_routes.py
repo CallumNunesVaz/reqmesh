@@ -19,6 +19,7 @@ from app.services.history import record_change
 from app.services.baseline_membership import apply_membership, defined_baseline_names
 from app.services.reparent import apply_reparent, plan_reparent, validate_component_parent
 from app.services.delete_guard import check_deletable
+from app.services.meta_defs import normalize_system_states, serialize_meta_defs
 
 router = APIRouter()
 
@@ -442,6 +443,110 @@ def bulk_delete_change_requests(project_id: str, data: BulkDeleteRequest, user: 
     if refused:
         resp["refused"] = refused
     return resp
+
+
+# ── Decisions ─────────────────────────────────────────────────────────────────
+
+@router.post("/projects/{project_id}/decisions/bulk-delete")
+def bulk_delete_decisions(project_id: str, data: BulkDeleteRequest, user: dict = Depends(require_maintain)):
+    store = get_store(project_id)
+    force = data.force
+    deleted = 0
+    refused = []
+    for dec_id in data.ids:
+        before = store.get_item("decisions", dec_id)
+        if before is None:
+            continue
+        try:
+            check_deletable(store, "decisions", dec_id, force)
+        except HTTPException as exc:
+            if exc.status_code == 409:
+                refused.append(exc.detail)
+                continue
+            raise
+        if store.delete_item("decisions", dec_id):
+            record_change(store, dec_id, "delete", before, None, user.get("username", ""))
+            deleted += 1
+    resp = {"deleted": deleted}
+    if refused:
+        resp["refused"] = refused
+    return resp
+
+
+# ── Definitions ───────────────────────────────────────────────────────────────
+
+@router.post("/projects/{project_id}/definitions/bulk-delete")
+def bulk_delete_definitions(project_id: str, data: BulkDeleteRequest, user: dict = Depends(require_maintain)):
+    store = get_store(project_id)
+    force = data.force
+    deleted = 0
+    refused = []
+    for def_id in data.ids:
+        before = store.get_item("definitions", def_id)
+        if before is None:
+            continue
+        try:
+            check_deletable(store, "definitions", def_id, force)
+        except HTTPException as exc:
+            if exc.status_code == 409:
+                refused.append(exc.detail)
+                continue
+            raise
+        if store.delete_item("definitions", def_id):
+            record_change(store, def_id, "delete", before, None, user.get("username", ""))
+            deleted += 1
+    resp = {"deleted": deleted}
+    if refused:
+        resp["refused"] = refused
+    return resp
+
+
+# ── Analysis cases ────────────────────────────────────────────────────────────
+
+@router.post("/projects/{project_id}/analysis/bulk-delete")
+def bulk_delete_analysis_cases(project_id: str, data: BulkDeleteRequest, user: dict = Depends(require_maintain)):
+    store = get_store(project_id)
+    force = data.force
+    deleted = 0
+    refused = []
+    for case_id in data.ids:
+        before = store.get_item("analysis_cases", case_id)
+        if before is None:
+            continue
+        try:
+            check_deletable(store, "analysis_cases", case_id, force)
+        except HTTPException as exc:
+            if exc.status_code == 409:
+                refused.append(exc.detail)
+                continue
+            raise
+        if store.delete_item("analysis_cases", case_id):
+            record_change(store, case_id, "delete", before, None, user.get("username", ""))
+            deleted += 1
+    resp = {"deleted": deleted}
+    if refused:
+        resp["refused"] = refused
+    return resp
+
+
+# ── System states ─────────────────────────────────────────────────────────────
+
+@router.post("/projects/{project_id}/system-states/bulk-delete")
+def bulk_delete_system_states(project_id: str, data: BulkDeleteRequest, user: dict = Depends(require_maintain)):
+    # No `check_deletable`, deliberately: like baselines and the single delete,
+    # nothing in the link registry targets `system_states`, so the guard could
+    # never fire. Membership is not cleared from requirements here, matching the
+    # single delete — the names become orphans and the page surfaces them.
+    store = get_store(project_id)
+    names = set(data.ids)
+    with store.meta_lock():
+        meta = store.read_meta()
+        defs = normalize_system_states(meta.get("system_states", []))
+        removed = [d["name"] for d in defs if d["name"] in names]
+        defs = [d for d in defs if d["name"] not in names]
+        meta["system_states"] = serialize_meta_defs(defs)
+        store._write_meta_unlocked(meta)
+    return {"deleted": len(removed)}
 
 
 # ── Bulk reparent + re-prefix for requirements ────────────────────────────────

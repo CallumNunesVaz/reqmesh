@@ -29,6 +29,12 @@ class DecisionRecordCreate(BaseModel):
     title: str = ""
     context: str = ""
     decision: str = ""
+    rationale: str = ""
+    consequences: str = ""
+    linked_requirements: list[str] = Field(default_factory=list)
+    #: Decisions are as often about the design as about the specification.
+    linked_components: list[str] = Field(default_factory=list)
+    status: str = "accepted"
 
 
 class DecisionRecordUpdate(BaseModel):

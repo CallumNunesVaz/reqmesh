@@ -1501,6 +1501,22 @@ export const api = {
   bulkDeleteChangeRequests: (projectId: string, ids: string[]) =>
     request<{ deleted: number }>(`/projects/${projectId}/change-requests/bulk-delete`, { method: 'POST', body: { ids } }),
 
+  // Bulk — Decisions
+  bulkDeleteDecisions: (projectId: string, ids: string[]) =>
+    request<{ deleted: number }>(`/projects/${projectId}/decisions/bulk-delete`, { method: 'POST', body: { ids } }),
+
+  // Bulk — Definitions
+  bulkDeleteDefinitions: (projectId: string, ids: string[]) =>
+    request<{ deleted: number }>(`/projects/${projectId}/definitions/bulk-delete`, { method: 'POST', body: { ids } }),
+
+  // Bulk — Analysis cases
+  bulkDeleteAnalysisCases: (projectId: string, ids: string[]) =>
+    request<{ deleted: number }>(`/projects/${projectId}/analysis/bulk-delete`, { method: 'POST', body: { ids } }),
+
+  // Bulk — System states
+  bulkDeleteSystemStates: (projectId: string, names: string[]) =>
+    request<{ deleted: number }>(`/projects/${projectId}/system-states/bulk-delete`, { method: 'POST', body: { ids: names } }),
+
   // History
   getItemHistory: (projectId: string, itemId: string) =>
     request<HistoryEntry[]>(`/projects/${projectId}/history/${itemId}`),

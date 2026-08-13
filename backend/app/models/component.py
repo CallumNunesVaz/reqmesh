@@ -73,6 +73,7 @@ class ComponentCreate(BaseModel):
     satisfies: list[str] = Field(default_factory=list)
     verification_cases: list[str] = Field(default_factory=list)
     relations: list[Relation] = Field(default_factory=list)
+    attributes: list[AttributeValue] = Field(default_factory=list)
     parameters: list[Parameter] = Field(default_factory=list)
     baselines: list[str] = Field(default_factory=list)
 

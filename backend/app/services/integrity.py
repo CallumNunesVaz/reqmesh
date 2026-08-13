@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
 
 class IntegrityChecker:
     def __init__(self, store):
@@ -325,45 +323,3 @@ class IntegrityChecker:
                         "target": vc_id,
                         "severity": "error",
                     })
-
-
-def mark_links_suspect(store, updated_req_id: str):
-    reqs = store.list_requirements()
-    suspect_file = store.root / "_suspect.yaml"
-    existing = store._read_yaml(suspect_file) if suspect_file.exists() else {}
-    links = existing.get("links", [])
-
-    now = datetime.now(timezone.utc).isoformat()
-
-    def add(source: str, rel_type: str, reason: str) -> None:
-        if any(l["source"] == source and l["target"] == updated_req_id for l in links):
-            return
-        links.append({"source": source, "target": updated_req_id, "type": rel_type,
-                      "marked": now, "reason": reason})
-
-    for r in reqs:
-        for rel in r.get("relations", []):
-            if rel["target"] == updated_req_id:
-                add(r["id"], rel["type"],
-                    f"Target requirement {updated_req_id} was modified")
-
-    # NOTE: this function has no callers. The live suspect-link mechanism is
-    # fingerprint-based (services/fingerprint.py, surfaced by GET
-    # /suspect-links); this writes a _suspect.yaml that nothing reads. Left
-    # as-is rather than extended — cross-entity propagation belongs on the
-    # path that actually runs. See check_suspect_links.
-
-    store.ensure_dirs()
-    store._write_yaml(suspect_file, {"links": links, "updated": datetime.now(timezone.utc).isoformat()})
-
-
-def clear_suspect_links(store, ids: list[str] | None = None):
-    suspect_file = store.root / "_suspect.yaml"
-    if not suspect_file.exists():
-        return
-    if ids is None:
-        import os; os.remove(suspect_file)
-        return
-    existing = store._read_yaml(suspect_file) if suspect_file.exists() else {}
-    links = [l for l in existing.get("links", []) if f"{l['source']}-{l['target']}" not in ids]
-    store._write_yaml(suspect_file, {"links": links, "updated": datetime.now(timezone.utc).isoformat()})

@@ -201,11 +201,14 @@ operation; a path served by several methods therefore appears several times.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
+| POST | `/api/projects/{project_id}/analysis/bulk-delete` | Bulk Delete Analysis Cases |
 | POST | `/api/projects/{project_id}/change-requests/bulk` | Bulk Update Change Requests |
 | POST | `/api/projects/{project_id}/change-requests/bulk-delete` | Bulk Delete Change Requests |
 | POST | `/api/projects/{project_id}/components/bulk` | Bulk Update Components |
 | POST | `/api/projects/{project_id}/components/bulk-delete` | Bulk Delete Components |
 | POST | `/api/projects/{project_id}/components/bulk-reparent` | Bulk Reparent Components |
+| POST | `/api/projects/{project_id}/decisions/bulk-delete` | Bulk Delete Decisions |
+| POST | `/api/projects/{project_id}/definitions/bulk-delete` | Bulk Delete Definitions |
 | POST | `/api/projects/{project_id}/requirements/bulk` | Bulk Update Requirements |
 | POST | `/api/projects/{project_id}/requirements/bulk-delete` | Bulk Delete Requirements |
 | POST | `/api/projects/{project_id}/requirements/bulk-reparent` | Bulk Reparent Requirements |
@@ -213,6 +216,7 @@ operation; a path served by several methods therefore appears several times.
 | POST | `/api/projects/{project_id}/risks/bulk-delete` | Bulk Delete Risks |
 | POST | `/api/projects/{project_id}/specifications/bulk` | Bulk Update Specifications |
 | POST | `/api/projects/{project_id}/specifications/bulk-delete` | Bulk Delete Specifications |
+| POST | `/api/projects/{project_id}/system-states/bulk-delete` | Bulk Delete System States |
 | POST | `/api/projects/{project_id}/verification/bulk` | Bulk Update Verification Cases |
 | POST | `/api/projects/{project_id}/verification/bulk-delete` | Bulk Delete Verification Cases |
 ## Publishing & interchange

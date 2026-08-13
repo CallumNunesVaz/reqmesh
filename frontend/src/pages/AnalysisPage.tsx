@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, FlaskConical, Trash2, X, Search, Edit3, ChevronDown } from 'lucide-react';
+import { Plus, FlaskConical, Trash2, X, Search, Edit3, ChevronDown, Square, CheckSquare } from 'lucide-react';
 import { api, type AnalysisCase, type Requirement, type Component } from '../api/client';
 import { useStore } from '../store';
 import { useAuthStore } from '../store/auth';
@@ -13,6 +13,9 @@ import { useToasts } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmDialog';
 import { useKeyboardShortcuts } from '../components/useKeyboardShortcuts';
 import { useListSelection } from '../hooks/useListSelection';
+import { useRangeSelection } from '../hooks/useRangeSelection';
+import { useBulkActions } from '../hooks/useBulkActions';
+import BulkActionBar from '../components/BulkActionBar';
 import LoadingSplash from '../components/LoadingSplash';
 
 /**
@@ -167,6 +170,32 @@ export default function AnalysisPage() {
     load();
   };
 
+  // `filtered` is the list as displayed, which is the only ordering a
+  // Shift range may span.
+  const { selectedIds, select: toggleSelect, setSelectedIds } =
+    useRangeSelection(useMemo(() => filtered.map((c) => c.id), [filtered]));
+  const clearSelection = () => setSelectedIds(new Set());
+  const selectAll = () => setSelectedIds(new Set(filtered.map((c) => c.id)));
+
+  const { runBulkDelete } = useBulkActions({
+    clearSelection,
+    reload: load,
+  });
+
+  const handleBulkDelete = async () => {
+    if (!projectId) return;
+    const ids = [...selectedIds];
+    const saved = cases.filter((c) => selectedIds.has(c.id)).map((c) => ({ ...c }));
+    await runBulkDelete({
+      noun: 'analysis case',
+      ids,
+      saved,
+      idOf: (c) => c.id,
+      remove: (idsToRemove) => api.bulkDeleteAnalysisCases(projectId, idsToRemove),
+      recreate: (item) => api.createAnalysisCase(projectId, item),
+    });
+  };
+
   return (
     <div className="relative max-w-5xl mx-auto p-8">
       {loading && cases.length === 0 && <LoadingSplash label="Loading analysis cases…" />}
@@ -298,6 +327,15 @@ export default function AnalysisPage() {
                 }`}
               >
                 <div className="flex items-center gap-3 p-4 cursor-pointer" onClick={() => toggleExpand(c.id)}>
+                  {editable && (
+                    <span className="shrink-0" onClick={(e) => e.stopPropagation()}>
+                      {selectedIds.has(c.id) ? (
+                        <CheckSquare size={14} className="text-primary cursor-pointer" onClick={(e) => toggleSelect(c.id, e)} />
+                      ) : (
+                        <Square size={14} className="text-muted-foreground/40 cursor-pointer hover:text-muted-foreground" onClick={(e) => toggleSelect(c.id, e)} />
+                      )}
+                    </span>
+                  )}
                   <div className="w-9 h-9 bg-cs-purple/10 text-cs-purple rounded-lg flex items-center justify-center">
                     <FlaskConical size={18} />
                   </div>
@@ -392,6 +430,15 @@ export default function AnalysisPage() {
             );
           })}
         </div>
+      )}
+      {selectedIds.size > 0 && editable && (
+        <BulkActionBar
+          count={selectedIds.size}
+          onSelectAll={selectAll}
+          onClear={clearSelection}
+        >
+          <button onClick={handleBulkDelete} className="btn-danger text-xs"><Trash2 size={13} /> Delete</button>
+        </BulkActionBar>
       )}
     </div>
   );

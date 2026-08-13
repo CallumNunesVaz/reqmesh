@@ -1,13 +1,16 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Trash2, Edit3, Check, X, Layers, Loader, AlertTriangle } from 'lucide-react';
+import { Plus, Trash2, Edit3, Check, X, Layers, Loader, AlertTriangle, Square, CheckSquare } from 'lucide-react';
 import { api, type SystemStateDef } from '../api/client';
 import { useAuthStore } from '../store/auth';
 import { useConfirm } from '../components/ConfirmDialog';
 import { useToasts } from '../components/Toast';
 import { useKeyboardShortcuts } from '../components/useKeyboardShortcuts';
 import { useListSelection } from '../hooks/useListSelection';
+import { useRangeSelection } from '../hooks/useRangeSelection';
+import { useBulkActions } from '../hooks/useBulkActions';
+import BulkActionBar from '../components/BulkActionBar';
 import LoadingSplash from '../components/LoadingSplash';
 
 export default function SystemStatesPage() {
@@ -116,6 +119,31 @@ export default function SystemStatesPage() {
     onListEscape,
     onListNew: () => { if (editable) openCreate(); },
   });
+
+  // States are keyed by `name`, which is what a Shift range spans here.
+  const { selectedIds, select: toggleSelect, setSelectedIds } =
+    useRangeSelection(useMemo(() => states.map((s) => s.name), [states]));
+  const clearSelection = () => setSelectedIds(new Set());
+  const selectAll = () => setSelectedIds(new Set(states.map((s) => s.name)));
+
+  const { runBulkDelete } = useBulkActions({
+    clearSelection,
+    reload: load,
+  });
+
+  const handleBulkDelete = async () => {
+    if (!projectId) return;
+    const names = [...selectedIds];
+    const saved = states.filter((s) => selectedIds.has(s.name)).map((s) => ({ ...s }));
+    await runBulkDelete({
+      noun: 'system state',
+      ids: names,
+      saved,
+      idOf: (s) => s.name,
+      remove: (namesToRemove) => api.bulkDeleteSystemStates(projectId, namesToRemove),
+      recreate: (item) => api.createSystemState(projectId, { name: item.name, description: item.description }),
+    });
+  };
 
   return (
     <div className="relative flex flex-col h-full overflow-y-auto">
@@ -262,6 +290,15 @@ export default function SystemStatesPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
+                      {editable && (
+                        <span className="shrink-0">
+                          {selectedIds.has(s.name) ? (
+                            <CheckSquare size={14} className="text-primary cursor-pointer" onClick={(e) => toggleSelect(s.name, e)} />
+                          ) : (
+                            <Square size={14} className="text-muted-foreground/40 cursor-pointer hover:text-muted-foreground" onClick={(e) => toggleSelect(s.name, e)} />
+                          )}
+                        </span>
+                      )}
                       <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-muted text-muted-foreground text-[10px] font-mono">
                         {s.order}
                       </span>
@@ -296,6 +333,16 @@ export default function SystemStatesPage() {
               </motion.div>
             ))}
           </div>
+        )}
+
+        {selectedIds.size > 0 && editable && (
+          <BulkActionBar
+            count={selectedIds.size}
+            onSelectAll={selectAll}
+            onClear={clearSelection}
+          >
+            <button onClick={handleBulkDelete} className="btn-danger text-xs"><Trash2 size={13} /> Delete</button>
+          </BulkActionBar>
         )}
       </div>
     </div>

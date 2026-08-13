@@ -22,6 +22,7 @@ from app.services.yaml_store import YamlStore
 from app.services.history import record_change
 from app.services.delete_guard import check_deletable
 from app.services.reparent import validate_component_parent
+from app.services.link_validation import first_missing
 
 router = APIRouter()
 
@@ -46,12 +47,12 @@ def _validate_parent(store: YamlStore, component_id: str, parent_id: str | None)
 
 def _validate_links(store: YamlStore, satisfies: list[str] | None, vcs: list[str] | None) -> None:
     """A link to something that does not exist is a silent hole in traceability."""
-    for req_id in satisfies or []:
-        if store.get_requirement(req_id) is None:
-            raise HTTPException(status_code=400, detail=f"Requirement not found: {req_id}")
-    for vc_id in vcs or []:
-        if store.get_verification_case(vc_id) is None:
-            raise HTTPException(status_code=400, detail=f"Verification case not found: {vc_id}")
+    reason = first_missing(
+        store,
+        [("requirements", satisfies), ("verification_cases", vcs)],
+    )
+    if reason:
+        raise HTTPException(status_code=400, detail=reason)
 
 
 # NOTE: static paths (tree) must be registered before the /{component_id}
