@@ -375,11 +375,15 @@ export default function AllocationMatrixPage() {
                     return (
                       <td
                         key={transpose ? (col.row_id || col.req_id) : col.id}
-                        className={`border-b text-center p-0 cursor-pointer transition-colors ${
-                          allocated ? 'bg-cs-green/15 hover:bg-cs-green/20' : 'hover:bg-accent/30'
+                        className={`border-b text-center p-0 transition-colors ${allocated ? 'bg-cs-green/15' : ''} ${
+                          editable
+                            ? `cursor-pointer ${allocated ? 'hover:bg-cs-green/20' : 'hover:bg-accent/30'}`
+                            : ''
                         }`}
-                        onClick={() => handleToggle(row, col)}
-                        title={`${row.row_name || row.req_name || row.name} ${data.verb} ${col.name || (col.row_name || col.req_name)}`}
+                        onClick={editable ? () => handleToggle(row, col) : undefined}
+                        title={editable
+                          ? `${row.row_name || row.req_name || row.name} ${data.verb} ${col.name || (col.row_name || col.req_name)}`
+                          : 'Read-only in viewing mode — enable editing to change allocations'}
                       >
                         {isToggling ? (
                           <Loader size={12} className="animate-spin mx-auto text-muted-foreground" />

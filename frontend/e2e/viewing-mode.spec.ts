@@ -97,4 +97,35 @@ test.describe('viewing mode', () => {
     // The Confirm button must not be visible while the header says VIEWING.
     await expect(app.getByRole('button', { name: 'Confirm' })).toHaveCount(0);
   });
+
+  test('allocation cells do not advertise themselves as clickable in viewing mode', async ({ app, server }) => {
+    await signIn(app);
+    await app.goto(`${server.baseURL}/project/${DEMO_PROJECT}/allocation`);
+    await app.waitForSelector('main');
+    await expect(app.getByRole('tab', { name: 'Components' })).toBeVisible({ timeout: 20_000 });
+
+    const cell = app.locator('td.text-center').first();
+    await expect(cell).toBeVisible();
+
+    // Viewing mode: the cell must not present a pointer, and the tooltip must
+    // say why — read-only, with the edit toggle named — rather than describe a
+    // relationship the user cannot change anyway.
+    const viewing = await cell.evaluate((el) => {
+      const c = getComputedStyle(el);
+      return { cursor: c.cursor, title: el.getAttribute('title') };
+    });
+    expect(viewing.cursor).not.toBe('pointer');
+    expect(viewing.title).toMatch(/read-only/i);
+    expect(viewing.title).toMatch(/editing/i);
+
+    // Editing mode restores the real affordance: a pointer, and the tooltip
+    // reverts to describing the relationship.
+    await setEditMode(app, true);
+    const editing = await cell.evaluate((el) => {
+      const c = getComputedStyle(el);
+      return { cursor: c.cursor, title: el.getAttribute('title') };
+    });
+    expect(editing.cursor).toBe('pointer');
+    expect(editing.title).not.toMatch(/read-only/i);
+  });
 });
