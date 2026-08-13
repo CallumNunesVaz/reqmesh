@@ -101,19 +101,27 @@ jobs:
           docker push "$IMAGE:$VERSION"
           docker push "$IMAGE:latest"
 
-      # `docker save | gzip` of a freshly built multi-stage image is the most
-      # disk-hungry moment in the release, so the free space is recorded either
-      # side: v0.2.5 failed at the upload below with nothing in the log to say
-      # why, and a truncated archive from a full disk is the leading candidate.
+      # The archive's size is logged because it is the one number that would
+      # explain a later upload failure that the retry loop cannot absorb.
+      # (Disk exhaustion was the first theory for v0.2.5 and the log disproved
+      # it — see the next step.)
       - name: Save image archive for offline updates
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           IMAGE="ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
-          df -h / | tail -1
           docker save "$IMAGE:$VERSION" | gzip > "reqmesh-v${VERSION}-image.tar.gz"
           ls -lh "reqmesh-v${VERSION}-image.tar.gz"
-          df -h / | tail -1
 
+      # Retries because v0.2.5 failed here with a transient upload 404:
+      #
+      #   HTTP 404: Not Found
+      #   (https://uploads.github.com/repos/.../releases/369981735/assets?...)
+      #
+      # against a release the previous job had created minutes earlier and
+      # which plainly existed — the release id is right there in the URL. So it
+      # is the uploads endpoint not yet resolving the freshly created release,
+      # not permissions (contents: write is set) and not disk.
+      #
       # Never fails the release, for the same reason the prune step below does
       # not: by this point the tarball is attached and the image is pushed to
       # ghcr, so the release is complete and usable. This archive is the
