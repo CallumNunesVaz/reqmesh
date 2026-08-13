@@ -101,18 +101,46 @@ jobs:
           docker push "$IMAGE:$VERSION"
           docker push "$IMAGE:latest"
 
+      # `docker save | gzip` of a freshly built multi-stage image is the most
+      # disk-hungry moment in the release, so the free space is recorded either
+      # side: v0.2.5 failed at the upload below with nothing in the log to say
+      # why, and a truncated archive from a full disk is the leading candidate.
       - name: Save image archive for offline updates
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           IMAGE="ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
+          df -h / | tail -1
           docker save "$IMAGE:$VERSION" | gzip > "reqmesh-v${VERSION}-image.tar.gz"
+          ls -lh "reqmesh-v${VERSION}-image.tar.gz"
+          df -h / | tail -1
 
+      # Never fails the release, for the same reason the prune step below does
+      # not: by this point the tarball is attached and the image is pushed to
+      # ghcr, so the release is complete and usable. This archive is the
+      # offline `docker load` convenience copy. Marking the whole release failed
+      # when it has in fact shipped is worse than missing the asset — a red
+      # release that actually published is exactly the ambiguity that let
+      # 0.2.4's red CI look normal.
+      #
+      # It still has to be *visible*, so a failure emits a warning annotation
+      # rather than passing silently.
       - name: Attach image archive to the release
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          gh release upload "$GITHUB_REF_NAME" "reqmesh-v${VERSION}-image.tar.gz" --clobber
+          ARCHIVE="reqmesh-v${VERSION}-image.tar.gz"
+          for attempt in 1 2 3; do
+            if gh release upload "$GITHUB_REF_NAME" "$ARCHIVE" --clobber; then
+              echo "attached $ARCHIVE on attempt $attempt"
+              exit 0
+            fi
+            echo "upload attempt $attempt failed; retrying in $((attempt * 10))s"
+            sleep $((attempt * 10))
+          done
+          echo "::warning::Could not attach $ARCHIVE to $GITHUB_REF_NAME after 3 attempts. The release and the ghcr image are published; only the offline image archive is missing. Re-attach with: gh release upload $GITHUB_REF_NAME $ARCHIVE --clobber"
+          exit 1
 
       # Each archive is ~150 MB and only the newest are ever used, so without
       # this the release assets grow by that much every patch. Keeps the current
