@@ -144,9 +144,11 @@ test('the deep link does nothing for a user who cannot edit', async ({ app, serv
   // the link useless on a cold load, since the toggle defaults off.
   await app.goto(`${server.baseURL}/project/${P}/requirements?new=1`);
   await app.waitForSelector('main');
-  await app.waitForTimeout(1500);
 
+  // The effect that clears the param bails out until the requirements have
+  // loaded, so waiting a fixed 1500ms raced the fetch: on a slow machine the
+  // sleep expired first and the param was still there. Poll the URL for the
+  // outcome instead of guessing how long the load takes.
+  await expect.poll(() => app.url(), { timeout: 15_000 }).not.toContain('new=1');
   await expect(app.getByRole('heading', { name: 'New Requirement' })).toHaveCount(0);
-  // The stale param is still cleared, so a reload cannot resurrect it.
-  expect(app.url()).not.toContain('new=1');
 });
