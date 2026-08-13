@@ -6,8 +6,12 @@ test('?new=1 opens blank create form', async ({ app, server }) => {
   await signIn(app);
   await app.goto(`${server.baseURL}/project/${P}/requirements?new=1`);
   await app.waitForSelector('main');
-  await setEditMode(app);
-
+  // No setEditMode here: the deep link turns edit mode on itself ("following a
+  // create link is an explicit intent to edit"). Calling it raced — the helper
+  // samples EDITING before the effect fires, which waits for requirements to
+  // load, so it decided to click a toggle the dialog backdrop then covered, and
+  // waited out the full 60s timeout. That the app enables edit mode is exactly
+  // what this test should be proving, so asserting it directly is also truer.
   await expect(app.getByRole('heading', { name: 'New Requirement' })).toBeVisible();
 
   await expect(app.getByPlaceholder('Requirement name')).toHaveValue('');
@@ -55,8 +59,8 @@ test('query string is cleared after opening form', async ({ app, server }) => {
   await signIn(app);
   await app.goto(`${server.baseURL}/project/${P}/requirements?new=1`);
   await app.waitForSelector('main');
-  await setEditMode(app);
-
+  // See the first test: the deep link enables edit mode, so calling the helper
+  // here races the dialog backdrop.
   await expect(app.getByRole('heading', { name: 'New Requirement' })).toBeVisible();
 
   await expect(app).not.toHaveURL(/new=1/);
@@ -66,8 +70,8 @@ test('reloading after form opened does not reopen it', async ({ app, server }) =
   await signIn(app);
   await app.goto(`${server.baseURL}/project/${P}/requirements?new=1`);
   await app.waitForSelector('main');
-  await setEditMode(app);
-
+  // See the first test: the deep link enables edit mode, so calling the helper
+  // here races the dialog backdrop.
   await expect(app.getByRole('heading', { name: 'New Requirement' })).toBeVisible();
 
   await app.getByRole('button', { name: 'Cancel' }).click();

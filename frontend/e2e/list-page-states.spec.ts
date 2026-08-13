@@ -74,7 +74,12 @@ test('a page that had no loading state now renders one before its data', async (
   // race — Specifications rendered an empty list during this window before.
   await app.route(`**/api/projects/${P}/specifications*`, async (route) => {
     await new Promise((r) => setTimeout(r, 1500));
-    await route.continue();
+    // `unroute` below can land while this handler is still sleeping — on a
+    // busy machine the assertion and the unroute both happen inside the 1500ms
+    // — and by then the route has already been handled, so continuing throws
+    // "Route is already handled!". The response is not what this test asserts;
+    // the loading state is. Failing here would be failing on the fixture.
+    await route.continue().catch(() => {});
   });
 
   await app.goto(`${server.baseURL}/project/${P}/specifications`, { waitUntil: 'commit' });
