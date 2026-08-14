@@ -1,12 +1,65 @@
 import { useMemo, useState } from 'react';
 import {
   KeyboardSensor, PointerSensor, useSensor, useSensors,
+  closestCenter, pointerWithin, type ClientRect, type CollisionDetection,
   type DragEndEvent, type DragOverEvent, type DragStartEvent,
 } from '@dnd-kit/core';
 import { dragPayload, isValidDrop, topLevelOf, type Node } from '../lib/hierarchy';
 
 /** Sentinel droppable id for the "make top level" strip. */
 export const TOP_LEVEL_ID = '__top_level__';
+
+/** The tight bounding box around every droppable in a context. */
+function droppableBounds(rects: Iterable<ClientRect>) {
+  let top = Infinity, left = Infinity, bottom = -Infinity, right = -Infinity;
+  for (const r of rects) {
+    top = Math.min(top, r.top);
+    left = Math.min(left, r.left);
+    bottom = Math.max(bottom, r.bottom);
+    right = Math.max(right, r.right);
+  }
+  return top === Infinity ? null : { top, left, bottom, right };
+}
+
+/** The gap around the tree (card padding and the space to the page edge) that
+ *  still counts as "over the tree" for the closest-centre fallback. */
+const FALLBACK_MARGIN = 24;
+
+/**
+ * Resolve the drop target by the pointer, not the dragged element's centre.
+ *
+ * The draggable is the small grip at the row's left edge, so `closestCenter`
+ * (which compares the dragged element's translated centre to each droppable's
+ * centre) sits half a row or more above the cursor and drifts further with row
+ * height. `pointerWithin` uses the cursor itself, so the row highlighted is the
+ * row the pointer is actually over, and that is the row that receives the drop.
+ *
+ * When the pointer leaves every droppable it falls back to `closestCenter`, so
+ * the highlight does not flicker off mid-drag over the gap between the tree and
+ * the page edge. But once the pointer has left the tree entirely — the header,
+ * the sidebar, the graph canvas — there is no droppable to fall back onto, so
+ * returning nothing lets the drop cancel instead of landing on whatever row
+ * happens to be nearest.
+ */
+const collisionDetection: CollisionDetection = (args) => {
+  const within = pointerWithin(args);
+  if (within.length > 0) return within;
+
+  const { pointerCoordinates, droppableRects } = args;
+  if (pointerCoordinates) {
+    const bounds = droppableBounds(droppableRects.values());
+    if (
+      bounds &&
+      (pointerCoordinates.x < bounds.left - FALLBACK_MARGIN ||
+        pointerCoordinates.x > bounds.right + FALLBACK_MARGIN ||
+        pointerCoordinates.y < bounds.top - FALLBACK_MARGIN ||
+        pointerCoordinates.y > bounds.bottom + FALLBACK_MARGIN)
+    ) {
+      return [];
+    }
+  }
+  return closestCenter(args);
+};
 
 /**
  * Shared drag-to-reparent wiring for the requirement and component trees.
@@ -75,5 +128,6 @@ export function useTreeDrag<T extends Node>(opts: {
     dropIsValid,
     isDragging: draggingIds.length > 0,
     dndHandlers: { onDragStart, onDragOver, onDragEnd, onDragCancel },
+    collisionDetection,
   };
 }

@@ -23,7 +23,7 @@ import BulkActionBar from '../components/BulkActionBar';
 import { useToasts } from '../components/Toast';
 import TruncationBanner from '../components/TruncationBanner';
 import ReparentDialog from '../components/ReparentDialog';
-import { DndContext, DragOverlay, closestCenter } from '@dnd-kit/core';
+import { DndContext, DragOverlay } from '@dnd-kit/core';
 import { useTreeDrag } from '../hooks/useTreeDrag';
 import { DropRow, DragGrip, TopLevelDropZone } from '../components/TreeDragRow';
 
@@ -357,7 +357,7 @@ export default function RequirementsPage() {
   // away: dragging must not be the one path to an id rewrite that skips the
   // warning. `pendingParent` seeds the dialog with the dropped-on row.
   const [pendingParent, setPendingParent] = useState<string | null | undefined>(undefined);
-  const { sensors, draggingIds, overId, dropIsValid, isDragging, dndHandlers } = useTreeDrag({
+  const { sensors, draggingIds, overId, dropIsValid, isDragging, dndHandlers, collisionDetection } = useTreeDrag({
     items: requirements,
     selectedIds,
     onDrop: (ids, parent) => { setMovingIds(ids); setPendingParent(parent); },
@@ -531,7 +531,7 @@ export default function RequirementsPage() {
             )}
             <DndContext
               sensors={sensors}
-              collisionDetection={closestCenter}
+              collisionDetection={collisionDetection}
               {...dndHandlers}
             >
             {editMode && <TopLevelDropZone active={isDragging} isOver={overId === '__top_level__'} />}

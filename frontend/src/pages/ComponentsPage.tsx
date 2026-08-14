@@ -17,7 +17,7 @@ import { useBulkActions } from '../hooks/useBulkActions';
 import { useUndoStore } from '../store/undo';
 import ReparentDialog from '../components/ReparentDialog';
 import BulkActionBar from '../components/BulkActionBar';
-import { DndContext, DragOverlay, closestCenter } from '@dnd-kit/core';
+import { DndContext, DragOverlay } from '@dnd-kit/core';
 import { useTreeDrag, TOP_LEVEL_ID } from '../hooks/useTreeDrag';
 import { DropRow, DragGrip, TopLevelDropZone } from '../components/TreeDragRow';
 import LoadingSplash from '../components/LoadingSplash';
@@ -269,7 +269,7 @@ export default function ComponentsPage() {
   // selection-clearing and reload below never ran, so the page looked frozen
   // rather than refused.
   const [pendingParent, setPendingParent] = useState<string | null | undefined>(undefined);
-  const { sensors, draggingIds, overId, dropIsValid, isDragging, dndHandlers } = useTreeDrag({
+  const { sensors, draggingIds, overId, dropIsValid, isDragging, dndHandlers, collisionDetection } = useTreeDrag({
     items: components,
     selectedIds,
     onDrop: (ids, parent) => { setMovingIds(ids); setPendingParent(parent); },
@@ -587,7 +587,7 @@ export default function ComponentsPage() {
         </div>
       ) : (
         <div className="card p-2 flex-1 min-w-[280px]" role="tree" tabIndex={0} ref={treeContainerRef} onKeyDown={handleTreeKeyDown}>
-          <DndContext sensors={sensors} collisionDetection={closestCenter} {...dndHandlers}>
+          <DndContext sensors={sensors} collisionDetection={collisionDetection} {...dndHandlers}>
             {editable && <TopLevelDropZone active={isDragging} isOver={overId === TOP_LEVEL_ID} />}
             {tree.map((node) => renderNode(node, 0))}
             <DragOverlay dropAnimation={null}>
