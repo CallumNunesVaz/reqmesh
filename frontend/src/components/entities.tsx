@@ -264,11 +264,11 @@ export function EntityLink({ kind, id, name, projectId, showIcon = true, classNa
     return (
       <span
         title={`${displayMeta.label} ${id}${name ? ` — ${name}` : ''}`}
-        className={`inline-flex items-center gap-1 ${className}`}
+        className={`inline-flex items-center gap-1 min-w-0 ${className}`}
       >
         {showIcon && <Icon size={12} className={`${displayMeta.cls} shrink-0`} />}
-        <span className="font-mono whitespace-nowrap">{id}</span>
-        {name && <span className="truncate">{name}</span>}
+        <span className="font-mono whitespace-nowrap shrink-0">{id}</span>
+        {name && <span className="truncate min-w-0">{name}</span>}
       </span>
     );
   }
@@ -280,11 +280,11 @@ export function EntityLink({ kind, id, name, projectId, showIcon = true, classNa
       onMouseEnter={startPreview}
       onMouseLeave={endPreview}
       title={`${displayMeta.label} ${id}${name ? ` — ${name}` : ''}`}
-      className={`inline-flex items-center gap-1 rounded hover:underline underline-offset-2 transition-colors ${className}`}
+      className={`inline-flex items-center gap-1 min-w-0 rounded hover:underline underline-offset-2 transition-colors ${className}`}
     >
       {showIcon && <Icon size={12} className={`${displayMeta.cls} shrink-0`} />}
-      <span className="font-mono whitespace-nowrap">{id}</span>
-      {name && <span className="truncate">{name}</span>}
+      <span className="font-mono whitespace-nowrap shrink-0">{id}</span>
+      {name && <span className="truncate min-w-0">{name}</span>}
       {preview && anchor && <HoverPreview entity={preview} anchor={anchor} />}
     </GuardedLink>
   );
