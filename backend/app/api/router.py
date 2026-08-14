@@ -1008,14 +1008,24 @@ def rename_baseline(project_id: str, name: str, data: RenameBaseline, user: dict
     if not new_name:
         raise HTTPException(status_code=400, detail="New name is required")
     safe_id(new_name, "baseline name")
-    if store.get_item("baselines", new_name) is not None:
+    # A rename onto an existing frozen snapshot is a collision. Skipped when the
+    # name is unchanged, so a symbol/description/due-date edit on a frozen
+    # baseline is not refused as a duplicate of itself.
+    if new_name != name and store.get_item("baselines", new_name) is not None:
         raise HTTPException(status_code=409, detail="A baseline with that name already exists")
+    found = False
     # Update the baseline definition in project metadata.
     with store.meta_lock():
         meta = store.read_meta()
         defs = normalize_baseline_defs(meta.get("baselines", []))
+        # A rename onto an existing *unfrozen* definition is also a collision —
+        # without this check, renaming onto one would silently merge two
+        # definitions under one name.
+        if new_name != name and any(d["name"] == new_name for d in defs):
+            raise HTTPException(status_code=409, detail="A baseline with that name already exists")
         for d in defs:
             if d["name"] == name:
+                found = True
                 d["name"] = new_name
                 if data.symbol is not None:
                     d["symbol"] = data.symbol
@@ -1023,11 +1033,12 @@ def rename_baseline(project_id: str, name: str, data: RenameBaseline, user: dict
                     d["description"] = data.description
                 if data.due_date is not None:
                     d["due_date"] = data.due_date
-        serialized = serialize_meta_defs(defs)
-        # Validate before writing — a rejected write must leave _meta.yaml untouched.
-        _validate_due_dates(serialized)
-        meta["baselines"] = serialized
-        store._write_meta_unlocked(meta)
+        if found:
+            serialized = serialize_meta_defs(defs)
+            # Validate before writing — a rejected write must leave _meta.yaml untouched.
+            _validate_due_dates(serialized)
+            meta["baselines"] = serialized
+            store._write_meta_unlocked(meta)
     # Rename on all requirements
     updated = 0
     for r in store.list_requirements():
@@ -1046,14 +1057,17 @@ def rename_baseline(project_id: str, name: str, data: RenameBaseline, user: dict
             comps_updated += 1
     frozen = store.get_item("baselines", name)
     if frozen is not None:
-        frozen["name"] = new_name
         if data.symbol is not None:
             frozen["symbol"] = data.symbol
         if data.description is not None:
             frozen["description"] = data.description
-        store.write_item("baselines", new_name, frozen)
-        store.delete_item("baselines", name)
-    elif updated == 0 and comps_updated == 0:
+        if new_name != name:
+            frozen["name"] = new_name
+            store.write_item("baselines", new_name, frozen)
+            store.delete_item("baselines", name)
+        else:
+            store.write_item("baselines", name, frozen)
+    elif not found and updated == 0 and comps_updated == 0:
         raise HTTPException(status_code=404, detail="Baseline not found")
     return {"old_name": name, "new_name": new_name, "requirements_updated": updated}
 

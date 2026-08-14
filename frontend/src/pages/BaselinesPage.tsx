@@ -545,7 +545,7 @@ export default function BaselinesPage() {
                   <Layers size={16} />
                   {editingName ? `Edit "${editingName}"` : 'New Baseline'}
                 </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-[1fr_100px] gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-[1fr_150px] gap-3">
                   <div>
                     <label className="label">Name * <input
                       className="input"
