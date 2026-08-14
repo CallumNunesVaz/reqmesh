@@ -55,6 +55,7 @@ operation; a path served by several methods therefore appears several times.
 | GET | `/api/projects/{project_id}/components/{component_id}` | Get Component |
 | PUT | `/api/projects/{project_id}/components/{component_id}` | Update Component |
 | DELETE | `/api/projects/{project_id}/components/{component_id}` | Delete Component |
+| POST | `/api/projects/{project_id}/components/{component_id}/rename` | Rename a component |
 ## Verification
 
 | Method | Endpoint | Description |
@@ -311,3 +312,4 @@ operation; a path served by several methods therefore appears several times.
 Routes below accept an untyped JSON body (`data: dict`) and so carry no request schema in the OpenAPI output. They are real routes with thinner entries than the rest:
 
 - `POST /api/projects/{project_id}/requirements/{req_id}/rename`
+- `POST /api/projects/{project_id}/components/{component_id}/rename`

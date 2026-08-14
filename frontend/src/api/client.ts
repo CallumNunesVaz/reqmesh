@@ -1208,6 +1208,13 @@ export const api = {
     request<Component[]>(`/projects/${projectId}/requirements/${reqId}/components`),
   getComponentsForVerificationCase: (projectId: string, vcId: string) =>
     request<Component[]>(`/projects/${projectId}/verification/${vcId}/components`),
+  /** Rename a component, repointing its children and every reference that
+   *  targeted it. Returns what else moved. */
+  renameComponent: (projectId: string, componentId: string, newId: string) =>
+    request<{ id: string; children: string[]; relinked: string[] }>(
+      `/projects/${projectId}/components/${componentId}/rename`,
+      { method: 'POST', body: { new_id: newId } },
+    ),
   getRequirement: (projectId: string, reqId: string) =>
     request<Requirement>(`/projects/${projectId}/requirements/${reqId}`),
   createRequirement: (projectId: string, data: RequirementCreate) =>

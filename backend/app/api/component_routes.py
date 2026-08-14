@@ -23,6 +23,7 @@ from app.services.history import record_change
 from app.services.delete_guard import check_deletable
 from app.services.reparent import validate_component_parent
 from app.services.link_validation import first_missing
+from app.services.rename import rename_component
 
 router = APIRouter()
 
@@ -129,6 +130,37 @@ def list_components(
     items = sorted(items, key=lambda c: c.get("id", ""))
     total = len(items)
     return {"items": items[offset:offset + limit], "total": total, "offset": offset, "limit": limit}
+
+
+@router.post("/projects/{project_id}/components/{component_id}/rename", summary="Rename a component")
+def rename_component_route(project_id: str, component_id: str, data: dict,
+                           user: dict = Depends(require_maintain)):
+    """Rename a component, repointing children and references project-wide.
+
+    Registered before the ``/{component_id}`` catch-all for the same reason the
+    requirement route is: otherwise the literal ``rename`` segment can be
+    swallowed as a component id.
+    """
+    store = get_store(project_id)
+    component = store.get_component(safe_id(component_id, "component id"))
+    if component is None:
+        raise HTTPException(status_code=404, detail="Component not found")
+
+    new_id = (data.get("new_id") or "").strip()
+    if not new_id:
+        raise HTTPException(status_code=400, detail="New id is required")
+
+    # The id is the YAML filename; validate before anything touches the
+    # filesystem so a traversal never reaches ``_item_path``.
+    new_id = safe_id(new_id, "component id")
+    if new_id != component["id"] and store.get_component(new_id) is not None:
+        raise HTTPException(status_code=409, detail="A component with that id already exists")
+
+    try:
+        result = rename_component(store, component["id"], new_id, user.get("username", ""))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return result
 
 
 @router.get("/projects/{project_id}/components/{component_id}")

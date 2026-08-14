@@ -6,20 +6,23 @@ interface Props {
   open: boolean;
   onClose: () => void;
   currentId: string;
+  /** Singular noun for the entity being renamed, e.g. "requirement". */
+  entityLabel?: string;
   /** The default: the parent's prefix plus the next free slot. Fetched lazily
-   *  so the scheme lives in one place — the server. */
-  suggest: () => Promise<string>;
+   *  so the scheme lives in one place — the server. When absent (an entity
+   *  with no naming scheme), the field starts from the current id. */
+  suggest?: () => Promise<string>;
   onRename: (newId: string) => Promise<{ children: string[]; relinked: string[] }>;
 }
 
 /**
- * Rename a requirement.
+ * Rename an entity (a requirement, a component).
  *
  * An id is the YAML filename, every child's parent pointer, and every relation
  * target in the project, so this is a bigger action than it looks. The dialog
  * says what else will move before it happens, and reports what actually did.
  */
-export default function RenameDialog({ open, onClose, currentId, suggest, onRename }: Props) {
+export default function RenameDialog({ open, onClose, currentId, entityLabel = 'requirement', suggest, onRename }: Props) {
   const [value, setValue] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -30,7 +33,10 @@ export default function RenameDialog({ open, onClose, currentId, suggest, onRena
   useEffect(() => {
     if (!open) return;
     setValue(''); setError(''); setDone(null); setBusy(true);
-    suggest()
+    const next = suggest
+      ? suggest()
+      : Promise.resolve(currentId);
+    next
       .then((s) => setValue(s))
       // A failed suggestion must not block a manual rename — the field just
       // starts from the current id instead.
@@ -65,7 +71,7 @@ export default function RenameDialog({ open, onClose, currentId, suggest, onRena
       </button>
 
       <h2 className="text-lg font-bold text-foreground mb-1 flex items-center gap-2">
-        <Tag size={17} /> Rename requirement
+        <Tag size={17} /> Rename {entityLabel}
       </h2>
 
             {done ? (
@@ -75,8 +81,8 @@ export default function RenameDialog({ open, onClose, currentId, suggest, onRena
                   <span className="font-mono text-foreground">{value}</span>.
                 </p>
                 <div className="text-xs bg-muted/50 border rounded-lg p-3 space-y-1 mb-4">
-                  <div>{done.children.length} child requirement{done.children.length === 1 ? '' : 's'} repointed</div>
-                  <div>{done.relinked.length} relation target{done.relinked.length === 1 ? '' : 's'} rewritten</div>
+                  <div>{done.children.length} child {entityLabel}{done.children.length === 1 ? '' : 's'} repointed</div>
+                  <div>{done.relinked.length} reference{done.relinked.length === 1 ? '' : 's'} rewritten</div>
                 </div>
                 <button onClick={onClose} className="btn-primary w-full justify-center">Done</button>
               </>

@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, useId } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Trash2, ArrowLeft, Save, X, ChevronRight, AlertTriangle } from 'lucide-react';
+import { Trash2, ArrowLeft, Save, X, ChevronRight, AlertTriangle, Tag } from 'lucide-react';
 import { api, baselineNames, COMPONENT_TYPES, type Component, type Requirement, type VerificationCase, type Backlinks } from '../api/client';
 import { CopyLinkButton, EntityLink, COMPONENT_TYPE_META, type EntityKind } from '../components/entities';
 import { useEntityKinds } from '../components/entityIndex';
@@ -18,6 +18,7 @@ import { HistoryPanel } from '../components/HistoryPanel';
 import { CommentThread } from '../components/CommentThread';
 import { useConfirm } from '../components/ConfirmDialog';
 import { useToasts } from '../components/Toast';
+import RenameDialog from '../components/RenameDialog';
 
 /** Registry collection -> the entity kinds EntityLink knows how to render.
  *  Collections without a detail page of their own (decisions, analysis cases)
@@ -144,6 +145,29 @@ export default function ComponentDetailPage() {
     onDetailEscape: () => { if (window.history.length > 1) navigate(-1); else navigate(`/project/${projectId}/components`); },
   });
 
+  const [renaming, setRenaming] = useState(false);
+  const [renamedTo, setRenamedTo] = useState<string | null>(null);
+
+  const doRename = async (newId: string) => {
+    if (!projectId || !componentId) throw new Error('No project/component');
+    const res = await api.renameComponent(projectId, componentId, newId);
+    bumpGraphVersion();
+    // Navigating here would change `currentId` under the dialog, retriggering
+    // its reset effect and wiping the result it is about to show. Follow the
+    // record once the dialog closes instead.
+    setRenamedTo(res.id);
+    return res;
+  };
+
+  const closeRename = () => {
+    setRenaming(false);
+    if (renamedTo) {
+      const target = renamedTo;
+      setRenamedTo(null);
+      navigate(`/project/${projectId}/components/${target}`, { replace: true });
+    }
+  };
+
   const link = (field: 'satisfies' | 'verification_cases', id: string) => {
     if (!component || component[field].includes(id)) return;
     save({ [field]: [...component[field], id] } as any);
@@ -221,6 +245,11 @@ export default function ComponentDetailPage() {
             <CopyLinkButton kind="component" id={component.id} />
           </div>
         </div>
+        {editable && (
+          <button onClick={() => setRenaming(true)} className="btn-secondary text-xs p-2" title="Rename (change the id)">
+            <Tag size={14} />
+          </button>
+        )}
         <button onClick={handleDelete} className="btn-danger" disabled={!editable} title="Delete">
           <Trash2 size={14} />
         </button>
@@ -428,6 +457,14 @@ export default function ComponentDetailPage() {
           </div>
         </div>
       </div>
+
+      <RenameDialog
+        open={renaming}
+        onClose={closeRename}
+        currentId={componentId!}
+        entityLabel="component"
+        onRename={doRename}
+      />
     </div>
   );
 }
