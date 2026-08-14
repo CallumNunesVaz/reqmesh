@@ -908,7 +908,7 @@ class Publisher:
             item = self._latex_link(e["item_id"])
             name = _latex_escape(_truncate_words(e["name"] or e["kind"], 60))
             L.append(f"\\texttt{{\\footnotesize {when}}} & \\texttt{{{item}}} & {name} & "
-                     f"\\statusbadge{{{e['action']}}} & {_latex_escape(e['user'])} \\\\")
+                     f"\\statusbadge{{{_latex_escape(e['action'])}}} & {_latex_escape(e['user'])} \\\\")
             # Field-level detail spans the full width beneath its header row —
             # the same pattern the requirements tables use for descriptions.
             if e["fields"]:
@@ -1498,7 +1498,7 @@ class Publisher:
                 extra_str = " \\newline ".join(extras_parts)
 
                 L.append(f"\\hypertarget{{req-{rid_esc}}}{{}}"
-                         f"\\texttt{{{rid_esc}}} & {name} & \\statusbadge{{{status}}} & \\prioritybadge{{{priority}}} \\\\[-2pt]")
+                         f"\\texttt{{{rid_esc}}} & {name} & \\statusbadge{{{_latex_escape(status)}}} & \\prioritybadge{{{_latex_escape(priority)}}} \\\\[-2pt]")
                 if extra_str:
                     L.append(f"\\multicolumn{{4}}{{@{{}}p{{\\dimexpr\\textwidth-2\\tabcolsep\\relax}}@{{}}}}{{\\small {extra_str}}} \\\\[-3pt]")
                 L.append(r"\midrule")
@@ -1563,7 +1563,7 @@ class Publisher:
                 status = vc.get("status", "pending")
                 verified = ", ".join(self._latex_link(rid) for rid in vc.get("verified_requirements", []))
                 L.append(f"\\hypertarget{{vc-{vid_esc}}}{{}}"
-                         f"\\texttt{{{vid_esc}}} & {name} & {method} & \\statusbadge{{{status}}} & {verified or '---'} \\\\")
+                         f"\\texttt{{{vid_esc}}} & {name} & {method} & \\statusbadge{{{_latex_escape(status)}}} & {verified or '---'} \\\\")
                 L.append(r"\midrule")
             L.append(r"\end{longtable}")
             L.append(r"\newpage")
@@ -1593,7 +1593,7 @@ class Publisher:
                 prob = _latex_escape(r.get("probability", ""))
                 status = r.get("status", "open")
                 mitigation = _latex_escape(_truncate_words(r.get("mitigation", ""), 180))
-                L.append(f"\\texttt{{{rid}}} & {title} & \\prioritybadge{{{sev}}} & {prob} & \\statusbadge{{{status}}} & {mitigation} \\\\")
+                L.append(f"\\texttt{{{rid}}} & {title} & \\prioritybadge{{{_latex_escape(sev)}}} & {prob} & \\statusbadge{{{_latex_escape(status)}}} & {mitigation} \\\\")
                 L.append(r"\midrule")
             L.append(r"\end{longtable}")
         end_section("risks")
@@ -1621,7 +1621,7 @@ class Publisher:
                 vstatus = r.get("verification_status", "pending")
                 stripe = r"\rowcolor{rowalt}" if i % 2 else ""
                 L.append(f"{stripe}{rid} & {name} & {method} & {verified_by} & "
-                         f"\\statusbadge{{{vstatus}}} \\\\")
+                         f"\\statusbadge{{{_latex_escape(vstatus)}}} \\\\")
             L.append(r"\end{longtable}")
             L.append(r"\newpage")
 
@@ -1693,7 +1693,7 @@ class Publisher:
                     title = _latex_escape(cr.get("title", ""))
                     status = cr.get("status", "open")
                     affected = ", ".join(self._latex_link(rid) for rid in cr.get("affected_requirements", []))
-                    L.append(f"\\texttt{{{cid}}} & {title} & \\statusbadge{{{status}}} & {affected or '---'} \\\\")
+                    L.append(f"\\texttt{{{cid}}} & {title} & \\statusbadge{{{_latex_escape(status)}}} & {affected or '---'} \\\\")
                     L.append(r"\midrule")
                 L.append(r"\end{longtable}")
 
@@ -1790,7 +1790,7 @@ class Publisher:
                     decision = _latex_escape(_truncate_words(d.get("decision", ""), 200))
                     rationale = _latex_escape(_truncate_words(d.get("rationale", ""), 200))
                     status = d.get("status", "open")
-                    L.append(f"\\texttt{{{did}}} & {title} & {decision} & {rationale} & \\statusbadge{{{status}}} \\\\")
+                    L.append(f"\\texttt{{{did}}} & {title} & {decision} & {rationale} & \\statusbadge{{{_latex_escape(status)}}} \\\\")
                     L.append(r"\midrule")
                 L.append(r"\end{longtable}")
 
@@ -1918,7 +1918,7 @@ class Publisher:
                     for con in req_constraints:
                         cexpr = _latex_escape(con.get("expression", ""))
                         cstatus = con.get("status", "pending")
-                        L.append(f"{cexpr} & \\statusbadge{{{cstatus}}} \\\\")
+                        L.append(f"{cexpr} & \\statusbadge{{{_latex_escape(cstatus)}}} \\\\")
                         L.append(r"\midrule")
                     L.append(r"\end{longtable}")
                 L.append(r"\vspace{1em}")
@@ -1936,7 +1936,7 @@ class Publisher:
                 status = vc.get("status", "pending")
                 L.append(f"\\subsection*{{{vid} -- {name}}}")
                 L.append(f"\\textbf{{Method:}} {method}")
-                L.append(f"\\textbf{{Status:}} \\statusbadge{{{status}}}")
+                L.append(f"\\textbf{{Status:}} \\statusbadge{{{_latex_escape(status)}}}")
                 L.append(r"")
                 steps = vc.get("test_steps", [])
                 if steps:
@@ -1975,7 +1975,7 @@ class Publisher:
                         notes = _latex_escape(_truncate_words(h.get("notes", ""), 120))
                         executor = _latex_escape(h.get("executor", ""))
                         duration = _latex_escape(str(h.get("duration", "")))
-                        L.append(f"{ts} & \\statusbadge{{{hstatus}}} & {notes} & {executor} & {duration} \\\\")
+                        L.append(f"{ts} & \\statusbadge{{{_latex_escape(hstatus)}}} & {notes} & {executor} & {duration} \\\\")
                         L.append(r"\midrule")
                     L.append(r"\end{longtable}")
                 if not steps and not history:
@@ -2034,9 +2034,28 @@ class Publisher:
         and a table of contents. If no engine is installed — or the compile
         fails — fall back to the weasyprint HTML→PDF renderer so PDF export
         always works, just without the LaTeX polish.
+
+        The fallback stays because the engine is not guaranteed to be there:
+        both images download tectonic at build time and both tolerate that
+        download failing (``backend/Dockerfile:17``, ``Dockerfile.prod:47``),
+        and a bare-metal install may have no engine at all. Raising instead
+        would turn "the PDF looks plainer" into "there is no PDF".
+
+        What it must not be is *quiet*. A degraded render used to be
+        indistinguishable from a good one, so a LaTeX compile that had been
+        failing for months looked like a working export — which is how the
+        badge-escaping bug survived. ``compile_latex_to_pdf`` logs the engine's
+        own diagnostics; the warning here records that the document actually
+        handed back is the fallback.
         """
         if compile_latex_to_pdf(self.build_latex(), path):
             return path
+        logger.warning(
+            "LaTeX PDF render failed; falling back to the weasyprint HTML "
+            "renderer for %s. The document will lack tables, badges and a "
+            "table of contents. See the log above for the engine's output.",
+            path,
+        )
         from weasyprint import HTML as WHTML
         from app.services.sanitize import safe_url_fetcher
         WHTML(
