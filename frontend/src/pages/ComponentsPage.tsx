@@ -11,6 +11,7 @@ import { HelpTip } from '../components/HelpTip';
 import { useToasts } from '../components/Toast';
 import TruncationBanner from '../components/TruncationBanner';
 import { effectiveHiddenComponents, hiddenAncestors } from '../lib/graphFilters';
+import { rollupQuantities } from '../lib/quantityRollup';
 import { useRangeSelection } from '../hooks/useRangeSelection';
 import { useBulkActions } from '../hooks/useBulkActions';
 import { useUndoStore } from '../store/undo';
@@ -103,6 +104,10 @@ export default function ComponentsPage() {
     () => effectiveHiddenComponents(components, hiddenComponents),
     [components, hiddenComponents],
   );
+
+  // Effective (rolled-up) quantity per component, computed once for the list
+  // rather than per row. Own quantity × every ancestor's, up to the root.
+  const quantityRollup = useMemo(() => rollupQuantities(components), [components]);
 
   const filtering = !!(search || filterType);
   const filteredCount = filterMatchIds ? filterMatchIds.size : components.length;
@@ -334,6 +339,11 @@ export default function ComponentsPage() {
     if (filtering && !subtreeMatches(node)) return null;
     const isFocused = flatNodes[focusedIndex]?.id === node.id;
     const comp = components.find((c) => c.id === node.id);
+    const ownQty = node.quantity > 0 ? node.quantity : 1;
+    const effQty = quantityRollup.get(node.id) ?? ownQty;
+    const qtyLabel = [ownQty > 1 ? `×${ownQty}` : '', effQty !== ownQty ? `(${effQty}×)` : '']
+      .filter(Boolean)
+      .join(' ');
     return (
       <div key={node.id}>
         <DropRow id={node.id} disabled={!editable} isOver={overId === node.id} valid={dropIsValid}>
@@ -380,42 +390,65 @@ export default function ComponentsPage() {
           )}
           <TypeIcon size={14} className={`${typeMeta.cls} shrink-0`} />
           <span className="font-mono text-xs text-muted-foreground shrink-0">{node.id}</span>
-          <span className="text-sm text-card-foreground truncate">{node.name || 'Untitled'}</span>
-          {node.quantity > 1 && <span className="text-xs text-muted-foreground shrink-0">×{node.quantity}</span>}
+          <span className="text-sm text-card-foreground truncate flex-1 min-w-0">{node.name || 'Untitled'}</span>
+          {qtyLabel && (
+            <span
+              className="text-xs text-muted-foreground shrink-0"
+              title={effQty !== ownQty ? `${effQty}× in the build (${ownQty}× in this row)` : undefined}
+            >
+              {qtyLabel}
+            </span>
+          )}
           {node.satisfies.length > 0 && (
-            <span className="ml-auto text-[10px] text-muted-foreground shrink-0">
+            <span className="text-[10px] text-muted-foreground shrink-0">
               satisfies {node.satisfies.length}
             </span>
           )}
-          {/* An inherited-hidden node used to render this button disabled, which
-              left no way back: nothing is set on the node itself, so its own
-              toggle is a no-op, and the only control that would reveal it was
-              on an ancestor the user had to go and find. Clicking now clears
-              whichever ancestors are doing the hiding. */}
-          {editable && comp && (
+          {/* The trailing controls sit in a shrink-0 cluster so they hold a
+              stable column however many optional badges a row carries. Hover-
+              revealed buttons use opacity (not `hidden`), so they keep their
+              space and the column does not shift on hover. */}
+          <div className="flex items-center shrink-0">
+            {editable && comp && (
+              <button
+                onClick={(e) => { e.stopPropagation(); handleDuplicate(comp); }}
+                className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                title="Duplicate component"
+              >
+                <Copy size={13} />
+              </button>
+            )}
+            {editable && (
+              <button
+                onClick={(e) => { e.stopPropagation(); setDraft({ ...EMPTY_DRAFT, parent: node.id }); setShowCreate(true); }}
+                className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                aria-label={`Add child component to ${node.id}`}
+                title="Add child component"
+              >
+                <Plus size={13} />
+              </button>
+            )}
+            {/* An inherited-hidden node used to render this button disabled, which
+                left no way back: nothing is set on the node itself, so its own
+                toggle is a no-op, and the only control that would reveal it was
+                on an ancestor the user had to go and find. Clicking now clears
+                whichever ancestors are doing the hiding. */}
             <button
-              onClick={(e) => { e.stopPropagation(); handleDuplicate(comp); }}
-              className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-              title="Duplicate component"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (inherited) revealComponent(node.id);
+                else toggleHiddenComponent(node.id);
+              }}
+              className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0"
+              title={
+                inherited
+                  ? `Hidden by ${hiddenAncestors(components, hiddenComponents, node.id).join(', ')} — click to show`
+                  : effectiveHidden.has(node.id) ? 'Hidden in graph' : 'Shown in graph'
+              }
             >
-              <Copy size={13} />
+              {effectiveHidden.has(node.id) ? <EyeOff size={13} /> : <Eye size={13} />}
             </button>
-          )}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              if (inherited) revealComponent(node.id);
-              else toggleHiddenComponent(node.id);
-            }}
-            className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0"
-            title={
-              inherited
-                ? `Hidden by ${hiddenAncestors(components, hiddenComponents, node.id).join(', ')} — click to show`
-                : effectiveHidden.has(node.id) ? 'Hidden in graph' : 'Shown in graph'
-            }
-          >
-            {effectiveHidden.has(node.id) ? <EyeOff size={13} /> : <Eye size={13} />}
-          </button>
+          </div>
         </div>
         </DropRow>
         {hasKids && !isCollapsed && node.children.map((child) => renderNode(child, depth + 1))}

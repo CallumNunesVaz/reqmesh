@@ -597,10 +597,13 @@ export default function RequirementsPage() {
 
                 <span className="font-mono text-[11px] text-muted-foreground shrink-0 w-auto @md:w-[4.8rem]">{req.id}</span>
 
-                {/* min-w-0 (not shrink-0): on a narrow pane the name compresses
-                    and truncates instead of pushing the row past the edge. */}
+                {/* flex-1 + min-w-0 (not shrink-0): the name takes the free
+                    space, so the trailing controls keep a fixed column however
+                    wide the name or the optional badges are — and on a narrow
+                    pane the name compresses and truncates instead of pushing
+                    the row past the edge. */}
                 <span
-                  className={`text-[13px] truncate min-w-0 max-w-[55%] ${childCount > 0 ? 'font-semibold' : 'font-medium'} text-foreground`}
+                  className={`text-[13px] truncate min-w-0 flex-1 ${childCount > 0 ? 'font-semibold' : 'font-medium'} text-foreground`}
                   title={req.name || 'Untitled'}
                 >
                   {req.name || 'Untitled'}
@@ -613,7 +616,6 @@ export default function RequirementsPage() {
                     {stripHtml(req.description)}
                   </span>
                 )}
-                <span className="flex-1" />
 
                 {/* Meta */}
                 <span className="flex items-center gap-2 shrink-0">
