@@ -721,138 +721,142 @@ export default function RequirementDetailPage() {
           )}
         </div>
       )}
-      <div className="flex flex-wrap items-center gap-3 mb-6">
-        <button onClick={async () => { if (await confirmLeave()) navigate(`/project/${projectId}/requirements`); }} className="btn-secondary p-2">
-          <ArrowLeft size={16} />
-        </button>
-        <div className="flex-1 min-w-0">
-          {ancestors.length > 0 && (
-            <nav className="flex items-center gap-1 text-[11px] text-muted-foreground mb-0.5 flex-wrap">
-              {ancestors.map((a) => (
-                <span key={a.id} className="inline-flex items-center gap-1">
-                  <EntityLink kind="requirement" id={a.id} showIcon={false} className="hover:text-primary" />
-                  <ChevronRight size={10} className="shrink-0" />
-                </span>
-              ))}
-              <span className="font-mono text-foreground/70">{req.id}</span>
-            </nav>
-          )}
-          <div className="flex items-center gap-1.5">
-            <h1 className="text-xl font-bold tracking-tight font-mono text-foreground">{req.id}</h1>
-            <CopyLinkButton kind="requirement" id={req.id} />
+      <div data-testid="requirement-header" className="mb-6">
+        <div data-testid="requirement-header-identity" className="flex items-center gap-3 mb-3">
+          <button onClick={async () => { if (await confirmLeave()) navigate(`/project/${projectId}/requirements`); }} className="btn-secondary p-2">
+            <ArrowLeft size={16} />
+          </button>
+          <div className="flex-1 min-w-0">
+            {ancestors.length > 0 && (
+              <nav className="flex items-center gap-1 text-[11px] text-muted-foreground mb-0.5 flex-wrap">
+                {ancestors.map((a) => (
+                  <span key={a.id} className="inline-flex items-center gap-1">
+                    <EntityLink kind="requirement" id={a.id} showIcon={false} className="hover:text-primary" />
+                    <ChevronRight size={10} className="shrink-0" />
+                  </span>
+                ))}
+                <span className="font-mono text-foreground/70">{req.id}</span>
+              </nav>
+            )}
+            <div className="flex items-center gap-1.5">
+              <h1 className="text-xl font-bold tracking-tight font-mono text-foreground">{req.id}</h1>
+              <CopyLinkButton kind="requirement" id={req.id} />
+            </div>
+            {unreviewedIds.has(req.id) && (
+              <span className="badge bg-amber-500/10 text-amber-400 text-[10px] px-2 py-0.5">Needs re-review</span>
+            )}
           </div>
-          {unreviewedIds.has(req.id) && (
-            <span className="badge bg-amber-500/10 text-amber-400 text-[10px] px-2 py-0.5">Needs re-review</span>
+        </div>
+        <div data-testid="requirement-header-toolbar" className="flex flex-wrap items-center gap-3 justify-end">
+          <button onClick={showInGraph} className="btn-secondary text-xs" title="Select this requirement in the graph pane">
+            <Waypoints size={14} /> Show in graph
+          </button>
+          <button
+            onClick={traceDerivation}
+            className="btn-secondary text-xs"
+            title="Highlight everything that derives from this requirement — all incoming links, and their incoming links, expanding any collapsed groups on the way"
+          >
+            <GitFork size={14} /> Show derivation
+          </button>
+          {editable && unreviewedIds.has(req.id) && (
+            <button
+              onClick={async () => {
+                const ok = await showConfirm(
+                  'Record this requirement as reviewed? Its current content will be snapshotted — if any tracked fields change later, a "Needs re-review" warning will appear.',
+                  'Mark Reviewed',
+                );
+                if (!ok) return;
+                setReviewing(true);
+                setSaveError('');
+                setSaveSuccess(false);
+                try {
+                  await api.reviewRequirement(projectId!, reqId!);
+                  const updated = await api.getRequirement(projectId!, reqId!);
+                  setReq(updated);
+                  savedRef.current = updated;
+                  setUnreviewedIds((prev) => { const next = new Set(prev); next.delete(reqId!); return next; });
+                  setSaveSuccess(true);
+                  setTimeout(() => setSaveSuccess(false), 2000);
+                } catch (err: any) {
+                  setSaveError(err.message || 'Review failed');
+                } finally {
+                  setReviewing(false);
+                }
+              }}
+              className="btn-secondary text-xs"
+              disabled={reviewing}
+            >
+              {reviewing ? (
+                <><Loader size={14} className="animate-spin" /> Reviewing…</>
+              ) : (
+                <><ShieldCheck size={14} /> Mark Reviewed</>
+              )}
+            </button>
+          )}
+          {dirty && (
+            <>
+              <button
+                onClick={commitSave}
+                className="btn-primary text-xs p-2"
+                disabled={saving}
+                title="Save changes"
+              >
+                {saving ? <Loader size={14} className="animate-spin" /> : <Save size={14} />}
+              </button>
+              <button
+                onClick={discardChanges}
+                className="btn-secondary text-xs p-2"
+                title="Discard changes"
+              >
+                <Undo2 size={14} />
+              </button>
+            </>
+          )}
+          {editable && !req?.cascade_from && cascadeTargets.length > 0 && (
+            <button
+              onClick={doCascade}
+              disabled={cascadeBusy}
+              className="btn-secondary text-xs p-2 disabled:opacity-50"
+              title={`Cascade a copy into ${cascadeTargets.length} child group(s)`}
+            >
+              <GitFork size={14} />
+            </button>
+          )}
+          {editable && (
+            <button onClick={() => setCreateIntent({ mode: 'child', parent: reqId! })} className="btn-secondary text-xs p-2" title="Add child requirement">
+              <Plus size={14} />
+            </button>
+          )}
+          {editable && (
+            <button onClick={() => { if (req) setCreateIntent({ mode: 'duplicate', source: req }); }} className="btn-secondary text-xs p-2" title="Duplicate requirement">
+              <Copy size={14} />
+            </button>
+          )}
+          {editable && req && splitDescription(req.description).length > 0 && (
+            <button onClick={() => setSplitOpen(true)} className="btn-secondary text-xs p-2" title="Split into child requirements">
+              <Split size={14} />
+            </button>
+          )}
+          {editable && (
+            <button onClick={() => setRenaming(true)} className="btn-secondary text-xs p-2" title="Rename (change the id)">
+              <Tag size={14} />
+            </button>
+          )}
+          {editable && (
+            <button onClick={handleDelete} className="btn-danger" title="Delete">
+              <Trash2 size={14} />
+            </button>
+          )}
+          {canPropose && (
+            <button
+              onClick={openRequestChange}
+              className="btn-secondary text-xs"
+              title="Request a change to this requirement"
+            >
+              <GitPullRequest size={14} /> Request a Change
+            </button>
           )}
         </div>
-        <button onClick={showInGraph} className="btn-secondary text-xs" title="Select this requirement in the graph pane">
-          <Waypoints size={14} /> Show in graph
-        </button>
-        <button
-          onClick={traceDerivation}
-          className="btn-secondary text-xs"
-          title="Highlight everything that derives from this requirement — all incoming links, and their incoming links, expanding any collapsed groups on the way"
-        >
-          <GitFork size={14} /> Show derivation
-        </button>
-        {editable && unreviewedIds.has(req.id) && (
-          <button
-            onClick={async () => {
-              const ok = await showConfirm(
-                'Record this requirement as reviewed? Its current content will be snapshotted — if any tracked fields change later, a "Needs re-review" warning will appear.',
-                'Mark Reviewed',
-              );
-              if (!ok) return;
-              setReviewing(true);
-              setSaveError('');
-              setSaveSuccess(false);
-              try {
-                await api.reviewRequirement(projectId!, reqId!);
-                const updated = await api.getRequirement(projectId!, reqId!);
-                setReq(updated);
-                savedRef.current = updated;
-                setUnreviewedIds((prev) => { const next = new Set(prev); next.delete(reqId!); return next; });
-                setSaveSuccess(true);
-                setTimeout(() => setSaveSuccess(false), 2000);
-              } catch (err: any) {
-                setSaveError(err.message || 'Review failed');
-              } finally {
-                setReviewing(false);
-              }
-            }}
-            className="btn-secondary text-xs mr-2"
-            disabled={reviewing}
-          >
-            {reviewing ? (
-              <><Loader size={14} className="animate-spin" /> Reviewing…</>
-            ) : (
-              <><ShieldCheck size={14} /> Mark Reviewed</>
-            )}
-          </button>
-        )}
-        {dirty && (
-          <>
-            <button
-              onClick={commitSave}
-              className="btn-primary text-xs p-2"
-              disabled={saving}
-              title="Save changes"
-            >
-              {saving ? <Loader size={14} className="animate-spin" /> : <Save size={14} />}
-            </button>
-            <button
-              onClick={discardChanges}
-              className="btn-secondary text-xs p-2"
-              title="Discard changes"
-            >
-              <Undo2 size={14} />
-            </button>
-          </>
-        )}
-        {editable && !req?.cascade_from && cascadeTargets.length > 0 && (
-          <button
-            onClick={doCascade}
-            disabled={cascadeBusy}
-            className="btn-secondary text-xs p-2 disabled:opacity-50"
-            title={`Cascade a copy into ${cascadeTargets.length} child group(s)`}
-          >
-            <GitFork size={14} />
-          </button>
-        )}
-        {editable && (
-          <button onClick={() => setCreateIntent({ mode: 'child', parent: reqId! })} className="btn-secondary text-xs p-2" title="Add child requirement">
-            <Plus size={14} />
-          </button>
-        )}
-        {editable && (
-          <button onClick={() => { if (req) setCreateIntent({ mode: 'duplicate', source: req }); }} className="btn-secondary text-xs p-2" title="Duplicate requirement">
-            <Copy size={14} />
-          </button>
-        )}
-        {editable && req && splitDescription(req.description).length > 0 && (
-          <button onClick={() => setSplitOpen(true)} className="btn-secondary text-xs p-2" title="Split into child requirements">
-            <Split size={14} />
-          </button>
-        )}
-        {editable && (
-        <button onClick={() => setRenaming(true)} className="btn-secondary text-xs p-2" title="Rename (change the id)">
-          <Tag size={14} />
-        </button>
-        )}
-        {editable && (
-        <button onClick={handleDelete} className="btn-danger" title="Delete">
-          <Trash2 size={14} />
-        </button>
-        )}
-        {canPropose && (
-        <button
-          onClick={openRequestChange}
-          className="btn-secondary text-xs"
-          title="Request a change to this requirement"
-        >
-          <GitPullRequest size={14} /> Request a Change
-        </button>
-        )}
       </div>
       {showRequestChange && (
         <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
