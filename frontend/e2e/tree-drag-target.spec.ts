@@ -26,12 +26,40 @@ async function openTree(app: Page, server: { baseURL: string }, kind: TreeKind) 
 
 /** Ids in the same order the tree renders them (the id span is the only
  *  `span.font-mono` in a row). */
-async function domIds(app: Page): Promise<string[]> {
+async function sampleIds(app: Page): Promise<string[]> {
   return app.evaluate(() =>
     Array.from(document.querySelectorAll('main [role="treeitem"]')).map(
       (row) => row.querySelector('span.font-mono')?.textContent?.trim() ?? '',
     ),
   );
+}
+
+/**
+ * The rendered ids, once the tree has actually finished rendering them.
+ *
+ * The tree fetches its data after the page settles, so reading the DOM straight
+ * after `openTree` returns an empty or partial list — which is how this spec
+ * passed locally and failed on CI, where the runner is slow enough for the gap
+ * to matter. `pickPair` then found nothing to drag and the top-level test's
+ * `findIndex` returned -1.
+ *
+ * Polling for a *stable* count rather than a fixed one, because the two trees
+ * have different sizes and a hardcoded expectation would rot the moment the
+ * demo project changes. Two consecutive equal samples above one row means the
+ * render has settled; a fixed `waitForTimeout` would be the same bet this
+ * suite has already lost several times.
+ */
+async function domIds(app: Page): Promise<string[]> {
+  let previous = -1;
+  await expect
+    .poll(async () => {
+      const count = (await sampleIds(app)).length;
+      const settled = count > 1 && count === previous;
+      previous = count;
+      return settled;
+    }, { timeout: 20_000, intervals: [200] })
+    .toBe(true);
+  return sampleIds(app);
 }
 
 /** Read the current parent of every node, keyed by id. */
@@ -58,7 +86,11 @@ function pickPair(
   parent: Map<string, string | null>,
   limit = 8,
 ): { sourceIdx: number; targetIdx: number } {
-  const isLeaf = (id: string) => !ids.some((other) => parent.get(other) === id);
+  // Leafness is judged against the whole project, not the rendered rows: a node
+  // whose children happen to sit outside `limit` is still a parent, and picking
+  // it as a drag source would move a subtree when the test means to move a node.
+  const isLeaf = (id: string) =>
+    ![...parent.values()].some((p) => p === id);
   for (let s = 1; s < Math.min(limit, ids.length); s++) {
     const src = ids[s];
     if (!isLeaf(src)) continue;
