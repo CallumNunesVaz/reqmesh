@@ -13,6 +13,7 @@ import { useStore } from '../store';
 import { useKeyboardShortcuts } from '../components/useKeyboardShortcuts';
 import LoadingSplash from '../components/LoadingSplash';
 import { LinkEditor } from '../components/LinkEditor';
+import { HelpTip } from '../components/HelpTip';
 import RichTextEditor from '../components/RichTextEditor';
 import { HistoryPanel } from '../components/HistoryPanel';
 import { CommentThread } from '../components/CommentThread';
@@ -182,6 +183,14 @@ export default function ComponentDetailPage() {
   const ownBranch = component ? branchIds(allComponents, component.id) : new Set<string>();
   const parentOptions = allComponents.filter((c) => !ownBranch.has(c.id));
 
+  // A stored parent that names no component — a requirement id, or a component
+  // since deleted. The select would otherwise render *blank*: assigning a value
+  // no <option> carries sets selectedIndex to -1, which looks identical to an
+  // unset field while the YAML holds something else entirely. Worse, the next
+  // full-form save fails with "Parent component not found: <id>" against a box
+  // that appears empty. Surfacing the value is what makes that reportable.
+  const parentIsUnresolved = !!form.parent && !allComponents.some((c) => c.id === form.parent);
+
   // Ancestor chain for breadcrumb
   const ancestors = useMemo(() => {
     if (!component) return [];
@@ -329,12 +338,36 @@ export default function ComponentDetailPage() {
                 </label>
               </div>
               <div>
-                <label className="label">Parent
-                  <select className="input" value={form.parent} onChange={(e) => { setForm({ ...form, parent: e.target.value }); save({ parent: e.target.value || null }); }} disabled={!editable}>
+                <label className="label">Parent component
+                  <select
+                    className={`input ${parentIsUnresolved ? 'border-destructive text-destructive' : ''}`}
+                    value={form.parent}
+                    onChange={(e) => { setForm({ ...form, parent: e.target.value }); save({ parent: e.target.value || null }); }}
+                    disabled={!editable}
+                  >
                     <option value="">(top level)</option>
-                    {parentOptions.map((c) => <option key={c.id} value={c.id}>{c.id} — {c.name}</option>)}
+                    {/* Shown only when the stored value resolves to nothing, so
+                        the field states what it holds instead of going blank.
+                        Disabled: it is not a choice, it is a report. */}
+                    {parentIsUnresolved && (
+                      <option value={form.parent} disabled>{form.parent} — not a component</option>
+                    )}
+                    {parentOptions.map((c) => (
+                      // The type is part of the label because component names
+                      // routinely match requirement group names — the seeded
+                      // project has a component and a requirement both called
+                      // "Wing Assembly" — and a bare name in this dropdown
+                      // reads as a requirement group.
+                      <option key={c.id} value={c.id}>{c.id} — {c.name} ({c.type})</option>
+                    ))}
                   </select>
                 </label>
+                <HelpTip>A component's parent is always another component — this is design structure, not traceability. The link to requirements is “Satisfies requirements” above.</HelpTip>
+                {parentIsUnresolved && (
+                  <p className="text-xs text-destructive mt-1">
+                    Stored parent <span className="font-mono">{form.parent}</span> is not a component. Pick a real parent, or (top level).
+                  </p>
+                )}
               </div>
               <div>
                 <label className="label">Quantity

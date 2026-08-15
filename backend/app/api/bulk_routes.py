@@ -18,6 +18,7 @@ from app.services.errors import error_envelope
 from app.services.history import record_change
 from app.services.baseline_membership import apply_membership, defined_baseline_names
 from app.services.reparent import apply_reparent, plan_reparent, validate_component_parent
+from app.services.link_validation import first_missing
 from app.services.delete_guard import check_deletable
 from app.services.meta_defs import normalize_system_states, serialize_meta_defs
 
@@ -163,9 +164,47 @@ def bulk_update_components(project_id: str, data: BulkRequest, user: dict = Depe
         ) from exc
     if not ids or not updates:
         raise HTTPException(status_code=400, detail="ids and updates required")
+
+    # `ComponentUpdate` validates the *shape* and nothing else: `parent` is a
+    # bare `Optional[str]`, so before this check any string at all was accepted
+    # and written — including a requirement id, which is how a component ended
+    # up parented to something that is not a component. Every other write path
+    # already refused that (the single POST and PUT via
+    # `component_routes._validate_parent`, and bulk-reparent below); this
+    # handler was the one hole, and the same rule is reused rather than a
+    # second one written. One scan shared across every id, as bulk-reparent
+    # does. Validated for *all* ids before anything is written, so a batch with
+    # one bad member does not land half of itself.
+    if "parent" in updates:
+        components = store.list_components()
+        for comp_id in ids:
+            reason = validate_component_parent(components, comp_id, updates["parent"])
+            if reason:
+                raise HTTPException(status_code=400, detail=reason)
+
+    # Same omission, same consequence: a link to something that does not exist
+    # is a silent hole in traceability, and the single-component routes have
+    # always refused one.
+    reason = first_missing(
+        store,
+        [("requirements", updates.get("satisfies")),
+         ("verification_cases", updates.get("verification_cases"))],
+    )
+    if reason:
+        raise HTTPException(status_code=400, detail=reason)
+
     updated = 0
     for comp_id in ids:
-        if store.update_component(comp_id, updates):
+        before = store.get_component(comp_id)
+        if before is None:
+            continue
+        result = store.update_component(comp_id, updates)
+        if result:
+            # Bulk component edits recorded no history at all, while the
+            # requirements handler directly above has always recorded it. That
+            # asymmetry meant the audit trail silently depended on which button
+            # the user reached the edit through.
+            record_change(store, comp_id, "update", before, result, user.get("username", ""))
             updated += 1
     return {"updated": updated}
 

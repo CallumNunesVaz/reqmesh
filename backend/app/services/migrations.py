@@ -20,7 +20,7 @@ from typing import Callable
 
 logger = logging.getLogger(__name__)
 
-CURRENT_SCHEMA_VERSION = 2
+CURRENT_SCHEMA_VERSION = 3
 _MARKER = ".reqmesh-schema.json"
 
 
@@ -64,10 +64,73 @@ def _migrate_1_to_2(data_root: Path) -> None:
         logger.info("Migrated %d comment(s) to entity_kind/entity_id", migrated)
 
 
+def _migrate_2_to_3(data_root: Path) -> None:
+    """A component's parent must be another component.
+
+    Components form their own hierarchy and reach requirements through
+    ``satisfies``; a parent that names anything but a component is not a
+    relationship the model has (see README, "Components"). Every write path
+    refused such a value except ``POST /components/bulk``, which validated only
+    the shape — so a requirement id could be written there and then sat on disk
+    unnoticed, because ``build_flat_tree`` buckets an unresolvable parent under
+    ``None`` and the component simply renders as a root.
+
+    Repairs by clearing the parent, which makes the component top level — the
+    same thing the tree was already displaying, now actually true on disk.
+
+    The discarded value is logged per component, because clearing it destroys
+    the only evidence of what was there. If a repair turns out to be wrong, the
+    log is the only route back.
+
+    Idempotent: a component whose parent resolves (or is already empty) is left
+    alone, so a re-run — or a project a newer version already touched — is a
+    no-op. One unreadable component must not abort the migration and take
+    startup with it, so failures are logged per file and the rest continue.
+    """
+    from app.services.yaml_store import YamlStore
+
+    repaired = 0
+    for project in sorted(p for p in Path(data_root).iterdir() if p.is_dir()):
+        if not (project / "_meta.yaml").exists():
+            continue
+        components = project / "components"
+        if not components.exists():
+            continue
+        store = YamlStore(project)
+
+        # The id set is built from the filenames rather than by parsing every
+        # file, so one unparseable component cannot make every *other*
+        # component's parent look dangling and trigger a project-wide wipe of
+        # correct data.
+        known = {f.stem for f in components.glob("*.yaml")}
+
+        for f in sorted(components.glob("*.yaml")):
+            try:
+                item = store._parse_yaml(f)
+                if not item:
+                    continue
+                parent = item.get("parent")
+                if not parent or parent in known:
+                    continue
+                logger.warning(
+                    "Repairing component %s in project %s: parent %r is not a "
+                    "component; clearing it to top level",
+                    item.get("id", f.stem), project.name, parent,
+                )
+                item["parent"] = None
+                store._write_yaml(f, item)
+                repaired += 1
+            except Exception as exc:
+                logger.warning("Skipping component %s during migration to 3: %s", f, exc)
+    if repaired:
+        logger.info("Repaired %d component(s) with a non-component parent", repaired)
+
+
 # ── Migration registry ───────────────────────────────────────────────────────
 # MIGRATIONS[n] upgrades data from schema (n-1) to schema n.
 MIGRATIONS: dict[int, Callable[[Path], None]] = {
     2: _migrate_1_to_2,
+    3: _migrate_2_to_3,
 }
 
 

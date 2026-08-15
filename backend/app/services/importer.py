@@ -155,10 +155,30 @@ def import_into_store(store, parsed: dict, mode: str = "merge") -> dict:
         summary["verification_cases"] += 1
 
     # Components (SysML part defs) — carry the design tree that rollups sum over.
+    #
+    # A component's parent must be another component. The file is not trusted to
+    # honour that, and `parent` used to be written through verbatim, so an
+    # import could seed a component parented to a requirement id — a shape the
+    # API refuses everywhere else. Resolve against the components this import
+    # can actually see: the ones already in the store, plus the ones arriving
+    # alongside (a file listing a child before its parent is ordinary, so the
+    # incoming set has to count).
+    #
+    # An unresolvable parent is dropped to top level and reported rather than
+    # failing the import. Refusing the whole file over one bad pointer leaves
+    # the user with nothing imported and no way to see what was wrong; landing
+    # it with the repair named is recoverable.
+    incoming_ids = {c["id"] for c in normalised_comps if c is not None}
     for comp in normalised_comps:
         if comp is None:
             summary["skipped"] += 1
             continue
+        parent = comp.get("parent")
+        if parent and parent not in incoming_ids and not store.get_component(parent):
+            summary.setdefault("repaired_parents", []).append(
+                {"component": comp["id"], "dropped_parent": parent}
+            )
+            comp["parent"] = None
         if store.get_component(comp["id"]):
             store.update_component(comp["id"], comp)
         else:

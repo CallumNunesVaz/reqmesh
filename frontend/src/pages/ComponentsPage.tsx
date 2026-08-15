@@ -524,9 +524,13 @@ export default function ComponentsPage() {
                 </select></label>
               </div>
               <div className="w-44">
-                <label className="label">Parent <select className="input" value={draft.parent} onChange={(e) => setDraft({ ...draft, parent: e.target.value })}>
+                <label className="label">Parent component <select className="input" value={draft.parent} onChange={(e) => setDraft({ ...draft, parent: e.target.value })}>
                   <option value="">(top level)</option>
-                  {components.map((c) => <option key={c.id} value={c.id}>{c.id} — {c.name}</option>)}
+                  {/* Type in the label: component names routinely match
+                      requirement group names — the seeded project has a
+                      component and a requirement both called "Wing Assembly" —
+                      so a bare name here reads as a requirement group. */}
+                  {components.map((c) => <option key={c.id} value={c.id}>{c.id} — {c.name} ({c.type})</option>)}
                 </select></label>
               </div>
               <button type="submit" className="btn-primary">Create</button>
