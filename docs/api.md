@@ -232,6 +232,10 @@ operation; a path served by several methods therefore appears several times.
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | POST | `/api/projects/{project_id}/git/init` | Git Init |
+| GET | `/api/projects/{project_id}/git/key` | Git Get Key |
+| POST | `/api/projects/{project_id}/git/key` | Git Create Key |
+| DELETE | `/api/projects/{project_id}/git/key` | Git Delete Key |
+| POST | `/api/projects/{project_id}/git/key/rotate` | Git Rotate Key |
 | GET | `/api/projects/{project_id}/git/log` | Git Log |
 | POST | `/api/projects/{project_id}/git/push` | Git Push |
 | DELETE | `/api/projects/{project_id}/git/remote` | Git Delete Remote |

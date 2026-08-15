@@ -53,6 +53,15 @@ Before reporting, please understand reqmesh's documented threat model:
 4. **Malicious interchange file** — uploaded ReqIF, SysML, XLSX, CSV
 5. **Compromised dependency** — supply-chain attack on a transitive package
 
+A project's git SSH deploy key is stored **unencrypted at rest** on disk
+(`<data root>/.ssh/<project>/id_ed25519`). This is forced, not chosen: pushes
+run unattended under `BatchMode=yes`, which admits no passphrase prompt, so a
+passphrased key could never be used for an automated push. An attacker who
+gains filesystem access to the data volume, or administrative access to the
+application, can therefore read the key and gain push access to the project's
+configured remote. Deploy keys should be scoped to a single repository and
+revoked at the host when a project is decommissioned.
+
 The project is GPL-3.0-or-later; source is openly available to attackers by
 design. Threats that require source access to identify are acknowledged but
 are assigned lower severity.

@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import shlex
 import subprocess
 import threading
 from pathlib import Path
@@ -162,7 +163,7 @@ def _git(project_root: Path, *args: str, remote_url: str = "") -> subprocess.Com
         capture_output=True,
         text=True,
         timeout=30,
-        env=_ssh_env(remote_url) if remote_url else None,
+        env=_ssh_env(remote_url, project_root) if remote_url else None,
     )
 
 
@@ -265,14 +266,33 @@ def is_allowed_remote(remote_url: str) -> bool:
     return str(remote_url).startswith(ALLOWED_REMOTE_SCHEMES)
 
 
-def _ssh_env(remote_url: str) -> dict:
+def _ssh_env(remote_url: str, project_root: Path | None = None) -> dict:
     """Environment for a git network call.
 
     SSH remotes get a non-interactive, bounded handshake: without this git can
     block forever on an unknown-host prompt with no tty to answer it.
+
+    When the project has a deploy key on disk, ``GIT_SSH_COMMAND`` offers *only*
+    that key (``IdentitiesOnly=yes``). Without that, ssh presents every identity
+    it can find before ours and a host like GitHub refuses the connection for
+    too many failed attempts before the right key is ever tried. With no key
+    the command is byte-identical to the pre-key behaviour, so a deployment that
+    relies on a mounted key or an agent keeps working untouched.
     """
     env = os.environ.copy()
     if str(remote_url).startswith(("git@", "ssh://")):
+        if project_root is not None:
+            from app.services.git_keys import private_key_path
+
+            key_path = private_key_path(project_root)
+            if key_path.exists():
+                # Quote the path: it contains a project id, which `safe_id`
+                # constrains but which must still not break the command string.
+                quoted = shlex.quote(str(key_path))
+                env["GIT_SSH_COMMAND"] = (
+                    f"ssh -i {quoted} -o IdentitiesOnly=yes "
+                    "-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o BatchMode=yes")
+                return env
         env["GIT_SSH_COMMAND"] = (
             "ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o BatchMode=yes")
     return env
@@ -299,7 +319,7 @@ def test_remote(project_root: Path, remote_url: str) -> dict:
         return {"ok": False, "error": REMOTE_SCHEME_ERROR}
     try:
         ident = _identity_for(project_root)
-        env = _ssh_env(remote_url)
+        env = _ssh_env(remote_url, project_root)
         result = subprocess.run(
             ["git", *ident, "ls-remote", "--heads", remote_url],
             cwd=str(project_root), capture_output=True, text=True, timeout=20,

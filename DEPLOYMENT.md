@@ -393,8 +393,18 @@ Open `http://localhost:8025` to see captured emails.
 
 reqmesh can push every change to an external Git repository for off-server
 backup and an audit trail. Configure the remote via Settings → Project or
-set `RT_GIT_REMOTE_URL` globally. For SSH remotes mount your key into the
-container.
+set `RT_GIT_REMOTE_URL` globally.
+
+For SSH remotes, generate a deploy key from the project's Git panel (admin
+only): the public half and its fingerprint are shown there for pasting into
+GitHub/GitLab as a deploy key with write access, and the private half is stored
+on the server under `<data root>/.ssh/<project>/id_ed25519`. Use **Rotate** to
+replace it (pushes fail until the new public key is re-registered at the host)
+and **Delete** to remove it.
+
+Mounting your own key into the container remains supported as an alternative:
+place it where the container's `ssh` agent or default identity can find it, and
+reqmesh will use it when no project deploy key exists.
 
 ### Offline Mode
 

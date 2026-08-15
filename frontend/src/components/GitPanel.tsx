@@ -3,11 +3,12 @@ import { motion } from 'framer-motion';
 import {
   GitBranch, Clock, User, RotateCw, AlertTriangle,
   CheckCircle, XCircle, Plug, Unplug, Trash2, Upload,
-  PlusCircle,
+  PlusCircle, KeyRound, Copy,
 } from 'lucide-react';
-import { api, type GitStatus } from '../api/client';
+import { api, type GitStatus, type GitKeyInfo } from '../api/client';
 import { useToasts } from './Toast';
 import { useConfirm } from './ConfirmDialog';
+import { copyText } from '../lib/clipboard';
 
 interface Props {
   projectId: string;
@@ -70,6 +71,14 @@ export default function GitPanel({ projectId, isAdmin, canEdit, remoteUrl, onRem
   const [togglingHook, setTogglingHook] = useState(false);
   const [restoring, setRestoring] = useState<string | null>(null);
 
+  // Deploy key (admin-only)
+  const [keyInfo, setKeyInfo] = useState<GitKeyInfo | null>(null);
+  const [loadingKey, setLoadingKey] = useState(true);
+  const [generating, setGenerating] = useState(false);
+  const [rotating, setRotating] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [copied, setCopied] = useState<'idle' | 'ok' | 'fail'>('idle');
+
   // Git log
   const [commits, setCommits] = useState<Array<{
     hash: string; author: string; date: string; message: string;
@@ -100,10 +109,24 @@ export default function GitPanel({ projectId, isAdmin, canEdit, remoteUrl, onRem
     }
   }, [projectId]);
 
+  const fetchKey = useCallback(async () => {
+    if (!isAdmin) { setLoadingKey(false); return; }
+    setLoadingKey(true);
+    try {
+      setKeyInfo(await api.gitGetKey(projectId));
+    } catch {
+      // 404 is the expected "no key" state; any other error also renders empty.
+      setKeyInfo(null);
+    } finally {
+      setLoadingKey(false);
+    }
+  }, [projectId, isAdmin]);
+
   useEffect(() => {
     fetchStatus();
     fetchHistory();
-  }, [fetchStatus, fetchHistory]);
+    fetchKey();
+  }, [fetchStatus, fetchHistory, fetchKey]);
 
   const afterAction = async () => {
     await fetchStatus();
@@ -207,6 +230,158 @@ export default function GitPanel({ projectId, isAdmin, canEdit, remoteUrl, onRem
     }
   };
 
+  const handleGenerateKey = async () => {
+    setGenerating(true);
+    try {
+      setKeyInfo(await api.gitCreateKey(projectId));
+      addToast('success', 'Deploy key generated');
+    } catch (err: any) {
+      addToast('error', err.message || 'Failed to generate key');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const handleRotateKey = async () => {
+    const ok = await showConfirm(
+      'Rotating the deploy key discards the current private key. ' +
+      'Pushes will fail until the new public key is registered at the remote host.',
+      'Rotate Deploy Key',
+    );
+    if (!ok) return;
+    setRotating(true);
+    try {
+      setKeyInfo(await api.gitRotateKey(projectId));
+      addToast('success', 'Deploy key rotated');
+    } catch (err: any) {
+      addToast('error', err.message || 'Failed to rotate key');
+    } finally {
+      setRotating(false);
+    }
+  };
+
+  const handleDeleteKey = async () => {
+    const ok = await showConfirm(
+      'Delete the deploy key? Pushes to SSH remotes will fail until a new key is generated and registered.',
+      'Delete Deploy Key',
+      { destructive: true },
+    );
+    if (!ok) return;
+    setDeleting(true);
+    try {
+      await api.gitDeleteKey(projectId);
+      setKeyInfo(null);
+      addToast('success', 'Deploy key deleted');
+    } catch (err: any) {
+      addToast('error', err.message || 'Failed to delete key');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleCopyKey = async () => {
+    if (!keyInfo) return;
+    const ok = await copyText(keyInfo.public_key);
+    setCopied(ok ? 'ok' : 'fail');
+    window.setTimeout(() => setCopied('idle'), 2000);
+  };
+
+  // ── Deploy key card (admin-only) ────────────────────────────────────────────
+
+  const deployKeyCard = !isAdmin ? null : (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+      className="card p-5 mb-6"
+    >
+      <div className="flex items-center gap-2 mb-3">
+        <KeyRound size={14} className="text-muted-foreground" />
+        <h2 className="font-semibold text-sm text-card-foreground">SSH Deploy Key</h2>
+      </div>
+
+      {loadingKey ? (
+        <div className="flex items-center gap-2 text-muted-foreground text-sm">
+          <RotateCw size={14} className="animate-spin" />
+          Loading deploy key…
+        </div>
+      ) : keyInfo ? (
+        <div>
+          <p className="text-xs text-muted-foreground mb-2">
+            This project's deploy key. Paste the public key into your git host
+            (GitHub / GitLab) as a deploy key with write access.
+          </p>
+
+          <div className="relative">
+            <code className="block w-full text-[11px] font-mono bg-primary/5 border border-border/60 rounded p-2 pr-16 break-all">
+              {keyInfo.public_key}
+            </code>
+            <button
+              onClick={handleCopyKey}
+              disabled={copied === 'ok'}
+              className="btn-secondary text-[10px] absolute right-1 top-1"
+              title="Copy public key"
+            >
+              {copied === 'ok' ? (
+                <><CheckCircle size={11} className="mr-1" /> Copied</>
+              ) : (
+                <><Copy size={11} className="mr-1" /> Copy</>
+              )}
+            </button>
+          </div>
+          {copied === 'fail' && (
+            <p className="text-[10px] text-amber-400 mt-1">
+              Copy blocked — select the key above and copy manually.
+            </p>
+          )}
+
+          <div className="flex flex-wrap gap-x-6 gap-y-1 mt-2 text-[11px] text-muted-foreground">
+            <span>Fingerprint: <code className="font-mono text-card-foreground">{keyInfo.fingerprint}</code></span>
+            <span>Created: {new Date(keyInfo.created).toLocaleString()}</span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 mt-3">
+            <button
+              onClick={handleRotateKey}
+              disabled={rotating}
+              className="btn-secondary text-[10px]"
+            >
+              {rotating ? (
+                <><RotateCw size={11} className="animate-spin mr-1" /> Rotating…</>
+              ) : (
+                <><RotateCw size={11} className="mr-1" /> Rotate</>
+              )}
+            </button>
+            <button
+              onClick={handleDeleteKey}
+              disabled={deleting}
+              className="btn-secondary text-[10px] text-red-400 hover:text-red-300"
+            >
+              {deleting ? 'Deleting…' : <><Trash2 size={11} className="mr-1" /> Delete</>}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div>
+          <p className="text-xs text-muted-foreground mb-3">
+            No deploy key. Generate one to authenticate pushes to an SSH remote —
+            the public half is shown here for pasting into GitHub or GitLab, and
+            the private half never leaves the server.
+          </p>
+          <button
+            onClick={handleGenerateKey}
+            disabled={generating}
+            className="btn-primary text-sm"
+          >
+            {generating ? (
+              <><RotateCw size={14} className="animate-spin mr-1" /> Generating…</>
+            ) : (
+              <><PlusCircle size={14} className="mr-1" /> Generate Key</>
+            )}
+          </button>
+        </div>
+      )}
+    </motion.div>
+  );
+
   // ── Loading / error states ─────────────────────────────────────────────────
 
   if (loading) {
@@ -235,40 +410,43 @@ export default function GitPanel({ projectId, isAdmin, canEdit, remoteUrl, onRem
 
   if (!status?.is_repo) {
     return (
-      <motion.div
-        initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-        className="card p-5 mb-6"
-      >
-        <div className="flex items-center gap-2 mb-3">
-          <GitBranch size={14} className="text-muted-foreground" />
-          <h2 className="font-semibold text-sm text-card-foreground">Version Control</h2>
-        </div>
+      <>
+        <motion.div
+          initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+          className="card p-5 mb-6"
+        >
+          <div className="flex items-center gap-2 mb-3">
+            <GitBranch size={14} className="text-muted-foreground" />
+            <h2 className="font-semibold text-sm text-card-foreground">Version Control</h2>
+          </div>
 
-        <div className="text-center py-6">
-          <GitBranch size={32} className="mx-auto text-muted-foreground/40 mb-3" />
-          <p className="text-sm text-muted-foreground mb-1">
-            Not a git repository
-          </p>
-          <p className="text-xs text-muted-foreground/60 mb-4 max-w-md mx-auto">
-            Initialise a git repository to version every change automatically.
-            Every write to the project creates a commit, so you can always go
-            back and see exactly who changed what and when.
-          </p>
-          {canEdit && (
-            <button
-              onClick={handleInit}
-              disabled={initialising}
-              className="btn-primary text-sm"
-            >
-              {initialising ? (
-                <><RotateCw size={14} className="animate-spin mr-1" /> Initialising…</>
-              ) : (
-                <><PlusCircle size={14} className="mr-1" /> Initialise Repository</>
-              )}
-            </button>
-          )}
-        </div>
-      </motion.div>
+          <div className="text-center py-6">
+            <GitBranch size={32} className="mx-auto text-muted-foreground/40 mb-3" />
+            <p className="text-sm text-muted-foreground mb-1">
+              Not a git repository
+            </p>
+            <p className="text-xs text-muted-foreground/60 mb-4 max-w-md mx-auto">
+              Initialise a git repository to version every change automatically.
+              Every write to the project creates a commit, so you can always go
+              back and see exactly who changed what and when.
+            </p>
+            {canEdit && (
+              <button
+                onClick={handleInit}
+                disabled={initialising}
+                className="btn-primary text-sm"
+              >
+                {initialising ? (
+                  <><RotateCw size={14} className="animate-spin mr-1" /> Initialising…</>
+                ) : (
+                  <><PlusCircle size={14} className="mr-1" /> Initialise Repository</>
+                )}
+              </button>
+            )}
+          </div>
+        </motion.div>
+        {deployKeyCard}
+      </>
     );
   }
 
@@ -292,6 +470,7 @@ export default function GitPanel({ projectId, isAdmin, canEdit, remoteUrl, onRem
   }
 
   return (
+    <>
     <motion.div
       initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
       className="card p-5 mb-6"
@@ -585,5 +764,7 @@ export default function GitPanel({ projectId, isAdmin, canEdit, remoteUrl, onRem
         )}
       </div>
     </motion.div>
+    {deployKeyCard}
+    </>
   );
 }

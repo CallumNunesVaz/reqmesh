@@ -12,7 +12,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query, Depends, File, Form, Request, UploadFile
+from fastapi import APIRouter, HTTPException, Query, Depends, File, Form, Request, Response, UploadFile
 from pydantic import BaseModel, ValidationError
 
 from app.core.config import settings
@@ -752,6 +752,90 @@ def git_delete_remote(project_id: str, user: dict = Depends(require_admin)):
     store = get_store(project_id)
     git_service.delete_remote(store.root)
     return {"ok": True}
+
+
+# ── Git deploy keys ───────────────────────────────────────────────────────────
+
+def _git_key_info(project_id: str) -> dict | None:
+    from app.services import git_keys
+
+    store = get_store(project_id)
+    return git_keys.get_info(store.root)
+
+
+@router.get("/projects/{project_id}/git/key")
+def git_get_key(project_id: str, user: dict = Depends(require_admin)):
+    """The project's deploy key's public half and fingerprint, or 404.
+
+    Admin-only, matching the other admin git routes. The private key is never
+    returned — under any role, ever — because the moment such an endpoint
+    exists it is one authorisation bug away from being reachable.
+    """
+    info = _git_key_info(project_id)
+    if info is None:
+        raise HTTPException(status_code=404, detail="No deploy key exists for this project")
+    return info
+
+
+@router.post("/projects/{project_id}/git/key", status_code=201)
+def git_create_key(project_id: str, user: dict = Depends(require_admin)):
+    """Generate an ed25519 deploy keypair for the project. 409 if one exists."""
+    from app.services import git_keys
+
+    store = get_store(project_id)
+    if git_keys.get_info(store.root) is not None:
+        raise HTTPException(status_code=409, detail="A deploy key already exists for this project")
+    try:
+        info = git_keys.generate(store.root)
+    except git_keys.SshKeygenNotFoundError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from None
+    record_change(store, "git-key", "create", None, info, user.get("username", ""))
+    return info
+
+
+@router.post("/projects/{project_id}/git/key/rotate")
+def git_rotate_key(project_id: str, user: dict = Depends(require_admin)):
+    """Replace the deploy key. The old private key is discarded.
+
+    Pushes will fail until the new public key is registered at the host — that
+    is the whole danger of this button, and the UI's confirmation text says so.
+    """
+    from app.services import git_keys
+
+    store = get_store(project_id)
+    try:
+        # Inside the try: `get_info` shells out to ssh-keygen for the
+        # fingerprint, so it fails for exactly the same reasons the rotation
+        # does and must be reported the same way rather than as a traceback.
+        before = git_keys.get_info(store.root)
+        info = git_keys.rotate(store.root)
+    except git_keys.SshKeygenNotFoundError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from None
+    except Exception as exc:
+        # `rotate` swaps the new key in only once it is complete, so a failure
+        # here means the existing key is still in place and pushes still work.
+        # Saying so is the difference between an operator who retries and one
+        # who assumes their backup path is broken and starts digging.
+        logger.exception("Deploy key rotation failed for %s", project_id)
+        raise HTTPException(
+            status_code=500,
+            detail=("Key rotation failed; the existing deploy key is unchanged "
+                    f"and still in use. Cause: {exc}"),
+        ) from None
+    record_change(store, "git-key", "rotate", before, info, user.get("username", ""))
+    return info
+
+
+@router.delete("/projects/{project_id}/git/key", status_code=204)
+def git_delete_key(project_id: str, user: dict = Depends(require_admin)):
+    """Remove the deploy key. 204 whether or not one existed."""
+    from app.services import git_keys
+
+    store = get_store(project_id)
+    before = git_keys.get_info(store.root)
+    git_keys.delete(store.root)
+    record_change(store, "git-key", "delete", before, None, user.get("username", ""))
+    return Response(status_code=204)
 
 
 # ── Validation ────────────────────────────────────────────────────────────────

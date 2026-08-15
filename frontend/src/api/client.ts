@@ -1046,6 +1046,17 @@ export interface GitStatus {
   hook_installed: boolean;
 }
 
+/** A project's git SSH deploy key, returned by GET/POST /git/key. */
+export interface GitKeyInfo {
+  /** Full "ssh-ed25519 AAAA... reqmesh:<id>" line — paste into GitHub/GitLab. */
+  public_key: string;
+  /** "SHA256:…" as `ssh-keygen -lf` reports it. */
+  fingerprint: string;
+  type: string;
+  /** ISO 8601, UTC. */
+  created: string;
+}
+
 /** Response from GET /projects/{id}/activity. */
 export interface ActivityData {
   buckets: ActivityBucket[];
@@ -1561,6 +1572,15 @@ export const api = {
 
   gitDeleteRemote: (projectId: string) =>
     request<{ ok: boolean }>(`/projects/${projectId}/git/remote`, { method: 'DELETE' }),
+
+  gitGetKey: (projectId: string) =>
+    request<GitKeyInfo>(`/projects/${projectId}/git/key`),
+  gitCreateKey: (projectId: string) =>
+    request<GitKeyInfo>(`/projects/${projectId}/git/key`, { method: 'POST' }),
+  gitRotateKey: (projectId: string) =>
+    request<GitKeyInfo>(`/projects/${projectId}/git/key/rotate`, { method: 'POST' }),
+  gitDeleteKey: (projectId: string) =>
+    request<void>(`/projects/${projectId}/git/key`, { method: 'DELETE' }),
 
   gitInstallHook: (projectId: string) =>
     request<{ installed: boolean; path: string }>(`/projects/${projectId}/hooks/install`, { method: 'POST' }),
