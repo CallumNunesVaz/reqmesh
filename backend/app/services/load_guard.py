@@ -37,8 +37,10 @@ from app.services.sanitize import sanitize_html
 _ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._ -]*$")
 
 # Fields stored as HTML and rendered as HTML. Everything else is escaped at the
-# point of use, so this is the whole of the stored-XSS surface.
-_HTML_FIELDS = ("description", "rationale")
+# point of use, so this is the whole of the stored-XSS surface. The risk FMECA
+# fields join `description` here because the UI edits them with the same rich
+# text editor that writes HTML.
+_HTML_FIELDS = ("description", "rationale", "failure_mode", "effect", "cause")
 
 
 def is_safe_id(value: object) -> bool:
@@ -108,6 +110,21 @@ def _validate_specification(item: dict) -> None:
         item["url"] = ""
 
 
+def _validate_risk(item: dict) -> None:
+    """Read-side FMECA fallback for risks predating the failure-mode split.
+
+    Migration 3 rewrites these on disk, but — like ``_validate_comment`` — it
+    cannot be relied on alone: a data root that predates the framework is
+    stamped at the current schema without anything running, and a risk file
+    that failed to migrate is left at the old shape on purpose. A risk written
+    before the split therefore arrives here with ``description`` and no
+    ``failure_mode``; reading the failure mode from the description keeps every
+    consumer seeing the same content the register always showed.
+    """
+    if not item.get("failure_mode") and item.get("description"):
+        item["failure_mode"] = item["description"]
+
+
 def _validate_comment(item: dict) -> None:
     """Coerce a pre-schema-2 comment to ``entity_kind``/``entity_id``.
 
@@ -130,4 +147,5 @@ _SPECIFIC = {
     "requirements": _validate_requirement,
     "specifications": _validate_specification,
     "comments": _validate_comment,
+    "risks": _validate_risk,
 }

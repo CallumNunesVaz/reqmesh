@@ -183,7 +183,8 @@ def search_project(store, query: str, kind: str | None = None, limit: int = 50) 
         for rk in store.list_items("risks"):
             score, name, snippet = _score_text(
                 rk.get("id", ""), rk.get("title", ""),
-                rk.get("description", ""),
+                rk.get("failure_mode", ""),
+                f"{rk.get('effect', '')} {rk.get('cause', '')} "
                 f"{rk.get('impact', '')} {rk.get('mitigation', '')}",
             )
             if score > 0:

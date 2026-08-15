@@ -166,7 +166,9 @@ export interface RequirementCreate {
 }
 
 export interface RiskCreate {
-  description?: string;
+  cause?: string;
+  effect?: string;
+  failure_mode?: string;
   id: string;
   likelihood?: string;
   severity?: string;
@@ -277,8 +279,10 @@ export interface RequirementUpdate {
 }
 
 export interface RiskUpdate {
-  description?: string | null;
+  cause?: string | null;
   detection?: string | null;
+  effect?: string | null;
+  failure_mode?: string | null;
   impact?: string | null;
   likelihood?: string | null;
   linked_components?: string[] | null;

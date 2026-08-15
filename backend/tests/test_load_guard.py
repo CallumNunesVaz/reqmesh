@@ -156,9 +156,24 @@ relations:
 def test_validate_on_load_is_a_noop_for_unknown_collections():
     """Collections with no specific validator still get the id and HTML checks
     rather than being passed through unguarded."""
-    item = validate_on_load("risks", {"id": "RSK-1", "description": "<script>x</script>ok"})
+    item = validate_on_load("baselines", {"id": "BL-1", "description": "<script>x</script>ok"})
     assert item is not None and "<script>" not in item["description"]
-    assert validate_on_load("risks", {"id": "../../x"}) is None
+    assert validate_on_load("baselines", {"id": "../../x"}) is None
+
+
+def test_risk_without_failure_mode_reads_it_from_description():
+    """A risk written before the FMECA split shows its old description as its
+    failure mode rather than rendering as an empty field."""
+    item = validate_on_load("risks", {"id": "RSK-1", "description": "<p>Engine fails</p>"})
+    assert item["failure_mode"] == "<p>Engine fails</p>"
+    assert item["description"] == "<p>Engine fails</p>", "description is kept on disk"
+
+
+def test_risk_with_failure_mode_is_not_overwritten():
+    """The fallback must not clobber a real failure_mode."""
+    item = validate_on_load("risks", {"id": "RSK-1",
+                                      "description": "old", "failure_mode": "new"})
+    assert item["failure_mode"] == "new"
 
 
 # ── XLSX import bounds ───────────────────────────────────────────────────────

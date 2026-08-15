@@ -30,8 +30,10 @@ export default function RisksPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState('');
-  const [form, setForm] = useState({ id: '', title: '', description: '', severity: '', likelihood: '' });
-  const descriptionId = useId();
+  const [form, setForm] = useState({ id: '', title: '', failure_mode: '', effect: '', cause: '', severity: '', likelihood: '' });
+  const failureModeId = useId();
+  const effectId = useId();
+  const causeId = useId();
   const editable = useAuthStore((s) => s.canPropose());
   // Bulk operations are maintainer-tier (backend require_maintain), unlike
   // individual create/edit/delete which are propose-tier.
@@ -192,7 +194,7 @@ export default function RisksPage() {
       if (filterSeverity && r.severity !== filterSeverity) return false;
       if (filterLikelihood && (r.rating?.likelihood ?? r.probability) !== filterLikelihood) return false;
       if (q) {
-        const hay = `${r.id} ${r.title || ''} ${r.description || ''}`.toLowerCase();
+        const hay = `${r.id} ${r.title || ''} ${r.failure_mode || ''} ${r.effect || ''} ${r.cause || ''}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
@@ -204,7 +206,7 @@ export default function RisksPage() {
   const focusId = useFocusedEntity(risks.length > 0);
 
   const openCreate = () => {
-    setForm({ id: '', title: '', description: '', severity: '', likelihood: '' });
+    setForm({ id: '', title: '', failure_mode: '', effect: '', cause: '', severity: '', likelihood: '' });
     setEditingId(null);
     setShowCreate(true);
   };
@@ -213,7 +215,9 @@ export default function RisksPage() {
     setForm({
       id: r.id,
       title: r.title || '',
-      description: r.description || '',
+      failure_mode: r.failure_mode || '',
+      effect: r.effect || '',
+      cause: r.cause || '',
       severity: r.severity || '',
       likelihood: r.rating?.likelihood ?? r.likelihood ?? '',
     });
@@ -227,7 +231,7 @@ export default function RisksPage() {
     try {
       if (editingId) {
         await api.updateRisk(projectId, editingId, {
-          title: form.title, description: form.description,
+          title: form.title, failure_mode: form.failure_mode, effect: form.effect, cause: form.cause,
           severity: form.severity, likelihood: form.likelihood,
         });
         addToast('success', `Risk ${editingId} updated`);
@@ -235,7 +239,7 @@ export default function RisksPage() {
         await api.createRisk(projectId, form);
         addToast('success', `Risk ${form.id.trim()} created`);
       }
-      setShowCreate(false); setForm({ id: '', title: '', description: '', severity: '', likelihood: '' });
+      setShowCreate(false); setForm({ id: '', title: '', failure_mode: '', effect: '', cause: '', severity: '', likelihood: '' });
       setEditingId(null);
       load();
     } catch (err: any) { setError(err.message || 'Failed to create'); }
@@ -362,15 +366,37 @@ export default function RisksPage() {
               <button type="submit" className="btn-primary">{editingId ? 'Save' : 'Create'}</button>
               <button type="button" onClick={() => setShowCreate(false)} className="btn-secondary">Cancel</button>
             </div>
-            <div className="mt-3">
-              <label className="label" htmlFor={descriptionId}>Description</label>
-              <RichTextEditor
-                id={descriptionId}
-                content={form.description}
-                onChange={(html) => setForm({ ...form, description: html })}
-                onBlur={() => {}}
-                placeholder="Write a risk description…"
-              />
+            <div className="mt-3 space-y-3">
+              <div>
+                <label className="label" htmlFor={failureModeId}>Failure Mode</label>
+                <RichTextEditor
+                  id={failureModeId}
+                  content={form.failure_mode}
+                  onChange={(html) => setForm({ ...form, failure_mode: html })}
+                  onBlur={() => {}}
+                  placeholder="What goes wrong…"
+                />
+              </div>
+              <div>
+                <label className="label" htmlFor={effectId}>Effect</label>
+                <RichTextEditor
+                  id={effectId}
+                  content={form.effect}
+                  onChange={(html) => setForm({ ...form, effect: html })}
+                  onBlur={() => {}}
+                  placeholder="What the failure does to the system…"
+                />
+              </div>
+              <div>
+                <label className="label" htmlFor={causeId}>Cause</label>
+                <RichTextEditor
+                  id={causeId}
+                  content={form.cause}
+                  onChange={(html) => setForm({ ...form, cause: html })}
+                  onBlur={() => {}}
+                  placeholder="Why the failure happens…"
+                />
+              </div>
             </div>
           </motion.form>
         )}
@@ -504,9 +530,21 @@ export default function RisksPage() {
                     )}
                   </label>
                 </div>
-                {r.description && (
+                {r.failure_mode && (
                   <div className="text-xs text-muted-foreground mt-0.5">
-                    <AutoLinkHtml html={r.description} kinds={entityKinds} />
+                    <AutoLinkHtml html={r.failure_mode} kinds={entityKinds} />
+                  </div>
+                )}
+                {r.effect && (
+                  <div className="text-xs text-muted-foreground mt-1">
+                    <span className="font-semibold text-card-foreground">Effect:</span>{' '}
+                    <AutoLinkHtml html={r.effect} kinds={entityKinds} />
+                  </div>
+                )}
+                {r.cause && (
+                  <div className="text-xs text-muted-foreground mt-1">
+                    <span className="font-semibold text-card-foreground">Cause:</span>{' '}
+                    <AutoLinkHtml html={r.cause} kinds={entityKinds} />
                   </div>
                 )}
                 {(r.linked_requirements.length > 0 || (r.mitigating_requirements || []).length > 0

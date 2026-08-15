@@ -33,6 +33,15 @@ class RiskSeverity(str, Enum):
 class Risk(BaseModel):
     id: str
     title: str = ""
+    #: What goes wrong. Carries the pre-FMECA `description` after migration.
+    failure_mode: str = ""
+    #: What the failure does to the system.
+    effect: str = ""
+    #: Why the failure happens.
+    cause: str = ""
+    # Superseded by `failure_mode`. Kept so risks written before the FMECA
+    # split load unchanged; a risk read with an empty `failure_mode` falls back
+    # to this on read (services/load_guard.py).
     description: str = ""
     severity: str = "medium"
     likelihood: str = "possible"
@@ -76,14 +85,18 @@ class Risk(BaseModel):
 class RiskCreate(BaseModel):
     id: str
     title: str = ""
-    description: str = ""
+    failure_mode: str = ""
+    effect: str = ""
+    cause: str = ""
     severity: str = "medium"
     likelihood: str = "possible"
 
 
 class RiskUpdate(BaseModel):
     title: Optional[str] = None
-    description: Optional[str] = None
+    failure_mode: Optional[str] = None
+    effect: Optional[str] = None
+    cause: Optional[str] = None
     severity: Optional[str] = None
     likelihood: Optional[str] = None
     probability: Optional[str] = None

@@ -676,6 +676,13 @@ export interface RiskRating {
 export interface Risk {
   id: string;
   title: string;
+  /** What goes wrong. Carries the pre-FMECA `description` after migration. */
+  failure_mode: string;
+  /** What the failure does to the system. */
+  effect: string;
+  /** Why the failure happens. */
+  cause: string;
+  /** Superseded by `failure_mode`; retained so pre-FMECA risks still load. */
   description: string;
   severity: string;
   likelihood: string;

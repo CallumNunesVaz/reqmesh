@@ -7,6 +7,7 @@ from html import escape as esc
 
 from app.core.config import settings as global_settings
 from app.services.sanitize import sanitize_html
+from app.services.html_text import strip_html
 from app.services.verification_links import attach as attach_verification_cases
 from app.services.entity_kinds import resolve_entity_label
 from app.services.publishers.css import CSS
@@ -627,12 +628,27 @@ class Publisher:
     def _risk_table(self, risks: list | None):
         if not risks:
             return ""
-        html = '<table><thead><tr><th>ID</th><th>Title</th><th>Severity</th><th>Probability</th><th>Status</th></tr></thead><tbody>'
+        html = ('<table><thead><tr><th>ID</th><th>Title</th><th>Failure Mode</th>'
+                '<th>Effect</th><th>Cause</th><th>Severity</th><th>Probability</th>'
+                '<th>Status</th></tr></thead><tbody>')
+
+        def _rich(value: str) -> str:
+            # The FMECA fields are stored as rich text (the UI edits them with
+            # the same editor as descriptions), so sanitise and drop the outer
+            # paragraph wrapper the way the requirement hierarchy does.
+            return sanitize_html(value or "").replace("<p>", "").replace("</p>", "")
+
         for r in risks:
             sev = esc(r.get("severity", "medium"), quote=True)
+            failure_mode = _rich(r.get("failure_mode", ""))
+            effect = _rich(r.get("effect", ""))
+            cause = _rich(r.get("cause", ""))
             html += f"""<tr class="risk-sev-{sev}">
               <td style="font-family:monospace;">{esc(r['id'])}</td>
               <td>{esc(r.get('title',''))}</td>
+              <td>{failure_mode or '—'}</td>
+              <td>{effect or '—'}</td>
+              <td>{cause or '—'}</td>
               <td><span class="badge badge-{sev}">{sev}</span></td>
               <td>{esc(r.get('probability',''))}</td>
               <td>{self._badge(r.get('status','open'))}</td>
@@ -1594,6 +1610,22 @@ class Publisher:
                 status = r.get("status", "open")
                 mitigation = _latex_escape(_truncate_words(r.get("mitigation", ""), 180))
                 L.append(f"\\texttt{{{rid}}} & {title} & \\prioritybadge{{{_latex_escape(sev)}}} & {prob} & \\statusbadge{{{_latex_escape(status)}}} & {mitigation} \\\\")
+                # FMECA fields ride a full-width detail row beneath the header
+                # row, exactly like the requirements-by-type table's description.
+                # They are rich text, so strip the markup before escaping.
+                fmeca_parts = []
+                if r.get("failure_mode", "").strip():
+                    fmeca_parts.append(
+                        f"\\textbf{{Failure Mode:}} {_latex_escape(_truncate_words(strip_html(r.get('failure_mode', '')), 240))}")
+                if r.get("effect", "").strip():
+                    fmeca_parts.append(
+                        f"\\textbf{{Effect:}} {_latex_escape(_truncate_words(strip_html(r.get('effect', '')), 240))}")
+                if r.get("cause", "").strip():
+                    fmeca_parts.append(
+                        f"\\textbf{{Cause:}} {_latex_escape(_truncate_words(strip_html(r.get('cause', '')), 240))}")
+                if fmeca_parts:
+                    detail = " \\newline ".join(fmeca_parts)
+                    L.append(f"\\multicolumn{{6}}{{@{{}}p{{\\dimexpr\\textwidth-2\\tabcolsep\\relax}}@{{}}}}{{\\small {detail}}} \\\\[-3pt]")
                 L.append(r"\midrule")
             L.append(r"\end{longtable}")
         end_section("risks")

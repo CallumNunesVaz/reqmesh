@@ -5,7 +5,7 @@ import { test, expect, signIn, setEditMode, DEMO_PROJECT } from './fixtures';
  *
  * Covers:
  *  1. No clipping on the risk create form at laptop width (the regression guard).
- *  2. Round-trip a rich description on a risk — bold survives save + reload.
+ *  2. Round-trip rich failure-mode text on a risk — bold survives save + reload.
  *  3. Component detail page has a TipTap editor, no description textarea.
  *  4. Baselines page renders HTML descriptions without literal tag soup.
  */
@@ -49,9 +49,9 @@ test.describe('risk create form', () => {
   });
 });
 
-// ── 2. Round-trip rich description on a risk ─────────────────────────────────
+// ── 2. Round-trip rich text on a risk's failure mode ─────────────────────────
 
-test('bold text in a risk description survives save and reload', async ({ app, server }) => {
+test('bold text in a risk failure mode survives save and reload', async ({ app, server }) => {
   await signIn(app);
   await app.goto(`${server.baseURL}/project/${P}/risks`);
   await app.waitForSelector('main');
@@ -66,12 +66,14 @@ test('bold text in a risk description survives save and reload', async ({ app, s
   await expect(editBtn).toBeVisible();
   await editBtn.click();
 
-  // The edit form should now show the risk's id (disabled) and a RichTextEditor
+  // The edit form should now show the risk's id (disabled) and three
+  // RichTextEditors (failure mode, effect, cause).
   const form = app.locator('form').filter({ has: app.locator('input[value="RSK00001"]') });
   await expect(form).toBeVisible({ timeout: 10_000 });
 
-  // TipTap uses a contentEditable div, not an input — use keyboard to type
-  const editor = form.locator('.ProseMirror');
+  // TipTap uses a contentEditable div, not an input — use keyboard to type.
+  // The first editor is the failure mode.
+  const editor = form.locator('.ProseMirror').first();
   await editor.click();
   // Select all existing content and replace it
   await app.keyboard.press('Control+a');
@@ -81,7 +83,7 @@ test('bold text in a risk description survives save and reload', async ({ app, s
   await app.keyboard.press('Control+b');
   await app.keyboard.type('bold');
   await app.keyboard.press('Control+b');
-  await app.keyboard.type(' description.');
+  await app.keyboard.type(' failure mode.');
 
   // Save
   await form.getByRole('button', { name: 'Save' }).click();
@@ -94,11 +96,11 @@ test('bold text in a risk description survives save and reload', async ({ app, s
   // Let the risks list load and the card render
   await app.waitForTimeout(1000);
 
-  // The card for RSK00001 should now contain the description with a <strong>
+  // The card for RSK00001 should now contain the failure mode with a <strong>
   const riskCard = app.locator('.card').filter({ hasText: 'RSK00001' }).first();
   await expect(riskCard).toBeVisible({ timeout: 10_000 });
 
-  // The description is rendered as HTML, so the <strong> must be a real element.
+  // The failure mode is rendered as HTML, so the <strong> must be a real element.
   //
   // Located by content rather than by class: this used to select
   // `.line-clamp-1`, which was the truncation bug itself, so removing the clamp

@@ -9,6 +9,21 @@
       "title": "Title",
       "type": "string"
     },
+    "failure_mode": {
+      "default": "",
+      "title": "Failure Mode",
+      "type": "string"
+    },
+    "effect": {
+      "default": "",
+      "title": "Effect",
+      "type": "string"
+    },
+    "cause": {
+      "default": "",
+      "title": "Cause",
+      "type": "string"
+    },
     "description": {
       "default": "",
       "title": "Description",

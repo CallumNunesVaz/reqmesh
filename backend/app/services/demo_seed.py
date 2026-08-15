@@ -1674,37 +1674,47 @@ RISKS = [
     # Where mitigation text names a physical thing the component is linked; where it
     # does not the field is deliberately empty — linking everything teaches nothing.
     {"id": "RSK00001", "title": "Engine Failure on Takeoff",
-     "description": "Loss of engine power during takeoff below 500 ft AGL.  Consequences:"
-                    " forced landing straight ahead or within 30° of heading.  Cessna 172's"
-                    " low stall speed (48 KIAS clean) and benign stall characteristics"
-                    " make survivable outcomes highly probable if the pilot maintains"
-                    " airspeed.",
+     "failure_mode": "Loss of engine power during takeoff below 500 ft AGL.",
+     "effect": "Forced landing straight ahead or within 30° of heading.  Cessna 172's"
+               " low stall speed (48 KIAS clean) and benign stall characteristics"
+               " make survivable outcomes highly probable if the pilot maintains"
+               " airspeed.",
+     "cause": "Engine mechanical or fuel/ignition failure despite pre-flight checks"
+              " (e.g. magneto or fuel-system fault).",
      "severity": "critical", "likelihood": "rare",
      "status": "open", "mitigation": "Pre-takeoff run-up check; engine trend monitoring",
      "linked_requirements": ["PROP0001", "PROP0003"],
      "linked_components": ["ENG"],
      "mitigating_components": ["LMAG", "RMAG"]},
     {"id": "RSK00002", "title": "Fuel Exhaustion in Flight",
-     "description": "Fuel mismanagement or undetected leak leading to fuel exhaustion"
-                    " before destination.  Leading cause of general aviation accidents"
-                    " (approximately 8% of all GA accidents per AOPA Nall Report).",
+     "failure_mode": "Fuel mismanagement or undetected leak leading to fuel exhaustion"
+                     " before destination.",
+     "effect": "Engine stoppage with no fuel remaining.  Leading cause of general"
+               " aviation accidents (approximately 8% of all GA accidents per AOPA"
+               " Nall Report).",
+     "cause": "Inaccurate fuel planning, or a leak that goes undetected between"
+              " pre-flight inspections.",
      "severity": "high", "likelihood": "possible",
      "status": "mitigating", "mitigation": "Fuel totalizer on G1000 MFD; pre-flight dipstick check",
      "linked_requirements": ["PROP0006", "AFRM0006"], "detection": "likely",
      "linked_components": ["TANK", "FQSND"],
      "mitigating_components": ["GDU"]},
     {"id": "RSK00003", "title": "G1000 Display Overheat",
-     "description": "PFD or MFD display failure due to excessive cockpit temperatures"
-                    " (direct sunlight on ramp, >50°C / 122°F).  The G1000 operating"
-                    " temperature specification is −20°C to +55°C.",
+     "failure_mode": "PFD or MFD display failure due to excessive cockpit temperatures.",
+     "effect": "Loss of primary flight or navigation displays; reversionary mode"
+               " retains partial function.",
+     "cause": "Direct sunlight on ramp, >50°C / 122°F cockpit.  The G1000 operating"
+              " temperature specification is −20°C to +55°C.",
      "severity": "medium", "likelihood": "unlikely",
      "status": "monitoring", "mitigation": "Sunshades; cabin ventilation; reversionary mode",
      "linked_requirements": ["AVNC0001", "AVNC0002"], "detection": "obvious",
      "linked_components": ["GDU"]},
     {"id": "RSK00004", "title": "Carbon Monoxide Incapacitation",
-     "description": "CO leaking into cabin via exhaust muff cracks, causing progressive"
-                    " crew incapacitation (headache → confusion → unconsciousness)."
-                    "  CO binds to haemoglobin with 200× the affinity of oxygen.",
+     "failure_mode": "CO leaking into cabin via exhaust muff cracks.",
+     "effect": "Progressive crew incapacitation (headache → confusion →"
+               " unconsciousness).",
+     "cause": "Exhaust muff cracks; CO binds to haemoglobin with 200× the affinity"
+              " of oxygen.",
      "severity": "critical", "likelihood": "rare",
      # Closed rather than open: the AD retrofit is the mitigation, and a register
      # where nothing ever closes says nothing about how the project is managed.
@@ -1713,20 +1723,24 @@ RISKS = [
      "linked_components": ["MUFF", "SHUD"],
      "mitigating_components": ["CODT"]},
     {"id": "RSK00005", "title": "Alternator Failure in IMC",
-     "description": "Alternator failure while in instrument meteorological conditions (IMC)."
-                    "  The essential bus provides 30 min of power — sufficient for an"
-                    "  approach at a nearby airport but requiring prompt action.",
+     "failure_mode": "Alternator failure while in instrument meteorological conditions"
+                     " (IMC).",
+     "effect": "The essential bus provides 30 min of power — sufficient for an"
+               " approach at a nearby airport but requiring prompt action.",
+     "cause": "Alternator mechanical or electrical fault (belt, regulator, or"
+              " windings).",
      "severity": "high", "likelihood": "unlikely",
      "status": "mitigating", "mitigation": "Essential bus isolation; battery endurance ≥ 30 min",
      "linked_requirements": ["ELEC0001", "ELEC0002", "ELEC0003"], "detection": "undetectable",
      "linked_components": ["ALT"],
      "mitigating_components": ["BATT", "EBUS"]},
     {"id": "RSK00006", "title": "Icing Encounter",
-     "description": "Inadvertent encounter with structural icing conditions (visible"
-                    " moisture + OAT below freezing).  The Cessna 172S is NOT certified"
-                    " for flight into known icing (FIKI).  Ice accumulation on wings"
-                    " and tail can increase stall speed by 15-30% and reduce control"
-                    " effectiveness.",
+     "failure_mode": "Inadvertent encounter with structural icing conditions (visible"
+                     " moisture + OAT below freezing).",
+     "effect": "Ice accumulation on wings and tail can increase stall speed by"
+               " 15-30% and reduce control effectiveness.",
+     "cause": "Flight continued into icing conditions in an aircraft that is NOT"
+              " certified for flight into known icing (FIKI).",
      "severity": "high", "likelihood": "possible",
      "status": "open", "mitigation": "Pitot heat; immediate 180° turn or descent",
      "linked_requirements": ["AFRM0004", "ENVR0003", "SAFE0001"],

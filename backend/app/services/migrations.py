@@ -20,7 +20,7 @@ from typing import Callable
 
 logger = logging.getLogger(__name__)
 
-CURRENT_SCHEMA_VERSION = 3
+CURRENT_SCHEMA_VERSION = 4
 _MARKER = ".reqmesh-schema.json"
 
 
@@ -126,11 +126,57 @@ def _migrate_2_to_3(data_root: Path) -> None:
         logger.info("Repaired %d component(s) with a non-component parent", repaired)
 
 
+def _migrate_3_to_4(data_root: Path) -> None:
+    """Risks split their free-text ``description`` into FMECA fields.
+
+    ``description`` becomes ``failure_mode``; ``effect`` and ``cause`` are left
+    empty — there is nothing to derive them from, and inventing content would
+    be worse than blank. ``description`` is deliberately **not** deleted from
+    the YAML: a migration that discards data has no way back if the release is
+    rolled back.
+
+    Idempotent: a risk that already has ``failure_mode`` is left alone, so a
+    re-run — or a project a newer version already touched — is a no-op. One
+    unreadable risk must not abort the migration and take startup down with it,
+    so failures are logged per file and the rest continue.
+
+    Risks are not fingerprinted (``services/fingerprint.py`` fingerprints only
+    requirements), so this rewrite does not change any stored review
+    fingerprint and cannot flag the register as needing re-review.
+    """
+    from app.services.yaml_store import YamlStore
+
+    migrated = 0
+    for project in sorted(p for p in Path(data_root).iterdir() if p.is_dir()):
+        if not (project / "_meta.yaml").exists():
+            continue
+        risks = project / "risks"
+        if not risks.exists():
+            continue
+        store = YamlStore(project)
+        for f in sorted(risks.glob("*.yaml")):
+            try:
+                item = store._parse_yaml(f)
+                if not item or item.get("failure_mode"):
+                    continue
+                description = item.get("description")
+                if not description or not str(description).strip():
+                    continue
+                item["failure_mode"] = description
+                store._write_yaml(f, item)
+                migrated += 1
+            except Exception as exc:
+                logger.warning("Skipping risk %s during migration to 4: %s", f, exc)
+    if migrated:
+        logger.info("Migrated %d risk(s) description -> failure_mode", migrated)
+
+
 # ── Migration registry ───────────────────────────────────────────────────────
 # MIGRATIONS[n] upgrades data from schema (n-1) to schema n.
 MIGRATIONS: dict[int, Callable[[Path], None]] = {
     2: _migrate_1_to_2,
     3: _migrate_2_to_3,
+    4: _migrate_3_to_4,
 }
 
 
