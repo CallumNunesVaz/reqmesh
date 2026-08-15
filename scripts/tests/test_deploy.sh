@@ -909,4 +909,19 @@ check "the compile timeout allows for a cold cache" \
 check "cache warming gets its own, larger budget" \
       "$(grep -c 'WARM_TECTONIC_TIMEOUT' "$REPO/backend/scripts/warm_tectonic.py")" "1"
 
+# ══════════════════════════════════════════════════════════════════════════════
+section "ssh is present for git remotes"
+# ══════════════════════════════════════════════════════════════════════════════
+# Both images install git with --no-install-recommends, and git only
+# *Recommends* openssh-client — so ssh was absent from every published image.
+# `git ls-remote git@github.com:...` failed with "ssh: not found", which made
+# both git@ and ssh:// unusable in Docker despite being in
+# ALLOWED_REMOTE_SCHEMES and despite DEPLOYMENT.md telling operators to mount a
+# key. Asserted here because the failure is invisible until someone configures
+# an SSH remote against a real host, and nothing else in CI runs the image.
+for dockerfile in "$REPO/Dockerfile.prod" "$REPO/backend/Dockerfile"; do
+  check "$(basename "$(dirname "$dockerfile")")/$(basename "$dockerfile") installs openssh-client" \
+        "$(grep -cE '^[[:space:]]*openssh-client' "$dockerfile")" "1"
+done
+
 finish

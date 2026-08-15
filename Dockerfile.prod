@@ -34,6 +34,12 @@ LABEL org.opencontainers.image.version="${VERSION}" \
 # life of the image. This is what the trivy job flags.
 RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     git \
+    `# openssh-client: git only *Recommends* it, and --no-install-recommends` \
+    `# drops it — so ssh was absent and every git@/ssh:// remote failed with` \
+    `# "ssh: not found", despite both being in ALLOWED_REMOTE_SCHEMES and` \
+    `# DEPLOYMENT.md telling operators to mount a key. Also provides` \
+    `# ssh-keygen for managed deploy keys.` \
+    openssh-client \
     libglib2.0-0 \
     libpango-1.0-0 \
     libpangoft2-1.0-0 \

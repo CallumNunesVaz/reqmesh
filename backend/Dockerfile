@@ -2,8 +2,14 @@ FROM python:3.12-slim
 
 # git: project auto-commit / history. pango+harfbuzz+fonts: weasyprint PDF export
 # (fallback renderer). curl/ca-certificates: fetch the tectonic LaTeX engine.
+#
+# openssh-client is listed explicitly because git only *Recommends* it and
+# --no-install-recommends drops it: without it `ssh` does not exist, and every
+# git@/ssh:// remote fails with "ssh: not found" even though both schemes are
+# in ALLOWED_REMOTE_SCHEMES. It also provides ssh-keygen for managed keys.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
+    openssh-client \
     curl \
     ca-certificates \
     libglib2.0-0 \
