@@ -44,6 +44,7 @@ export default function ProjectSettingsPage() {
 
   const [projectName, setProjectName] = useState('');
   const [naming, setNaming] = useState<Record<string, NamingRule>>({});
+  const [enforceNaming, setEnforceNaming] = useState(true);
   const [originalName, setOriginalName] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -119,6 +120,7 @@ export default function ProjectSettingsPage() {
         merged[key] = { ...def, ...incoming[key] };
       }
       setNaming(merged);
+      setEnforceNaming((incoming as any).enforce !== false);
       const git = p.git || {};
       setGitUserName(git.user_name || '');
       setGitUserEmail(git.user_email || '');
@@ -153,7 +155,7 @@ export default function ProjectSettingsPage() {
     setSaving(true);
     try {
       await api.updateProject(projectId, {
-        name: projectName, naming,
+        name: projectName, naming: { ...naming, enforce: enforceNaming },
         stakeholders,
         ...(riskMatrix ? { risk_matrix: riskMatrix } : {}),
         git: {
@@ -206,6 +208,20 @@ export default function ProjectSettingsPage() {
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="card p-5 mb-6">
         <h2 className="font-semibold text-sm text-card-foreground mb-1">Naming Standards</h2>
         <p className="text-xs text-muted-foreground mb-4">Define ID patterns for auto-generated entity IDs. Used by the "Next UID" feature and the create-requirement modal.</p>
+
+        <label className="flex items-start gap-2 mb-1">
+          <input
+            type="checkbox"
+            className="mt-0.5 w-4 h-4 rounded border-muted-foreground/30"
+            checked={enforceNaming}
+            onChange={(e) => setEnforceNaming(e.target.checked)}
+            disabled={!editable}
+          />
+          <span className="text-sm font-medium text-card-foreground">Reject ids that do not fit these patterns</span>
+        </label>
+        <p className="text-xs text-muted-foreground mb-4 pl-6">
+          New entities must match their kind's pattern. Turn this off for a project migrated from another tool, whose existing ids predate these standards — only creation is affected, existing records keep loading and saving.
+        </p>
 
         <div className="space-y-4">
           {Object.entries(naming).map(([key, rule]) => (

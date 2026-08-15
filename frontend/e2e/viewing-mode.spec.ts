@@ -10,7 +10,7 @@ import { test, expect, signIn, setEditMode, DEMO_PROJECT } from './fixtures';
  * happened to use it.
  */
 const ROUTES = [
-  'requirements', 'requirements/AFRM0001', 'requirements/ACFT0000', 'components', 'components/GDC',
+  'requirements', 'requirements/AFRM0001', 'requirements/ACFT0000', 'components', 'components/GDC01',
   'specifications', 'verification', 'risks', 'change-requests', 'baselines',
   'traces', 'allocation', 'metrics',
   // Added with the pages themselves: being absent from this sweep and from

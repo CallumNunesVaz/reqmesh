@@ -13,7 +13,7 @@ import io
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import Response
 
-from app.api._utils import check_precondition
+from app.api._utils import check_precondition, enforce_naming
 from app.core.dependencies import get_store, require_maintain
 from app.core.ids import safe_id
 from app.core.tree_utils import build_flat_tree
@@ -176,6 +176,7 @@ def get_component(project_id: str, component_id: str):
 def create_component(project_id: str, data: ComponentCreate, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     safe_id(data.id, "component id")
+    enforce_naming(store, "components", data.id)
     if store.get_component(data.id):
         raise HTTPException(status_code=409, detail="Component already exists")
     _validate_parent(store, data.id, data.parent)

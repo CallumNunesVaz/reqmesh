@@ -6,7 +6,10 @@ import { test, expect, signIn, setEditMode, DEMO_PROJECT } from './fixtures';
  * by searching for text that lives only in `cause`.
  */
 const P = DEMO_PROJECT;
-const RISK_ID = 'RSK-FMECA';
+// Conforms to the project's naming standard for risks (RSK + numeric
+// suffix). Enforcement is on by default, so a readable-but-wrong-shaped id
+// like 'RSK-FMECA' is now refused at create.
+const RISK_ID = 'RSK99001';
 const FAILURE_MODE = 'Aileron control rod snaps';
 const EFFECT = 'Loss of roll authority in the turn';
 const CAUSE_ONLY = 'hydrogen-embrittlement-fatigue';

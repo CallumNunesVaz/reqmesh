@@ -91,6 +91,7 @@ export default function ChangeRequestsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [error, setError] = useState('');
   const [form, setForm] = useState({ id: '', title: '', description: '', rationale: '', urgency: 'normal' });
+  const [idExample, setIdExample] = useState('');
   const [editingCrId, setEditingCrId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ title: '', description: '', rationale: '', urgency: 'normal' });
   const [loading, setLoading] = useState(true);
@@ -189,6 +190,17 @@ export default function ChangeRequestsPage() {
 
   // Arriving from a link elsewhere (?focus=CR-001).
   const focusId = useFocusedEntity(crs.length > 0);
+
+  const openCreate = () => {
+    setShowCreate(true);
+    if (!projectId) return;
+    api.getNextId(projectId, 'change_requests')
+      .then((r) => {
+        setForm((f) => (f.id ? f : { ...f, id: r.next_id }));
+        setIdExample(r.next_id);
+      })
+      .catch(() => {});
+  };
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -379,7 +391,7 @@ export default function ChangeRequestsPage() {
           <p className="text-sm text-muted-foreground mt-1">{filtering ? `${filteredCRs.length} of ${crs.length} change requests` : `${crs.length} change requests`}</p>
         </div>
         {editable && (
-        <button onClick={() => setShowCreate(!showCreate)} className="btn-primary">
+        <button onClick={openCreate} className="btn-primary">
           <Plus size={16} /> New Change Request
         </button>
         )}
@@ -421,7 +433,7 @@ export default function ChangeRequestsPage() {
           <motion.form initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
             onSubmit={handleCreate} className="card p-4 mb-4 overflow-hidden">
             <div className="flex items-end gap-3">
-              <div className="w-32"><label className="label">ID <input className="input font-mono" placeholder="CR-001" value={form.id} onChange={e => setForm({...form, id: e.target.value})} /></label></div>
+              <div className="w-32"><label className="label">ID <input className="input font-mono" placeholder="CR-001" value={form.id} onChange={e => setForm({...form, id: e.target.value})} /></label>{idExample && <span className="text-[10px] text-muted-foreground">e.g. {idExample}</span>}</div>
               <div className="flex-1"><label className="label">Title <input className="input" placeholder="Change request title" value={form.title} onChange={e => setForm({...form, title: e.target.value})} /></label></div>
               <div className="w-28">
                 <label className="label">Urgency <select className="select" value={form.urgency} onChange={e => setForm({...form, urgency: e.target.value})}>

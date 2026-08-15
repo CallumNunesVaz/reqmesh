@@ -325,7 +325,7 @@ const DOCS: DocSection[] = [
         <H3>Parameters & Rollups</H3>
         <P>Components carry numeric parameters (mass, current draw, cost…) that participate in <strong className="text-card-foreground">budget rollups</strong>:</P>
         <Code>rollup('C172', 'mass')  →  sums mass across every component under C172</Code>
-        <P>Quantity is multiplied automatically — 2× SPAR each at 19 kg contributes 38 kg.</P>
+        <P>Quantity is multiplied automatically — 2× SPAR01 each at 19 kg contributes 38 kg.</P>
       </>
     ),
   },

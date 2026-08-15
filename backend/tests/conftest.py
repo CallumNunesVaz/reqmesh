@@ -90,6 +90,11 @@ def maintainer_client(_real_role_client):
 @pytest.fixture()
 def project(client):
     client.post("/api/projects", json={"id": "demo", "name": "Demo Project"})
+    # Naming enforcement defaults to on, which would reject the readable
+    # hand-written ids this suite uses ("SYS", "WING", "REQ-OLD"…). Turn it off
+    # so the existing tests keep exercising the behaviour they were written for;
+    # test_naming.py turns it back on where it tests enforcement itself.
+    client.patch("/api/projects/demo", json={"naming": {"enforce": False}})
     return "demo"
 
 

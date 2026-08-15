@@ -89,10 +89,10 @@ class TestCacheCorrectness:
     def test_projects_do_not_share_a_cache_entry(self, client):
         client.post("/api/projects", json={"id": "a", "name": "A"})
         client.post("/api/projects", json={"id": "b", "name": "B"})
-        make_req(client, "a", "REQ-A")
-        make_req(client, "b", "REQ-B")
-        assert {r["id"] for r in get_store("a").list_requirements()} == {"REQ-A"}
-        assert {r["id"] for r in get_store("b").list_requirements()} == {"REQ-B"}
+        make_req(client, "a", "REQ-A1")
+        make_req(client, "b", "REQ-B1")
+        assert {r["id"] for r in get_store("a").list_requirements()} == {"REQ-A1"}
+        assert {r["id"] for r in get_store("b").list_requirements()} == {"REQ-B1"}
 
 
 class TestItIsActuallyFaster:

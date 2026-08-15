@@ -223,9 +223,13 @@ export default function ComponentsPage() {
   const handleDuplicate = async (src: Component) => {
     if (!projectId) return;
     const existing = new Set(components.map((c) => c.id));
-    let id = `${src.id}-copy`;
-    let n = 2;
-    while (existing.has(id)) { id = `${src.id}-copy${n++}`; }
+    // Numbered from 1, not bare `-copy`, because the project's naming
+    // standard is enforced on create and a numeric-suffix scheme refuses an
+    // id that does not end in a digit. `-copy` was silently rejected with a
+    // 422 the moment enforcement went in, which broke Duplicate outright.
+    let n = 1;
+    let id = `${src.id}-copy${n}`;
+    while (existing.has(id)) { id = `${src.id}-copy${++n}`; }
     try {
       await api.createComponent(projectId, {
         id,

@@ -6,8 +6,8 @@ import { test, expect, signIn, DEMO_PROJECT } from './fixtures';
  * `components=` for ages but the dialog never sent it, so every report
  * contained the whole project.
  *
- * The demo project's "YOKE" component satisfies exactly FLTC0001, and nothing
- * satisfies ACFT0000 but the C172 root. So a YOKE-scoped report renders
+ * The demo project's "YOKE01" component satisfies exactly FLTC0001, and nothing
+ * satisfies ACFT0000 but the C172 root. So a YOKE01-scoped report renders
  * FLTC0001 as a real requirement link and never renders ACFT0000 as one
  * (it may still appear as a "(not in this document)" dangling reference in the
  * Components table, which is why the assertion checks the link, not the id).
@@ -22,10 +22,10 @@ test('picking one component narrows the exported document', async ({ app, server
   const dialog = app.getByRole('dialog');
 
   // Deselect everything, then pick a single component. The picker defaults to
-  // "All", which means "no filter" — clicking None then YOKE is the explicit
+  // "All", which means "no filter" — clicking None then YOKE01 is the explicit
   // one-component selection.
   await dialog.locator('button[title="Select no components"]').click();
-  await dialog.getByText('YOKE', { exact: true }).click();
+  await dialog.getByText('YOKE01', { exact: true }).click();
 
   const [download] = await Promise.all([
     app.waitForEvent('download'),

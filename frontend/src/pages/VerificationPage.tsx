@@ -51,6 +51,7 @@ export default function VerificationPage() {
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [newVC, setNewVC] = useState({ id: '', name: '', description: '', method: 'test' });
+  const [idExample, setIdExample] = useState('');
   const [requirements, setRequirements] = useState<Requirement[]>([]);
   const [components, setComponents] = useState<Component[]>([]);
   // Persisted per project — see RequirementsPage/ComponentsPage for why.
@@ -114,6 +115,19 @@ export default function VerificationPage() {
     [requirements],
   );
 
+  const openCreate = () => {
+    setShowCreate(true);
+    if (!projectId) return;
+    // Prefill the id from the project's naming standard so the configured
+    // scheme is followed rather than typed from memory. Only fills an empty id,
+    // so a value already typed (or left over) is never clobbered.
+    api.getNextId(projectId, 'verification')
+      .then((r) => {
+        setNewVC((v) => (v.id ? v : { ...v, id: r.next_id }));
+        setIdExample(r.next_id);
+      })
+      .catch(() => {});
+  };
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!projectId || !newVC.id.trim() || !editable) return;
@@ -144,9 +158,13 @@ export default function VerificationPage() {
   const handleDuplicate = async (vc: VerificationCase) => {
     if (!projectId) return;
     const existing = new Set(verificationCases.map((v) => v.id));
-    let id = `${vc.id}-copy`;
-    let n = 2;
-    while (existing.has(id)) { id = `${vc.id}-copy${n++}`; }
+    // Numbered from 1, not bare `-copy`, because the project's naming
+    // standard is enforced on create and a numeric-suffix scheme refuses an
+    // id that does not end in a digit. `-copy` was silently rejected with a
+    // 422 the moment enforcement went in, which broke Duplicate outright.
+    let n = 1;
+    let id = `${vc.id}-copy${n}`;
+    while (existing.has(id)) { id = `${vc.id}-copy${++n}`; }
     try {
       await api.createVerificationCase(projectId, {
         id,
@@ -389,7 +407,7 @@ export default function VerificationPage() {
           </p>
         </div>
         {editable && (
-        <button onClick={() => setShowCreate(!showCreate)} className="btn-primary whitespace-nowrap shrink-0 self-start">
+        <button onClick={openCreate} className="btn-primary whitespace-nowrap shrink-0 self-start">
           <Plus size={16} /> New Verification Case
         </button>
         )}
@@ -471,6 +489,7 @@ export default function VerificationPage() {
                 <label className="label">ID
                   <input className="input font-mono" placeholder="VC-001" value={newVC.id} onChange={(e) => setNewVC({ ...newVC, id: e.target.value })} />
                 </label>
+                {idExample && <span className="text-[10px] text-muted-foreground">e.g. {idExample}</span>}
               </div>
               <div className="flex-1">
                 <label className="label">Name

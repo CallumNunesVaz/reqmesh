@@ -75,13 +75,13 @@ test('add-child opens the create form pre-set to that parent and the child lands
 
   await expect(app.getByRole('combobox', { name: 'Parent' })).toHaveValue('C172');
 
-  await app.getByRole('textbox', { name: 'ID' }).fill('ALIGNCHILD');
+  await app.getByRole('textbox', { name: 'ID' }).fill('ALIGNCHILD01');
   await app.getByRole('textbox', { name: 'Name' }).fill('Align child');
   await app.getByRole('button', { name: 'Create', exact: true }).click();
 
-  await expect(app.locator('#entity-ALIGNCHILD')).toBeVisible({ timeout: 15_000 });
+  await expect(app.locator('#entity-ALIGNCHILD01')).toBeVisible({ timeout: 15_000 });
 
-  const created = await getJson(app, `/projects/${P}/components/ALIGNCHILD`);
+  const created = await getJson(app, `/projects/${P}/components/ALIGNCHILD01`);
   expect(created).not.toBeNull();
   expect(created.parent).toBe('C172');
 });
@@ -89,8 +89,8 @@ test('add-child opens the create form pre-set to that parent and the child lands
 test('a nested component displays its rolled-up quantity', async ({ app, server }) => {
   await open(app, server);
 
-  // FQSND is 2× under TANK (2×) under WING (1×): 4× in the build.
-  const row = app.locator('#entity-FQSND');
+  // FQSND01 is 2× under TANK01 (2×) under WING01 (1×): 4× in the build.
+  const row = app.locator('#entity-FQSND01');
   await expect(row).toContainText('×2 (4×)');
 
   // A single-instance row under a single-instance parent stays quiet.

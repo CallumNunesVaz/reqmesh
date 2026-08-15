@@ -11,19 +11,19 @@ means a re-prefixed move is now reversible, where before there was no way back.
 """
 from __future__ import annotations
 
-import re
-
 from app.services.history import record_change
 from app.services.link_registry import kind_matches, links_into, targets_of
+from app.services.naming import get_naming
+from app.services.naming import matches_scheme as matches_scheme  # noqa: F401  (re-export: one rule)
 
 
 def suggest_id(requirements: list[dict], meta: dict, parent_id: str | None) -> str:
     """The default new id: the parent's prefix plus the next free slot.
 
-    Mirrors the ``next-uid`` route's scheme so a rename and a create agree about
-    what this project's ids look like.
+    Mirrors the shared ``next_id`` generator's scheme so a rename and a create
+    agree about what this project's ids look like.
     """
-    naming = (meta.get("naming") or {}).get("requirements") or {}
+    naming = get_naming(meta, "requirements")
     prefix_len = int(naming.get("prefix_length", 4) or 4)
     separator = naming.get("separator", "")
     suffix_len = int(naming.get("suffix_length", 4) or 4)
@@ -49,29 +49,6 @@ def suggest_id(requirements: list[dict], meta: dict, parent_id: str | None) -> s
             except ValueError:
                 pass
     return f"{base}{str(max_suffix + 1 if max_suffix >= 0 else 1).zfill(suffix_len)}"
-
-
-def matches_scheme(new_id: str, meta: dict) -> str | None:
-    """Reason *new_id* does not fit the project's naming scheme, or None.
-
-    Deliberately permissive: the scheme describes what generated ids look like,
-    not a law every hand-written id must obey — projects migrating from another
-    tool carry legacy ids that would never round-trip through a strict check.
-    Only the shape that would break the suffix arithmetic is refused.
-    """
-    naming = (meta.get("naming") or {}).get("requirements") or {}
-    separator = naming.get("separator", "")
-    suffix_type = naming.get("suffix_type", "numeric")
-
-    if separator and separator not in new_id:
-        return f"Expected '{separator}' between the prefix and the number"
-
-    tail = new_id.split(separator)[-1] if separator else new_id
-    if suffix_type == "numeric":
-        digits = re.search(r"(\d+)$", tail)
-        if not digits:
-            return "Expected the id to end in a number"
-    return None
 
 
 def rename_requirement(store, old_id: str, new_id: str, username: str = "") -> dict:

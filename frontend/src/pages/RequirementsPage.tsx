@@ -943,7 +943,7 @@ function BulkEditModal({
               {/* Row 4: Subject / Cascade From / Effort */}
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="label">Subject<input className="input font-mono text-xs" placeholder="e.g. WING" value={form.subject}
+                  <label className="label">Subject<input className="input font-mono text-xs" placeholder="e.g. WING01" value={form.subject}
                     onChange={(e) => setForm({ ...form, subject: e.target.value })} /></label>
                 </div>
                 <div>

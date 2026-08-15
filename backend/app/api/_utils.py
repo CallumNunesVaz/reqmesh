@@ -51,6 +51,30 @@ def read_upload_capped(file: UploadFile, limit_mb: int) -> bytes:
     return b"".join(chunks)
 
 
+def enforce_naming(store, kind: str, new_id: str) -> None:
+    """422 if *new_id* does not fit the project's naming scheme for *kind*.
+
+    Enforcement is additional to ``safe_id``, never a replacement: a route still
+    runs ``safe_id`` first, and this layers the permissive ``matches_scheme``
+    check (see ``services.naming``) on top. It lives in the route layer rather
+    than the store because the import paths and the demo seeder write through
+    ``store.create_*`` directly and must stay exempt — see the task spec's
+    Enforcement section.
+
+    A project can opt out entirely with ``naming: {enforce: false}`` in its
+    ``_meta.yaml``; that is the escape hatch for projects migrated from another
+    tool whose legacy ids predate the standard. Absent means on.
+    """
+    from app.services.naming import enforce_enabled, matches_scheme
+
+    meta = store.read_meta()
+    if not enforce_enabled(meta):
+        return
+    reason = matches_scheme(new_id, meta, kind)
+    if reason:
+        raise HTTPException(status_code=422, detail=reason)
+
+
 def paginate(items: list[dict], offset: int | None = None,
              limit: int | None = None, default_limit: int = 500,
              max_limit: int = 2000) -> dict:

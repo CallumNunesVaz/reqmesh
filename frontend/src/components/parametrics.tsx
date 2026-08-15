@@ -315,7 +315,7 @@ export function ParametricsCard({ reqId, parameters, constraints, evaluated, edi
 
       {editable && (
         <div className="flex gap-1">
-          <input className="input flex-1 text-xs font-mono" placeholder={`expr: gross <= 1160 or rollup('WING','mass') <= limit`} value={newConstraint.expr}
+          <input className="input flex-1 text-xs font-mono" placeholder={`expr: gross <= 1160 or rollup('WING01','mass') <= limit`} value={newConstraint.expr}
             onChange={(e) => setNewConstraint({ ...newConstraint, expr: e.target.value })} />
           <input className="input w-40 text-xs font-mono" placeholder="assume (optional)" value={newConstraint.assume}
             onChange={(e) => setNewConstraint({ ...newConstraint, assume: e.target.value })} />

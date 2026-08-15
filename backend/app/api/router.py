@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import datetime
 import logging
-import string
 from pathlib import Path
 from typing import Optional
 
@@ -24,7 +23,8 @@ from app.services.meta_defs import (
     serialize_meta_defs,
 )
 from app.services.rename import matches_scheme, rename_requirement, suggest_id
-from app.api._utils import check_precondition, paginate
+from app.services.naming import KINDS, ids_for, next_id as generate_next_id
+from app.api._utils import check_precondition, enforce_naming, paginate
 from app.models.specification import SpecificationCreate, SpecificationUpdate
 from app.models.definition import DefinitionCreate, DefinitionUpdate
 from app.models.analysis import AnalysisCaseCreate, AnalysisCaseUpdate
@@ -370,7 +370,7 @@ def rename_requirement_route(project_id: str, req_id: str, data: dict,
         return {"suggested": suggest_id(reqs, meta, req.get("parent"))}
 
     new_id = safe_id(new_id, "requirement id")
-    reason = matches_scheme(new_id, meta)
+    reason = matches_scheme(new_id, meta, "requirements")
     if reason:
         raise HTTPException(status_code=400, detail=reason)
 
@@ -384,103 +384,23 @@ def rename_requirement_route(project_id: str, req_id: str, data: dict,
 @router.get("/projects/{project_id}/requirements/next-uid", summary="Next free UID")
 def next_uid(project_id: str, parent: str | None = None):
     store = get_store(project_id)
-    reqs = store.list_requirements()
     meta = store.read_meta()
-    naming = meta.get("naming", {}).get("requirements", {})
-    prefix_len = int(naming.get("prefix_length", 4) or 4)
-    prefix_type = naming.get("prefix_type", "alpha")
-    prefix_hint = naming.get("prefix_hint", "REQ")
-    separator = naming.get("separator", "")
-    suffix_len = int(naming.get("suffix_length", 4) or 4)
-    suffix_type = naming.get("suffix_type", "numeric")
-
-    prefix = None
+    parent_id = None
     if parent:
         parent_req = store.get_requirement(parent)
         if parent_req:
-            pid = parent_req["id"]
-            if separator and separator in pid:
-                prefix = pid.split(separator)[0]
-            elif separator:
-                prefix = pid[:prefix_len].upper()
-            else:
-                prefix = pid[:prefix_len].upper()
-
-    if not prefix:
-        used = set()
-        for r in reqs:
-            rid = r.get("id", "")
-            if separator and separator in rid:
-                used.add(rid.split(separator)[0].upper())
-            else:
-                used.add(rid[:prefix_len].upper())
-        if prefix_hint.upper() not in used:
-            prefix = prefix_hint.upper()
-        else:
-            # Walk sequentially from the hint instead of generating all
-            # combinations up front (itertools.product over 26^4 = 457k).
-            # This finds the first available prefix in the same sorted order
-            # without materialising the entire space.
-            chars = string.ascii_uppercase if prefix_type == "alpha" else string.ascii_uppercase + string.digits
-            _prefix_iter = _make_prefix_iter(chars, prefix_len)
-            for candidate in _prefix_iter:
-                if candidate not in used:
-                    prefix = candidate
-                    break
-            if not prefix:
-                prefix = prefix_hint.upper() + "0"
-
-    base = prefix + separator if separator else prefix
-    max_suffix = -1
-    for r in reqs:
-        rid = r.get("id", "")
-        if rid.startswith(base):
-            rest = rid[len(base):]
-            if suffix_type == "numeric":
-                try:
-                    max_suffix = max(max_suffix, int(rest))
-                except ValueError:
-                    pass
-            else:
-                if len(rest) == suffix_len:
-                    max_suffix = max(max_suffix, int(rest, 36) if rest.isalnum() else -1)
-
-    next_val = max_suffix + 1 if max_suffix >= 0 else 1
-    if suffix_type == "numeric":
-        suffix = str(next_val).zfill(suffix_len)
-    else:
-        suffix = _int_to_base36(next_val).zfill(suffix_len)
-
-    return {"prefix": prefix, "next_id": f"{base}{suffix}"}
+            parent_id = parent_req["id"]
+    # Delegate to the shared generator so this legacy path and the generic
+    # /{kind}/next-id route cannot disagree about what the next id is.
+    return generate_next_id(ids_for(store, "requirements"), meta, "requirements", parent_id)
 
 
-def _make_prefix_iter(chars: str, start_len: int):
-    """Yield prefix candidates in length-first lexicographic order, bounded at
-    ``start_len + 2``.  Unlike ``itertools.product(chars, repeat=…)`` this does
-    not materialise the full Cartesian product (worst-case 457k tuples)."""
-    for length in range(start_len, start_len + 3):
-        yield from _product_gen(chars, length)
-
-
-def _product_gen(chars: str, length: int):
-    """Recursive generator over the characters in ``chars``."""
-    if length == 0:
-        yield ""
-        return
-    for rest in _product_gen(chars, length - 1):
-        for c in chars:
-            yield c + rest
-
-
-def _int_to_base36(n: int) -> str:
-    chars = string.digits + string.ascii_lowercase
-    if n == 0:
-        return "0"
-    result = ""
-    while n > 0:
-        n, r = divmod(n, 36)
-        result = chars[r] + result
-    return result
+@router.get("/projects/{project_id}/{kind}/next-id", summary="Next free id for a kind")
+def next_id(project_id: str, kind: str):
+    if kind not in KINDS:
+        raise HTTPException(status_code=404, detail=f"Unknown kind: {kind}")
+    store = get_store(project_id)
+    return generate_next_id(ids_for(store, kind), store.read_meta(), kind)
 
 
 @router.get("/projects/{project_id}/requirements")
@@ -529,6 +449,7 @@ def get_requirement(project_id: str, req_id: str):
 def create_requirement(project_id: str, data: RequirementCreate, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     safe_id(data.id, "requirement id")
+    enforce_naming(store, "requirements", data.id)
     if store.get_requirement(data.id):
         raise HTTPException(status_code=409, detail="Requirement already exists")
     reason = first_missing_relation(store, data.relations)
@@ -822,6 +743,7 @@ def get_specification(project_id: str, spec_id: str):
 def create_specification(project_id: str, data: SpecificationCreate, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     safe_id(data.id, "specification id")
+    enforce_naming(store, "specifications", data.id)
     if store.get_specification(data.id):
         raise HTTPException(status_code=409, detail="Specification already exists")
     spec_dict = data.model_dump(mode="json")
@@ -1411,6 +1333,7 @@ def get_verification_case(project_id: str, vc_id: str):
 def create_verification_case(project_id: str, data: VerificationCaseCreate, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     safe_id(data.id, "verification case id")
+    enforce_naming(store, "verification", data.id)
     if store.get_verification_case(data.id):
         raise HTTPException(status_code=409, detail="Verification case already exists")
     vc_dict = data.model_dump(mode="json")

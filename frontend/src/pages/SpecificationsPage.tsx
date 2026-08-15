@@ -30,6 +30,7 @@ export default function SpecificationsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [newSpec, setNewSpec] = useState({ id: '', name: '', description: '', url: '' });
+  const [idExample, setIdExample] = useState('');
   const [requirements, setRequirements] = useState<Requirement[]>([]);
   const [components, setComponents] = useState<Component[]>([]);
   const [loading, setLoading] = useState(true);
@@ -78,6 +79,19 @@ export default function SpecificationsPage() {
     useCallback((id: string) => setExpanded((prev) => new Set(prev).add(id)), []),
   );
 
+  const openCreate = () => {
+    setEditingId(null);
+    setNewSpec({ id: '', name: '', description: '', url: '' });
+    setShowCreate(true);
+    if (!projectId) return;
+    api.getNextId(projectId, 'specifications')
+      .then((r) => {
+        setNewSpec((v) => (v.id ? v : { ...v, id: r.next_id }));
+        setIdExample(r.next_id);
+      })
+      .catch(() => {});
+  };
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!projectId || !editable) return;
@@ -116,9 +130,13 @@ export default function SpecificationsPage() {
   const handleDuplicate = async (spec: Specification) => {
     if (!projectId) return;
     const existing = new Set(specifications.map((s) => s.id));
-    let id = `${spec.id}-copy`;
-    let n = 2;
-    while (existing.has(id)) { id = `${spec.id}-copy${n++}`; }
+    // Numbered from 1, not bare `-copy`, because the project's naming
+    // standard is enforced on create and a numeric-suffix scheme refuses an
+    // id that does not end in a digit. `-copy` was silently rejected with a
+    // 422 the moment enforcement went in, which broke Duplicate outright.
+    let n = 1;
+    let id = `${spec.id}-copy${n}`;
+    while (existing.has(id)) { id = `${spec.id}-copy${++n}`; }
     try {
       await api.createSpecification(projectId, {
         id,
@@ -192,7 +210,7 @@ export default function SpecificationsPage() {
           </p>
         </div>
         {editable && (
-        <button onClick={() => { setEditingId(null); setNewSpec({ id: '', name: '', description: '', url: '' }); setShowCreate(!showCreate); }} className="btn-primary">
+        <button onClick={openCreate} className="btn-primary">
           <Plus size={16} /> New Specification
         </button>
         )}
@@ -233,6 +251,7 @@ export default function SpecificationsPage() {
                 <label className="label">ID
                   <input className="input font-mono" placeholder="SRS-001" value={newSpec.id} onChange={(e) => setNewSpec({ ...newSpec, id: e.target.value })} disabled={!!editingId} />
                 </label>
+                {!editingId && idExample && <span className="text-[10px] text-muted-foreground">e.g. {idExample}</span>}
               </div>
               <div className="flex-1">
                 <label className="label">Name

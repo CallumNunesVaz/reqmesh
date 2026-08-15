@@ -28,10 +28,10 @@ def seeded(tmp_path):
 class TestComponentScope:
     def test_includes_satisfied_requirements(self, seeded):
         """Scoping to a component includes requirements that component satisfies."""
-        pub = Publisher(seeded, components=["FUSE"])
+        pub = Publisher(seeded, components=["FUSE01"])
         req_ids = {r["id"] for r in pub.reqs}
-        # FUSE → AFRM0001; children COCK → AFRM0003, YOKE → FLTC0001,
-        # SEAT/RSEAT/HARN → AFRM0002, DOOR → AFRM0001
+        # FUSE01 → AFRM0001; children COCK01 → AFRM0003, YOKE01 → FLTC0001,
+        # SEAT01/RSEAT01/HARN01 → AFRM0002, DOOR01 → AFRM0001
         assert "AFRM0001" in req_ids
         assert "AFRM0003" in req_ids
         assert "FLTC0001" in req_ids
@@ -39,10 +39,10 @@ class TestComponentScope:
 
     def test_excludes_requirements_not_satisfied(self, seeded):
         """Scoping to a component excludes requirements it does not satisfy."""
-        pub = Publisher(seeded, components=["YOKE"])
+        pub = Publisher(seeded, components=["YOKE01"])
         req_ids = {r["id"] for r in pub.reqs}
-        assert "FLTC0001" in req_ids  # YOKE satisfies FLTC0001
-        # Top-level reqs not satisfied by YOKE or its children (it has none)
+        assert "FLTC0001" in req_ids  # YOKE01 satisfies FLTC0001
+        # Top-level reqs not satisfied by YOKE01 or its children (it has none)
         assert "ACFT0000" not in req_ids
         assert "PROP0001" not in req_ids
         assert "AFRM0001" not in req_ids
@@ -50,8 +50,8 @@ class TestComponentScope:
     def test_tree_descends_to_children(self, seeded):
         """Scope descends the component tree: scoping to a parent picks up
         the requirements its children satisfy."""
-        # FUSE → COCK → YOKE → FLTC0001 (three levels)
-        pub = Publisher(seeded, components=["FUSE"])
+        # FUSE01 → COCK01 → YOKE01 → FLTC0001 (three levels)
+        pub = Publisher(seeded, components=["FUSE01"])
         req_ids = {r["id"] for r in pub.reqs}
         assert "FLTC0001" in req_ids
 
@@ -78,12 +78,12 @@ class TestComponentScope:
 
     def test_both_filters_intersect(self, seeded):
         """Both together intersect: a requirement must satisfy both filters."""
-        # YOKE satisfies FLTC0001, which is NOT under AFRM0000 hierarchy
-        pub = Publisher(seeded, subsystems=["AFRM0000"], components=["YOKE"])
+        # YOKE01 satisfies FLTC0001, which is NOT under AFRM0000 hierarchy
+        pub = Publisher(seeded, subsystems=["AFRM0000"], components=["YOKE01"])
         assert len(pub.reqs) == 0
 
-        # FUSE satisfies AFRM0001, which IS under AFRM0000 — intersection works
-        pub = Publisher(seeded, subsystems=["AFRM0000"], components=["FUSE"])
+        # FUSE01 satisfies AFRM0001, which IS under AFRM0000 — intersection works
+        pub = Publisher(seeded, subsystems=["AFRM0000"], components=["FUSE01"])
         req_ids = {r["id"] for r in pub.reqs}
         assert "AFRM0001" in req_ids
         # ACFT0000 is not under AFRM0000, even though C172 satisfies it

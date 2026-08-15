@@ -306,6 +306,11 @@ operation; a path served by several methods therefore appears several times.
 | GET | `/api/version` | Build metadata |
 | GET | `/health` | Health |
 | GET | `/version` | Version |
+## Other
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/projects/{project_id}/{kind}/next-id` | Next free id for a kind |
 
 ## Notes
 

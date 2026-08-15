@@ -21,11 +21,11 @@ test('duplicate a component: copy exists with a fresh id and carries no links', 
 
   await app.locator('#entity-C172 [title="Duplicate component"]').click();
 
-  await expect(app.getByText('Component C172-copy created')).toBeVisible({ timeout: 15000 });
+  await expect(app.getByText('Component C172-copy1 created')).toBeVisible({ timeout: 15000 });
 
-  const copy = await getJson(app, `/projects/${P}/components/C172-copy`);
+  const copy = await getJson(app, `/projects/${P}/components/C172-copy1`);
   expect(copy).not.toBeNull();
-  expect(copy.id).toBe('C172-copy');
+  expect(copy.id).toBe('C172-copy1');
   expect(copy.satisfies).toEqual([]);
   expect(copy.verification_cases).toEqual([]);
   expect(copy.baselines).toEqual([]);
@@ -47,11 +47,11 @@ test('duplicate a specification: copy exists with a fresh id and the original is
 
   await app.locator('#entity-SPEC-SYS [title="Duplicate specification"]').click();
 
-  await expect(app.getByText('Specification SPEC-SYS-copy created')).toBeVisible({ timeout: 15000 });
+  await expect(app.getByText('Specification SPEC-SYS-copy1 created')).toBeVisible({ timeout: 15000 });
 
-  const copy = await getJson(app, `/projects/${P}/specifications/SPEC-SYS-copy`);
+  const copy = await getJson(app, `/projects/${P}/specifications/SPEC-SYS-copy1`);
   expect(copy).not.toBeNull();
-  expect(copy.id).toBe('SPEC-SYS-copy');
+  expect(copy.id).toBe('SPEC-SYS-copy1');
   expect(copy.requirements).toEqual([]);
   expect(copy.components ?? []).toEqual([]);
 

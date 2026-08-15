@@ -24,6 +24,7 @@ export default function CreateRequirementModal({
   const [form, setForm] = useState({ id: '', name: '', type: 'functional', priority: 'medium', parent: '', description: '' });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [idExample, setIdExample] = useState('');
   const { selectedReqId } = useSelectedReq();
   const parentId = useId();
 
@@ -49,7 +50,7 @@ export default function CreateRequirementModal({
         parent,
       });
       api.getNextUid(projectId, parent || undefined)
-        .then((uid) => setForm((f) => ({ ...f, id: uid.next_id })))
+        .then((uid) => { setForm((f) => ({ ...f, id: uid.next_id })); setIdExample(uid.next_id); })
         .catch(() => {});
       return;
     }
@@ -58,7 +59,7 @@ export default function CreateRequirementModal({
     const parent = intent?.mode === 'child' ? intent.parent : (selectedReqId || '');
     setForm({ ...base, parent });
     api.getNextUid(projectId, parent || undefined)
-      .then((uid) => setForm((f) => ({ ...f, id: uid.next_id })))
+      .then((uid) => { setForm((f) => ({ ...f, id: uid.next_id })); setIdExample(uid.next_id); })
       .catch(() => {});
   }, [open, projectId, selectedReqId, intent]);
 
@@ -68,12 +69,12 @@ export default function CreateRequirementModal({
     if (parentReq?.parent) {
       setForm((f) => ({ ...f, parent: parentReq.parent! }));
       api.getNextUid(projectId, parentReq.parent)
-        .then((uid) => setForm((f) => ({ ...f, id: uid.next_id })))
+        .then((uid) => { setForm((f) => ({ ...f, id: uid.next_id })); setIdExample(uid.next_id); })
         .catch(() => {});
     } else {
       setForm((f) => ({ ...f, parent: '' }));
       api.getNextUid(projectId)
-        .then((uid) => setForm((f) => ({ ...f, id: uid.next_id })))
+        .then((uid) => { setForm((f) => ({ ...f, id: uid.next_id })); setIdExample(uid.next_id); })
         .catch(() => {});
     }
   };
@@ -81,7 +82,7 @@ export default function CreateRequirementModal({
   const handleParentChange = (parentId: string) => {
     setForm((f) => ({ ...f, parent: parentId }));
     api.getNextUid(projectId, parentId || undefined)
-      .then((uid) => setForm((f) => ({ ...f, id: uid.next_id })))
+      .then((uid) => { setForm((f) => ({ ...f, id: uid.next_id })); setIdExample(uid.next_id); })
       .catch(() => {});
   };
 
@@ -152,6 +153,7 @@ export default function CreateRequirementModal({
               <div className="grid grid-cols-[8rem_1fr] gap-3">
                 <div>
                   <label className="label">ID <input className="input font-mono" value={form.id} onChange={(e) => setForm({ ...form, id: e.target.value })} /></label>
+                  {idExample && <span className="text-[10px] text-muted-foreground">e.g. {idExample}</span>}
                 </div>
                 <div>
                   {/* The name is the primary field of a create dialog the user just

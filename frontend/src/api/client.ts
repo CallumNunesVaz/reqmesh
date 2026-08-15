@@ -1596,6 +1596,9 @@ export const api = {
     const qs = parent ? `?parent=${encodeURIComponent(parent)}` : '';
     return request<{ prefix: string; next_id: string }>(`/projects/${projectId}/requirements/next-uid${qs}`);
   },
+  /** Next id for any configured kind — the shared generator behind next-uid. */
+  getNextId: (projectId: string, kind: string) =>
+    request<{ prefix: string; next_id: string }>(`/projects/${projectId}/${kind}/next-id`),
 
   // Review
   reviewRequirement: (projectId: string, reqId: string, comment?: string) =>

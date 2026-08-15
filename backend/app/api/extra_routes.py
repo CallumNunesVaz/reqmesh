@@ -20,7 +20,7 @@ from app.core.dependencies import get_store, require_edit, require_maintain, req
 from app.core.rate_limit import rate_limit
 from app.core.ids import safe_id
 from app.services.meta_defs import normalize_baseline_defs
-from app.api._utils import sorted_by_modified, read_upload_capped, paginate, check_precondition
+from app.api._utils import sorted_by_modified, read_upload_capped, paginate, check_precondition, enforce_naming
 from app.models.change_request import ChangeRequestCreate, ChangeRequestUpdate
 from app.models.requirement import RequirementCreate
 from app.services.change_requests import redline as compute_redline
@@ -79,6 +79,7 @@ def get_change_request(project_id: str, cr_id: str):
 def create_change_request(project_id: str, data: ChangeRequestCreate, user: dict = Depends(require_edit)):
     store = get_store(project_id)
     safe_id(data.id, "change request id")
+    enforce_naming(store, "change_requests", data.id)
     if store.get_item("change_requests", data.id):
         raise HTTPException(status_code=409, detail="Change request already exists")
     reason = first_missing(store, [("requirements", data.affected_requirements)],
@@ -292,6 +293,7 @@ def get_risk(project_id: str, risk_id: str):
 def create_risk(project_id: str, data: RiskCreate, user: dict = Depends(require_edit)):
     store = get_store(project_id)
     safe_id(data.id, "risk id")
+    enforce_naming(store, "risks", data.id)
     if store.get_item("risks", data.id):
         raise HTTPException(status_code=409, detail="Risk already exists")
     r = data.model_dump(mode="json")

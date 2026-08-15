@@ -51,26 +51,26 @@ function parentSelect(app: Page): Locator {
 
 test('component detail parent select offers only other components', async ({ app, server }) => {
   await signIn(app);
-  await app.goto(`${server.baseURL}/project/${P}/components/FUSE`);
+  await app.goto(`${server.baseURL}/project/${P}/components/FUSE01`);
   await app.waitForSelector('main', { timeout: 20_000 });
   await setEditMode(app);
 
   const compIds = new Set(await listIds(app, 'components'));
   const reqIds = new Set(await listIds(app, 'requirements'));
-  // FUSE has both a parent and children, so the picker is populated and the
+  // FUSE01 has both a parent and children, so the picker is populated and the
   // self/descendant exclusion is actually exercised.
-  const own = await branch(app, 'FUSE');
+  const own = await branch(app, 'FUSE01');
 
   const select = parentSelect(app);
   await expect(select).toBeVisible({ timeout: 15_000 });
   const options = (await optionValues(select)).filter((v) => v !== '');
 
-  expect(options.length, 'FUSE has eligible parents other than its own branch').toBeGreaterThan(0);
+  expect(options.length, 'FUSE01 has eligible parents other than its own branch').toBeGreaterThan(0);
 
   for (const value of options) {
     expect(compIds.has(value), `parent option ${value} is a component id`).toBe(true);
     expect(reqIds.has(value), `parent option ${value} is not a requirement id`).toBe(false);
-    expect(own.has(value), `parent option ${value} is not FUSE or one of its descendants`).toBe(false);
+    expect(own.has(value), `parent option ${value} is not FUSE01 or one of its descendants`).toBe(false);
   }
 });
 
@@ -116,7 +116,7 @@ test('a parent that is not a component is reported, not rendered blank', async (
   const reqIds = await listIds(app, 'requirements');
   const orphanParent = reqIds[0];
 
-  await app.route(`**/api/projects/${P}/components/FUSE`, async (route) => {
+  await app.route(`**/api/projects/${P}/components/FUSE01`, async (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
     const res = await route.fetch();
     const body = await res.json();
@@ -126,7 +126,7 @@ test('a parent that is not a component is reported, not rendered blank', async (
     });
   });
 
-  await app.goto(`${server.baseURL}/project/${P}/components/FUSE`);
+  await app.goto(`${server.baseURL}/project/${P}/components/FUSE01`);
   await app.waitForSelector('main', { timeout: 20_000 });
   await setEditMode(app);
 
@@ -146,7 +146,7 @@ test('parent options name their component type, so a name cannot read as a requi
   // The demo project has a component and a requirement both called "Wing
   // Assembly"; without the type the dropdown is genuinely ambiguous.
   await signIn(app);
-  await app.goto(`${server.baseURL}/project/${P}/components/FUSE`);
+  await app.goto(`${server.baseURL}/project/${P}/components/FUSE01`);
   await app.waitForSelector('main', { timeout: 20_000 });
   await setEditMode(app);
 

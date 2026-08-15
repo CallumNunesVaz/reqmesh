@@ -36,7 +36,7 @@ test('a long component name is clipped instead of overflowing', async ({ app, se
 
   await signIn(app);
   await post(app, `/projects/${P}/components`, {
-    id: 'LONGCHILD',
+    id: 'LONGCHILD01',
     name: longName,
     type: 'part',
     parent: 'C172',

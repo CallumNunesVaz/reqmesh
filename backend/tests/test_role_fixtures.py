@@ -24,6 +24,10 @@ def admin_client(_real_role_client):
 def project(admin_client):
     r = admin_client.post("/api/projects", json={"id": "rp", "name": "RP"})
     assert r.status_code == 201, r.text
+    # This suite exercises permission tiers, not id shapes; naming enforcement
+    # defaults on, so opt out (mirrors the shared `project` fixture) rather than
+    # renaming the readable ids these tests use.
+    admin_client.patch("/api/projects/rp", json={"naming": {"enforce": False}})
     return "rp"
 
 

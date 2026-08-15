@@ -97,15 +97,15 @@ def test_component_link_does_not_cross_link_a_same_named_requirement(client):
     requirement would be blocked for no reason.
     """
     p = _project(client, "cl6")
-    _component(client, p, "SHARED")
-    client.post(f"/api/projects/{p}/requirements", json={"id": "SHARED", "title": "req"})
+    _component(client, p, "SHARED1")
+    client.post(f"/api/projects/{p}/requirements", json={"id": "SHARED1", "title": "req"})
     client.post(f"/api/projects/{p}/risks", json={"id": "RSK-1", "title": "r"})
-    client.put(f"/api/projects/{p}/risks/RSK-1", json={"linked_components": ["SHARED"]})
+    client.put(f"/api/projects/{p}/risks/RSK-1", json={"linked_components": ["SHARED1"]})
 
     # The requirement is not referenced by that risk, so it deletes cleanly.
-    assert client.delete(f"/api/projects/{p}/requirements/SHARED").status_code == 200
+    assert client.delete(f"/api/projects/{p}/requirements/SHARED1").status_code == 200
     # The component still is.
-    assert client.delete(f"/api/projects/{p}/components/SHARED").status_code == 409
+    assert client.delete(f"/api/projects/{p}/components/SHARED1").status_code == 409
 
 
 def test_dangling_component_id_is_reported_not_rejected(client):

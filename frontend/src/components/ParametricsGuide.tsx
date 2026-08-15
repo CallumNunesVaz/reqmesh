@@ -23,9 +23,9 @@ const sections = [
     title: 'Budget Rollups',
     questions: [
       { q: 'What is a rollup?',
-        a: 'It sums a parameter across every part of a component tree. So `rollup(\'AVIO\', \'current\')` adds up the current draw of every LRU under the AVIO subsystem. Quantity is multiplied automatically (e.g. 2× GDU displays).' },
+        a: 'It sums a parameter across every part of a component tree. So `rollup(\'AVIO01\', \'current\')` adds up the current draw of every LRU under the AVIO subsystem. Quantity is multiplied automatically (e.g. 2× GDU01 displays).' },
       { q: 'When would I use one?',
-        a: 'Weight & balance: `rollup(\'C172\', \'mass\')` tells you the tracked total mass. Electrical load: `rollup(\'AVIO\', \'current\')` gives the total avionics current to size the alternator.' },
+        a: 'Weight & balance: `rollup(\'C172\', \'mass\')` tells you the tracked total mass. Electrical load: `rollup(\'AVIO01\', \'current\')` gives the total avionics current to size the alternator.' },
     ],
   },
   {
