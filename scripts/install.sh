@@ -314,6 +314,11 @@ non_interactive() {
     save_cfg "BIND" "${RT_BIND:-}"
     # Needed before BASE_URL, which derives its host from it.
     save_cfg "LAN_IP" "$(detect_lan_ip)"
+    # Every address this box answers on, so the proxy serves all of them. A
+    # host with a primary and a secondary lease on one NIC otherwise gets a
+    # site block naming whichever one detection happened to pick, and requests
+    # to the other return an empty 200 — a blank page with no error anywhere.
+    save_cfg "LAN_IPS" "$(detect_lan_ips | tr '\n' ' ')"
 
     # BASE_URL cannot simply be carried over from the previous install the way
     # the other settings are. Switching a deployment between HTTP and HTTPS

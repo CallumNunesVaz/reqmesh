@@ -257,6 +257,58 @@ check "blank line separates the block from the body" \
 check "http still redirects" "$(printf '%s' "$out" | grep -c 'redir https://{host}{uri} permanent')" "1"
 check "tls internal retained" "$(printf '%s' "$out" | grep -c 'tls internal')" "1"
 
+# ══════════════════════════════════════════════════════════════════════════════
+section "a multi-homed host is served on every address"
+# ══════════════════════════════════════════════════════════════════════════════
+# A NIC carrying a primary and a secondary lease is ordinary, and detection
+# returns exactly one address. Naming only that one meant a request to the
+# other matched no site and Caddy answered 200 with an *empty body* — a blank
+# page, no error in any log, and `curl https://localhost/` still perfectly
+# healthy. This is what a reinstall did to calsrv: it bound .161 while the
+# operator, RT_BASE_URL and the previous Caddyfile all said .163.
+render_multi() {
+  ( declare -A CFG=([TLS]=selfsigned [LAN_IP]="${1-}" [LAN_IPS]="${2-}" [BASE_URL]="${3-}")
+    TEMPLATES_DIR="$REPO/scripts/templates"
+    source "$REPO/scripts/lib.sh" >/dev/null 2>&1
+    render_caddyfile "reqmesh:8000" )
+}
+
+out_multi="$(render_multi 192.168.0.161 "192.168.0.163 192.168.0.161" "https://192.168.0.163")"
+check "the base-URL address is served" \
+      "$(printf '%s' "$out_multi" | grep -c 'https://192.168.0.163')" "1"
+check "the other local address is served too" \
+      "$(printf '%s' "$out_multi" | grep -c 'https://192.168.0.161')" "1"
+check "default_sni follows the base URL, not detection" \
+      "$(printf '%s' "$out_multi" | grep -c 'default_sni 192.168.0.163')" "1"
+check "each address appears once" \
+      "$(printf '%s' "$out_multi" | grep -o 'https://192.168.0.163' | wc -l)" "1"
+
+# The base URL leads even when detection never saw that address at all — a
+# static lease the box has not been told about, or a NAT'd address.
+out_unknown="$(render_multi 10.0.0.5 "10.0.0.5" "https://192.168.0.163")"
+check "an undetected base-URL host is still served" \
+      "$(printf '%s' "$out_unknown" | grep -c 'https://192.168.0.163')" "1"
+
+# A hostname base URL is a name Caddy can match on its own; it must still be
+# named, and must not be mistaken for an IP.
+out_name="$(render_multi 192.168.0.163 "192.168.0.163" "https://reqmesh.lan")"
+check "a hostname base URL is served" \
+      "$(printf '%s' "$out_name" | grep -c 'https://reqmesh.lan')" "1"
+
+# localhost as a base URL must not be duplicated into the address list.
+out_local="$(render_multi 192.168.0.163 "192.168.0.163" "http://localhost:8000")"
+check "localhost base URL is not duplicated" \
+      "$(printf '%s' "$out_local" | grep -o 'https://localhost' | wc -l)" "1"
+check "localhost base URL leaves default_sni on the LAN IP" \
+      "$(printf '%s' "$out_local" | grep -c 'default_sni 192.168.0.163')" "1"
+
+# base_url_host is the seam both of those rely on.
+check "base_url_host strips scheme, port and path" \
+      "$( source "$REPO/scripts/lib.sh" >/dev/null 2>&1; base_url_host 'https://192.168.0.163:8443/x' )" \
+      "192.168.0.163"
+check "base_url_host on an empty value is empty" \
+      "$( source "$REPO/scripts/lib.sh" >/dev/null 2>&1; base_url_host '' )" ""
+
 # With no LAN IP there is no name to pin, and default_sni must not be emitted
 # with an empty value — Caddy rejects that outright.
 out_nolan="$(render_domainless "")"
