@@ -5,8 +5,6 @@ could reach `component.parent` and then sit there unseen — `build_flat_tree`
 buckets an unresolvable parent under ``None``, so the component simply rendered
 as a root. The migration makes that display true on disk.
 """
-from pathlib import Path
-
 import pytest
 from ruamel.yaml import YAML
 
