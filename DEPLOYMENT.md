@@ -64,7 +64,7 @@ The install command names a **git tag or branch**, which is not the same as the
 
 | URL | Meaning |
 |---|---|
-| `.../reqmesh/v0.3.2/scripts/install.sh` | that release — reproducible, recommended |
+| `.../reqmesh/v0.3.3/scripts/install.sh` | that release — reproducible, recommended |
 | `.../reqmesh/main/scripts/install.sh` | current development tip |
 | `.../reqmesh/latest/scripts/install.sh` | **404** — there is no git ref called `latest` |
 
@@ -82,14 +82,14 @@ Use the standard installer — it covers Ubuntu 24.04 along with every other
 supported target, and is the only install path that is tested end to end:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/CallumNunesVaz/reqmesh/v0.3.2/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/CallumNunesVaz/reqmesh/v0.3.3/scripts/install.sh | bash
 ```
 
 For a bare-metal install (Python venv + systemd, no Docker), answer "bare" at
 the deployment-mode prompt, or run it scripted:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/CallumNunesVaz/reqmesh/v0.3.2/scripts/install.sh \
+curl -fsSL https://raw.githubusercontent.com/CallumNunesVaz/reqmesh/v0.3.3/scripts/install.sh \
   | REQMESH_DEPLOY_MODE=bare REQMESH_PROXY=nginx bash -s -- --non-interactive
 ```
 
@@ -128,7 +128,7 @@ move the state directory outside the data root and restart; nothing is lost.
 A plain re-run behaves the same way for settings, but does allow changes:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/CallumNunesVaz/reqmesh/v0.3.2/scripts/install.sh \
+curl -fsSL https://raw.githubusercontent.com/CallumNunesVaz/reqmesh/v0.3.3/scripts/install.sh \
   | bash -s -- --non-interactive
 ```
 
@@ -163,7 +163,7 @@ and the change is printed.
 The tarball unpacks to a directory containing the application and the installer:
 
 ```bash
-tar xzf reqmesh-v0.3.2.tar.gz && cd reqmesh-v0.3.2
+tar xzf reqmesh-v0.3.3.tar.gz && cd reqmesh-v0.3.3
 sudo ./install.sh --non-interactive        # delegates to scripts/install.sh
 ```
 
@@ -171,7 +171,7 @@ The bare-metal path needs no network. For Docker offline, load the published
 image first and pin it:
 
 ```bash
-docker load < reqmesh-v0.3.2-image.tar.gz
+docker load < reqmesh-v0.3.3-image.tar.gz
 REQMESH_VERSION=<loaded-tag> ./install.sh --non-interactive
 ```
 
