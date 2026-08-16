@@ -391,7 +391,7 @@ export default function RequirementsPage() {
   };
 
   return (
-    <div className="relative max-w-4xl mx-auto px-6 py-6 min-h-[50vh]">
+    <div className="relative w-full px-6 py-6 min-h-[50vh]">
       {loading && requirements.length === 0 && <LoadingSplash label="Loading requirements…" />}
       {truncation && <TruncationBanner info={truncation} />}
       {/* Header */}
@@ -550,6 +550,7 @@ export default function RequirementsPage() {
                 valid={dropIsValid}
               >
               <div
+                id={`entity-${req.id}`}
                 role="treeitem"
                 tabIndex={0}
                 onClick={() => navigate(`/project/${projectId}/requirements/${req.id}`)}
@@ -560,8 +561,14 @@ export default function RequirementsPage() {
                   }
                 }}
                 className={`group flex items-center gap-2 pr-3 py-[7px] cursor-pointer transition-colors hover:bg-accent/40 ${dimByFilter ? 'opacity-45' : ''} ${draggingIds.includes(req.id) ? 'opacity-40' : ''}`}
-                style={{ paddingLeft: `${12 + depth * 22}px` }}
               >
+                {/* Left cell. The tree indent lives *here*, not on the row, so
+                    that every column to the right of the name starts at the
+                    same x on every row whatever its depth. */}
+                <div
+                  className="flex items-center gap-2 min-w-0 flex-1"
+                  style={{ paddingLeft: `${12 + depth * 22}px` }}
+                >
                 {editMode && <DragGrip id={req.id} label={req.id} />}
                 {/* Selection checkbox */}
                 {editMode && (
@@ -597,11 +604,9 @@ export default function RequirementsPage() {
 
                 <span className="font-mono text-[11px] text-muted-foreground shrink-0 w-auto @md:w-[4.8rem]">{req.id}</span>
 
-                {/* flex-1 + min-w-0 (not shrink-0): the name takes the free
-                    space, so the trailing controls keep a fixed column however
-                    wide the name or the optional badges are — and on a narrow
-                    pane the name compresses and truncates instead of pushing
-                    the row past the edge. */}
+                {/* flex-1 + min-w-0 (not shrink-0): the name takes whatever the
+                    indent leaves, so it compresses and truncates on a narrow
+                    pane instead of pushing the row past the edge. */}
                 <span
                   className={`text-[13px] truncate min-w-0 flex-1 ${childCount > 0 ? 'font-semibold' : 'font-medium'} text-foreground`}
                   title={req.name || 'Untitled'}
@@ -609,40 +614,50 @@ export default function RequirementsPage() {
                   {req.name || 'Untitled'}
                 </span>
 
-                {/* Pane-width tiers: description only on wide panes; priority
-                    chip and the status *word* drop next, leaving the dot. */}
-                {req.description && (
-                  <span className="text-xs text-muted-foreground/70 truncate flex-1 min-w-0 hidden @2xl:inline">
-                    {stripHtml(req.description)}
-                  </span>
+                {childCount > 0 && isCollapsed && !filtering && (
+                  <span className="shrink-0 text-[10px] text-muted-foreground bg-secondary rounded-full px-1.5 py-px">{childCount}</span>
                 )}
+                </div>
 
-                {/* Meta */}
+                {/* Description column. Fixed share of the row — not flex-1 —
+                    so its left edge lines up down the list rather than
+                    floating with the length of the name beside it. Rendered
+                    even when empty to hold the column open. */}
+                <span className="hidden @3xl:block w-[28%] shrink-0 truncate text-xs text-muted-foreground/70">
+                  {req.description ? stripHtml(req.description) : ''}
+                </span>
+
+                {/* Meta. Every slot below is a fixed width and is rendered
+                    whether or not it has content, so the priority chip, the
+                    status and the row actions each hold one column. */}
                 <span className="flex items-center gap-2 shrink-0">
-                  {childCount > 0 && isCollapsed && !filtering && (
-                    <span className="text-[10px] text-muted-foreground bg-secondary rounded-full px-1.5 py-px">{childCount}</span>
-                  )}
-                  {priorityChips[req.priority] && (
-                    <span className={`badge border text-[10px] px-1.5 py-px hidden @sm:inline-flex ${priorityChips[req.priority]}`}>{req.priority}</span>
-                  )}
+                  <span className="hidden @sm:flex w-[4.2rem] shrink-0 justify-start">
+                    {priorityChips[req.priority] && (
+                      <span className={`badge border text-[10px] px-1.5 py-px ${priorityChips[req.priority]}`}>{req.priority}</span>
+                    )}
+                  </span>
                   <span className="flex items-center gap-1.5 w-auto @md:w-[5.6rem]" title={req.status}>
                     <span className={`w-1.5 h-1.5 rounded-full ${status.dot}`} />
                     <span className="text-[11px] text-muted-foreground capitalize hidden @md:inline">{req.status}</span>
                   </span>
-                  {req.verification_status === 'passed' && <span className="w-1.5 h-1.5 rounded-full bg-cs-green" title="Verification passed" />}
-                  {req.verification_status === 'failed' && <span className="w-1.5 h-1.5 rounded-full bg-cs-red" title="Verification failed" />}
-                  {verdicts.has(req.id) && (
-                    <span
-                      className={`text-[10px] font-semibold leading-none ${
-                        verdicts.get(req.id) === 'pass' ? 'text-cs-teal'
-                          : verdicts.get(req.id) === 'unknown' ? 'text-cs-yellow'
-                          : 'text-cs-red'
-                      }`}
-                      title={`Parametric constraints: ${verdicts.get(req.id)}`}
-                    >
-                      Σ
-                    </span>
-                  )}
+                  <span className="w-1.5 shrink-0">
+                    {req.verification_status === 'passed' && <span className="block w-1.5 h-1.5 rounded-full bg-cs-green" title="Verification passed" />}
+                    {req.verification_status === 'failed' && <span className="block w-1.5 h-1.5 rounded-full bg-cs-red" title="Verification failed" />}
+                  </span>
+                  <span className="w-2.5 shrink-0 text-center">
+                    {verdicts.has(req.id) && (
+                      <span
+                        className={`text-[10px] font-semibold leading-none ${
+                          verdicts.get(req.id) === 'pass' ? 'text-cs-teal'
+                            : verdicts.get(req.id) === 'unknown' ? 'text-cs-yellow'
+                            : 'text-cs-red'
+                        }`}
+                        title={`Parametric constraints: ${verdicts.get(req.id)}`}
+                      >
+                        Σ
+                      </span>
+                    )}
+                  </span>
                   {editMode && (
                     <>
                       <button

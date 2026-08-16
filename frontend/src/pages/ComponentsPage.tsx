@@ -363,8 +363,11 @@ export default function ComponentsPage() {
             }
           }}
           className={`group flex items-center gap-2 px-2 py-2 rounded-lg cursor-pointer transition-colors hover:bg-accent ${isFocused ? 'bg-accent ring-1 ring-ring/30' : ''} ${draggingIds.includes(node.id) ? 'opacity-40' : ''}`}
-          style={{ paddingLeft: depth * 20 + 8 }}
         >
+          {/* Left cell. The tree indent lives here, not on the row, so the
+              quantity, satisfies and action columns to its right start at the
+              same x on every row whatever its depth. */}
+          <div className="flex items-center gap-2 min-w-0 flex-1" style={{ paddingLeft: depth * 20 }}>
           {editable && <DragGrip id={node.id} label={node.id} />}
           {editable && (
             <button
@@ -395,19 +398,19 @@ export default function ComponentsPage() {
           <TypeIcon size={14} className={`${typeMeta.cls} shrink-0`} />
           <span className="font-mono text-xs text-muted-foreground shrink-0">{node.id}</span>
           <span className="text-sm text-card-foreground truncate flex-1 min-w-0">{node.name || 'Untitled'}</span>
-          {qtyLabel && (
-            <span
-              className="text-xs text-muted-foreground shrink-0"
-              title={effQty !== ownQty ? `${effQty}× in the build (${ownQty}× in this row)` : undefined}
-            >
-              {qtyLabel}
-            </span>
-          )}
-          {node.satisfies.length > 0 && (
-            <span className="text-[10px] text-muted-foreground shrink-0">
-              satisfies {node.satisfies.length}
-            </span>
-          )}
+          </div>
+          {/* Fixed-width slots, rendered whether or not they carry content, so
+              a row without a quantity or a satisfies count does not pull the
+              rows around it out of column. */}
+          <span
+            className="w-14 shrink-0 text-right text-xs text-muted-foreground"
+            title={qtyLabel && effQty !== ownQty ? `${effQty}× in the build (${ownQty}× in this row)` : undefined}
+          >
+            {qtyLabel}
+          </span>
+          <span className="w-[5.5rem] shrink-0 text-right text-[10px] text-muted-foreground">
+            {node.satisfies.length > 0 ? `satisfies ${node.satisfies.length}` : ''}
+          </span>
           {/* The trailing controls sit in a shrink-0 cluster so they hold a
               stable column however many optional badges a row carries. Hover-
               revealed buttons use opacity (not `hidden`), so they keep their
