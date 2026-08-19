@@ -312,6 +312,10 @@ const MAX_LOGO_BYTES = 1_000_000;
 function LogoInput({ value, onChange, locked }: { value: string; onChange: (v: string) => void; locked: boolean }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [err, setErr] = useState('');
+  // The URL entered to *replace* an embedded image. Kept separate from `value`
+  // so that typing into this field never silently discards the uploaded PNG —
+  // the switch only happens once the operator commits it.
+  const [switchUrl, setSwitchUrl] = useState('');
   const isData = value.startsWith('data:');
   const embeddedKb = isData ? Math.round((value.length * 3) / 4 / 1024) : 0;
 
@@ -332,13 +336,21 @@ function LogoInput({ value, onChange, locked }: { value: string; onChange: (v: s
     reader.readAsDataURL(file);
   };
 
+  const applySwitch = () => {
+    const url = switchUrl.trim();
+    if (!url) return;
+    onChange(url);
+    setSwitchUrl('');
+    setErr('');
+  };
+
   return (
     <div className="shrink-0 w-64 max-w-full space-y-2">
       {value ? (
         <div className="flex items-center gap-2">
           <img src={value} alt="Logo preview" className="max-h-10 max-w-[7rem] rounded border border-border bg-white/5 object-contain" />
           {!locked && (
-            <button onClick={() => { onChange(''); setErr(''); }} className="text-muted-foreground hover:text-destructive" title="Remove logo">
+            <button onClick={() => { onChange(''); setErr(''); setSwitchUrl(''); }} className="text-muted-foreground hover:text-destructive" title="Remove logo">
               <X size={13} />
             </button>
           )}
@@ -346,8 +358,22 @@ function LogoInput({ value, onChange, locked }: { value: string; onChange: (v: s
       ) : (
         <div className="text-xs text-muted-foreground italic">No logo set</div>
       )}
+      {isData && <div className="text-[11px] text-muted-foreground">Embedded image ({embeddedKb} KB)</div>}
       {isData ? (
-        <div className="text-[11px] text-muted-foreground">Embedded image ({embeddedKb} KB)</div>
+        !locked && (
+          <div className="flex gap-1.5">
+            <input
+              className="input text-xs w-full font-mono"
+              placeholder="Paste a URL to switch"
+              value={switchUrl}
+              onChange={(e) => setSwitchUrl(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); applySwitch(); } }}
+            />
+            <button className="btn-secondary text-xs shrink-0" onClick={applySwitch} disabled={!switchUrl.trim()} title="Switch to this URL">
+              Use URL
+            </button>
+          </div>
+        )
       ) : (
         <input
           className="input text-xs w-full font-mono"

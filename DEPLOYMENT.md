@@ -310,6 +310,23 @@ RT_ADMIN_PASSWORD=$(openssl rand -base64 12) \
 reqmesh is now listening on `http://localhost:8000`. Log in with
 `admin` / the generated password.
 
+#### Pinning a runtime setting
+
+Most instance settings (SMTP, offline mode, base URL, self-update, the report
+branding, …) are **editable from the admin UI** out of the box — they fall back
+to the app's own defaults. To pin one at the deployment level, write it into a
+`.env` file next to the compose file; the container picks it up and the UI then
+shows it read-only:
+
+```bash
+# .env  (same directory as docker-compose.prod.yml)
+RT_OFFLINE_MODE=true
+RT_SMTP_HOST=smtp.example.com
+```
+
+`RT_SECRET` and `RT_ADMIN_PASSWORD` are still required, either in the
+environment or in `.env`.
+
 #### Making It Reachable on the Network
 
 Set `RT_BIND=0.0.0.0` to expose port 8000 to all interfaces:
@@ -345,7 +362,8 @@ docker save ghcr.io/callumnunesvaz/reqmesh:latest | gzip > reqmesh.tar.gz
 scp reqmesh.tar.gz airgap-server:/opt/reqmesh/
 # On the air-gapped server:
 gunzip -c reqmesh.tar.gz | docker load
-RT_OFFLINE_MODE=true docker compose -f docker-compose.prod.yml up -d
+echo RT_OFFLINE_MODE=true >> .env
+docker compose -f docker-compose.prod.yml up -d
 ```
 
 ---
@@ -370,7 +388,8 @@ and set a long read timeout, otherwise real-time updates will not work.
 ### Email Notifications
 
 reqmesh can send email for requirement reviews, change requests, risks,
-decisions, and comments. Set these in the environment:
+decisions, and comments. Set these either from the admin Settings page or by
+pinning them in a `.env` file next to `docker-compose.prod.yml`:
 
 | Variable | Example | Notes |
 |----------|---------|-------|
@@ -384,8 +403,12 @@ decisions, and comments. Set these in the environment:
 For testing without a real SMTP server:
 ```bash
 docker run -d --name mailpit -p 8025:8025 -p 1025:1025 axllent/mailpit
-RT_SMTP_HOST=localhost RT_SMTP_PORT=1025 RT_SMTP_USE_TLS=false \
-  docker compose -f docker-compose.prod.yml up -d
+cat >> .env <<'EOF'
+RT_SMTP_HOST=localhost
+RT_SMTP_PORT=1025
+RT_SMTP_USE_TLS=false
+EOF
+docker compose -f docker-compose.prod.yml up -d
 ```
 Open `http://localhost:8025` to see captured emails.
 

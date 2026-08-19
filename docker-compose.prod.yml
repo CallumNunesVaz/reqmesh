@@ -23,12 +23,20 @@ services:
       dockerfile: Dockerfile.prod
     ports:
       - "${RT_BIND:-127.0.0.1}:8000:8000"
+    # Any RT_* setting an operator writes into a `.env` file beside this compose
+    # file is passed through to the container. Settings *not* named there fall
+    # back to the app's own defaults and stay editable from the admin UI. The
+    # `environment:` list below therefore pins only what the deployment must —
+    # never a runtime setting (SMTP, offline mode, base URL, self-update, …) an
+    # operator might want to change from the UI. Previously those were exported
+    # with `${RT_X:-default}` shell defaults, which compose substitutes and
+    # exports even when unset, so `is_env_locked` saw every one as pinned.
+    env_file:
+      - path: .env
+        required: false
     environment:
       - RT_STATIC_DIR=/app/frontend/dist
       - RT_UPDATE_CONTROL_DIR=/control
-      - RT_GITHUB_REPO=${RT_GITHUB_REPO:-CallumNunesVaz/reqmesh}
-      - RT_GITHUB_TOKEN=${RT_GITHUB_TOKEN:-}
-      - RT_SELF_UPDATE_ENABLED=${RT_SELF_UPDATE_ENABLED:-true}
       - RT_DATA_ROOT=/data/projects
       # Accounts and the signing secret belong on the durable volume, beside the
       # project data. Left at its default this resolved to $HOME/.reqmesh =
@@ -60,16 +68,9 @@ services:
       # the *development* default (localhost:5173), which has no business
       # being an allowed credentialed origin in production.
       - RT_CORS_ORIGINS=${RT_CORS_ORIGINS:-[]}
-      - RT_OFFLINE_MODE=${RT_OFFLINE_MODE:-false}
       - RT_PROFILE=${RT_PROFILE:-team}
       - RT_COOKIE_SECURE=${RT_COOKIE_SECURE:-true}
       - RT_PROXY_TRUSTED_CIDR=${RT_PROXY_TRUSTED_CIDR:-127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}
-      - "RT_BASE_URL=${RT_BASE_URL:-http://localhost:8000}"
-      - RT_SMTP_HOST=${RT_SMTP_HOST:-}
-      - RT_SMTP_PORT=${RT_SMTP_PORT:-587}
-      - RT_SMTP_USERNAME=${RT_SMTP_USERNAME:-}
-      - RT_SMTP_PASSWORD=${RT_SMTP_PASSWORD:-}
-      - RT_SMTP_FROM=${RT_SMTP_FROM:-reqmesh@localhost}
     volumes:
       - reqmesh-data:/data
       # Shared with the updater sidecar. The app writes update requests here; it
