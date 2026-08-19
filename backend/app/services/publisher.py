@@ -14,6 +14,9 @@ from app.services.publishers.css import CSS
 from app.services.publishers.latex_helpers import (
     latex_engine_available,
     compile_latex_to_pdf,
+    compile_latex_to_pdf_detailed,
+    WATERMARK_APPLIED_MARKER,
+    WATERMARK_OMITTED_MARKER,
     _darken,
     latex_escape,
     truncate_words,
@@ -23,11 +26,43 @@ logger = logging.getLogger(__name__)
 
 # Re-export for backward compatibility — callers (updater, system_routes,
 # publish_routes) import from publisher directly.
-__all__ = ["Publisher", "compile_latex_to_pdf", "latex_engine_available"]
+__all__ = [
+    "Publisher",
+    "compile_latex_to_pdf",
+    "compile_latex_to_pdf_detailed",
+    "latex_engine_available",
+    "watermark_preamble",
+]
 
 # Aliases with the underscore prefix the Publisher class expects.
 _latex_escape = latex_escape
 _truncate_words = truncate_words
+
+
+def watermark_preamble(status_txt: str) -> list[str]:
+    """LaTeX that stamps a DRAFT watermark on every page, guarded like ``tikz``.
+
+    ``draftwatermark`` is not in a minimal TeX install — tectonic fetches it
+    from its bundle on demand, so it is absent from a warmed cache until fetched
+    and unreachable in ``offline_mode``. Loading it unconditionally therefore
+    fails a draft report where a non-draft one builds fine. The load is guarded
+    by ``\\IfFileExists`` and the settings calls by ``\\ifdefined``, so a missing
+    or incompatible package costs the watermark and nothing else.
+
+    ``\\typeout`` markers record which branch ran, so the compile step can report
+    that a draft lost its DRAFT mark rather than ship an unmarked draft silently.
+    """
+    return [
+        r"\IfFileExists{draftwatermark.sty}{\usepackage{draftwatermark}\newcommand{\rmhaswatermark}{1}}{}",
+        r"\ifdefined\rmhaswatermark",
+        f"  \\SetWatermarkText{{{status_txt or 'DRAFT'}}}",
+        r"  \SetWatermarkScale{0.5}",
+        r"  \SetWatermarkColor[gray]{0.92}",
+        r"  \typeout{" + WATERMARK_APPLIED_MARKER + "}",
+        r"\else",
+        r"  \typeout{" + WATERMARK_OMITTED_MARKER + "}",
+        r"\fi",
+    ]
 
 
 class Publisher:
@@ -1044,10 +1079,7 @@ class Publisher:
         # \pill fallback further down degrades to a flat colour chip.
         L.append(r"\IfFileExists{tikz.sty}{\usepackage{tikz}\newcommand{\rmhaspill}{1}}{}")
         if is_draft:
-            L.append(r"\usepackage{draftwatermark}")
-            L.append(f"\\SetWatermarkText{{{status_txt or 'DRAFT'}}}")
-            L.append(r"\SetWatermarkScale{0.5}")
-            L.append(r"\SetWatermarkColor[gray]{0.92}")
+            L.extend(watermark_preamble(status_txt))
 
         # ── Palette ───────────────────────────────────────────────────────
         # Matches the app UI exactly — the Cloudscape light-theme CSS variables
@@ -2080,7 +2112,16 @@ class Publisher:
         own diagnostics; the warning here records that the document actually
         handed back is the fallback.
         """
-        if compile_latex_to_pdf(self.build_latex(), path):
+        result = compile_latex_to_pdf_detailed(self.build_latex(), path)
+        if result.ok:
+            if result.watermark_omitted:
+                logger.warning(
+                    "DRAFT watermark omitted from %s: the draftwatermark TeX "
+                    "package is unavailable, so the report rendered without its "
+                    "DRAFT mark. Warm the cache (backend/scripts/warm_tectonic.py) "
+                    "to restore it.",
+                    path,
+                )
             return path
         logger.warning(
             "LaTeX PDF render failed; falling back to the weasyprint HTML "

@@ -18,7 +18,7 @@ import app.services.publisher as publisher_module
 from app.services.publisher import Publisher, compile_latex_to_pdf
 from app.services.yaml_store import YamlStore
 from app.services.demo_seed import seed_demo_project, PROJECT_ID
-from app.services.publishers.latex_helpers import latex_engine_available, latex_escape
+from app.services.publishers.latex_helpers import CompileResult, latex_engine_available, latex_escape
 
 
 # ── fixtures ──────────────────────────────────────────────────────────────────
@@ -139,8 +139,8 @@ class TestSilentFailure:
         """
         monkeypatch.setattr(
             publisher_module,
-            "compile_latex_to_pdf",
-            lambda latex, out, timeout=300: False,
+            "compile_latex_to_pdf_detailed",
+            lambda latex, out, timeout=300: CompileResult(ok=False),
         )
         out = tmp_path / "out.pdf"
         assert Publisher(seeded).to_pdf_file(str(out)) == str(out)
@@ -155,8 +155,8 @@ class TestSilentFailure:
         """
         monkeypatch.setattr(
             publisher_module,
-            "compile_latex_to_pdf",
-            lambda latex, out, timeout=300: False,
+            "compile_latex_to_pdf_detailed",
+            lambda latex, out, timeout=300: CompileResult(ok=False),
         )
         with caplog.at_level(logging.WARNING, logger=publisher_module.__name__):
             Publisher(seeded).to_pdf_file(str(tmp_path / "out.pdf"))

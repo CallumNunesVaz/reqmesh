@@ -9,6 +9,7 @@ import logging
 import shutil
 import subprocess
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -18,6 +19,23 @@ logger = logging.getLogger(__name__)
 # needs no full TeX Live install; the classic engines run two passes so the
 # table of contents and longtables resolve.
 _LATEX_ENGINES = ("tectonic", "pdflatex", "lualatex", "xelatex")
+
+# Markers the guarded watermark preamble writes into the LaTeX log via
+# ``\typeout`` (see ``Publisher``'s watermark preamble), so the compile step can
+# learn whether a draft report's DRAFT watermark actually rendered. A draft that
+# silently loses its mark is a document-control problem, not a cosmetic one, so
+# the omission is reported rather than swallowed.
+WATERMARK_APPLIED_MARKER = "reqmesh:watermark=applied"
+WATERMARK_OMITTED_MARKER = "reqmesh:watermark=omitted"
+
+
+@dataclass
+class CompileResult:
+    """Outcome of a LaTeX compile: success plus whether the DRAFT watermark was
+    dropped because the ``draftwatermark`` package was unavailable."""
+
+    ok: bool
+    watermark_omitted: bool = False
 
 
 def latex_engine_available() -> str | None:
@@ -42,18 +60,36 @@ def compile_latex_to_pdf(latex: str, out_path: str, timeout: int = 300) -> bool:
     Deliberately does not retry. A user waiting on a PDF export should fail
     fast and fall back to the HTML renderer; retrying is the caller's decision,
     and only the build-time warmer wants it.
+
+    Callers that need to know whether a draft report's DRAFT watermark was
+    dropped should use :func:`compile_latex_to_pdf_detailed` instead.
+    """
+    return compile_latex_to_pdf_detailed(latex, out_path, timeout).ok
+
+
+def compile_latex_to_pdf_detailed(latex: str, out_path: str, timeout: int = 300) -> CompileResult:
+    r"""Like :func:`compile_latex_to_pdf`, but also reports whether a draft
+    report's DRAFT watermark could not be rendered.
+
+    The watermark preamble is guarded (``\IfFileExists{draftwatermark.sty}``),
+    so a missing package no longer fails the compile — but it does silently drop
+    the DRAFT mark. The preamble writes a ``\typeout`` marker into the log, and
+    this function reads it back so callers can tell the user what they did not
+    get rather than ship an unmarked draft.
     """
     engine = latex_engine_available()
     if engine is None:
         logger.warning("No LaTeX engine found (%s); cannot render PDF from LaTeX.",
                        ", ".join(_LATEX_ENGINES))
-        return False
+        return CompileResult(ok=False)
     with tempfile.TemporaryDirectory(prefix="reqmesh-tex-") as tmp:
         tmp_dir = Path(tmp)
         tex_file = tmp_dir / "report.tex"
         tex_file.write_text(latex, encoding="utf-8")
         if engine == "tectonic":
-            cmds = [[engine, "--outdir", str(tmp_dir), str(tex_file)]]
+            # --keep-logs leaves report.log behind so the watermark marker can
+            # be read back; tectonic otherwise deletes it.
+            cmds = [[engine, "--outdir", str(tmp_dir), "--keep-logs", str(tex_file)]]
         else:
             # Two passes so \tableofcontents and longtable column widths settle.
             base = [engine, "-interaction=nonstopmode", "-halt-on-error",
@@ -91,13 +127,25 @@ def compile_latex_to_pdf(latex: str, out_path: str, timeout: int = 300) -> bool:
                              "TeX cache, run backend/scripts/warm_tectonic.py")
             logger.warning("LaTeX compile with %s failed: %s\n%s", engine, exc,
                            "\n".join(parts) or "(the engine produced no output)")
-            return False
+            return CompileResult(ok=False)
         pdf = tmp_dir / "report.pdf"
         if not pdf.exists():
             logger.warning("LaTeX compile with %s produced no PDF.", engine)
-            return False
+            return CompileResult(ok=False)
+        watermark_omitted = _watermark_omitted(tmp_dir)
         shutil.copyfile(pdf, out_path)
-        return True
+        return CompileResult(ok=True, watermark_omitted=watermark_omitted)
+
+
+def _watermark_omitted(tmp_dir: Path) -> bool:
+    """True when the compile log records that the DRAFT watermark was dropped."""
+    log_path = tmp_dir / "report.log"
+    if not log_path.exists():
+        return False
+    try:
+        return WATERMARK_OMITTED_MARKER in log_path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return False
 
 
 def _darken(hex_color: str, factor: float) -> str:

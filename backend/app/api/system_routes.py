@@ -384,7 +384,7 @@ def _check_tectonic():
 
 @_register("tectonic-e2e")
 def _test_tectonic_e2e():
-    return _test_latex_compile("tectonic")
+    return _test_latex_watermark("tectonic")
 
 
 @_register("pdflatex")
@@ -517,6 +517,49 @@ This is a minimal reqmesh dependency test.
         else:
             msg = (getattr(r, "stderr", None) or getattr(r, "stdout", None) or "").strip()
             return {"ok": False, "error": f"no PDF produced (rc={r.returncode}): {msg[:500]}"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def _test_latex_watermark(engine: str) -> dict:
+    """Compile a minimal document that loads the DRAFT watermark, exactly as a
+    draft report does, so a regression in the watermark path shows up on the
+    System page instead of only at publish time."""
+    import shutil, tempfile
+    from pathlib import Path as P
+    from app.services.publisher import compile_latex_to_pdf_detailed, watermark_preamble
+
+    if not shutil.which(engine):
+        return {"ok": False, "error": f"{engine} not found"}
+
+    # The draftwatermark load is guarded (see publisher.watermark_preamble), so
+    # the document builds even when the package is absent — but the DRAFT mark
+    # is then silently dropped, which is a document-control problem this check
+    # must surface rather than hide.
+    tex = "\n".join([
+        r"\documentclass{article}",
+        r"\usepackage{lmodern}",
+        r"\usepackage{fontenc}",
+        r"\usepackage[table]{xcolor}",
+        *watermark_preamble("DRAFT"),
+        r"\begin{document}",
+        r"\section{Smoke Test}",
+        r"This is a minimal reqmesh dependency test exercising the DRAFT watermark.",
+        r"\end{document}",
+    ])
+
+    tmp = tempfile.mkdtemp(prefix=f"rm-dep-{engine}-")
+    out = P(tmp) / "smoke.pdf"
+    try:
+        result = compile_latex_to_pdf_detailed(tex, str(out), timeout=120)
+        if not (result.ok and out.exists() and out.stat().st_size > 100):
+            return {"ok": False, "error": "no PDF produced (watermark smoke compile failed)"}
+        if result.watermark_omitted:
+            return {"ok": False, "error": "PDF compiled but the DRAFT watermark was omitted — "
+                                          "draftwatermark package not cached (run backend/scripts/warm_tectonic.py)"}
+        return {"ok": True, "detail": "PDF compiled with the DRAFT watermark"}
     except Exception as e:
         return {"ok": False, "error": str(e)}
     finally:

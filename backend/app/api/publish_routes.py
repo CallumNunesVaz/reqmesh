@@ -16,7 +16,7 @@ from starlette.background import BackgroundTask
 from app.core.config import settings
 from app.core.dependencies import get_store, require_maintain, get_current_user
 from app.core.rate_limit import rate_limit
-from app.services.publisher import Publisher, compile_latex_to_pdf
+from app.services.publisher import Publisher, compile_latex_to_pdf_detailed
 
 router = APIRouter()
 
@@ -84,7 +84,8 @@ def download_report(project_id: str, format: str = "html", subsystems: str | Non
             Path(path).write_text(pub.build_html(sec_list, changelog_from, changelog_to))
         elif format == "pdf":
             latex = pub.build_latex(sec_list, changelog_from, changelog_to)
-            if not compile_latex_to_pdf(latex, path):
+            result = compile_latex_to_pdf_detailed(latex, path)
+            if not result.ok:
                 # Loud on purpose. The fallback produces a visibly worse report,
                 # and the only previous signal was a response header the browser
                 # threw away — so a deployment could render degraded PDFs for
@@ -101,6 +102,16 @@ def download_report(project_id: str, format: str = "html", subsystems: str | Non
                     url_fetcher=safe_url_fetcher({getattr(settings, "report_logo_url", "")}),
                 ).write_pdf(path)
                 fallback = "LaTeX\u2192PDF (tectonic/pdflatex) not available \u2014 rendered via HTML\u2192PDF weasyprint (tables, badges, and table-of-contents omitted)"
+            elif result.watermark_omitted:
+                # The compile succeeded but the DRAFT watermark did not render —
+                # the draftwatermark package is missing from the cache. A draft
+                # that loses its mark is a document-control problem, so this is
+                # surfaced to the user exactly like the weasyprint fallback.
+                logger.warning(
+                    "PDF report for %s rendered without its DRAFT watermark: the "
+                    "draftwatermark TeX package is unavailable. Warm the cache "
+                    "(backend/scripts/warm_tectonic.py) to restore it.", project_id)
+                fallback = "DRAFT watermark omitted \u2014 the draftwatermark TeX package is unavailable; warm the cache (backend/scripts/warm_tectonic.py) to restore it"
         elif format == "md":
             pub.to_markdown_file(path)
         elif format == "latex":

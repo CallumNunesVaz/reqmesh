@@ -64,7 +64,15 @@ def main() -> int:
         latex = Publisher(YamlStore(project), None).build_latex(None, "", "")
         print(f"warm-tectonic: generated {len(latex):,} chars of LaTeX")
 
-        out = Path(tmp) / "warm.pdf"
+        # A draft report additionally pulls in the draftwatermark package (the
+        # DRAFT watermark). It is fetched on demand like every other package, so
+        # warming only the non-draft report would leave it absent from the cache
+        # and make the first draft export fall over — or fail outright offline.
+        from app.core.config import settings as global_settings
+        global_settings.report_status = "draft"
+        draft_latex = Publisher(YamlStore(project), None).build_latex(None, "", "")
+        print(f"warm-tectonic: generated {len(draft_latex):,} chars of draft LaTeX")
+
         # Imported late so the module-level import cost is not paid when this
         # script is only being asked for its docstring.
         from app.services.publisher import compile_latex_to_pdf
@@ -84,33 +92,33 @@ def main() -> int:
         # fetch on a slow link has been seen to take ~120s.
         timeout = int(os.environ.get("WARM_TECTONIC_TIMEOUT", "600"))
 
-        ok = False
-        started = time.time()
-        for attempt in range(1, attempts + 1):
-            began = time.time()
-            ok = compile_latex_to_pdf(latex, str(out), timeout=timeout)
-            took = time.time() - began
-            if ok and out.exists() and out.stat().st_size > 0:
-                if attempt > 1:
-                    print(f"warm-tectonic: attempt {attempt} succeeded after "
-                          f"{attempt - 1} failure(s)")
-                break
-            ok = False
-            print(f"warm-tectonic: attempt {attempt}/{attempts} failed after "
-                  f"{took:.1f}s", file=sys.stderr)
-            if attempt < attempts:
-                backoff = 5 * attempt
-                print(f"warm-tectonic: retrying in {backoff}s", file=sys.stderr)
-                time.sleep(backoff)
+        def _compile(source: str, out: Path, label: str) -> int:
+            """Compile one document with retries; return its PDF size, or raise
+            SystemExit(1) if the attempts are spent."""
+            for attempt in range(1, attempts + 1):
+                began = time.time()
+                ok = compile_latex_to_pdf(source, str(out), timeout=timeout)
+                took = time.time() - began
+                if ok and out.exists() and out.stat().st_size > 0:
+                    if attempt > 1:
+                        print(f"warm-tectonic: {label} attempt {attempt} succeeded "
+                              f"after {attempt - 1} failure(s)")
+                    return out.stat().st_size
+                print(f"warm-tectonic: {label} attempt {attempt}/{attempts} failed "
+                      f"after {took:.1f}s", file=sys.stderr)
+                if attempt < attempts:
+                    backoff = 5 * attempt
+                    print(f"warm-tectonic: retrying in {backoff}s", file=sys.stderr)
+                    time.sleep(backoff)
+            print(f"warm-tectonic: {label} compile FAILED after {attempts} attempt(s), "
+                  f"{time.time() - started:.1f}s total", file=sys.stderr)
+            raise SystemExit(1)
 
+        started = time.time()
+        size = _compile(latex, Path(tmp) / "warm.pdf", "report")
+        _compile(draft_latex, Path(tmp) / "warm-draft.pdf", "draft report")
         elapsed = time.time() - started
 
-        if not ok:
-            print(f"warm-tectonic: compile FAILED after {attempts} attempt(s), "
-                  f"{elapsed:.1f}s total", file=sys.stderr)
-            return 1
-
-        size = out.stat().st_size
         cached = sum(f.stat().st_size for f in Path(cache).rglob("*") if f.is_file()) \
             if Path(cache).exists() else 0
         print(f"warm-tectonic: compiled {size:,} bytes of PDF in {elapsed:.1f}s")
