@@ -2,8 +2,8 @@ import { useEffect, useState, useMemo, useRef, useCallback, useId } from 'react'
 import { useParams, useNavigate } from 'react-router-dom';
 import { GuardedLink as Link } from '../components/navGuard';
 import { motion } from 'framer-motion';
-import { Trash2, ArrowLeft, Plus, X, ArrowRight, ArrowLeftRight, Sparkles, ShieldCheck, ExternalLink, ChevronRight, Waypoints, AlertTriangle, CheckCircle2, GitFork, Loader, Save, Undo2, GitPullRequest, Tag, Copy, Split } from 'lucide-react';
-import { api, baselineNames, CR_URGENCIES, type StakeholderDef, type SystemStateDef, type RequirementValue, type Requirement, type VerificationCase, type QualityItem, type Component, type Specification, type ChangeRequest, type Risk, type EvaluatedRequirement, type Definition, type DecisionRecord, type Backlinks } from '../api/client';
+import { Trash2, ArrowLeft, Plus, X, ArrowRight, ArrowLeftRight, Sparkles, ShieldCheck, ExternalLink, ChevronRight, Waypoints, AlertTriangle, CheckCircle2, GitFork, Loader, Save, Undo2, GitPullRequest, Pencil, Copy, Split } from 'lucide-react';
+import { api, baselineNames, CR_URGENCIES, type StakeholderDef, type SystemStateDef, type RequirementValue, type Requirement, type VerificationCase, type QualityItem, type Component, type Specification, type ChangeRequest, type Risk, type EvaluatedRequirement, type Definition, type DecisionRecord, type Backlinks, type RenameCascade } from '../api/client';
 import { ParametricsCard } from '../components/parametrics';
 import WhatIfPanel from '../components/WhatIfPanel';
 import RichTextEditor from '../components/RichTextEditor';
@@ -561,8 +561,8 @@ export default function RequirementDetailPage() {
 
   const [renamedTo, setRenamedTo] = useState<string | null>(null);
 
-  const doRename = async (newId: string) => {
-    const res = await api.renameRequirement(projectId!, reqId!, newId);
+  const doRename = async (newId: string, cascade: RenameCascade) => {
+    const res = await api.renameRequirement(projectId!, reqId!, newId, cascade);
     bumpGraphVersion();
     bumpDataVersion();
     // Navigating here would change `currentId` under the dialog, retriggering
@@ -571,6 +571,12 @@ export default function RequirementDetailPage() {
     setRenamedTo(res.id);
     return res;
   };
+
+  const previewRename = useCallback(
+    (newId: string, cascade: RenameCascade) =>
+      api.renameRequirement(projectId!, reqId!, newId, cascade, true),
+    [projectId, reqId],
+  );
 
   const closeRename = () => {
     setRenaming(false);
@@ -798,6 +804,16 @@ export default function RequirementDetailPage() {
             )}
             <div className="flex items-center gap-1.5">
               <h1 className="text-xl font-bold tracking-tight font-mono text-foreground">{req.id}</h1>
+              {editable && (
+                <button
+                  onClick={() => setRenaming(true)}
+                  title="Rename (change the id)"
+                  aria-label={`Edit the requirement id ${req.id}`}
+                  className="inline-flex items-center rounded-md border border-dashed border-border/70 p-1 text-muted-foreground hover:border-foreground/40 hover:bg-accent hover:text-foreground transition-colors"
+                >
+                  <Pencil size={14} aria-hidden />
+                </button>
+              )}
               <CopyLinkButton kind="requirement" id={req.id} />
             </div>
             {unreviewedIds.has(req.id) && (
@@ -893,11 +909,6 @@ export default function RequirementDetailPage() {
           {editable && req && splitDescription(req.description).length > 0 && (
             <button onClick={() => setSplitOpen(true)} className="btn-secondary text-xs p-2" title="Split into child requirements">
               <Split size={14} />
-            </button>
-          )}
-          {editable && (
-            <button onClick={() => setRenaming(true)} className="btn-secondary text-xs p-2" title="Rename (change the id)">
-              <Tag size={14} />
             </button>
           )}
           {editable && (
@@ -1762,7 +1773,9 @@ export default function RequirementDetailPage() {
         onClose={closeRename}
         currentId={reqId!}
         suggest={suggestNewId}
+        cascadeModes={['self', 'children', 'descendants']}
         onRename={doRename}
+        onPreview={previewRename}
       />
 
       <SplitRequirementDialog

@@ -100,3 +100,31 @@ test('no rename control in viewing mode', async ({ app, server }) => {
 
   await expect(app.locator('[title="Rename (change the id)"]')).toHaveCount(0);
 });
+
+test('an entity that linked to a renamed requirement still resolves', async ({ app, server }) => {
+  // RSK00001 threatens PROP0001 in the demo seed, so a rename must repoint it.
+  await openDetail(app, server, 'PROP0001');
+
+  await app.locator('[title="Rename (change the id)"]').click();
+  const field = app.getByLabel('New id');
+  await expect(field).not.toHaveValue('', { timeout: 10000 });
+  await field.fill('PROP9001');
+  await app.getByRole('button', { name: 'Rename', exact: true }).click();
+  await expect(app.getByText(/is now/)).toBeVisible({ timeout: 15000 });
+  await app.getByRole('button', { name: 'Done' }).click();
+  await expect(app).toHaveURL(/PROP9001$/);
+
+  // The risk register's "Threatens" chip must now point at the new id and be a
+  // live link, not a dead mention.
+  await app.goto(`${server.baseURL}/project/${P}/risks`);
+  await app.waitForSelector('main');
+  await app.locator('input[placeholder="Search risks…"]').fill('RSK00001');
+
+  const card = app.locator('.card').filter({ hasText: 'RSK00001' }).first();
+  await expect(card).toBeVisible({ timeout: 10_000 });
+
+  const link = card.locator('a', { hasText: 'PROP9001' }).first();
+  await expect(link).toBeVisible({ timeout: 10_000 });
+  await link.click();
+  await expect(app).toHaveURL(/requirements\/PROP9001$/, { timeout: 15_000 });
+});

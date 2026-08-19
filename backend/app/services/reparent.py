@@ -31,6 +31,30 @@ def collect_subtree(children_by_parent: dict[str, list[str]], root_id: str) -> l
     return out
 
 
+def renumber_subtree(subtree: list[str], old_prefix: str, new_prefix: str,
+                     sep: str, width: int, live_nums: set[int]) -> dict[str, str]:
+    """Allocate fresh numbers under *new_prefix* for *subtree*, in order.
+
+    The one place the re-prefix arithmetic lives, shared by the bulk reparent
+    and the requirement rename cascade. Only nodes that share *old_prefix* are
+    renamed (mixed-tree descendants keep their id and get their parent repointed
+    by the caller); every node still appears in the returned map, identity where
+    unrenamed, so callers can index by old id. *live_nums* is mutated in place,
+    so a sequence of calls keeps allocating past earlier ones.
+    """
+    subtree_new_nums = {int(mm.group(1)) for old_id in subtree
+                        if (mm := re.match(r"^" + re.escape(new_prefix) + r"\D*(\d+)$", old_id))}
+    effective_used = live_nums - subtree_new_nums
+    next_num = (max(effective_used) + 1) if effective_used else 1
+    local_map = {old_id: old_id for old_id in subtree}
+    for old_id in subtree:
+        if old_id.startswith(old_prefix):
+            local_map[old_id] = f"{new_prefix}{sep}{str(next_num).zfill(width)}"
+            live_nums.add(next_num)
+            next_num += 1
+    return local_map
+
+
 @dataclass
 class RenameGroup:
     """One moved subtree whose ids are being rewritten to the new prefix."""
@@ -121,19 +145,10 @@ def plan_reparent(
             # earlier groups. Exclude any subtree node that already bears the
             # new prefix — the old per-id scan did the same, and changing it
             # would shift the allocation.
-            live_nums = used_nums_by_prefix.setdefault(new_prefix, set())
-            subtree_new_nums = {int(mm.group(1)) for old_id in subtree
-                                if (mm := re.match(r"^" + re.escape(new_prefix) + r"\D*(\d+)$", old_id))}
-            effective_used = live_nums - subtree_new_nums
-            next_num = (max(effective_used) + 1) if effective_used else 1
-            # Only nodes that share the moved group's prefix are renamed; other
-            # descendants keep their ID but still get their parent pointer fixed.
-            local_map = {old_id: old_id for old_id in subtree}
-            for old_id in subtree:
-                if old_id.startswith(old_prefix):
-                    local_map[old_id] = f"{new_prefix}{sep}{str(next_num).zfill(width)}"
-                    live_nums.add(next_num)
-                    next_num += 1
+            local_map = renumber_subtree(
+                subtree, old_prefix, new_prefix, sep, width,
+                used_nums_by_prefix.setdefault(new_prefix, set()),
+            )
             plan.groups.append(RenameGroup(root_id=req_id, order=subtree, local_map=local_map))
             plan.id_map.update({k: v for k, v in local_map.items() if k != v})
             continue

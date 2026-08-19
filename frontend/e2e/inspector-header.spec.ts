@@ -44,6 +44,7 @@ async function headerButtonBoxes(app: any): Promise<Box[]> {
 
   await push(identity.locator('button').first(), 'back');
   await push(identity.locator('button[title^="Copy link"]'), 'copy link');
+  await push(identity.locator('button[title^="Rename"]'), 'rename');
 
   const buttons = toolbar.locator('button');
   const count = await buttons.count();
@@ -97,7 +98,6 @@ test('the inspector header reflows onto two rows without overlapping at 300px', 
     'Add child requirement',
     'Duplicate requirement',
     'Split into child requirements',
-    'Rename (change the id)',
     'Delete',
     'Request a Change',
   ];
@@ -105,7 +105,7 @@ test('the inspector header reflows onto two rows without overlapping at 300px', 
     await expect(toolbar.getByRole('button', { name })).toHaveCount(1);
   }
   await expect(toolbar.locator('button')).toHaveCount(expected.length);
-  await expect(app.locator('[data-testid="requirement-header-identity"] button')).toHaveCount(2);
+  await expect(app.locator('[data-testid="requirement-header-identity"] button')).toHaveCount(3);
 
   // No horizontal overflow.
   const header = app.locator('[data-testid="requirement-header"]');

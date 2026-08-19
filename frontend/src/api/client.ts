@@ -874,6 +874,19 @@ export interface ReparentResult {
   dry_run?: boolean;
 }
 
+/** The cascade mode for a requirement rename: how far the new prefix reaches. */
+export type RenameCascade = 'self' | 'children' | 'descendants';
+
+/** The rename route's result — the real call and the dry-run share a shape, the
+ *  dry-run additionally carrying `dry_run: true` and writing nothing. */
+export interface RenameRequirementResult {
+  id: string;
+  children: string[];
+  relinked: string[];
+  renames: { from: string; to: string }[];
+  dry_run?: boolean;
+}
+
 export interface ImportSummary {
   created: number;
   updated: number;
@@ -1480,12 +1493,20 @@ export const api = {
    *  free slot, following the project's naming scheme. */
   suggestRequirementId: (projectId: string, reqId: string) =>
     request<{ suggested: string }>(`/projects/${projectId}/requirements/${reqId}/rename`, { method: 'POST', body: {} }),
-  /** Rename a requirement, repointing its children and every relation that
-   *  targeted it. Returns what else moved. */
-  renameRequirement: (projectId: string, reqId: string, newId: string) =>
-    request<{ id: string; children: string[]; relinked: string[] }>(
+  /** Rename a requirement, repointing its children and every reference that
+   *  targeted it. `cascade` controls how far the new prefix reaches; `dryRun`
+   *  returns the planned `renames` and the records that would be relinked
+   *  without writing anything. */
+  renameRequirement: (
+    projectId: string,
+    reqId: string,
+    newId: string,
+    cascade: RenameCascade = 'self',
+    dryRun: boolean = false,
+  ) =>
+    request<RenameRequirementResult>(
       `/projects/${projectId}/requirements/${reqId}/rename`,
-      { method: 'POST', body: { new_id: newId } },
+      { method: 'POST', body: { new_id: newId, cascade, dry_run: dryRun } },
     ),
   bulkDeleteRequirements: (projectId: string, ids: string[]) =>
     request<{ deleted: number }>(`/projects/${projectId}/requirements/bulk-delete`, { method: 'POST', body: { ids } }),

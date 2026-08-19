@@ -191,3 +191,47 @@ def test_an_unreviewed_project_is_not_flagged_wholesale(client, wired):
     """Treating never-reviewed as suspect would flag every citation in a new
     project, and a signal that is always on is ignored."""
     assert client.get(f"/api/projects/{wired}/suspect-links").json()["count"] == 0
+
+
+# ── Relations are polymorphic, so they are not registry rows ──────────────────
+#
+# A Relation.target may name a requirement *or* a verification case. The registry
+# declares one fixed target collection per row, so relations cannot be a row:
+# doing so makes the delete guard block on them and makes the integrity checker
+# report a `verified_by` -> verification case link as dangling. Rename sweeps
+# relation targets locally instead; these tests pin that the registry's other
+# consumers did not change with it.
+
+def test_deleting_a_relation_target_does_not_require_force(client, project):
+    """Deleting a requirement cited only by a relation is a plain delete."""
+    client.post(f"/api/projects/{project}/requirements", json={"id": "REQ-A", "name": "a"})
+    client.post(f"/api/projects/{project}/requirements", json={"id": "REQ-B", "name": "b",
+                "relations": [{"type": "refines", "target": "REQ-A"}]})
+
+    res = client.delete(f"/api/projects/{project}/requirements/REQ-A")
+    assert res.status_code == 200, res.text
+    assert client.get(f"/api/projects/{project}/requirements/REQ-A").status_code == 404
+
+
+def test_a_verified_by_relation_to_a_verification_case_is_not_dangling(client, project):
+    """A relation to an existing verification case is valid, not a dangling
+    requirement reference."""
+    client.post(f"/api/projects/{project}/verification",
+                json={"id": "VC-1", "name": "v", "method": "test"})
+    client.post(f"/api/projects/{project}/requirements", json={"id": "REQ-A", "name": "a",
+                "relations": [{"type": "verified_by", "target": "VC-1"}]})
+
+    issues = client.get(f"/api/projects/{project}/validate").json()["issues"]
+    assert not any(i["type"] == "dangling_reference" for i in issues), issues
+
+
+def test_a_relation_to_an_id_in_no_collection_is_still_dangling(client, project):
+    """Removing the relation row must not make relations invisible to the
+    integrity checker — a target that resolves nowhere is still reported."""
+    from app.core.dependencies import get_store
+    store = get_store(project)
+    client.post(f"/api/projects/{project}/requirements", json={"id": "REQ-A", "name": "a"})
+    store.update_requirement("REQ-A", {"relations": [{"type": "refines", "target": "GHOST9999"}]})
+
+    issues = client.get(f"/api/projects/{project}/validate").json()["issues"]
+    assert any(i["type"] == "dangling_link" for i in issues), issues

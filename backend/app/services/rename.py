@@ -11,10 +11,16 @@ means a re-prefixed move is now reversible, where before there was no way back.
 """
 from __future__ import annotations
 
+import re
+
 from app.services.history import record_change
 from app.services.link_registry import kind_matches, links_into, targets_of
 from app.services.naming import get_naming
 from app.services.naming import matches_scheme as matches_scheme  # noqa: F401  (re-export: one rule)
+from app.services.reparent import collect_subtree, leading_prefix, renumber_subtree
+
+#: The cascade modes a rename may request. ``self`` keeps today's behaviour.
+CASCADE_MODES = ("self", "children", "descendants")
 
 
 def suggest_id(requirements: list[dict], meta: dict, parent_id: str | None) -> str:
@@ -51,59 +57,341 @@ def suggest_id(requirements: list[dict], meta: dict, parent_id: str | None) -> s
     return f"{base}{str(max_suffix + 1 if max_suffix >= 0 else 1).zfill(suffix_len)}"
 
 
-def rename_requirement(store, old_id: str, new_id: str, username: str = "") -> dict:
+def _rewrite_text(text: str, id_map: dict[str, str]) -> str:
+    """Rewrite bare ``[[old]]`` / ``old`` mentions in rich text, id-by-id.
+
+    Ids only match on their own: the lookarounds treat ``-`` as a word
+    character (as ``autoLink.tsx`` does), so ``REQ01`` never matches inside
+    ``REQ012`` and ``REQ-0001`` matches as a whole. ``[[old]]`` is handled by
+    the same pattern — the brackets are word boundaries.
+    """
+    if not text:
+        return text
+    for old_id, new_id in sorted(id_map.items(), key=lambda kv: -len(kv[0])):
+        pattern = re.compile(r"(?<![\w-])" + re.escape(old_id) + r"(?![\w-])")
+        text = pattern.sub(lambda _m, new_id=new_id: new_id, text)
+    return text
+
+
+def _rewrite_expr(text: str, id_map: dict[str, str]) -> str:
+    """Rewrite ``old.param`` references in parameter/constraint expressions.
+
+    Narrower than :func:`_rewrite_text`: only the ``id.param`` form is a
+    requirement reference, so the id must be followed by ``.``. A component
+    rollup like ``rollup('C172', 'mass')`` is left alone.
+    """
+    if not text:
+        return text
+    for old_id, new_id in sorted(id_map.items(), key=lambda kv: -len(kv[0])):
+        pattern = re.compile(r"(?<![\w-])" + re.escape(old_id) + r"(?=\.)")
+        text = pattern.sub(lambda _m, new_id=new_id: new_id, text)
+    return text
+
+
+def _rewrite_expr_fields(record: dict, id_map: dict[str, str]) -> bool:
+    """Rewrite ``expr``/``assume``/``bindings`` on a parameter or constraint.
+
+    Mutates a *copy* supplied by the caller; returns whether anything changed.
+    """
+    changed = False
+    for key in ("expr", "assume"):
+        value = record.get(key)
+        if isinstance(value, str) and value:
+            rewritten = _rewrite_expr(value, id_map)
+            if rewritten != value:
+                record[key] = rewritten
+                changed = True
+    bindings = record.get("bindings")
+    if isinstance(bindings, dict) and bindings:
+        new_bindings = {
+            k: (_rewrite_expr(v, id_map) if isinstance(v, str) and v else v)
+            for k, v in bindings.items()
+        }
+        if new_bindings != bindings:
+            record["bindings"] = new_bindings
+            changed = True
+    return changed
+
+
+def _rewrite_text_references(store, id_map: dict[str, str]) -> None:
+    """Rewrite the references the link registry deliberately does not cover.
+
+    Parameter/constraint expressions and rich-text mentions are text rather
+    than declared links, so no registry row points at them — but a rename still
+    breaks every one of them, so they are swept here with a narrow rewriter.
+    """
+    for req in store.list_requirements():
+        patch: dict = {}
+        for field in ("description", "rationale", "source"):
+            text = req.get(field)
+            if isinstance(text, str) and text:
+                rewritten = _rewrite_text(text, id_map)
+                if rewritten != text:
+                    patch[field] = rewritten
+
+        parameters = req.get("parameters")
+        if isinstance(parameters, list) and parameters:
+            new_parameters: list[dict] = []
+            changed = False
+            for parameter in parameters:
+                if not isinstance(parameter, dict):
+                    new_parameters.append(parameter)
+                    continue
+                copy = dict(parameter)
+                changed |= _rewrite_expr_fields(copy, id_map)
+                new_parameters.append(copy)
+            if changed:
+                patch["parameters"] = new_parameters
+
+        constraints = req.get("constraints")
+        if isinstance(constraints, list) and constraints:
+            new_constraints: list[dict] = []
+            changed = False
+            for constraint in constraints:
+                if not isinstance(constraint, dict):
+                    new_constraints.append(constraint)
+                    continue
+                copy = dict(constraint)
+                changed |= _rewrite_expr_fields(copy, id_map)
+                new_constraints.append(copy)
+            if changed:
+                patch["constraints"] = new_constraints
+
+        if patch:
+            store.update_requirement(req["id"], patch)
+
+
+def _plan_rename_id_map(requirements: list[dict], old_id: str, new_id: str,
+                        cascade: str) -> dict[str, str]:
+    """Every old id the rename will move, mapped to its new id.
+
+    The root always moves to *new_id* exactly. For ``children`` the immediate
+    *leaf* children are re-prefixed; for ``descendants`` the whole subtree is;
+    for ``self`` nothing else. Re-prefixing shares :func:`renumber_subtree`
+    with the bulk reparent, so the two cannot disagree about the scheme.
+    """
+    id_map = {old_id: new_id}
+    new_prefix = leading_prefix(new_id)
+    old_prefix = leading_prefix(old_id)
+    if cascade == "self" or not new_prefix or not old_prefix or new_prefix == old_prefix:
+        return id_map
+
+    children_by_parent: dict[str, list[str]] = {}
+    for r in requirements:
+        children_by_parent.setdefault(r.get("parent"), []).append(r["id"])
+
+    if cascade == "descendants":
+        extra = collect_subtree(children_by_parent, old_id)[1:]
+    elif cascade == "children":
+        immediate = children_by_parent.get(old_id, [])
+        extra = [c for c in immediate if c not in children_by_parent]
+    else:
+        extra = []
+
+    if not extra:
+        return id_map
+
+    # Mirror the new id's separator + zero-padded width, and reserve its number
+    # so a descendant can never be allocated onto the root's new id.
+    pm = re.match(r"^[A-Za-z]+(\D*)(\d+)$", new_id)
+    sep, width = (pm.group(1), len(pm.group(2))) if pm else ("", 4)
+    used: set[int] = set()
+    for r in requirements:
+        mm = re.match(r"^" + re.escape(new_prefix) + r"\D*(\d+)$", r["id"])
+        if mm:
+            used.add(int(mm.group(1)))
+    mm = re.match(r"^" + re.escape(new_prefix) + r"\D*(\d+)$", new_id)
+    if mm:
+        used.add(int(mm.group(1)))
+
+    local_map = renumber_subtree(extra, old_prefix, new_prefix, sep, width, used)
+    id_map.update({k: v for k, v in local_map.items() if k != v})
+    return id_map
+
+
+def _plan_link_sweep(store, id_map: dict[str, str]):
+    """The inbound references the rename will rewrite, without writing them.
+
+    Returns ``(children, relinked, updates)`` — the tree-linked records whose
+    parent moved, the other records relinked, and the ``(holder, id, field,
+    value)`` writes to perform. Iterating ``links_into`` means a link added to
+    the model later is swept here without a second edit.
+    """
+    children: list[str] = []
+    relinked: list[str] = []
+    updates: list[tuple[str, str, str, object]] = []
+    for link in links_into("requirements"):
+        try:
+            items = store.list_items(link.holder)
+        except Exception:
+            # A collection that does not exist in this project is not an error.
+            continue
+        for item in items:
+            if not kind_matches(item, link):
+                continue
+            targets = targets_of(item, link)
+            if not any(t in id_map for t in targets):
+                continue
+            new_targets = [id_map.get(t, t) for t in targets]
+            new_value = new_targets if link.many else new_targets[0]
+            updates.append((link.holder, item["id"], link.field, new_value))
+            if link.tree:
+                if item["id"] not in children:
+                    children.append(item["id"])
+            elif item["id"] not in relinked:
+                relinked.append(item["id"])
+    return children, relinked, updates
+
+
+def _plan_relation_sweep(store, id_map: dict[str, str]):
+    """The relation targets the rename will rewrite, without writing them.
+
+    Relations are kept out of the registry on purpose: a ``Relation.target`` is
+    polymorphic (a requirement *or* a verification case), which the registry's
+    fixed per-row ``target`` cannot express without teaching every consumer
+    (delete guard, integrity) a new shape. So the rename sweeps them locally —
+    only targets that equal a renamed requirement id are repointed, and a
+    ``verified_by`` relation to a verification case is left untouched. Returns
+    ``(relinked, updates)`` in the same shape as :func:`_plan_link_sweep`.
+    """
+    relinked: list[str] = []
+    updates: list[tuple[str, str, str, object]] = []
+    for req in store.list_requirements():
+        relations = req.get("relations")
+        if not isinstance(relations, list) or not relations:
+            continue
+        new_relations = []
+        changed = False
+        for rel in relations:
+            if isinstance(rel, dict) and rel.get("target") in id_map:
+                new_relations.append({**rel, "target": id_map[rel["target"]]})
+                changed = True
+            else:
+                new_relations.append(rel)
+        if changed:
+            updates.append(("requirements", req["id"], "relations", new_relations))
+            if req["id"] not in relinked:
+                relinked.append(req["id"])
+    return relinked, updates
+
+
+def rename_requirement(store, old_id: str, new_id: str, username: str = "",
+                       cascade: str = "self", dry_run: bool = False) -> dict:
     """Move *old_id* to *new_id* and repoint everything that referenced it.
 
-    Returns ``{"id", "children", "relinked"}`` — the new id, the children whose
-    parent pointer moved, and the requirements whose relations were rewritten.
+    Returns ``{"id", "children", "relinked", "renames"}`` — the new id, the
+    children whose parent pointer moved, the records whose references were
+    rewritten, and every old→new rename performed (for the cascade preview).
+
+    ``cascade`` controls how far the new prefix reaches: ``self`` (default) is
+    today's behaviour, ``children`` re-prefixes the immediate *leaf* children,
+    ``descendants`` the whole subtree. ``dry_run`` returns the planned renames
+    and the records that would be relinked without writing anything.
+
+    The inbound references are *derived* from ``link_registry.links_into``
+    rather than hand-listed, so a link added to the model later is rewritten
+    here without a second edit. Relations are the one exception: their targets
+    are polymorphic, so the registry cannot declare them and they are swept
+    locally by :func:`_plan_relation_sweep`.
+
+    Ordering matches ``rename_component``: write the new record before deleting
+    the old one (the reverse order would leave the project with neither if the
+    create failed), and only then rewrite referrers. This is ordered, not
+    atomic — a failure midway through the referrer sweep leaves the record at
+    the new id with some inbound references still naming the old one (dangling,
+    but resolvable), never the old id deleted alongside a half-written new one.
     """
     node = store.get_requirement(old_id)
     if node is None:
         raise ValueError(f"Requirement not found: {old_id}")
     if new_id == old_id:
-        return {"id": old_id, "children": [], "relinked": []}
+        return {"id": old_id, "children": [], "relinked": [], "renames": []}
     if store.get_requirement(new_id) is not None:
         raise ValueError(f"A requirement with id {new_id} already exists")
+    if cascade not in CASCADE_MODES:
+        raise ValueError(f"Unknown cascade mode: {cascade}")
 
-    before = dict(node)
-    moved = dict(node)
-    moved["id"] = new_id
+    id_map = _plan_rename_id_map(store.list_requirements(), old_id, new_id, cascade)
+    renames = [{"from": k, "to": v} for k, v in sorted(id_map.items())]
 
-    # Write the new record before deleting the old one. The reverse order would
-    # leave the project with neither if the create failed.
-    store.create_requirement(moved)
-    store.delete_requirement(old_id)
+    if dry_run:
+        children, relinked, _updates = _plan_link_sweep(store, id_map)
+        relation_relinked, _relation_updates = _plan_relation_sweep(store, id_map)
+        for rel_id in relation_relinked:
+            if rel_id not in relinked:
+                relinked.append(rel_id)
+        return {
+            "dry_run": True,
+            "id": new_id,
+            "renames": renames,
+            "children": children,
+            "relinked": relinked,
+        }
 
-    children: list[str] = []
-    relinked: list[str] = []
-    for r in store.list_requirements():
-        if r["id"] == new_id:
+    # Write the new records before deleting the old ones; a descendant keeps its
+    # old parent pointer until the sweep below repoints it (dangling, resolvable).
+    for old, new in id_map.items():
+        before = store.get_requirement(old)
+        if before is None:
             continue
-        if r.get("parent") == old_id:
-            store.update_requirement(r["id"], {"parent": new_id})
-            children.append(r["id"])
-        rels = r.get("relations", [])
+        moved = dict(before)
+        moved["id"] = new
+        store.create_requirement(moved)
+        store.delete_requirement(old)
+        record_change(store, new, "rename", before, moved, username)
+
+    children, relinked, updates = _plan_link_sweep(store, id_map)
+    relation_relinked, relation_updates = _plan_relation_sweep(store, id_map)
+    for rel_id in relation_relinked:
+        if rel_id not in relinked:
+            relinked.append(rel_id)
+    for holder, item_id, field, value in updates + relation_updates:
+        store.update_item(holder, item_id, {field: value})
+
+    _rewrite_requirement_snapshots(store, id_map)
+    _rewrite_text_references(store, id_map)
+
+    return {"id": new_id, "children": children, "relinked": relinked, "renames": renames}
+
+
+def _rewrite_requirement_snapshots(store, id_map: dict[str, str]) -> None:
+    """Repoint renamed requirement ids inside every frozen baseline.
+
+    A frozen baseline carries its requirement snapshot in ``snapshot``, keyed
+    by requirement id — and each entry's ``parent`` and ``relations[].target``
+    are requirement ids too — so a rename must move the key and repoint those
+    fields. The component half lives in :func:`_rewrite_baseline_snapshots`.
+    """
+    baselines_dir = store.root / "baselines"
+    if not baselines_dir.exists():
+        return
+    for f in sorted(baselines_dir.glob("*.yaml")):
+        baseline = store._read_yaml(f)
+        if not baseline:
+            continue
+        snapshot = baseline.get("snapshot")
+        if not isinstance(snapshot, dict):
+            continue
         changed = False
-        for rel in rels:
-            if rel.get("target") == old_id:
-                rel["target"] = new_id
+        new_snapshot: dict[str, dict] = {}
+        for rid, entry in snapshot.items():
+            new_rid = id_map.get(rid, rid)
+            if new_rid != rid:
                 changed = True
+            if isinstance(entry, dict):
+                if entry.get("parent") in id_map:
+                    entry["parent"] = id_map[entry["parent"]]
+                    changed = True
+                relations = entry.get("relations")
+                if isinstance(relations, list):
+                    for rel in relations:
+                        if isinstance(rel, dict) and rel.get("target") in id_map:
+                            rel["target"] = id_map[rel["target"]]
+                            changed = True
+            new_snapshot[new_rid] = entry
         if changed:
-            store.update_requirement(r["id"], {"relations": rels})
-            relinked.append(r["id"])
-
-    # The moved record's own relations may point at itself after a cycle of
-    # edits; rewrite those too so nothing dangles.
-    fresh = store.get_requirement(new_id) or moved
-    own = fresh.get("relations", [])
-    if any(rel.get("target") == old_id for rel in own):
-        for rel in own:
-            if rel.get("target") == old_id:
-                rel["target"] = new_id
-        store.update_requirement(new_id, {"relations": own})
-
-    record_change(store, new_id, "rename", before, store.get_requirement(new_id), username)
-    return {"id": new_id, "children": children, "relinked": relinked}
+            baseline["snapshot"] = new_snapshot
+            store.write_item("baselines", f.stem, baseline)
 
 
 def _rewrite_baseline_snapshots(store, old_id: str, new_id: str) -> None:

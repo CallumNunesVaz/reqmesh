@@ -349,13 +349,18 @@ def get_requirement_tree(project_id: str):
 @router.post("/projects/{project_id}/requirements/{req_id}/rename", summary="Rename a requirement")
 def rename_requirement_route(project_id: str, req_id: str, data: dict,
                              user: dict = Depends(require_maintain)):
-    """Rename a requirement, repointing children and relations project-wide.
+    """Rename a requirement, repointing children and references project-wide.
 
     Registered before the ``/{req_id}`` catch-all for the same reason next-uid
     is: otherwise "rename" is swallowed as a requirement id.
 
     Without ``new_id`` this only *suggests* one — the parent's prefix and the
     next free slot — so the dialog can prefill without a second endpoint.
+
+    ``cascade`` is ``self`` (default) | ``children`` | ``descendants`` and
+    controls how far the new prefix reaches. ``dry_run`` returns the planned
+    ``renames`` and the records that would be relinked without writing anything,
+    so the dialog can preview each choice before committing.
     """
     store = get_store(project_id)
     req = store.get_requirement(safe_id(req_id, "requirement id"))
@@ -374,8 +379,14 @@ def rename_requirement_route(project_id: str, req_id: str, data: dict,
     if reason:
         raise HTTPException(status_code=400, detail=reason)
 
+    cascade = (data.get("cascade") or "self")
+    dry_run = bool(data.get("dry_run"))
+
     try:
-        result = rename_requirement(store, req["id"], new_id, user.get("username", ""))
+        result = rename_requirement(
+            store, req["id"], new_id, user.get("username", ""),
+            cascade=cascade, dry_run=dry_run,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return result
