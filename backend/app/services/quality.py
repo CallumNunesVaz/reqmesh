@@ -203,5 +203,7 @@ def project_quality(store) -> dict:
         "config": {
             "min_words": config["min_words"],
             "max_words": config["max_words"],
+            "rules": config["rules"],
+            "weights": config["weights"],
         },
     }

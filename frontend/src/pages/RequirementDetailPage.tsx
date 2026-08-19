@@ -24,6 +24,7 @@ import { splitDescription } from '../lib/splitText';
 import { useConfirm } from '../components/ConfirmDialog';
 import { deleteWithReferenceCheck } from '../lib/forceDelete';
 import DescriptionHelper from '../components/DescriptionHelper';
+import { scoreRequirement, type QualityConfig } from '../lib/quality';
 import ParametricsGuide from '../components/ParametricsGuide';
 import { LinkEditor } from '../components/LinkEditor';
 import { useKeyboardShortcuts } from '../components/useKeyboardShortcuts';
@@ -109,6 +110,7 @@ export default function RequirementDetailPage() {
   const showConfirm = useConfirm();
   const [workflow, setWorkflow] = useState<{ states: string[]; transitions: Record<string, string[]> } | null>(null);
   const [qualityResult, setQualityResult] = useState<QualityItem | null>(null);
+  const [qualityConfig, setQualityConfig] = useState<QualityConfig | undefined>();
   const [unreviewedIds, setUnreviewedIds] = useState<Set<string>>(new Set());
   const [saveError, setSaveError] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -270,6 +272,17 @@ export default function RequirementDetailPage() {
     }
     return results;
   }, [allReqs, req]);
+  // Live quality preview: the draft description scored client-side from the
+  // same generated rule table the server uses. A preview — the server's score
+  // stays authoritative on save and reconciles the display.
+  const liveScore = useMemo(
+    () => scoreRequirement(req?.description ?? '', qualityConfig),
+    [req?.description, qualityConfig],
+  );
+  // Whether the description differs from the last saved record. One string
+  // compare on the field being typed, never a deep-compare of the whole
+  // requirement (which would rerun on every keystroke of a long description).
+  const descDirty = req != null && savedRef.current != null && req.description !== savedRef.current.description;
   useEffect(() => {
     if (!projectId || !reqId) return;
     // Every fetch below is guarded: this page is NOT remounted per requirement
@@ -322,7 +335,10 @@ export default function RequirementDetailPage() {
     api.getWorkflow(projectId).then((wf) => { if (alive) setWorkflow(wf); }).catch(() => {});
     api.getQuality(projectId).then((q) => {
       const match = q.per_requirement.find((r) => r.id === reqId);
-      if (alive && match) setQualityResult(match);
+      if (alive) {
+        setQualityConfig(q.config);
+        if (match) setQualityResult(match);
+      }
     }).catch(() => {});
     api.getUnreviewed(projectId).then((u) => {
       if (alive) setUnreviewedIds(new Set(u.items.map((r) => r.id)));
@@ -393,6 +409,14 @@ export default function RequirementDetailPage() {
       }
       api.getUnreviewed(projectId).then((u) => {
         setUnreviewedIds(new Set(u.items.map((r) => r.id)));
+      }).catch(() => {});
+      // The live score is a preview; once the description is saved the server's
+      // score is authoritative, so re-read it (and its config) to reconcile the
+      // Quality card with what the server actually scored.
+      api.getQuality(projectId).then((q) => {
+        const match = q.per_requirement.find((r) => r.id === reqId);
+        setQualityConfig(q.config);
+        if (match) setQualityResult(match);
       }).catch(() => {});
       // The value and rank depend on this requirement's scores *and* on every
       // other requirement's, so they are recomputed server-side after a save
@@ -758,6 +782,10 @@ export default function RequirementDetailPage() {
   const removeVerificationCase = (index: number) => {
     save({ verification_cases: req.verification_cases.filter((_, i) => i !== index) });
   };
+  // The Quality card shows the live preview while the description is dirty and
+  // the server's score once it is reconciled (clean, or after a save re-fetch).
+  const qualityScore = descDirty ? liveScore.score : (qualityResult?.score ?? liveScore.score);
+  const qualityFindings = descDirty ? liveScore.findings : (qualityResult?.findings ?? liveScore.findings);
   return (
     <div className="max-w-6xl mx-auto p-8">
       {saveError && (
@@ -1001,8 +1029,7 @@ export default function RequirementDetailPage() {
             <label className="label">Name<input
               className="input text-lg font-medium"
               value={req.name}
-              onChange={(e) => setReq({ ...req, name: e.target.value })}
-              onBlur={(e) => save({ name: e.target.value })}
+              onChange={(e) => save({ name: e.target.value })}
               disabled={!editable}
             /></label>
             <label className="label mt-4 flex items-center gap-2" htmlFor={descriptionId}>
@@ -1013,8 +1040,8 @@ export default function RequirementDetailPage() {
               <RichTextEditor
                 id={descriptionId}
                 content={req.description}
-                onChange={(html) => { setReq({ ...req, description: html }); }}
-                onBlur={(html) => save({ description: html })}
+                onChange={(html) => { save({ description: html }); }}
+                onBlur={() => {}}
                 disabled={false}
                 placeholder="Write a requirement description…"
                 holderId={req.id}
@@ -1030,6 +1057,31 @@ export default function RequirementDetailPage() {
               />
             )}
           </motion.div>
+          {qualityResult && (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="card p-5">
+              <h2 className="font-semibold text-sm text-card-foreground mb-3 flex items-center gap-2"><Sparkles size={14} className="text-violet-400" /> Quality</h2>
+              <div className="flex items-center gap-3 mb-3">
+                <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-lg font-bold ${qualityScore >= 80 ? 'bg-emerald-500/10 text-emerald-400' : qualityScore >= 50 ? 'bg-amber-500/10 text-amber-400' : 'bg-red-500/10 text-red-400'}`}>
+                  {qualityScore}
+                </div>
+                <div className="flex-1">
+                  <div className="w-full bg-muted rounded-full h-2">
+                    <div className={`h-full rounded-full transition-all duration-500 ${qualityScore >= 80 ? 'bg-emerald-500' : qualityScore >= 50 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${qualityScore}%` }} />
+                  </div>
+                  <div className="text-[10px] text-muted-foreground mt-1">/100</div>
+                </div>
+              </div>
+              {qualityFindings.length > 0 && (
+                <div className="space-y-1">
+                  {qualityFindings.slice(0, 5).map((f, i) => (
+                    <div key={i} className={`text-xs px-2 py-1 rounded ${f.severity === 'error' ? 'bg-red-500/5 text-red-400' : f.severity === 'warning' ? 'bg-amber-500/5 text-amber-400' : 'bg-muted text-muted-foreground'}`}>
+                      {f.message}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </motion.div>
+          )}
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="card p-5">
             <h2 className="font-semibold text-sm text-card-foreground mb-1">Relations</h2>
             <HelpTip>Link this requirement to others using relationship types like refines, satisfies, derives, or conflicts. Relations form the traceability graph — they show which requirements depend on or are detailed by others.</HelpTip>
@@ -1228,31 +1280,6 @@ export default function RequirementDetailPage() {
                 nameOf={(id) => satisfiedBy.find((c) => c.id === id)?.name
                   ?? allComponents.find((c) => c.id === id)?.name ?? ''}
               />
-            </motion.div>
-          )}
-          {qualityResult && (
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }} className="card p-5">
-              <h2 className="font-semibold text-sm text-card-foreground mb-3 flex items-center gap-2"><Sparkles size={14} className="text-violet-400" /> Quality</h2>
-              <div className="flex items-center gap-3 mb-3">
-                <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-lg font-bold ${qualityResult.score >= 80 ? 'bg-emerald-500/10 text-emerald-400' : qualityResult.score >= 50 ? 'bg-amber-500/10 text-amber-400' : 'bg-red-500/10 text-red-400'}`}>
-                  {qualityResult.score}
-                </div>
-                <div className="flex-1">
-                  <div className="w-full bg-muted rounded-full h-2">
-                    <div className={`h-full rounded-full transition-all duration-500 ${qualityResult.score >= 80 ? 'bg-emerald-500' : qualityResult.score >= 50 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${qualityResult.score}%` }} />
-                  </div>
-                  <div className="text-[10px] text-muted-foreground mt-1">/100</div>
-                </div>
-              </div>
-              {qualityResult.findings.length > 0 && (
-                <div className="space-y-1">
-                  {qualityResult.findings.slice(0, 5).map((f, i) => (
-                    <div key={i} className={`text-xs px-2 py-1 rounded ${f.severity === 'error' ? 'bg-red-500/5 text-red-400' : f.severity === 'warning' ? 'bg-amber-500/5 text-amber-400' : 'bg-muted text-muted-foreground'}`}>
-                      {f.message}
-                    </div>
-                  ))}
-                </div>
-              )}
             </motion.div>
           )}
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="card p-5">
@@ -1686,8 +1713,8 @@ export default function RequirementDetailPage() {
                   <RichTextEditor
                     id={rationaleId}
                     content={req.rationale || ''}
-                    onChange={(html) => { setReq({ ...req, rationale: html }); }}
-                    onBlur={(html) => save({ rationale: html })}
+                    onChange={(html) => { save({ rationale: html }); }}
+                    onBlur={() => {}}
                     disabled={false}
                     holderId={req.id}
                   />
@@ -1704,8 +1731,7 @@ export default function RequirementDetailPage() {
                   className="input"
                   placeholder="Stakeholder/document reference..."
                   value={req.source || ''}
-                  onChange={(e) => setReq({ ...req, source: e.target.value })}
-                  onBlur={(e) => save({ source: e.target.value })}
+                  onChange={(e) => save({ source: e.target.value })}
                   disabled={!editable}
                 /></label>
               </div>

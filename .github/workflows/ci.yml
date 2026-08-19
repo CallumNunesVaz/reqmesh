@@ -189,3 +189,9 @@ jobs:
       - run: python gen_api_reference.py
         working-directory: backend
       - run: git diff --exit-code docs/api.md
+      # The frontend's rule table is generated from PATTERN_RULES the same way;
+      # a rule change that is not regenerated must fail the build rather than
+      # let the live quality score drift from the server's.
+      - run: python gen_quality_rules.py
+        working-directory: backend
+      - run: git diff --exit-code frontend/src/lib/generated/qualityRules.ts

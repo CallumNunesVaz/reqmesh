@@ -278,7 +278,11 @@ export default function RichTextEditor({ content, onChange, onBlur, disabled = f
 
   useEffect(() => {
     if (editor) {
-      editor.setEditable(!disabled);
+      // `emitUpdate` is false: toggling editable is not a content change, so it
+      // must not fire `onChange`. The default true emitted a spurious update on
+      // mount that marked an untouched rich-text field dirty the moment the
+      // editor rendered (normalised HTML differing from the stored plain text).
+      editor.setEditable(!disabled, false);
     }
   }, [disabled, editor]);
 

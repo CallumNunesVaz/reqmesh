@@ -37,7 +37,7 @@ silently re-enables a rule somebody turned off.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 
 # Severities, in the order the UI sorts them. `error` means the statement is
 # not fit to review; `warning` means it is probably wrong; `info` is a matter
@@ -355,5 +355,21 @@ def rule_ids() -> tuple[str, ...]:
 
 
 def as_dicts() -> list[dict]:
-    """The rule set as plain dicts — the payload the frontend pack carries."""
-    return [asdict(r) for r in PATTERN_RULES]
+    """The rule set as plain dicts — the payload the frontend pack carries.
+
+    ``config`` is the resolved ``_meta.yaml`` key (``rule.config``, i.e.
+    ``config_key`` or the id), so the client looks rules up under exactly the
+    keys the server's ``_load_config`` produces.
+    """
+    return [
+        {
+            "id": r.id,
+            "config": r.config,
+            "pattern": r.pattern,
+            "severity": r.severity,
+            "message": r.message,
+            "weight": r.weight,
+            "enabled": r.enabled,
+        }
+        for r in PATTERN_RULES
+    ]

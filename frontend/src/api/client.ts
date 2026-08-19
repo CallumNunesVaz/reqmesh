@@ -765,7 +765,7 @@ export interface CoverageData {
 export interface ConflictItem { ids?: string[]; a?: string; b?: string; type: string; name?: string }
 export interface QualityFinding { rule: string; severity: string; message: string; start: number; end: number }
 export interface QualityItem { id: string; name: string; score: number; findings: QualityFinding[] }
-export interface QualityData { average: number; per_requirement: QualityItem[]; total: number; config: { min_words: number; max_words: number } }
+export interface QualityData { average: number; per_requirement: QualityItem[]; total: number; config: { min_words: number; max_words: number; rules: Record<string, boolean>; weights: Record<string, number> } }
 
 export type ConstraintStatus = 'pass' | 'fail' | 'unknown' | 'error' | 'not_applicable';
 export type EvalVerdict = 'pass' | 'fail' | 'unknown' | 'error' | 'none';

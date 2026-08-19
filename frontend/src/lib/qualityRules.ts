@@ -1,58 +1,37 @@
 /**
- * The requirement-lint rule set, generated from the backend.
+ * Hand-written helpers over the generated rule table.
  *
- * `qualityRules.json` is written by `backend/gen_quality_rules.py` from
- * `app/services/quality_rules.py` — do not hand-edit it, and do not add rules
- * here. The live editor feedback and the server-side score have to check the
- * same things; they previously had separately maintained regex copies and had
- * already drifted apart.
- *
- * Patterns are authored to be valid in both Python `re` and JavaScript
- * `RegExp`, and are compiled here with `gi` — global so every occurrence is
- * reported, case-insensitive to match the backend.
+ * The rule *data* lives in `./generated/qualityRules` (written by
+ * `backend/gen_quality_rules.py` — never hand-edit it). This module holds the
+ * small amount of logic that is code rather than data: the modal-keyword
+ * highlighter and the pattern-rule scanner used by the inline description
+ * helper. The full client-side score lives in `./quality`.
  */
-import pack from './qualityRules.json';
+import {
+  QUALITY_RULES,
+  MODALS,
+  type QualityRule,
+  type Severity,
+} from './generated/qualityRules';
 
-export type Severity = 'error' | 'warning' | 'info';
+export { MODALS };
+export type { QualityRule, Severity };
 
-export interface QualityRule {
-  id: string;
-  title: string;
-  severity: Severity;
-  /** Portable regex source. Compile with `ruleRegex`, never with a cached instance. */
-  pattern: string;
-  /** Template containing a single `{match}` placeholder. */
-  message: string;
-  weight: number;
-  /** The INCOSE Guide to Writing Requirements rule this implements, or ''. */
-  incose: string;
-  enabled: boolean;
-}
+export type ModalStrength = 'binding' | 'advisory';
 
 export interface RuleFinding {
   rule: string;
   severity: Severity;
   message: string;
-  /** Offsets into the plain-text form of the description. */
   start: number;
   end: number;
 }
 
-export const QUALITY_RULES: QualityRule[] = (pack.rules as QualityRule[]).filter((r) => r.enabled);
-
-/** How strongly a modal keyword obliges. Drives its colour. */
-export type ModalStrength = 'binding' | 'advisory';
-
-/** Modal keyword sets, longest phrase first so "shall not" wins over "shall". */
-export const MODALS: Record<ModalStrength, string[]> = pack.modals;
-
-/**
- * One regex matching every modal keyword, longest-first.
+/** One regex matching every modal keyword, longest-first.
  *
- * Alternation order is what makes "shall not" match as a unit rather than
- * "shall" followed by a stray "not" — the arrays are pre-sorted by length in
- * the backend, and flattening must preserve that.
- */
+ *  Alternation order is what makes "shall not" match as a unit rather than
+ *  "shall" followed by a stray "not" — the arrays are pre-sorted by length in
+ *  the backend, and flattening must preserve that. */
 export function modalRegex(): RegExp {
   const all = [...MODALS.binding, ...MODALS.advisory].sort((a, b) => b.length - a.length);
   return new RegExp(`\\b(${all.map((w) => w.replace(/ /g, '\\s+')).join('|')})\\b`, 'gi');
@@ -66,12 +45,7 @@ export function modalStrength(word: string): ModalStrength | null {
   return null;
 }
 
-/**
- * A fresh RegExp per call.
- *
- * These are `g`-flagged, so they carry `lastIndex` between calls — sharing one
- * instance across inputs makes matches disappear on every other keystroke.
- */
+/** A fresh RegExp per call — `g`-flagged instances carry `lastIndex`. */
 export function ruleRegex(rule: QualityRule): RegExp {
   return new RegExp(rule.pattern, 'gi');
 }
@@ -80,6 +54,7 @@ export function ruleRegex(rule: QualityRule): RegExp {
 export function runPatternRules(plain: string): RuleFinding[] {
   const findings: RuleFinding[] = [];
   for (const rule of QUALITY_RULES) {
+    if (!rule.enabled) continue;
     const re = ruleRegex(rule);
     let m: RegExpExecArray | null;
     while ((m = re.exec(plain)) !== null) {

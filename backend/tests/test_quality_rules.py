@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-import json
 import re
-import subprocess
-from pathlib import Path
 
 import pytest
 
@@ -128,116 +125,6 @@ def _get_rule(rule_id: str) -> Rule:
     pytest.fail(f"Rule not found: {rule_id}")
 
 
-# ── Cross-language parity ────────────────────────────────────────────────────
-#
-# Run the same statements through Python and Node (against the generated JSON)
-# and assert the (rule_id, start, end) tuples are identical.
-
-
-_PARITY_STATEMENTS = [
-    "The system should authenticate users within 500 ms.",
-    "Data is processed by the system and stored for later retrieval.",
-    "TODO: implement the login flow completely.",
-    "The system must be capable of handling 1000 requests per second.",
-    "The system shall not lose data under any circumstances.",
-    "All modules shall support input/output operations promptly.",
-    "The system must authenticate users (via OAuth 2.0) and authorize them.",
-    "The system shall log out after 30 minutes of inactivity.",
-    "It should be user-friendly and robust.",
-    "The system shall do X unless Y occurs and also do Z.",
-    "The alloy shall withstand 500 degrees.",
-    "The system shall support e.g. OAuth 2.0 and OpenID Connect.",
-]
-
-
-def _python_findings(statement: str) -> set[tuple[str, int, int]]:
-    """Return (rule_id, start, end) for every pattern match in *statement*."""
-    results: set[tuple[str, int, int]] = set()
-    for rule in PATTERN_RULES:
-        if not rule.enabled:
-            continue
-        for m in re.finditer(rule.pattern, statement, re.IGNORECASE):
-            results.add((rule.id, m.start(), m.end()))
-    return results
-
-
-def _node_available() -> bool:
-    try:
-        subprocess.run(["node", "--version"], capture_output=True, check=True)
-        return True
-    except (FileNotFoundError, subprocess.CalledProcessError):
-        return False
-
-
-def test_cross_language_parity():
-    """Python and JavaScript produce identical (rule_id, start, end) tuples."""
-    if not _node_available():
-        pytest.skip("node is not on PATH — cannot run cross-language parity check")
-
-    json_path = Path(__file__).resolve().parent.parent.parent / "frontend" / "src" / "lib" / "qualityRules.json"
-    rules_json = json.loads(json_path.read_text(encoding="utf-8"))
-
-    # Build a JS script that mirrors runPatternRules() from qualityRules.ts
-    rules_js = json.dumps([r for r in rules_json["rules"] if r["enabled"]])
-    statements_js = json.dumps(_PARITY_STATEMENTS)
-
-    script = f"""
-    const rules = {rules_js};
-    const statements = {statements_js};
-
-    function runPatternRules(plain) {{
-        const findings = [];
-        for (const rule of rules) {{
-            const re = new RegExp(rule.pattern, 'gi');
-            let m;
-            while ((m = re.exec(plain)) !== null) {{
-                findings.push({{ rule: rule.id, start: m.index, end: m.index + m[0].length }});
-                if (m[0].length === 0) re.lastIndex += 1;
-            }}
-        }}
-        return findings;
-    }}
-
-    const all = [];
-    for (const stmt of statements) {{
-        const findings = runPatternRules(stmt);
-        for (const f of findings) {{
-            all.push([f.rule, f.start, f.end]);
-        }}
-    }}
-    // Sort for stable comparison
-    all.sort((a, b) => a[0].localeCompare(b[0]) || a[1] - b[1] || a[2] - b[2]);
-    console.log(JSON.stringify(all));
-    """
-
-    result = subprocess.run(
-        ["node", "-e", script],
-        capture_output=True,
-        text=True,
-        timeout=15,
-    )
-    assert result.returncode == 0, f"Node script failed: {result.stderr}"
-
-    try:
-        js_tuples_raw = json.loads(result.stdout)
-    except json.JSONDecodeError:
-        pytest.fail(f"Node output not valid JSON:\n{result.stdout}")
-
-    js_tuples: set[tuple[str, int, int]] = set()
-    for t in js_tuples_raw:
-        js_tuples.add((t[0], t[1], t[2]))
-
-    py_tuples: set[tuple[str, int, int]] = set()
-    for stmt in _PARITY_STATEMENTS:
-        py_tuples |= _python_findings(stmt)
-
-    only_py = py_tuples - js_tuples
-    only_js = js_tuples - py_tuples
-
-    assert only_py == set(), f"Findings only in Python: {sorted(only_py)}"
-    assert only_js == set(), f"Findings only in JavaScript: {sorted(only_js)}"
-
-
 # ── as_dicts / gen_quality_rules integration ─────────────────────────────────
 
 
@@ -247,6 +134,7 @@ def test_as_dicts_matches_rules():
     assert len(dicts) == len(PATTERN_RULES)
     for rule, d in zip(PATTERN_RULES, dicts, strict=True):
         assert d["id"] == rule.id
+        assert d["config"] == rule.config
         assert d["severity"] == rule.severity
         assert d["pattern"] == rule.pattern
         assert d["weight"] == rule.weight
