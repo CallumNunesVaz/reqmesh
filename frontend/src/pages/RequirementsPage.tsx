@@ -2,12 +2,12 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import CreateRequirementModal, { type CreateIntent } from '../components/CreateRequirementModal';
 import { usePersistedState, setCodec } from '../hooks/usePersistedState';
 import { useRangeSelection } from '../hooks/useRangeSelection';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
 import {
   Plus, Search, X, Trash2, ChevronRight, ChevronDown, ChevronsDownUp, ChevronsUpDown,
   Inbox, Square, CheckSquare, SlidersHorizontal, Copy, AlertTriangle,
 } from 'lucide-react';
-import { api, baselineNames, getTruncationInfo, type Requirement, type EvalVerdict, type TruncationInfo } from '../api/client';
+import { api, baselineNames, getTruncationInfo, type Requirement, type EvalVerdict, type TruncationInfo, type Component, type StakeholderDef, type SystemStateDef } from '../api/client';
 import { useStore } from '../store';
 import { useAuthStore } from '../store/auth';
 import { useUndoStore } from '../store/undo';
@@ -20,6 +20,8 @@ import { countMessage } from '../lib/feedback';
 import { REQUIREMENT_TYPES, REQUIREMENT_TYPE_META, reqTypeClass, reqTypeIcon } from '../lib/requirementTypes';
 import Modal from '../components/Modal';
 import BulkActionBar from '../components/BulkActionBar';
+import AutocompleteInput from '../components/AutocompleteInput';
+import { buildBulkUpdates, hasBulkEditChanges, bulkEditFieldCount, INITIAL_BULK_EDIT, type BulkEditForm } from '../lib/bulkEdit';
 import { useToasts } from '../components/Toast';
 import TruncationBanner from '../components/TruncationBanner';
 import ReparentDialog from '../components/ReparentDialog';
@@ -85,6 +87,8 @@ export default function RequirementsPage() {
   const [collapsed, setCollapsed] = usePersistedState<Set<string>>(pk('collapsed'), new Set(), setCodec<string>());
   const [createIntent, setCreateIntent] = useState<CreateIntent | null>(null);
   const [projectBaselines, setProjectBaselines] = useState<string[]>([]);
+  const [projectStakeholders, setProjectStakeholders] = useState<StakeholderDef[]>([]);
+  const [projectSystemStates, setProjectSystemStates] = useState<SystemStateDef[]>([]);
   // Which rows the reparent dialog is currently moving. Replaces two
   // free-text "Parent ID" boxes that accepted any string, including a
   // descendant (a cycle) or a typo (an orphan).
@@ -109,7 +113,11 @@ export default function RequirementsPage() {
         ev.requirements.filter((r) => r.verdict !== 'none').map((r) => [r.id, r.verdict]),
       )))
       .catch(() => {});
-    api.getProject(projectId).then((p) => setProjectBaselines(baselineNames(p.baselines))).catch(() => {});
+    api.getProject(projectId).then((p) => {
+      setProjectBaselines(baselineNames(p.baselines));
+      setProjectStakeholders(p.stakeholders || []);
+      setProjectSystemStates(p.system_states || []);
+    }).catch(() => {});
   };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(load, [projectId, dataVersion]);
@@ -761,6 +769,8 @@ export default function RequirementsPage() {
         projectId={projectId!}
         selectedIds={[...selectedIds]}
         projectBaselines={projectBaselines}
+        projectStakeholders={projectStakeholders}
+        projectSystemStates={projectSystemStates}
         onSaved={() => { clearSelection(); load(); }}
         allReqs={requirements}
       />
@@ -784,84 +794,52 @@ export default function RequirementsPage() {
 }
 
 function BulkEditModal({
-  open, onClose, projectId, selectedIds, projectBaselines, onSaved, allReqs,
+  open, onClose, projectId, selectedIds, projectBaselines, projectStakeholders, projectSystemStates, onSaved, allReqs,
 }: {
   open: boolean;
   onClose: () => void;
   projectId: string;
   selectedIds: string[];
   projectBaselines: string[];
+  projectStakeholders: StakeholderDef[];
+  projectSystemStates: SystemStateDef[];
   onSaved: () => void;
   allReqs: Requirement[];
 }) {
-  const INITIAL = {
-    type: '',
-    priority: '',
-    status: '',
-    rationale: '',
-    source: '',
-    allocated_to: '',
-    baselines: null as string[] | null,
-    normative: null as boolean | null,
-    system_states: '',
-    subject: '',
-    needs: '',
-    priorities: '',
-    cascade_from: '',
-    description: '',
-  };
-
-  const [form, setForm] = useState(INITIAL);
+  const [form, setForm] = useState<BulkEditForm>(INITIAL_BULK_EDIT);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [components, setComponents] = useState<Component[]>([]);
+  const [coverageNeeds, setCoverageNeeds] = useState<{ value: string; label: string }[]>([]);
   const cascadeFromId = useId();
   const descriptionId = useId();
+  const allocatedToId = useId();
+  const subjectId = useId();
 
   useEffect(() => {
-    if (open) { setForm(INITIAL); setError(''); }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (open) { setForm(INITIAL_BULK_EDIT); setError(''); }
   }, [open]);
 
-  const hasChanges = Object.entries(form).some(([k, v]) => {
-    const init = (INITIAL as any)[k];
-    if (init === null) return v !== null;
-    if (typeof init === 'boolean') return v !== null;
-    return v !== '' && v !== init;
-  });
+  // The two pickers (Allocated To / Subject) offer the project's components,
+  // and Coverage Needs offers the artifact-kind vocabulary the tracing model
+  // actually satisfies — both fetched once when the modal opens rather than on
+  // every requirements-page load.
+  useEffect(() => {
+    if (!open) return;
+    api.listComponents(projectId).then(setComponents).catch(() => setComponents([]));
+    api.getCoverageNeeds().then((v) => setCoverageNeeds(v.items)).catch(() => setCoverageNeeds([]));
+  }, [open, projectId]);
 
-  const buildUpdates = (): Record<string, any> => {
-    const updates: Record<string, any> = {};
-    if (form.type) updates.type = form.type;
-    if (form.priority) updates.priority = form.priority;
-    if (form.status) updates.status = form.status;
-    if (form.rationale) updates.rationale = form.rationale;
-    if (form.source) updates.source = form.source;
-    if (form.allocated_to) updates.allocated_to = form.allocated_to;
-    if (form.baselines !== null) updates.baselines = form.baselines;
-    if (form.normative !== null) updates.normative = form.normative;
-    if (form.system_states) updates.system_states = form.system_states.split(',').map(s => s.trim()).filter(Boolean);
-    if (form.subject) updates.subject = form.subject;
-    if (form.needs) updates.needs = form.needs.split(',').map(s => s.trim()).filter(Boolean);
-    if (form.priorities) {
-      const prio: Record<string, number> = {};
-      for (const line of form.priorities.split('\n')) {
-        const [k, v] = line.split(':').map(s => s.trim());
-        if (k && v && !isNaN(Number(v))) prio[k] = Number(v);
-      }
-      if (Object.keys(prio).length > 0) updates.priorities = prio;
-    }
-    // '' means "leave unchanged"; the sentinel clears the field, which the old
-    // free-text box could not express at all — you could opt into a cascade but
-    // never out of one.
-    if (form.cascade_from === '__none__') updates.cascade_from = null;
-    else if (form.cascade_from) updates.cascade_from = form.cascade_from;
-    if (form.description) updates.description = form.description;
-    return updates;
-  };
+  const componentSuggestions = useMemo(
+    () => components.map((c) => ({ id: c.id, label: c.name || c.id })),
+    [components],
+  );
+
+  const hasChanges = hasBulkEditChanges(form);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const updates = buildUpdates();
+    const updates = buildBulkUpdates(form);
     if (Object.keys(updates).length === 0) { setError('Select at least one field to update.'); return; }
     setBusy(true);
     setError('');
@@ -887,18 +865,16 @@ function BulkEditModal({
       onSaved();
       onClose();
     } catch (err: any) {
-      setError(err.message || 'Bulk update failed');
+      // ApiError always carries a string `message` (the structured `detail`
+      // envelope is unwrapped in client.ts), so a 422 validation envelope or a
+      // 409 workflow message renders as text, never "[object Object]".
+      setError(typeof err?.message === 'string' ? err.message : 'Bulk update failed');
     } finally {
       setBusy(false);
     }
   };
 
-  const fieldCount = Object.entries(form).filter(([k, v]) => {
-    const init = (INITIAL as any)[k];
-    if (init === null) return v !== null;
-    if (typeof init === 'boolean') return v !== null;
-    return v !== '' && v !== init;
-  }).length;
+  const fieldCount = bulkEditFieldCount(form);
 
   return (
     <Modal open={open} onClose={onClose} align="top" topOffset="pt-[4vh]" panelClassName="w-full max-w-2xl p-6 max-h-[92vh] overflow-y-auto">
@@ -957,16 +933,30 @@ function BulkEditModal({
                     onChange={(e) => setForm({ ...form, source: e.target.value })} /></label>
                 </div>
                 <div>
-                  <label className="label">Allocated To<input className="input" placeholder="System element..." value={form.allocated_to}
-                    onChange={(e) => setForm({ ...form, allocated_to: e.target.value })} /></label>
+                  <label className="label" htmlFor={allocatedToId}>Allocated To</label>
+                  <AutocompleteInput
+                    id={allocatedToId}
+                    className="input font-mono text-xs"
+                    placeholder="Search components…"
+                    value={form.allocated_to}
+                    onChange={(v) => setForm({ ...form, allocated_to: v })}
+                    suggestions={componentSuggestions}
+                  />
                 </div>
               </div>
 
               {/* Row 4: Subject / Cascade From / Effort */}
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="label">Subject<input className="input font-mono text-xs" placeholder="e.g. WING01" value={form.subject}
-                    onChange={(e) => setForm({ ...form, subject: e.target.value })} /></label>
+                  <label className="label" htmlFor={subjectId}>Subject</label>
+                  <AutocompleteInput
+                    id={subjectId}
+                    className="input font-mono text-xs"
+                    placeholder="e.g. WING01"
+                    value={form.subject}
+                    onChange={(v) => setForm({ ...form, subject: v })}
+                    suggestions={componentSuggestions}
+                  />
                 </div>
                 <div>
                   <label className="label" htmlFor={cascadeFromId}>Cascade From</label>
@@ -1004,26 +994,138 @@ function BulkEditModal({
               {/* Row 5: System States / Coverage Needs */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="label">System States<input className="input font-mono text-xs" placeholder="takeoff, cruise, landing" value={form.system_states}
-                    onChange={(e) => setForm({ ...form, system_states: e.target.value })} /></label>
-                  <div className="text-[10px] text-muted-foreground mt-0.5">Comma-separated OOSEM modes</div>
+                  <div className="label">System States</div>
+                  {projectSystemStates.length === 0 ? (
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      No system states defined on this project.
+                    </p>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5 mt-1">
+                      {projectSystemStates.map((s) => {
+                        const active = (form.system_states || []).includes(s.name);
+                        const anySet = form.system_states !== null;
+                        return (
+                          <button
+                            key={s.name}
+                            type="button"
+                            onClick={() => {
+                              const current = form.system_states ?? [];
+                              const next = active ? current.filter((x) => x !== s.name) : [...current, s.name];
+                              setForm({ ...form, system_states: next });
+                            }}
+                            className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
+                              active
+                                ? 'bg-primary/15 text-primary border-primary/30'
+                                : anySet ? 'bg-muted text-muted-foreground border-transparent hover:border-primary/20' : 'bg-muted/50 text-muted-foreground/50 border-transparent'
+                            }`}
+                          >
+                            {s.name}
+                          </button>
+                        );
+                      })}
+                      {form.system_states !== null && (
+                        <button
+                          type="button"
+                          onClick={() => setForm({ ...form, system_states: null })}
+                          className="text-[10px] text-muted-foreground hover:text-foreground underline ml-1"
+                        >
+                          clear selection
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  <div className="text-[10px] text-muted-foreground mt-0.5">
+                    Click a state to toggle it. When any state is set, the new set replaces all existing states.
+                  </div>
                 </div>
                 <div>
-                  <label className="label">Coverage Needs<input className="input font-mono text-xs" placeholder="design, verification_case" value={form.needs}
-                    onChange={(e) => setForm({ ...form, needs: e.target.value })} /></label>
-                  <div className="text-[10px] text-muted-foreground mt-0.5">Comma-separated artifact types</div>
+                  <div className="label">Coverage Needs</div>
+                  {coverageNeeds.length === 0 ? (
+                    <p className="text-[11px] text-muted-foreground mt-1">No artifact types available.</p>
+                  ) : (
+                    <div className="space-y-1 mt-1">
+                      {coverageNeeds.map((o) => {
+                        const checked = (form.needs || []).includes(o.value);
+                        return (
+                          <label key={o.value} className="flex items-start gap-2 text-xs cursor-pointer group">
+                            <input
+                              type="checkbox"
+                              className="w-3.5 h-3.5 mt-0.5 rounded border-muted-foreground/30 shrink-0"
+                              checked={checked}
+                              onChange={(e) => {
+                                const current = form.needs ?? [];
+                                const next = e.target.checked
+                                  ? [...current, o.value]
+                                  : current.filter((x) => x !== o.value);
+                                setForm({ ...form, needs: next });
+                              }}
+                            />
+                            <span className="sr-only">coverage need</span>
+                            <span className="min-w-0">
+                              <span className="font-mono text-[11px] text-foreground">{o.value}</span>
+                              <span className="text-[10px] text-muted-foreground block">{o.label}</span>
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {form.needs !== null && (
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, needs: null })}
+                      className="text-[10px] text-muted-foreground hover:text-foreground underline mt-1"
+                    >
+                      clear selection
+                    </button>
+                  )}
+                  <div className="text-[10px] text-muted-foreground mt-0.5">
+                    Artifacts that must exist to cover the selected requirements
+                  </div>
                 </div>
               </div>
 
               {/* Stakeholder Priorities */}
               <div>
-                <label className="label">Stakeholder Priorities<textarea
-                  className="input font-mono text-xs h-16 resize-none"
-                  placeholder="development: 5\ncustomers: 8\nsafety: 10"
-                  value={form.priorities}
-                  onChange={(e) => setForm({ ...form, priorities: e.target.value })}
-                /></label>
-                <div className="text-[10px] text-muted-foreground mt-0.5">One per line, format: stakeholder: score</div>
+                <div className="label">Stakeholder Priorities</div>
+                {projectStakeholders.length === 0 ? (
+                  <p className="text-[11px] text-muted-foreground">
+                    No stakeholders defined.{' '}
+                    <Link to={`/project/${projectId}/settings`} className="text-primary hover:underline">
+                      Add them in project settings
+                    </Link>{' '}
+                    to score these requirements.
+                  </p>
+                ) : (
+                  <div className="space-y-1 mt-1">
+                    {projectStakeholders.map((s) => {
+                      const score = form.priorities?.[s.name];
+                      return (
+                        <div key={s.name} className="flex items-center gap-2">
+                          <span className="text-xs text-foreground flex-1 min-w-0 truncate" title={s.name}>{s.name}</span>
+                          <select
+                            className="select text-xs py-0.5 w-24"
+                            aria-label={`${s.name} priority`}
+                            value={score == null ? '' : String(score)}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              const next: Record<string, number> = form.priorities ? { ...form.priorities } : {};
+                              if (v === '') delete next[s.name];
+                              else next[s.name] = Number(v);
+                              setForm({ ...form, priorities: Object.keys(next).length > 0 ? next : null });
+                            }}
+                          >
+                            <option value="">No change</option>
+                            {[0, 1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}
+                          </select>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                <div className="text-[10px] text-muted-foreground mt-0.5">
+                  Score each stakeholder 0–5. Only stakeholders you set are changed.
+                </div>
               </div>
 
               {/* Description */}
