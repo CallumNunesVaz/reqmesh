@@ -21,7 +21,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { forceSimulation, forceLink, forceManyBody, forceCollide, forceX, forceY } from 'd3-force';
-import { Search, RotateCw, ListTree, Orbit, SlidersHorizontal, ChevronsUpDown, ChevronsDownUp, Filter, Waypoints, Share2, Save, ArrowLeftRight, ArrowDownLeft, ArrowUpRight, EyeOff } from 'lucide-react';
+import { Search, RotateCw, ListTree, Orbit, SlidersHorizontal, ChevronsUpDown, ChevronsDownUp, Filter, Waypoints, Share2, Save, ArrowLeftRight, ArrowDownLeft, ArrowUpRight, EyeOff, GitMerge } from 'lucide-react';
 import { api, type Requirement, type TraceLink, type EvaluatedRequirement, type EvaluatedParameter, type Component } from '../api/client';
 import CircularNode from './CircularNode';
 import BlockNode, { BLOCK_W, STACK_OVERHANG, type BlockParam, type BlockConstraint } from './BlockNode';
@@ -30,12 +30,14 @@ import OrthoEdge from './OrthoEdge';
 import LoadingSplash from './LoadingSplash';
 import { zoomLevel, LEVEL_LABELS } from './semanticZoom';
 import { useTheme } from './ThemeProvider';
-import { useSelectedReq, useContextPane } from './Layout';
+import { useSelectedReq, useContextPane, useHoveredEntity, useHoveredEntityBus } from './Layout';
 import { useStore } from '../store';
 import { useWhatIf } from './WhatIfContext';
 import { requirementVerdict } from '../lib/whatIfVerdict';
 import { formatReqType, reqTypeColor } from '../lib/requirementTypes';
 import { effectiveHiddenComponents, filterableComponentIds, isReqHiddenByComponents, isReqHiddenByBaselines, migrateLegacyFilterList, requirementsRevealed, pruneUnknownIds } from '../lib/graphFilters';
+import { hoistEdges } from '../lib/hoistEdges';
+import { requirementsSatisfiedByComponent } from '../lib/crossHighlight';
 
 const edgeColors: Record<string, string> = {
   refines: 'hsl(207,90%,64%)',
@@ -339,7 +341,9 @@ function FloatingEdge({ id, source, target, data, style, markerEnd }: EdgeProps)
 
   const edgeColor = (data?.color as string) || (style as any)?.stroke || 'hsl(207,90%,64%)';
   const edgeLabel = (data?.label as string) || '';
-  const showLabel = !!(data?.showLabel && edgeLabel);
+  const hoisted = !!data?.hoisted;
+  const count = (data?.count as number) || 1;
+  const showLabel = !!(data?.showLabel && edgeLabel && !(hoisted && count > 1));
 
   return (
     <>
@@ -350,6 +354,26 @@ function FloatingEdge({ id, source, target, data, style, markerEnd }: EdgeProps)
         markerEnd={markerEnd}
         interactionWidth={selectedReqId ? 20 : 0}
       />
+      {hoisted && count > 1 && (
+        <EdgeLabelRenderer>
+          <div
+            style={{
+              position: 'absolute',
+              transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
+              pointerEvents: 'none',
+            }}
+            className="nodrag nopan"
+          >
+            <span
+              className="text-[9px] font-semibold px-1.5 py-px rounded-full bg-graph-panel border border-graph-border shadow-sm"
+              style={{ color: edgeColor, whiteSpace: 'nowrap' }}
+              title={`${count} relationships`}
+            >
+              &times;{count}
+            </span>
+          </div>
+        </EdgeLabelRenderer>
+      )}
       {showLabel && (
         <EdgeLabelRenderer>
           <div
@@ -493,6 +517,10 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
   const { selectedReqId, selectReq, derivationReq } = useSelectedReq();
   const { openContext } = useContextPane();
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
+  // Shared hover (canvas ↔ list). `hoveredEntity` re-renders only this pane on
+  // a hover change; `setHoveredEntity` is the stable bus setter.
+  const hoveredEntity = useHoveredEntity();
+  const { set: setHoveredEntity } = useHoveredEntityBus();
   // How many relationship hops out from the focused node stay highlighted.
   const [hopDepth, setHopDepth] = useState(() => {
     const saved = parseInt(localStorage.getItem('rt-graph-hop-depth') || '', 10);
@@ -614,6 +642,13 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
     setGraphSettings({});
     try { localStorage.removeItem(`rt-graph-settings-${projectId}`); } catch {}
   };
+
+  // Hoisted edges: a relationship whose endpoint is hidden by a collapsed group
+  // is redrawn to the nearest visible ancestor instead of disappearing. Lived
+  // in `graphSettings` so the saved-view slots (which snapshot and restore that
+  // object) carry it too. Defaults on.
+  const hoistEdgesEnabled = graphSettings.hoistEdges !== false;
+  const toggleHoistEdges = () => updateGraphSetting('hoistEdges', !hoistEdgesEnabled);
 
   const switchLayout = (mode: 'uml' | 'force') => {
     if (mode === layoutMode) return;
@@ -1060,34 +1095,69 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
 
     const edges: Edge[] = [];
     const seen = new Set<string>();
-    const pushEdge = (src: string, tgt: string, typ: string, color: string, label: string) => {
-      if (!visIds.has(src) || !visIds.has(tgt)) return;
-      const k = `${src}-${tgt}-${typ}`;
+
+    // Relation candidates (requirement relations, trace links, cascades) are
+    // collected first, then hoisted: a hidden endpoint is redirected to its
+    // nearest visible ancestor, so a collapsed graph keeps the relationship
+    // line landing on the group standing in for what is inside it.
+    const parentOf = new Map(reqs.map((r) => [r.id, r.parent]));
+    const relationCandidates: { source: string; target: string; type: string }[] = [];
+    for (const req of reqs) {
+      for (const rel of req.relations || []) {
+        relationCandidates.push({ source: req.id, target: rel.target, type: rel.type });
+      }
+    }
+    for (const link of traces) {
+      relationCandidates.push({ source: link.source, target: link.target, type: link.type });
+    }
+    for (const req of reqs) {
+      if (req.cascade_from) relationCandidates.push({ source: req.cascade_from, target: req.id, type: 'cascades' });
+    }
+
+    const pushEdge = (src: string, tgt: string, typ: string, hoisted: boolean, count: number) => {
+      // The id must be stable for a given (source, target, hoisted) triple so
+      // the edge memo can bail out on unchanged edges instead of re-deriving
+      // geometry on every selection/hover restyle.
+      const k = hoisted ? `${src}-${tgt}-${typ}-hoist` : `${src}-${tgt}-${typ}`;
       if (seen.has(k)) return; seen.add(k);
       const style = edgeMarkers[typ] || { markerEnd: MarkerType.ArrowClosed, strokeDasharray: 'none', strokeWidth: 1 };
+      const color = edgeColors[typ] || '#64748b';
       edges.push({
         id: k, source: src, target: tgt, type: 'floating',
-        data: { color, label },
-        style: { stroke: color, strokeWidth: style.strokeWidth, strokeDasharray: style.strokeDasharray, opacity: 0.45 },
+        data: { color, label: typ, hoisted, count },
+        // A hoisted edge is visually distinct: a short dash that reads as
+        // "the endpoint is a group standing in for something inside it".
+        style: {
+          stroke: color,
+          strokeWidth: style.strokeWidth,
+          strokeDasharray: hoisted ? '2,3' : style.strokeDasharray,
+          opacity: 0.45,
+        },
         markerEnd: { type: style.markerEnd, color, width: 14, height: 14 },
       });
     };
 
-    for (const req of reqs) {
-      if (!visIds.has(req.id)) continue;
-      for (const rel of req.relations || []) {
-        pushEdge(req.id, rel.target, rel.type, edgeColors[rel.type] || '#64748b', rel.type);
+    if (hoistEdgesEnabled) {
+      for (const h of hoistEdges(relationCandidates, visIds, parentOf)) {
+        pushEdge(h.source, h.target, h.type, h.hoisted, h.count);
+      }
+    } else {
+      // Toggle off: the pre-hoist behaviour — an edge with a hidden endpoint is
+      // simply dropped.
+      const seenRel = new Set<string>();
+      for (const r of relationCandidates) {
+        if (!visIds.has(r.source) || !visIds.has(r.target)) continue;
+        const k = `${r.source}-${r.target}-${r.type}`;
+        if (seenRel.has(k)) continue; seenRel.add(k);
+        pushEdge(r.source, r.target, r.type, false, 1);
       }
     }
-    for (const link of traces) {
-      pushEdge(link.source, link.target, link.type, edgeColors[link.type] || '#64748b', link.type);
-    }
-    for (const req of reqs) {
-      if (!req.cascade_from) continue;
-      pushEdge(req.cascade_from, req.id, 'cascades', edgeColors.cascades, 'cascade');
-    }
+
     for (const req of reqs) {
       if (!req.parent) continue;
+      // A parent edge into a hidden child is internal to a collapsed group —
+      // drop it rather than draw a dangling line to a node that isn't there.
+      if (!visIds.has(req.id)) continue;
       // Parent edges: solid line, diamond-style composition marker
       const pk = `${req.parent}-${req.id}-parent`;
       if (seen.has(pk)) continue; seen.add(pk);
@@ -1101,7 +1171,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
 
     return { initialNodes: nodes, initialEdges: edges };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reqs, filteredReqs, traces, visibleNodeIds, childCounts, collapsed, entranceDone, evaluated, whatIf.impact, whatIf.stepIndex]);
+  }, [reqs, filteredReqs, traces, visibleNodeIds, childCounts, collapsed, entranceDone, evaluated, whatIf.impact, whatIf.stepIndex, hoistEdgesEnabled]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
@@ -1917,15 +1987,44 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
   );
 
 
-  const onPaneClick = useCallback(() => { selectReq(null); setHoveredNodeId(null); }, [selectReq]);
+  const onPaneClick = useCallback(() => { selectReq(null); setHoveredNodeId(null); setHoveredEntity(null); }, [selectReq, setHoveredEntity]);
   const handleNodeEnter = useCallback((_: React.MouseEvent, node: Node) => {
-    // Hover-highlighting recomputes the BFS neighbourhood, restyles every edge
-    // and re-renders every node (they all read the selection context). Fine on
-    // small graphs, a stutter machine on big ones — clicking still highlights.
+    // Cross-highlight is cheap (targeted node updates) so it runs in perf mode;
+    // the neighbourhood highlight below is the one gated there.
+    setHoveredEntity({ kind: 'requirement', id: node.id });
     if (perfMode) return;
     if (!selectedReqId && !animatingRef.current) setHoveredNodeId(node.id);
-  }, [selectedReqId, perfMode]);
-  const handleNodeLeave = useCallback(() => { setHoveredNodeId(null); }, []);
+  }, [selectedReqId, perfMode, setHoveredEntity]);
+  const handleNodeLeave = useCallback(() => { setHoveredNodeId(null); setHoveredEntity(null); }, [setHoveredEntity]);
+
+  // ── Cross-highlight (shared hover) ───────────────────────────────────────
+  // The hovered entity lives in Layout (see HoveredEntityCtx). Highlight the
+  // corresponding node(s) here by toggling `crossHighlighted` on their data —
+  // targeted, so only the affected nodes re-render, never the whole graph.
+  const crossHighlightRef = useRef<Set<string>>(new Set());
+  const crossTargetIds = useMemo(() => {
+    if (!hoveredEntity) return new Set<string>();
+    if (hoveredEntity.kind === 'requirement') return new Set([hoveredEntity.id]);
+    if (hoveredEntity.kind === 'component') {
+      return new Set(requirementsSatisfiedByComponent(hoveredEntity.id, components));
+    }
+    return new Set<string>();
+  }, [hoveredEntity, components]);
+
+  useEffect(() => {
+    const prev = crossHighlightRef.current;
+    const next = crossTargetIds;
+    const affected = new Set([...prev, ...next]);
+    if (affected.size === 0) return;
+    crossHighlightRef.current = next;
+    setNodes((nds) => nds.map((n) => {
+      if (!affected.has(n.id)) return n;
+      const now = next.has(n.id);
+      const was = !!(n.data as any).crossHighlighted;
+      if (was === now) return n;
+      return { ...n, data: { ...n.data, crossHighlighted: now } };
+    }));
+  }, [crossTargetIds, setNodes]);
 
   // Stable context value: without the memo every GraphPane render hands all
   // nodes a fresh object and forces a full node re-render pass.
@@ -2277,6 +2376,24 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
             aria-pressed={showAllLinks}
           >
             <Share2 size={13} />
+          </button>
+          {/* Toggle: hoist relationship edges whose endpoint is hidden by a
+              collapsed group up to that group, so the line still reaches it
+              instead of silently disappearing. */}
+          <button
+            onClick={toggleHoistEdges}
+            className={`hidden @md:block p-1.5 rounded-lg border shadow-sm transition-all ${
+              hoistEdgesEnabled
+                ? 'bg-primary text-primary-foreground border-graph-border'
+                : 'bg-graph-panel border-graph-border text-graph-text hover:bg-graph-control-hover'
+            }`}
+            title={hoistEdgesEnabled
+              ? 'Hoisting hidden edges to collapsed groups — click to hide them'
+              : 'Hidden edges are dropped — click to hoist them to collapsed groups'}
+            aria-label="Toggle hoisted edges"
+            aria-pressed={hoistEdgesEnabled}
+          >
+            <GitMerge size={13} />
           </button>
           {/* Saved view slots: click a filled slot to jump to it, an empty slot
               to save the current view. Shift-click overwrites; right-click clears. */}

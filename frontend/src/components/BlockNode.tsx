@@ -67,6 +67,8 @@ export interface BlockNodeData {
   pulseActive?: boolean;
   vcCount: number;
   desc: string;
+  /** Set by the canvas while the shared hover points here (cross-highlight). */
+  crossHighlighted?: boolean;
 }
 
 export const BLOCK_W = 216;
@@ -91,6 +93,7 @@ function BlockNode({ data }: NodeProps) {
   const PriorityIcon = prio.icon;
   const dimmed = hasSelection && !connectedIds.has(d.label);
   const isSelected = selectedReqId === d.label;
+  const crossHighlighted = !!d.crossHighlighted;
   const verdictColor = d.verdict ? constraintColors[d.verdict] || constraintColors.unknown : null;
 
   const glowFilter = isSelected
@@ -109,6 +112,7 @@ function BlockNode({ data }: NodeProps) {
     ? previewRingColor
     : isSelected ? colors.fill
     : hover ? 'hsl(var(--foreground) / 0.3)'
+    : crossHighlighted ? 'hsl(var(--primary))'
     : 'hsl(var(--border))';
 
   const pulseGlow = previewRingColor
@@ -146,6 +150,7 @@ function BlockNode({ data }: NodeProps) {
   const frame = (children: React.ReactNode, clip = true) => (
     <div
       style={{ position: 'relative', width: BLOCK_W }}
+      data-cross-highlight={crossHighlighted ? '' : undefined}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
     >
@@ -163,7 +168,7 @@ function BlockNode({ data }: NodeProps) {
           opacity: dimmed ? 0.18 : 1,
           filter: pulseGlow,
           borderColor,
-          boxShadow: isSelected && !previewRingColor ? `0 0 0 1px ${colors.fill}` : undefined,
+          boxShadow: isSelected && !previewRingColor ? `0 0 0 1px ${colors.fill}` : crossHighlighted ? '0 0 0 2px hsl(var(--primary))' : undefined,
           transition: 'opacity 0.25s ease, filter 0.25s ease, border-color 0.2s ease',
           cursor: 'pointer',
         }}

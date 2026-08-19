@@ -39,6 +39,8 @@ interface CircularNodeData {
   onExpandCollapse?: () => void;
   onSelect?: () => void;
   onAddChild?: () => void;
+  /** Set by the canvas while the shared hover points here (cross-highlight). */
+  crossHighlighted?: boolean;
 }
 
 const verdictColors: Record<string, string> = {
@@ -63,6 +65,7 @@ function CircularNode({ data }: NodeProps) {
   const childCount = nodeData.childCount || 0;
   const dimmed = hasSelection && !connectedIds.has(nodeData.label);
   const isSelected = selectedReqId === nodeData.label;
+  const crossHighlighted = !!nodeData.crossHighlighted;
 
   const cr = childCount > 1 ? Math.min(22, 14 + childCount * 1.2) : 14;
   const nodeW = cr * 2 + 4;
@@ -80,6 +83,7 @@ function CircularNode({ data }: NodeProps) {
   return (
     <div
       className="relative"
+      data-cross-highlight={crossHighlighted ? '' : undefined}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{
@@ -113,6 +117,11 @@ function CircularNode({ data }: NodeProps) {
         {isSelected && (
           <circle cx={nodeW/2} cy={nodeW/2} r={cr + 8} fill="none"
             stroke={fill} strokeWidth="1.25" opacity="0.7" />
+        )}
+
+        {crossHighlighted && (
+          <circle cx={nodeW/2} cy={nodeW/2} r={cr + 5} fill="none"
+            stroke="hsl(var(--primary))" strokeWidth="1.25" opacity="0.85" />
         )}
 
         {/* Priority is a thin rim on the core, not a fat one and not a

@@ -59,23 +59,27 @@ function viewportTransform(app: any): Promise<string> {
   return app.evaluate(() => document.querySelector('.react-flow__viewport')?.style.transform ?? '');
 }
 
-/** A screen point on the visible stroke of the first (or named) edge. */
-function edgeMidpoint(app: any, edgeId?: string) {
-  return app.evaluate((id) => {
+/** A screen point on the visible stroke of the first (or named) edge, at a
+ *  given fraction along its length. The default midpoint is fine for the pan
+ *  tests; the click test uses a point near the target, where edges converging
+ *  on a node approach from distinct directions (their source-side fan and
+ *  midpoints overlap other edges once hidden endpoints are hoisted). */
+function edgeMidpoint(app: any, edgeId?: string, t = 0.5) {
+  return app.evaluate(({ id, t }) => {
     const g = id
       ? [...document.querySelectorAll('.react-flow__edge')].find((e) => e.getAttribute('data-id') === id)
       : document.querySelector('.react-flow__edge');
     if (!g) return null;
     const p = g.querySelector('.react-flow__edge-path');
     if (!p) return null;
-    const pt = p.getPointAtLength(p.getTotalLength() * 0.5);
+    const pt = p.getPointAtLength(p.getTotalLength() * t);
     const m = p.getScreenCTM();
     return {
       id: g.getAttribute('data-id'),
       x: m.a * pt.x + m.c * pt.y + m.e,
       y: m.b * pt.x + m.d * pt.y + m.f,
     };
-  }, edgeId);
+  }, { id: edgeId, t });
 }
 
 async function dragBy(app: any, from: { x: number; y: number }, dx: number, dy: number) {
@@ -155,7 +159,7 @@ test('with a requirement selected, clicking an edge selects the other end', asyn
   expect(edge).toBeTruthy();
   expect(edge!.otherEnd).not.toBe(nodeId);
 
-  const pt = await edgeMidpoint(app, edge!.edgeId!);
+  const pt = await edgeMidpoint(app, edge!.edgeId!, 0.85);
   expect(pt).toBeTruthy();
   await app.mouse.click(pt!.x, pt!.y);
 

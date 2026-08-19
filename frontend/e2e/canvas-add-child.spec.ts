@@ -45,15 +45,19 @@ async function zoomToLevel3(app: any) {
     }
   }
 
-  // Position mouse over the first node so zoom stays centered on it.
+  // Anchor the zoom on the node's top-left corner, not its centre: the add-child
+  // button hangs off that corner (left: -9), and zooming toward the centre
+  // pushes the corner — and the button — off the left edge of the pane as the
+  // node grows. Anchoring on the corner keeps the button in view at any zoom.
   const node = app.locator('.react-flow__node').first();
   const box = await node.boundingBox();
   if (box) {
-    await app.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await app.mouse.move(box.x + 4, box.y + 4);
   }
 
   // The button is gated on level >= 3 (zoom >= 0.6). Scroll-zoom in.
-  // After fitView the demo project is at L2; each wheel tick adds ~0.1 zoom.
+  // After fitView the demo project is at L1 (the graph is denser with hoisted
+  // edges); each wheel tick adds ~13%, so 8 ticks lands at L4.
   for (let i = 0; i < 8; i++) {
     await app.mouse.wheel(0, -120);
     await app.waitForTimeout(150);
@@ -164,6 +168,10 @@ test('clicking + on an already-selected node does not navigate to detail page', 
 
   await node.click();
   await app.waitForTimeout(450);
+
+  // Selecting the node re-fits the camera to its whole subtree, zooming back
+  // out below the level the add-child button appears at — zoom back in.
+  await zoomToLevel3(app);
 
   await node.hover();
   await app.locator('[title="Add child requirement"]').first().click();

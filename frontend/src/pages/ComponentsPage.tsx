@@ -5,6 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, ChevronRight, Boxes, Square, CheckSquare, Trash2, X, Search, Eye, EyeOff, Download, Copy } from 'lucide-react';
 import { api, COMPONENT_TYPES, getTruncationInfo, type Component, type ComponentTreeNode, type TruncationInfo } from '../api/client';
 import { useStore } from '../store';
+import { useHoveredEntityBus, useHoverHighlight } from '../components/Layout';
+import { componentsSatisfyingRequirement } from '../lib/crossHighlight';
 import { useAuthStore } from '../store/auth';
 import { COMPONENT_TYPE_META } from '../components/entities';
 import { HelpTip } from '../components/HelpTip';
@@ -55,6 +57,23 @@ export default function ComponentsPage() {
   const treeContainerRef = useRef<HTMLDivElement>(null);
 
   const hasUnsavedChanges = showCreate && !!(draft.id.trim() || draft.name.trim() || draft.parent);
+
+  // Cross-highlight with the canvas. Hovering a component row lights the
+  // requirements it satisfies on the canvas; hovering a canvas node lights the
+  // component(s) that satisfy it here. Applied imperatively so a hover never
+  // re-renders the whole tree.
+  const { set: setHoveredEntity } = useHoveredEntityBus();
+  const litRowRef = useRef<Element[]>([]);
+  useHoverHighlight((hovered) => {
+    for (const el of litRowRef.current) el.classList.remove('rt-cross-hover');
+    litRowRef.current = [];
+    if (hovered?.kind === 'requirement') {
+      for (const cid of componentsSatisfyingRequirement(hovered.id, components)) {
+        const el = document.getElementById(`entity-${cid}`);
+        if (el) { el.classList.add('rt-cross-hover'); litRowRef.current.push(el); }
+      }
+    }
+  });
 
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
@@ -356,6 +375,8 @@ export default function ComponentsPage() {
           role="treeitem"
           tabIndex={-1}
           onClick={() => navigate(`/project/${projectId}/components/${node.id}`)}
+          onMouseEnter={() => setHoveredEntity({ kind: 'component', id: node.id })}
+          onMouseLeave={() => setHoveredEntity(null)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault();

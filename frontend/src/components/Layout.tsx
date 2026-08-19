@@ -3,8 +3,9 @@ import { Outlet, useParams, useLocation } from 'react-router-dom';
 import { GuardedLink as Link } from './navGuard';
 import LoadingSplash from './LoadingSplash';
 import { PanelRight, PanelRightClose, PanelRightOpen, LogIn, LogOut, User, Pencil, Eye, FileDown, FileUp, Users, Search, HelpCircle, BookOpen, Server, SlidersHorizontal, Undo2, Redo2 } from 'lucide-react';
-import { useState, useEffect, useCallback, useMemo, createContext, useContext, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, createContext, useContext, useRef, useSyncExternalStore } from 'react';
 import { ThemeToggle } from './ThemeToggle';
+import { type EntityKind } from './entities';
 import RequirementNav from './RequirementNav';
 import GraphPane from './GraphPane';
 import CommandPalette, { OPEN_PALETTE_EVENT } from './CommandPalette';
@@ -83,6 +84,55 @@ const SelectedReqCtx = createContext<SelectedReqCtxValue>({
   selectedReqId: null, selectReq: () => {}, derivationReq: null, showDerivation: () => {},
 });
 export function useSelectedReq() { return useContext(SelectedReqCtx); }
+
+// ── Shared hover (canvas ↔ list cross-highlighting) ───────────────────────
+//
+// The canvas and the routed page are siblings here, so the only state they can
+// share without threading props is this context. The value is a *stable* bus —
+// `set` mutates a ref and notifies subscribers — rather than a piece of React
+// state whose change would re-render every row and every node on each hover.
+// Consumers either `useSyncExternalStore`-subscribe to the entity (the canvas)
+// or toggling a highlight class imperatively (the list rows), so a hover never
+// re-renders the whole list or graph.
+
+export interface HoveredEntity {
+  kind: EntityKind;
+  id: string;
+}
+
+interface HoveredEntityBus {
+  get: () => HoveredEntity | null;
+  set: (entity: HoveredEntity | null) => void;
+  subscribe: (listener: () => void) => () => void;
+}
+
+const HoveredEntityCtx = createContext<HoveredEntityBus>({
+  get: () => null,
+  set: () => {},
+  subscribe: () => () => {},
+});
+
+/** The live hovered entity — re-renders only this subscriber on a change. */
+export function useHoveredEntity(): HoveredEntity | null {
+  const { get, subscribe } = useContext(HoveredEntityCtx);
+  return useSyncExternalStore(subscribe, get, get);
+}
+
+/** Stable setter for the hovered entity, plus the raw bus for subscribers. */
+export function useHoveredEntityBus(): HoveredEntityBus {
+  return useContext(HoveredEntityCtx);
+}
+
+/** Run `apply(hovered)` now and on every hover change, without re-rendering. */
+export function useHoverHighlight(apply: (hovered: HoveredEntity | null) => void): void {
+  const { get, subscribe } = useContext(HoveredEntityCtx);
+  const applyRef = useRef(apply);
+  applyRef.current = apply;
+  useEffect(() => {
+    applyRef.current(get());
+    return subscribe(() => applyRef.current(get()));
+  }, [get, subscribe]);
+}
 
 // Canvas defaults closed on table/form routes, open on graph-centric routes.
 const CANVAS_CLOSED_DEFAULT = new Set(['allocation', 'traces', 'metrics', 'settings']);
@@ -176,6 +226,24 @@ export default function Layout() {
   const [resizing, setResizing] = useState<'graph' | 'nav' | false>(false);
   const [selectedReqId, setSelectedReqId] = useState<string | null>(null);
   const [navCollapsed, setNavCollapsed] = useState(() => localStorage.getItem('rt-nav-collapsed') === '1');
+
+  // The hover bus is a ref + listeners, not state: a hover must not re-render
+  // the whole layout tree (see HoveredEntityCtx above).
+  const hoveredRef = useRef<HoveredEntity | null>(null);
+  const hoveredListenersRef = useRef(new Set<() => void>());
+  const hoveredBus = useMemo<HoveredEntityBus>(() => ({
+    get: () => hoveredRef.current,
+    set: (entity) => {
+      const cur = hoveredRef.current;
+      if (cur?.kind === entity?.kind && cur?.id === entity?.id) return;
+      hoveredRef.current = entity;
+      hoveredListenersRef.current.forEach((fn) => fn());
+    },
+    subscribe: (listener) => {
+      hoveredListenersRef.current.add(listener);
+      return () => { hoveredListenersRef.current.delete(listener); };
+    },
+  }), []);
 
   const toggleNavCollapsed = useCallback(() => {
     setNavCollapsed((c) => {
@@ -350,6 +418,7 @@ export default function Layout() {
 
   return (
     <ToastProvider>
+    <HoveredEntityCtx.Provider value={hoveredBus}>
     <GraphPaneCtx.Provider value={{ graphOpen, toggleGraph }}>
     <ContextPaneCtx.Provider value={contextPaneValue}>
     <SelectedReqCtx.Provider value={{ selectedReqId, selectReq, derivationReq, showDerivation }}>
@@ -636,6 +705,7 @@ export default function Layout() {
     </SelectedReqCtx.Provider>
     </ContextPaneCtx.Provider>
     </GraphPaneCtx.Provider>
+    </HoveredEntityCtx.Provider>
     </ToastProvider>
   );
 }

@@ -40,6 +40,8 @@ function OrthoEdge({ id, data, style, markerEnd }: EdgeProps) {
   const edgeColor = (data?.color as string) || (style as { stroke?: string })?.stroke || 'hsl(207,90%,64%)';
   const edgeLabel = (data?.label as string) || '';
   const active = !!data?.showLabel;
+  const hoisted = !!data?.hoisted;
+  const count = (data?.count as number) || 1;
 
   return (
     <>
@@ -50,13 +52,36 @@ function OrthoEdge({ id, data, style, markerEnd }: EdgeProps) {
         markerEnd={markerEnd}
         interactionWidth={selectedReqId ? 20 : 0}
       />
+      {hoisted && count > 1 && (
+        // A hoisted edge is several relations collapsed onto one group pair —
+        // badge the count so the merge reads as intentional, not as a missing
+        // line. Always shown, not gated on selection.
+        <EdgeLabelRenderer>
+          <div
+            style={{
+              position: 'absolute',
+              transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
+              pointerEvents: 'none',
+            }}
+            className="nodrag nopan"
+          >
+            <span
+              className="text-[9px] font-semibold px-1.5 py-px rounded-full bg-graph-panel border border-graph-border shadow-sm"
+              style={{ color: edgeColor, whiteSpace: 'nowrap' }}
+              title={`${count} relationships`}
+            >
+              &times;{count}
+            </span>
+          </div>
+        </EdgeLabelRenderer>
+      )}
       {active && (
         // Direction pulse: a dot glides source → target along the exact path.
         <circle r={2.2} fill={edgeColor} opacity={0.9} style={{ pointerEvents: 'none' }}>
           <animateMotion dur="2.8s" repeatCount="indefinite" path={path} calcMode="linear" />
         </circle>
       )}
-      {active && edgeLabel && (
+      {active && edgeLabel && !(hoisted && count > 1) && (
         <EdgeLabelRenderer>
           <div
             style={{

@@ -11,7 +11,7 @@ import { api, baselineNames, getTruncationInfo, type Requirement, type EvalVerdi
 import { useStore } from '../store';
 import { useAuthStore } from '../store/auth';
 import { useUndoStore } from '../store/undo';
-import { useSelectedReq } from '../components/Layout';
+import { useSelectedReq, useHoveredEntityBus, useHoverHighlight } from '../components/Layout';
 import LoadingSplash from '../components/LoadingSplash';
 import RichTextEditor from '../components/RichTextEditor';
 import { useConfirm } from '../components/ConfirmDialog';
@@ -70,6 +70,20 @@ export default function RequirementsPage() {
   const showConfirm = useConfirm();
   const { addToast } = useToasts();
   const { selectedReqId, selectReq } = useSelectedReq();
+
+  // Cross-highlight with the canvas. Hovering a row lights the corresponding
+  // node; hovering a canvas node lights this row. Applied imperatively to the
+  // row's DOM element so a hover never re-renders the whole list.
+  const { set: setHoveredEntity } = useHoveredEntityBus();
+  const litRowRef = useRef<Element[]>([]);
+  useHoverHighlight((hovered) => {
+    for (const el of litRowRef.current) el.classList.remove('rt-cross-hover');
+    litRowRef.current = [];
+    if (hovered?.kind === 'requirement') {
+      const el = document.getElementById(`entity-${hovered.id}`);
+      if (el) { el.classList.add('rt-cross-hover'); litRowRef.current.push(el); }
+    }
+  });
 
   // Search, filters and the collapsed-tree state persist per project, so
   // navigating to another requirement (or another page) and back does not
@@ -563,6 +577,8 @@ export default function RequirementsPage() {
                 role="treeitem"
                 tabIndex={0}
                 onClick={() => navigate(`/project/${projectId}/requirements/${req.id}`)}
+                onMouseEnter={() => setHoveredEntity({ kind: 'requirement', id: req.id })}
+                onMouseLeave={() => setHoveredEntity(null)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();

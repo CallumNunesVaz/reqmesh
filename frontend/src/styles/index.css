@@ -189,4 +189,11 @@
   .badge {
     @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium;
   }
+
+  /* Cross-highlight (canvas ↔ list hover). Applied imperatively to list rows
+     via `useHoverHighlight`; a hover must not re-render the whole list. */
+  .rt-cross-hover {
+    background-color: hsl(var(--primary) / 0.12);
+    box-shadow: inset 2px 0 0 hsl(var(--primary));
+  }
 }
