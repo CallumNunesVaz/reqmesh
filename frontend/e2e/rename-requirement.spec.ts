@@ -116,14 +116,10 @@ test('an entity that linked to a renamed requirement still resolves', async ({ a
 
   // The risk register's "Threatens" chip must now point at the new id and be a
   // live link, not a dead mention.
-  await app.goto(`${server.baseURL}/project/${P}/risks`);
+  await app.goto(`${server.baseURL}/project/${P}/risks/RSK00001`);
   await app.waitForSelector('main');
-  await app.locator('input[placeholder="Search risks…"]').fill('RSK00001');
 
-  const card = app.locator('.card').filter({ hasText: 'RSK00001' }).first();
-  await expect(card).toBeVisible({ timeout: 10_000 });
-
-  const link = card.locator('a', { hasText: 'PROP9001' }).first();
+  const link = app.locator('a').filter({ hasText: 'PROP9001' }).first();
   await expect(link).toBeVisible({ timeout: 10_000 });
   await link.click();
   await expect(app).toHaveURL(/requirements\/PROP9001$/, { timeout: 15_000 });

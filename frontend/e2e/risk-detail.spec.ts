@@ -1,4 +1,4 @@
-import { test, expect, signIn, setEditMode, DEMO_PROJECT, api } from './fixtures';
+import { test, expect, signIn, setEditMode, DEMO_PROJECT, api, pickLinkOption } from './fixtures';
 
 const P = DEMO_PROJECT;
 
@@ -59,7 +59,7 @@ test('a requirement linked from the risk detail page appears on that requirement
   await app.waitForSelector('main');
   await setEditMode(app, true);
 
-  await app.locator('[data-link-editor="Threatens"] select').selectOption(`${req.id} — ${req.name}`);
+  await pickLinkOption(app.locator('[data-link-editor="Threatens"]'), req.id);
 
   await expect(async () => {
     const updated = await api<any>(app, `/projects/${P}/risks/RSK00001`);
