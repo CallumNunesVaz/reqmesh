@@ -1,6 +1,6 @@
-import { useEffect, useState, useId } from 'react';
+import { useEffect, useState, useId, useMemo, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, X, Sigma, CheckCircle2, XCircle, HelpCircle, AlertTriangle, MinusCircle, FlaskConical, Ruler, Boxes, ArrowUp, ArrowDown, Beaker, Play } from 'lucide-react';
+import { Plus, X, Sigma, CheckCircle2, XCircle, HelpCircle, AlertTriangle, MinusCircle, FlaskConical, Ruler, Boxes, ArrowUp, ArrowDown, Beaker, Play, Pencil, Check, Lock } from 'lucide-react';
 import type {
   Parameter, Constraint, Definition,
   EvaluatedRequirement, EvaluatedConstraint, EvalVerdict, ConstraintStatus,
@@ -8,6 +8,10 @@ import type {
 import { KNOWN_UNITS } from '../api/client';
 import { EntityLink } from './entities';
 import { useWhatIf } from './WhatIfContext';
+import {
+  buildParameterReferences, filterReferences, identifierFragment, resolveParameterEdit,
+  type ParamOwner, type ParamReference,
+} from '../lib/parametrics';
 
 /** Shared <datalist> of known units for parameter-unit autocomplete. */
 const UNITS_LIST_ID = 'rm-known-units';
@@ -55,6 +59,208 @@ export function MarginTag({ margin }: { margin: NonNullable<EvaluatedConstraint[
   );
 }
 
+/**
+ * Auto-growing expression field with the inline reference helper.
+ *
+ * A `<textarea>` (rather than an `<input>`) so a long expression wraps and
+ * grows instead of being truncated to one line. Enter submits (no newline is
+ * ever valid in an expression), and while typing the identifier fragment under
+ * the caret filters a fuzzy list of `refs`; picking one inserts at the caret.
+ */
+function ExpressionField({ value, onChange, onSubmit, placeholder, className, refs }: {
+  value: string;
+  onChange: (next: string) => void;
+  onSubmit?: () => void;
+  placeholder?: string;
+  className?: string;
+  refs: ParamReference[];
+}) {
+  const taRef = useRef<HTMLTextAreaElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [caret, setCaret] = useState(0);
+  const [open, setOpen] = useState(false);
+  const [highlight, setHighlight] = useState(0);
+  const listboxId = useId();
+
+  const fragment = identifierFragment(value, caret);
+  const filtered = useMemo(() => filterReferences(refs, fragment), [refs, fragment]);
+  // Only trigger on fragments that name something — a digit-only fragment (the
+  // tail of a number being typed) would open the list on every value.
+  const show = open && /[A-Za-z]/.test(fragment) && filtered.length > 0;
+
+  // Auto-grow to the content's height.
+  useEffect(() => {
+    const ta = taRef.current;
+    if (!ta) return;
+    ta.style.height = 'auto';
+    ta.style.height = `${ta.scrollHeight}px`;
+  }, [value]);
+
+  // Close on click outside.
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, []);
+
+  // Scroll the highlighted option into view.
+  useEffect(() => {
+    const el = containerRef.current?.querySelector<HTMLElement>(`[data-ref-idx="${highlight}"]`);
+    el?.scrollIntoView({ block: 'nearest' });
+  }, [highlight]);
+
+  const insert = (r: ParamReference) => {
+    const start = caret - fragment.length;
+    const nextVal = value.slice(0, start) + r.ref + value.slice(caret);
+    onChange(nextVal);
+    setOpen(false);
+    const pos = start + (r.caret ?? r.ref.length);
+    requestAnimationFrame(() => {
+      const ta = taRef.current;
+      if (!ta) return;
+      ta.focus();
+      ta.setSelectionRange(pos, pos);
+      setCaret(pos);
+    });
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (show) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setHighlight((h) => Math.min(h + 1, filtered.length - 1)); return; }
+      if (e.key === 'ArrowUp') { e.preventDefault(); setHighlight((h) => Math.max(h - 1, 0)); return; }
+      if (e.key === 'Enter') { e.preventDefault(); insert(filtered[highlight]); return; }
+      if (e.key === 'Escape') { e.preventDefault(); setOpen(false); return; }
+    }
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      onSubmit?.();
+    }
+  };
+
+  return (
+    <div ref={containerRef} className="relative min-w-0 flex-1">
+      <textarea
+        ref={taRef}
+        rows={1}
+        className={className}
+        value={value}
+        placeholder={placeholder}
+        autoComplete="off"
+        spellCheck={false}
+        onChange={(e) => {
+          onChange(e.target.value);
+          setCaret(e.target.selectionStart ?? e.target.value.length);
+          setOpen(true);
+          setHighlight(0);
+        }}
+        onClick={(e) => setCaret((e.target as HTMLTextAreaElement).selectionStart ?? value.length)}
+        onKeyUp={(e) => setCaret((e.target as HTMLTextAreaElement).selectionStart ?? value.length)}
+        onFocus={() => { if (fragment) setOpen(true); }}
+        onKeyDown={onKeyDown}
+      />
+      {show && (
+        /* oxlint-disable jsx-a11y/prefer-tag-over-role -- a combobox popup: there
+           is no native element that reproduces a filterable suggestion list. */
+        <div
+          id={listboxId}
+          role="listbox"
+          className="absolute z-50 left-0 min-w-full mt-1 max-h-52 overflow-y-auto rounded-lg border bg-popover shadow-lg"
+        >
+          {filtered.map((r, i) => (
+            <div
+              key={`${r.ref}-${i}`}
+              data-ref-idx={i}
+              role="option"
+              aria-selected={i === highlight}
+              tabIndex={-1}
+              onMouseDown={(e) => { e.preventDefault(); insert(r); }}
+              onMouseEnter={() => setHighlight(i)}
+              className={`flex items-center gap-2 px-3 py-1.5 text-xs cursor-pointer transition-colors ${
+                i === highlight ? 'bg-primary/10 text-primary' : 'text-popover-foreground hover:bg-accent'
+              }`}
+            >
+              <span className="font-mono text-[10px] opacity-60 shrink-0">{r.ref}</span>
+              <span className="truncate">{r.label}</span>
+            </div>
+          ))}
+        </div>
+        /* oxlint-enable jsx-a11y/prefer-tag-over-role */
+      )}
+    </div>
+  );
+}
+
+/**
+ * In-place editor for one parameter row, shared by `ParametricsCard` and
+ * `ParameterEditor`. Preserves `kind`/`value_type`/`calc_def`/`bindings` by
+ * resolving through `resolveParameterEdit` (spread the original, edit only the
+ * four editable fields).
+ */
+function ParameterEditRow({ original, refs, onSave, onCancel }: {
+  original: Parameter;
+  refs: ParamReference[];
+  onSave: (next: Parameter) => void;
+  onCancel: () => void;
+}) {
+  const [draft, setDraft] = useState({
+    name: original.name,
+    value: original.value != null ? String(original.value) : '',
+    unit: original.unit ?? '',
+    expr: original.expr ?? '',
+  });
+  const nameId = useId();
+
+  const commit = () => {
+    if (!draft.name.trim()) return;
+    onSave(resolveParameterEdit(original, draft));
+  };
+
+  return (
+    <div data-param-edit={original.name} className="flex items-center gap-2 text-xs py-1.5 px-2 rounded bg-accent/40 ring-1 ring-primary/20">
+      <input
+        id={nameId}
+        className="input w-28 text-xs font-mono shrink-0"
+        placeholder="name"
+        value={draft.name}
+        onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(); } }}
+      />
+      <input
+        className="input w-20 text-xs font-mono shrink-0"
+        placeholder="value"
+        value={draft.value}
+        onChange={(e) => setDraft((d) => ({ ...d, value: e.target.value, expr: e.target.value.trim() ? '' : d.expr }))}
+        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(); } }}
+      />
+      <ExpressionField
+        className="input text-xs font-mono resize-none"
+        placeholder="or expr: GROS0001.mass - empty"
+        value={draft.expr}
+        onChange={(v) => setDraft((d) => ({ ...d, expr: v, value: v.trim() ? '' : d.value }))}
+        onSubmit={commit}
+        refs={refs}
+      />
+      <input
+        className="input w-16 text-xs shrink-0"
+        list={UNITS_LIST_ID}
+        placeholder="unit"
+        value={draft.unit}
+        onChange={(e) => setDraft({ ...draft, unit: e.target.value })}
+        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(); } }}
+      />
+      <UnitsDatalist />
+      <button onClick={commit} className="btn-secondary shrink-0 p-1.5" title="Save parameter">
+        <Check size={12} />
+      </button>
+      <button onClick={onCancel} className="text-muted-foreground hover:text-foreground shrink-0 p-1.5" title="Cancel">
+        <X size={12} />
+      </button>
+    </div>
+  );
+}
+
 interface ParametricsCardProps {
   reqId: string;
   parameters: Parameter[];
@@ -64,6 +270,9 @@ interface ParametricsCardProps {
   onSave: (updates: { parameters?: Parameter[]; constraints?: Constraint[] }) => void;
   /** Reusable definitions available to bind as constraint/calc usages. */
   definitions?: Definition[];
+  /** Every other parameter in the project (other requirements + components),
+   *  offered by the reference helper as `ID.param`. */
+  references?: ParamOwner[];
 }
 
 /**
@@ -72,9 +281,10 @@ interface ParametricsCardProps {
  * live verdict and margin, and the measured verdict when verification cases
  * have recorded evidence.
  */
-export function ParametricsCard({ reqId, parameters, constraints, evaluated, editable, onSave, definitions = [] }: ParametricsCardProps) {
+export function ParametricsCard({ reqId, parameters, constraints, evaluated, editable, onSave, definitions = [], references = [] }: ParametricsCardProps) {
   const [draft, setDraft] = useState({ name: '', value: '', expr: '', unit: '' });
   const [newConstraint, setNewConstraint] = useState({ expr: '', assume: '' });
+  const [editingIdx, setEditingIdx] = useState(-1);
   const constraintDefs = definitions.filter((d) => d.type === 'constraint');
   const [defDraft, setDefDraft] = useState<{ id: string; bindings: Record<string, string> }>({ id: '', bindings: {} });
   const selectedDef = constraintDefs.find((d) => d.id === defDraft.id);
@@ -95,6 +305,16 @@ export function ParametricsCard({ reqId, parameters, constraints, evaluated, edi
   // Evaluated results keyed for the display rows.
   const evalParams = new Map((evaluated?.parameters ?? []).map((p) => [p.name, p]));
 
+  // The reference helper's project-wide list. Own params are offered by bare
+  // name, every other entity's as `ID.param`, plus `rollup` and the definitions.
+  const refs = useMemo(() => {
+    const evalValues = new Map<string, number | null>();
+    for (const p of evaluated?.parameters ?? []) evalValues.set(`${reqId}.${p.name}`, p.value ?? null);
+    return buildParameterReferences({
+      ownId: reqId, ownParameters: parameters, others: references, definitions, evalValues,
+    });
+  }, [reqId, parameters, references, definitions, evaluated]);
+
   const addParameter = () => {
     if (!draft.name.trim()) return;
     const p: Parameter = {
@@ -109,6 +329,11 @@ export function ParametricsCard({ reqId, parameters, constraints, evaluated, edi
 
   const removeParameter = (i: number) =>
     onSave({ parameters: parameters.filter((_, idx) => idx !== i) });
+
+  const saveEdit = (i: number, next: Parameter) => {
+    onSave({ parameters: parameters.map((p, idx) => (idx === i ? next : p)) });
+    setEditingIdx(-1);
+  };
 
   const addConstraint = () => {
     if (!newConstraint.expr.trim()) return;
@@ -161,6 +386,17 @@ export function ParametricsCard({ reqId, parameters, constraints, evaluated, edi
       {parameters.length > 0 && (
         <div className="space-y-1 mb-3">
           {parameters.map((p, i) => {
+            if (editable && editingIdx === i) {
+              return (
+                <ParameterEditRow
+                  key={`edit-${p.name}-${i}`}
+                  original={p}
+                  refs={refs}
+                  onSave={(next) => saveEdit(i, next)}
+                  onCancel={() => setEditingIdx(-1)}
+                />
+              );
+            }
             const ev = evalParams.get(p.name);
             const ref = `${reqId}.${p.name}`;
             const isLiteral = !p.expr && !p.calc_def && p.value != null;
@@ -168,7 +404,7 @@ export function ParametricsCard({ reqId, parameters, constraints, evaluated, edi
             const origVal = whatIf?.base[ref];
             const whatIfOpenNow = whatIfOpen.has(ref);
             return (
-              <div key={`${p.name}-${i}`} className={`flex items-center gap-2 text-xs py-1.5 px-2 rounded hover:bg-accent group ${isOverridden ? 'ring-1 ring-dashed ring-blue-400/50 bg-blue-500/5' : ''}`}>
+              <div key={`${p.name}-${i}`} data-param={p.name} className={`flex items-center gap-2 text-xs py-1.5 px-2 rounded hover:bg-accent group ${isOverridden ? 'ring-1 ring-dashed ring-blue-400/50 bg-blue-500/5' : ''}`}>
                 <span className="font-mono font-medium text-foreground w-28 shrink-0 truncate">{p.name}</span>
                 {p.expr || p.calc_def ? (
                   <span className="flex-1 min-w-0 truncate">
@@ -245,9 +481,20 @@ export function ParametricsCard({ reqId, parameters, constraints, evaluated, edi
                 {ev?.error && <span className="text-[10px] text-red-400 shrink-0" title={ev.error}>error</span>}
                 {ev?.unit_warning && <UnitWarning message={ev.unit_warning} />}
                 {editable && (
-                  <button onClick={() => removeParameter(i)} className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all">
-                    <X size={12} />
-                  </button>
+                  <span className="flex items-center gap-0.5">
+                    {p.calc_def ? (
+                      <span className="shrink-0 text-muted-foreground" title="Derived from a calc definition — delete to change its binding">
+                        <Lock size={12} />
+                      </span>
+                    ) : (
+                      <button onClick={() => setEditingIdx(i)} className="text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-all" title="Edit parameter">
+                        <Pencil size={12} />
+                      </button>
+                    )}
+                    <button onClick={() => removeParameter(i)} className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all" title="Remove parameter">
+                      <X size={12} />
+                    </button>
+                  </span>
                 )}
               </div>
             );
@@ -257,15 +504,24 @@ export function ParametricsCard({ reqId, parameters, constraints, evaluated, edi
 
       {editable && (
         <div className="flex gap-1 mb-4">
-          <input className="input flex-1 text-xs font-mono" placeholder="name" value={draft.name}
-            onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
-          <input className="input w-20 text-xs font-mono" placeholder="value" value={draft.value}
-            onChange={(e) => setDraft({ ...draft, value: e.target.value })} />
-          <input className="input flex-1 text-xs font-mono" placeholder="or expr: GROS0001.mass - empty" value={draft.expr}
-            onChange={(e) => setDraft({ ...draft, expr: e.target.value })} />
-          <input className="input w-16 text-xs" placeholder="unit" list={UNITS_LIST_ID} value={draft.unit}
-            onChange={(e) => setDraft({ ...draft, unit: e.target.value })} />
-          <button onClick={addParameter} className="btn-secondary shrink-0 p-2" disabled={!draft.name.trim()}>
+          <input className="input w-28 text-xs font-mono shrink-0" placeholder="name" value={draft.name}
+            onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addParameter(); } }} />
+          <input className="input w-20 text-xs font-mono shrink-0" placeholder="value" value={draft.value}
+            onChange={(e) => setDraft({ ...draft, value: e.target.value })}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addParameter(); } }} />
+          <ExpressionField
+            className="input text-xs font-mono resize-none"
+            placeholder="or expr: GROS0001.mass - empty"
+            value={draft.expr}
+            onChange={(v) => setDraft({ ...draft, expr: v })}
+            onSubmit={addParameter}
+            refs={refs}
+          />
+          <input className="input w-16 text-xs shrink-0" placeholder="unit" list={UNITS_LIST_ID} value={draft.unit}
+            onChange={(e) => setDraft({ ...draft, unit: e.target.value })}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addParameter(); } }} />
+          <button onClick={addParameter} className="btn-secondary shrink-0 p-2" disabled={!draft.name.trim()} title="Add parameter">
             <Plus size={12} />
           </button>
           <UnitsDatalist />
@@ -314,12 +570,24 @@ export function ParametricsCard({ reqId, parameters, constraints, evaluated, edi
       )}
 
       {editable && (
-        <div className="flex gap-1">
-          <input className="input flex-1 text-xs font-mono" placeholder={`expr: gross <= 1160 or rollup('WING01','mass') <= limit`} value={newConstraint.expr}
-            onChange={(e) => setNewConstraint({ ...newConstraint, expr: e.target.value })} />
-          <input className="input w-40 text-xs font-mono" placeholder="assume (optional)" value={newConstraint.assume}
-            onChange={(e) => setNewConstraint({ ...newConstraint, assume: e.target.value })} />
-          <button onClick={addConstraint} className="btn-secondary shrink-0 p-2" disabled={!newConstraint.expr.trim()}>
+        <div className="flex items-start gap-1">
+          <ExpressionField
+            className="input text-xs font-mono resize-none"
+            placeholder={`expr: gross <= 1160 or rollup('WING01','mass') <= limit`}
+            value={newConstraint.expr}
+            onChange={(v) => setNewConstraint({ ...newConstraint, expr: v })}
+            onSubmit={addConstraint}
+            refs={refs}
+          />
+          <ExpressionField
+            className="input text-xs font-mono resize-none"
+            placeholder="assume (optional)"
+            value={newConstraint.assume}
+            onChange={(v) => setNewConstraint({ ...newConstraint, assume: v })}
+            onSubmit={addConstraint}
+            refs={refs}
+          />
+          <button onClick={addConstraint} className="btn-secondary shrink-0 p-2" disabled={!newConstraint.expr.trim()} title="Add constraint">
             <Plus size={12} />
           </button>
         </div>
@@ -374,16 +642,37 @@ export function ParametricsCard({ reqId, parameters, constraints, evaluated, edi
 }
 
 /** Compact numeric-parameter editor used on the component detail panel. */
-export function ParameterEditor({ parameters, editable, onChange }: {
+export function ParameterEditor({ parameters, editable, onChange, id = '', references = [], definitions = [] }: {
   parameters: Parameter[];
   editable: boolean;
   onChange: (next: Parameter[]) => void;
+  /** The owning component's id — keys own parameters in the reference helper. */
+  id?: string;
+  /** Other project parameters offered by the reference helper as `ID.param`. */
+  references?: ParamOwner[];
+  definitions?: Definition[];
 }) {
-  const [draft, setDraft] = useState({ name: '', value: '', unit: '' });
-  useEffect(() => setDraft({ name: '', value: '', unit: '' }), [parameters]);
+  const [draft, setDraft] = useState({ name: '', value: '', unit: '', expr: '' });
+  const [editingIdx, setEditingIdx] = useState(-1);
+  useEffect(() => setDraft({ name: '', value: '', unit: '', expr: '' }), [parameters]);
   const paramNameId = useId();
 
+  const refs = useMemo(() => buildParameterReferences({
+    ownId: id, ownParameters: parameters, others: references, definitions,
+  }), [id, parameters, references, definitions]);
+
   if (!editable && parameters.length === 0) return null;
+
+  const addParameter = () => {
+    if (!draft.name.trim()) return;
+    onChange([...parameters, {
+      name: draft.name.trim(),
+      unit: draft.unit.trim(),
+      value: draft.expr.trim() ? null : (draft.value.trim() === '' ? null : Number(draft.value)),
+      expr: draft.expr.trim() || null,
+    }]);
+    setDraft({ name: '', value: '', unit: '', expr: '' });
+  };
 
   return (
     <div>
@@ -391,36 +680,71 @@ export function ParameterEditor({ parameters, editable, onChange }: {
       <p className="text-[11px] text-muted-foreground -mt-1 mb-1.5">Quantities budget rollups can sum</p>
       {parameters.length > 0 && (
         <div className="space-y-1 mb-2">
-          {parameters.map((p, i) => (
-            <div key={`${p.name}-${i}`} className="flex items-center gap-2 text-xs py-1 px-2 rounded hover:bg-accent group">
-              <span className="font-mono font-medium text-foreground flex-1 truncate">{p.name}</span>
-              <span className="font-mono">{p.expr ? `= ${p.expr}` : p.value ?? '—'}</span>
-              <span className="text-muted-foreground w-10 truncate">{p.unit}</span>
-              {editable && (
-                <button onClick={() => onChange(parameters.filter((_, idx) => idx !== i))}
-                  className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all">
-                  <X size={11} />
-                </button>
-              )}
-            </div>
-          ))}
+          {parameters.map((p, i) => {
+            if (editable && editingIdx === i) {
+              return (
+                <ParameterEditRow
+                  key={`edit-${p.name}-${i}`}
+                  original={p}
+                  refs={refs}
+                  onSave={(next) => { onChange(parameters.map((pp, idx) => (idx === i ? next : pp))); setEditingIdx(-1); }}
+                  onCancel={() => setEditingIdx(-1)}
+                />
+              );
+            }
+            return (
+              <div key={`${p.name}-${i}`} className="flex items-center gap-2 text-xs py-1 px-2 rounded hover:bg-accent group">
+                <span className="font-mono font-medium text-foreground flex-1 truncate">{p.name}</span>
+                <span className="font-mono">{p.expr ? `= ${p.expr}` : p.value ?? '—'}</span>
+                <span className="text-muted-foreground w-10 truncate">{p.unit}</span>
+                {editable && (
+                  <span className="flex items-center gap-0.5">
+                    {p.calc_def ? (
+                      <span className="shrink-0 text-muted-foreground" title="Derived from a calc definition — delete to change its binding">
+                        <Lock size={11} />
+                      </span>
+                    ) : (
+                      <button onClick={() => setEditingIdx(i)}
+                        className="text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-all" title="Edit parameter">
+                        <Pencil size={11} />
+                      </button>
+                    )}
+                    <button onClick={() => onChange(parameters.filter((_, idx) => idx !== i))}
+                      className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all">
+                      <X size={11} />
+                    </button>
+                  </span>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
       {editable && (
-        <div className="flex gap-1">
-          <input id={paramNameId} className="input flex-1 text-xs font-mono" placeholder="name" value={draft.name}
-            onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
-          <input className="input w-20 text-xs font-mono" placeholder="value" value={draft.value}
-            onChange={(e) => setDraft({ ...draft, value: e.target.value })} />
-          <input className="input w-14 text-xs" placeholder="unit" value={draft.unit}
-            onChange={(e) => setDraft({ ...draft, unit: e.target.value })} />
+        <div className="flex items-center gap-1">
+          <input id={paramNameId} className="input w-28 text-xs font-mono shrink-0" placeholder="name" value={draft.name}
+            onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addParameter(); } }} />
+          <input className="input w-20 text-xs font-mono shrink-0" placeholder="value" value={draft.value}
+            onChange={(e) => setDraft({ ...draft, value: e.target.value })}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addParameter(); } }} />
+          <ExpressionField
+            className="input text-xs font-mono resize-none"
+            placeholder="or expr"
+            value={draft.expr}
+            onChange={(v) => setDraft({ ...draft, expr: v })}
+            onSubmit={addParameter}
+            refs={refs}
+          />
+          <input className="input w-14 text-xs shrink-0" placeholder="unit" list={UNITS_LIST_ID} value={draft.unit}
+            onChange={(e) => setDraft({ ...draft, unit: e.target.value })}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addParameter(); } }} />
+          <UnitsDatalist />
           <button
-            onClick={() => {
-              if (!draft.name.trim() || draft.value.trim() === '') return;
-              onChange([...parameters, { name: draft.name.trim(), value: Number(draft.value), unit: draft.unit.trim() }]);
-            }}
+            onClick={addParameter}
             className="btn-secondary shrink-0 p-1.5"
-            disabled={!draft.name.trim() || draft.value.trim() === ''}
+            disabled={!draft.name.trim() || (draft.expr.trim() === '' && draft.value.trim() === '')}
+            title="Add parameter"
           >
             <Plus size={12} />
           </button>

@@ -1153,6 +1153,10 @@ export default function RequirementDetailPage() {
             editable={editable}
             onSave={save}
             definitions={definitions}
+            references={[
+              ...allReqs.map((r) => ({ id: r.id, parameters: r.parameters || [] })),
+              ...allComponents.map((c) => ({ id: c.id, parameters: c.parameters || [] })),
+            ]}
           />
           <WhatIfPanel />
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="card p-5">

@@ -315,6 +315,11 @@ export default function ComponentDetailPage() {
             parameters={component.parameters || []}
             editable={editable}
             onChange={(next) => save({ parameters: next as any })}
+            id={componentId}
+            references={[
+              ...requirements.map((r) => ({ id: r.id, parameters: r.parameters || [] })),
+              ...allComponents.map((c) => ({ id: c.id, parameters: c.parameters || [] })),
+            ]}
           />
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.19 }} className="card p-5">
             <CommentThread entityKind="components" entityId={componentId!} />
