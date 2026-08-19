@@ -1,4 +1,4 @@
-import { test as base, expect, type Page } from '@playwright/test';
+import { test as base, expect, type Locator, type Page } from '@playwright/test';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { cpSync, existsSync, mkdtempSync, renameSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -234,6 +234,21 @@ export async function setEditMode(page: Page, on = true) {
     await toggle.first().click();
     await page.waitForTimeout(400);
   }
+}
+
+/** Drive a LinkEditor combobox by its id: type the id into the filter and
+ *  commit the highlighted row with Enter. The control used to be a native
+ *  <select> driven with `selectOption`; it is now a searchable combobox, so a
+ *  test types, not picks an option. */
+export async function pickLinkOption(editor: Locator, id: string) {
+  const input = editor.locator('input');
+  await input.click();
+  await input.fill(id);
+  await editor.locator('[role="option"]').filter({ hasText: id }).first().waitFor({
+    state: 'visible',
+    timeout: 10_000,
+  });
+  await input.press('Enter');
 }
 
 /** Read through the API with the browser's session — the ground truth behind

@@ -1,4 +1,4 @@
-import { test, expect, signIn, setEditMode, DEMO_PROJECT } from './fixtures';
+import { test, expect, signIn, setEditMode, pickLinkOption, DEMO_PROJECT } from './fixtures';
 
 /**
  * When a write (create/update/delete) fails the server MUST surface the
@@ -38,22 +38,31 @@ test('a failed requirement update raises an error toast', async ({ app, server }
   await expect(app.locator('.card').filter({ hasText: /RSK/ }).first()).toBeVisible({ timeout: 15_000 });
 
   // Find a risk card and use the "Threatens" LinkEditor to add a link.
-  // The select triggers setRiskRequirements -> updateRisk -> PUT -> 500 -> toast.
-  const riskCard = app.locator('.card').filter({ hasText: /RSK/ }).first();
-  const linkSelect = riskCard.locator('[data-link-editor="Threatens"] select');
-  await linkSelect.waitFor({ timeout: 10_000 });
-
-  // Pick any option except the empty first one.
+  // Picking a requirement triggers setRiskRequirements -> updateRisk ->
+  // PUT -> 500 -> toast.
   //
-  // Asserted rather than skipped. These were early `return`s, which meant a
-  // demo with no linkable requirements — or a picker that stopped rendering
-  // its options at all — turned this test green while exercising nothing. A
-  // test for an invisible failure must not itself be able to fail invisibly.
-  const options = linkSelect.locator('option');
-  await expect(options).not.toHaveCount(1);
-  const value = await options.nth(1).getAttribute('value');
-  expect(value, 'the first real option must carry a value to select').toBeTruthy();
-  await linkSelect.selectOption(value!);
+  // Pick a linkable requirement, asserted rather than skipped. These were
+  // early `return`s, which meant a demo with no linkable requirements — or a
+  // picker that stopped rendering its options at all — turned this test green
+  // while exercising nothing. A test for an invisible failure must not itself
+  // be able to fail invisibly.
+  const risks: any[] = await app.evaluate(async (project: string) => {
+    const r = await fetch(`/api/projects/${project}/risks`, { credentials: 'include' });
+    return (await r.json()).items;
+  }, P);
+  const reqsPage: any = await app.evaluate(async (project: string) => {
+    const r = await fetch(`/api/projects/${project}/requirements`, { credentials: 'include' });
+    return r.json();
+  }, P);
+  const requirements: any[] = reqsPage.items || reqsPage;
+  const risk = risks[0];
+  expect(risk).toBeTruthy();
+  const linkable = requirements.find((r: any) => !risk.linked_requirements.includes(r.id));
+  expect(linkable, 'the first real option must carry a value to select').toBeTruthy();
+
+  const riskCard = app.locator('.card').filter({ hasText: risk.id }).first();
+  await riskCard.waitFor({ timeout: 10_000 });
+  await pickLinkOption(riskCard.locator('[data-link-editor="Threatens"]'), linkable.id);
 
   // The error toast should appear — the expect below has its own timeout,
   // so no fixed sleep is needed here.

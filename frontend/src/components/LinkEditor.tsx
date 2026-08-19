@@ -1,13 +1,32 @@
+import { useState } from 'react';
 import { X } from 'lucide-react';
 import { EntityLink, type EntityKind } from './entities';
+import AutocompleteInput from './AutocompleteInput';
+
+/**
+ * Options still selectable: everything not already linked. Extracted so the
+ * "already-linked ids never appear" rule is unit-testable and cannot drift
+ * from the component's own filter.
+ */
+export function availableOptions(
+  options: { id: string; name: string }[],
+  linked: string[],
+): { id: string; name: string }[] {
+  return options.filter((o) => !linked.includes(o.id));
+}
 
 /**
  * A linked-entity field: chips that navigate to the entity, each removable,
- * plus a "+ link…" select to add another. Originally local to
+ * plus a type-to-filter combobox to add another. Originally local to
  * ComponentDetailPage (satisfies / verification_cases); factored out so the
  * same editing pattern can back every entity-to-entity relationship the app
  * shows read-only in a detail pane — risk↔requirement, requirement↔component
  * allocation — instead of each growing its own copy.
+ *
+ * The add control used to be a native <select> listing every option; on a real
+ * project that is hundreds of entries with no way to search. It now reuses
+ * AutocompleteInput, so matching (substring on id and name, case-insensitive),
+ * keyboard navigation and outside-click close are shared, not reimplemented.
  */
 export function LinkEditor({ label, hint, kind, linked, options, editable, onAdd, onRemove, nameOf }: {
   /** Omit when an enclosing heading already names the field (e.g. an <h2>
@@ -17,7 +36,8 @@ export function LinkEditor({ label, hint, kind, linked, options, editable, onAdd
   editable: boolean; onAdd: (id: string) => void; onRemove: (id: string) => void;
   nameOf: (id: string) => string;
 }) {
-  const available = options.filter((o) => !linked.includes(o.id));
+  const [query, setQuery] = useState('');
+  const available = availableOptions(options, linked);
   return (
     // `data-link-editor` names this editor so a test can address it directly.
     // The e2e suite used to reach the "Mitigated By" picker as the *last*
@@ -42,10 +62,14 @@ export function LinkEditor({ label, hint, kind, linked, options, editable, onAdd
         ))}
       </div>
       {editable && available.length > 0 && (
-        <select className="input text-xs" value="" onChange={(e) => onAdd(e.target.value)}>
-          <option value="">+ link…</option>
-          {available.map((o) => <option key={o.id} value={o.id}>{o.id} — {o.name}</option>)}
-        </select>
+        <AutocompleteInput
+          className="input text-xs"
+          placeholder="+ link…"
+          value={query}
+          onChange={setQuery}
+          onSelect={(id) => { onAdd(id); setQuery(''); }}
+          suggestions={available.map((o) => ({ id: o.id, label: o.name }))}
+        />
       )}
     </div>
   );

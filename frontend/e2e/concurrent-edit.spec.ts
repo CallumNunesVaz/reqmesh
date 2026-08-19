@@ -1,4 +1,4 @@
-import { test, expect, signIn, setEditMode, DEMO_PROJECT } from './fixtures';
+import { test, expect, signIn, setEditMode, pickLinkOption, DEMO_PROJECT } from './fixtures';
 
 /**
  * The lost-update guard must refuse *other people's* overwrites, and nobody
@@ -49,14 +49,24 @@ test('allocating re-reads the requirement, so its version token stays fresh',
     );
 
     // The "Allocated To" editor passes no `label`, so LinkEditor's
-    // `data-link-editor={label || kind}` falls back to the kind.
-    const picker = app.locator('[data-link-editor="component"] select').first();
+    // `data-link-editor={label || kind}` falls back to the kind. The control
+    // is a combobox now, so pick a linkable component id from the API and
+    // drive the filter, not a <select>.
+    const components: any[] = await app.evaluate(async (project: string) => {
+      const r = await fetch(`/api/projects/${project}/components`, { credentials: 'include' });
+      const j = await r.json();
+      return j.items || j;
+    }, P);
+    const satisfied: any[] = await app.evaluate(async (project: string) => {
+      const r = await fetch(`/api/projects/${project}/requirements/AFRM0001/components`, { credentials: 'include' });
+      return r.json();
+    }, P);
+    const linkable = components.find((c: any) => !satisfied.some((s: any) => s.id === c.id));
+    expect(linkable, 'need a linkable component to move `modified`').toBeTruthy();
+
+    const picker = app.locator('[data-link-editor="component"]').first();
     await picker.waitFor({ timeout: 10_000 });
-    const options = picker.locator('option');
-    await expect(options).not.toHaveCount(1);
-    const value = await options.nth(1).getAttribute('value');
-    expect(value, 'need a linkable component to move `modified`').toBeTruthy();
-    await picker.selectOption(value!);
+    await pickLinkOption(picker, linkable.id);
 
     expect((await allocation).status()).toBe(200);
     expect((await reread).status(),

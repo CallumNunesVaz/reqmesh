@@ -1,4 +1,4 @@
-import { test, expect, signIn, setEditMode, DEMO_PROJECT } from './fixtures';
+import { test, expect, signIn, setEditMode, pickLinkOption, DEMO_PROJECT } from './fixtures';
 
 /**
  * Adding a requirement to "Mitigated By" on a risk persists independently
@@ -42,15 +42,15 @@ test('mitigated-by persists and does not overwrite threatens', async ({ app, ser
   const riskCard = app.locator('.card').filter({ hasText: risk.id }).first();
   await expect(riskCard).toBeVisible();
 
-  // Select the "Threatens" dropdown and add the threatened requirement.
-  const threatensSelect = riskCard.locator('[data-link-editor="Threatens"] select');
-  await threatensSelect.selectOption(`${threatenedReq.id} — ${threatenedReq.name}`);
-
-  // Now add a requirement to "Mitigated By".
+  // Select the "Threatens" combobox and add the threatened requirement.
   // Addressed by name, not position: component pickers now sit after this one,
   // so `.last()` silently pointed at the wrong control.
-  const mitigatedSelect = riskCard.locator('[data-link-editor="Mitigated By"] select');
-  await mitigatedSelect.selectOption(`${mitigatingReq.id} — ${mitigatingReq.name}`);
+  const threatensEditor = riskCard.locator('[data-link-editor="Threatens"]');
+  await pickLinkOption(threatensEditor, threatenedReq.id);
+
+  // Now add a requirement to "Mitigated By".
+  const mitigatedEditor = riskCard.locator('[data-link-editor="Mitigated By"]');
+  await pickLinkOption(mitigatedEditor, mitigatingReq.id);
 
   // Poll the API until both link changes land — no fixed sleep.
   await expect(async () => {

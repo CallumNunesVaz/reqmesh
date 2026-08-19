@@ -1,8 +1,68 @@
 import { useState, useRef, useEffect, useMemo, useCallback, useId } from 'react';
 
-interface Suggestion {
+export interface Suggestion {
   id: string;
   label: string;
+}
+
+/**
+ * Substring match on id and label, case-insensitive — the single filter rule
+ * shared by every combobox in the app. Kept here, exported, so a second widget
+ * (LinkEditor) reuses the exact same rule rather than drifting a copy.
+ */
+export function filterSuggestions(query: string, suggestions: Suggestion[]): Suggestion[] {
+  if (!query) return suggestions;
+  const q = query.toLowerCase();
+  return suggestions.filter(
+    (s) => s.id.toLowerCase().includes(q) || s.label.toLowerCase().includes(q)
+  );
+}
+
+export interface ComboboxState {
+  open: boolean;
+  highlight: number;
+}
+
+export interface ComboboxKeyResult {
+  open: boolean;
+  highlight: number;
+  /** The id to commit when the key selected the highlighted row. */
+  selectId?: string;
+}
+
+/**
+ * The keyboard contract of a suggestion popup, expressed as a pure function so
+ * the arrow/Enter/Escape behaviour is unit-testable and cannot drift between
+ * AutocompleteInput and anything that embeds it. `filtered` is the list that is
+ * currently visible; Enter returns `selectId` and the caller commits it — the
+ * popup never commits on its own.
+ */
+export function comboboxKeyDown(
+  state: ComboboxState,
+  key: string,
+  filtered: Suggestion[],
+): ComboboxKeyResult {
+  const count = filtered.length;
+  if (!state.open && (key === 'ArrowDown' || key === 'ArrowUp')) {
+    return { open: true, highlight: state.highlight };
+  }
+  if (key === 'ArrowDown') {
+    return { open: state.open, highlight: Math.min(state.highlight + 1, count - 1) };
+  }
+  if (key === 'ArrowUp') {
+    return { open: state.open, highlight: Math.max(state.highlight - 1, 0) };
+  }
+  if (key === 'Enter') {
+    if (state.open) {
+      const item = filtered[state.highlight];
+      if (item) return { open: false, highlight: 0, selectId: item.id };
+    }
+    return { open: state.open, highlight: state.highlight };
+  }
+  if (key === 'Escape') {
+    return { open: false, highlight: state.highlight };
+  }
+  return { open: state.open, highlight: state.highlight };
 }
 
 interface AutocompleteInputProps {
@@ -13,6 +73,12 @@ interface AutocompleteInputProps {
   placeholder?: string;
   className?: string;
   disabled?: boolean;
+  /**
+   * Called with the chosen id when a suggestion is committed (click or Enter).
+   * When omitted, `onChange` receives the id instead, preserving the original
+   * value-as-id behaviour for callers that treat the field's value as the id.
+   */
+  onSelect?: (id: string) => void;
 }
 
 export default function AutocompleteInput({
@@ -23,6 +89,7 @@ export default function AutocompleteInput({
   placeholder,
   className = '',
   disabled = false,
+  onSelect,
 }: AutocompleteInputProps) {
   const [open, setOpen] = useState(false);
   const [highlightIdx, setHighlightIdx] = useState(0);
@@ -31,42 +98,33 @@ export default function AutocompleteInput({
   const containerRef = useRef<HTMLDivElement>(null);
   const listboxId = useId();
 
-  const filtered = useMemo(() => {
-    if (!value) return suggestions;
-    const q = value.toLowerCase();
-    return suggestions.filter(
-      (s) => s.id.toLowerCase().includes(q) || s.label.toLowerCase().includes(q)
-    );
-  }, [value, suggestions]);
+  const filtered = useMemo(
+    () => filterSuggestions(value, suggestions),
+    [value, suggestions],
+  );
 
   const handleSelect = useCallback(
     (id: string) => {
-      onChange(id);
+      if (onSelect) onSelect(id);
+      else onChange(id);
       setOpen(false);
       setHighlightIdx(0);
     },
-    [onChange],
+    [onChange, onSelect],
   );
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (!open && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
-      setOpen(true);
-      e.preventDefault();
+    const key = e.key;
+    if (key !== 'ArrowDown' && key !== 'ArrowUp' && key !== 'Enter' && key !== 'Escape') {
       return;
     }
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setHighlightIdx((prev) => Math.min(prev + 1, filtered.length - 1));
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setHighlightIdx((prev) => Math.max(prev - 1, 0));
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
-      if (open && filtered[highlightIdx]) {
-        handleSelect(filtered[highlightIdx].id);
-      }
-    } else if (e.key === 'Escape') {
-      setOpen(false);
+    e.preventDefault();
+    const next = comboboxKeyDown({ open, highlight: highlightIdx }, key, filtered);
+    if (next.selectId) {
+      handleSelect(next.selectId);
+    } else {
+      setOpen(next.open);
+      setHighlightIdx(next.highlight);
     }
   };
 
@@ -107,6 +165,9 @@ export default function AutocompleteInput({
         role="combobox"
         aria-expanded={open && filtered.length > 0}
         aria-controls={listboxId}
+        aria-activedescendant={
+          open && filtered.length > 0 ? `${listboxId}-${highlightIdx}` : undefined
+        }
         aria-autocomplete="list"
       />
       {open && filtered.length > 0 && (
@@ -121,6 +182,7 @@ export default function AutocompleteInput({
           {filtered.map((s, i) => (
             <div
               key={s.id}
+              id={`${listboxId}-${i}`}
               role="option"
               aria-selected={i === highlightIdx}
               tabIndex={-1}
