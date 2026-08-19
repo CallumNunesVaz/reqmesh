@@ -16,6 +16,7 @@ const TraceMatrixPage = lazy(() => import('./pages/TraceMatrixPage'));
 const GraphView = lazy(() => import('./pages/GraphView'));
 const ChangeRequestsPage = lazy(() => import('./pages/ChangeRequestsPage'));
 const RisksPage = lazy(() => import('./pages/RisksPage'));
+const RiskDetailPage = lazy(() => import('./pages/RiskDetailPage'));
 const MetricsPage = lazy(() => import('./pages/MetricsPage'));
 const BaselinesPage = lazy(() => import('./pages/BaselinesPage'));
 const SystemStatesPage = lazy(() => import('./pages/SystemStatesPage'));
@@ -64,6 +65,7 @@ export default function App() {
           <Route path="/project/:projectId/traces" element={<TraceMatrixPage />} />
           <Route path="/project/:projectId/graph" element={<GraphView />} />
           <Route path="/project/:projectId/change-requests" element={<ChangeRequestsPage />} />
+          <Route path="/project/:projectId/risks/:riskId" element={<RiskDetailPage />} />
           <Route path="/project/:projectId/risks" element={<RisksPage />} />
           <Route path="/project/:projectId/metrics" element={<MetricsPage />} />
           <Route path="/project/:projectId/baselines" element={<BaselinesPage />} />

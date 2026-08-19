@@ -1,4 +1,4 @@
-import { test, expect, signIn, setEditMode, DEMO_PROJECT } from './fixtures';
+import { test, expect, signIn, setEditMode, DEMO_PROJECT, api } from './fixtures';
 
 /**
  * Rich-text fields for risks and components, plus the risk form overflow fix.
@@ -53,27 +53,14 @@ test.describe('risk create form', () => {
 
 test('bold text in a risk failure mode survives save and reload', async ({ app, server }) => {
   await signIn(app);
-  await app.goto(`${server.baseURL}/project/${P}/risks`);
+  await app.goto(`${server.baseURL}/project/${P}/risks/RSK00001`);
   await app.waitForSelector('main');
   await setEditMode(app, true);
 
-  // Hover the first risk card to reveal the edit button
-  const card = app.locator('.card').filter({ hasText: 'RSK00001' }).first();
-  await card.hover();
-
-  // Open the editor on this risk
-  const editBtn = card.locator('[title="Edit risk"]');
-  await expect(editBtn).toBeVisible();
-  await editBtn.click();
-
-  // The edit form should now show the risk's id (disabled) and three
-  // RichTextEditors (failure mode, effect, cause).
-  const form = app.locator('form').filter({ has: app.locator('input[value="RSK00001"]') });
-  await expect(form).toBeVisible({ timeout: 10_000 });
-
-  // TipTap uses a contentEditable div, not an input — use keyboard to type.
-  // The first editor is the failure mode.
-  const editor = form.locator('.ProseMirror').first();
+  // The FMECA card opens with three RichTextEditors (failure mode, effect,
+  // cause). The first is the failure mode.
+  const editor = app.locator('.ProseMirror').first();
+  await expect(editor).toBeVisible({ timeout: 15_000 });
   await editor.click();
   // Select all existing content and replace it
   await app.keyboard.press('Control+a');
@@ -85,32 +72,24 @@ test('bold text in a risk failure mode survives save and reload', async ({ app, 
   await app.keyboard.press('Control+b');
   await app.keyboard.type(' failure mode.');
 
-  // Save
-  await form.getByRole('button', { name: 'Save' }).click();
-  // Wait for the save to complete and the form to close
-  await expect(form).not.toBeVisible({ timeout: 10_000 });
+  // Save on blur — the detail page saves each field as it loses focus.
+  await app.getByLabel('Title').click();
 
-  // Reload the page
-  await app.goto(`${server.baseURL}/project/${P}/risks`);
+  // Wait for the write to land rather than racing the reload.
+  await expect(async () => {
+    const risk = await api<any>(app, `/projects/${P}/risks/RSK00001`);
+    expect(risk.failure_mode).toContain('bold');
+  }).toPass({ timeout: 10_000 });
+
+  // Reload the page and confirm the bold round-trip.
+  await app.goto(`${server.baseURL}/project/${P}/risks/RSK00001`);
   await app.waitForSelector('main');
-  // Let the risks list load and the card render
-  await app.waitForTimeout(1000);
-
-  // The card for RSK00001 should now contain the failure mode with a <strong>
-  const riskCard = app.locator('.card').filter({ hasText: 'RSK00001' }).first();
-  await expect(riskCard).toBeVisible({ timeout: 10_000 });
-
-  // The failure mode is rendered as HTML, so the <strong> must be a real element.
-  //
-  // Located by content rather than by class: this used to select
-  // `.line-clamp-1`, which was the truncation bug itself, so removing the clamp
-  // broke the test that was meant to be checking the bold round-trip. A test
-  // pinned to a utility class fails when the styling is fixed.
-  await expect(riskCard.locator('strong', { hasText: 'bold' })).toBeVisible();
-
-  // And the literal string "<strong>" must not appear as visible text — that is
-  // what an escaping renderer would produce.
-  await expect(riskCard).not.toContainText('<strong>');
+  // Scope to the FMECA card: the (defaultOpen) history panel legitimately
+  // shows the raw after-value, so a page-wide "no literal <strong>" check
+  // would always fail there.
+  const fmecaCard = app.locator('.card').filter({ has: app.getByText('Failure Mode', { exact: true }) }).first();
+  await expect(fmecaCard.locator('strong', { hasText: 'bold' })).toBeVisible({ timeout: 15_000 });
+  await expect(fmecaCard).not.toContainText('<strong>');
 });
 
 // ── 3. Component detail page: TipTap, no textarea ────────────────────────────

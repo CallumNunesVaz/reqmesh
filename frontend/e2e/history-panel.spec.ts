@@ -35,15 +35,15 @@ test('a requirement edit shows up in its history panel', async ({ app, server })
   await expect(panel.getByText('Loading history…')).toHaveCount(0, { timeout: 15000 });
 });
 
-test('a risk card can reveal its history without loading it up front', async ({ app, server }) => {
+test('a change-request card can reveal its history without loading it up front', async ({ app, server }) => {
   await signIn(app);
-  await app.goto(`${server.baseURL}/project/${P}/risks`);
+  await app.goto(`${server.baseURL}/project/${P}/change-requests`);
   await app.waitForSelector('main');
 
   // Collapsed by default: the list pages mount one panel per card, and eager
-  // loading meant one history request per risk just to render the page.
+  // loading meant one history request per record just to render the page.
   const toggles = app.getByRole('button', { name: 'Show change history' });
-  // Wait rather than count immediately: the risk list is fetched after mount,
+  // Wait rather than count immediately: the list is fetched after mount,
   // so `main` being present says nothing about the cards existing yet.
   await expect(toggles.first()).toBeVisible({ timeout: 15000 });
 

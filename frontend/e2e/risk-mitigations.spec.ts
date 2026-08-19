@@ -33,24 +33,19 @@ test('mitigated-by persists and does not overwrite threatens', async ({ app, ser
   expect(threatenedReq).toBeTruthy();
   expect(mitigatingReq).toBeTruthy();
 
-  // Navigate to risks page and enter edit mode.
-  await app.goto(`${server.baseURL}/project/${P}/risks`);
+  // Navigate to the risk's detail page and enter edit mode.
+  await app.goto(`${server.baseURL}/project/${P}/risks/${encodeURIComponent(risk.id)}`);
   await app.waitForSelector('main');
   await setEditMode(app, true);
 
-  // Add a requirement to "Threatens" on the first risk.
-  const riskCard = app.locator('.card').filter({ hasText: risk.id }).first();
-  await expect(riskCard).toBeVisible();
-
-  // Select the "Threatens" combobox and add the threatened requirement.
+  // Add a requirement to "Threatens" on the risk's detail page. The detail
+  // page carries one editor per direction, so these are page-level locators.
   // Addressed by name, not position: component pickers now sit after this one,
   // so `.last()` silently pointed at the wrong control.
-  const threatensEditor = riskCard.locator('[data-link-editor="Threatens"]');
-  await pickLinkOption(threatensEditor, threatenedReq.id);
+  await pickLinkOption(app.locator('[data-link-editor="Threatens"]'), threatenedReq.id);
 
   // Now add a requirement to "Mitigated By".
-  const mitigatedEditor = riskCard.locator('[data-link-editor="Mitigated By"]');
-  await pickLinkOption(mitigatedEditor, mitigatingReq.id);
+  await pickLinkOption(app.locator('[data-link-editor="Mitigated By"]'), mitigatingReq.id);
 
   // Poll the API until both link changes land — no fixed sleep.
   await expect(async () => {

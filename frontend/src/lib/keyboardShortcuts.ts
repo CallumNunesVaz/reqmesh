@@ -22,7 +22,7 @@ export const LIST_ROUTES = [
   'system-states',
 ] as const;
 
-export const DETAIL_ROUTES = ['requirements', 'components'] as const;
+export const DETAIL_ROUTES = ['requirements', 'components', 'risks'] as const;
 
 /** `/project/:projectId/<route>` — a list page. */
 export function isListPath(pathname: string): boolean {

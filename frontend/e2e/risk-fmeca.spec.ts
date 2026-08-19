@@ -2,8 +2,8 @@ import { test, expect, signIn, setEditMode, DEMO_PROJECT } from './fixtures';
 
 /**
  * FMECA: a risk carries failure mode, effect and cause as three separate rich
- * fields. Create one through the form, see all three on the card, and find it
- * by searching for text that lives only in `cause`.
+ * fields. Create one through the form, see all three on its detail page, and
+ * find it on the list by searching for text that lives only in `cause`.
  */
 const P = DEMO_PROJECT;
 // Conforms to the project's naming standard for risks (RSK + numeric
@@ -41,20 +41,23 @@ test('create a risk with three FMECA fields and find it by cause', async ({ app,
   await form.getByRole('button', { name: 'Create' }).click();
   await expect(form).not.toBeVisible({ timeout: 10_000 });
 
-  // All three fields render on the card.
-  const card = app.locator('.card').filter({ hasText: RISK_ID }).first();
-  await expect(card).toBeVisible({ timeout: 10_000 });
-  await expect(card).toContainText(FAILURE_MODE);
-  await expect(card).toContainText(EFFECT);
-  await expect(card).toContainText(CAUSE_ONLY);
+  // The list now renders one dense row per risk; the FMECA fields live on the
+  // detail page, so open it from the row to see all three.
+  await app.locator(`#entity-${RISK_ID}`).click();
+  await app.waitForSelector('main');
+  await expect(app.locator('main')).toContainText(FAILURE_MODE, { timeout: 10_000 });
+  await expect(app.locator('main')).toContainText(EFFECT);
+  await expect(app.locator('main')).toContainText(CAUSE_ONLY);
 
-  // Search for text that appears only in `cause` — the register's own filter,
-  // not the project-wide search — must still surface the risk.
+  // Back to the list: search for text that appears only in `cause` — the
+  // register's own filter, not the project-wide search — must still surface it.
+  await app.goto(`${server.baseURL}/project/${P}/risks`);
+  await app.waitForSelector('main');
   const search = app.locator('input[placeholder="Search risks…"]');
   await search.fill(CAUSE_ONLY);
-  await expect(card).toBeVisible({ timeout: 10_000 });
+  await expect(app.locator(`#entity-${RISK_ID}`)).toBeVisible({ timeout: 10_000 });
   // And a query for the failure mode also matches, so the three fields share
   // one haystack rather than hiding behind each other.
   await search.fill(FAILURE_MODE);
-  await expect(card).toBeVisible({ timeout: 10_000 });
+  await expect(app.locator(`#entity-${RISK_ID}`)).toBeVisible({ timeout: 10_000 });
 });

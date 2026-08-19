@@ -31,8 +31,9 @@ interface EntityMeta {
 
 /**
  * The single source of truth for how each entity kind looks and where it
- * lives. Only requirements have a detail page; the others deep-link into
- * their list page via `?focus=`, which selects and scrolls to the item.
+ * lives. Requirements, components and risks have a detail page; the others
+ * deep-link into their list page via `?focus=`, which selects and scrolls to
+ * the item.
  */
 export const ENTITY_META: Record<EntityKind, EntityMeta> = {
   requirement: {
@@ -69,7 +70,7 @@ export const ENTITY_META: Record<EntityKind, EntityMeta> = {
     icon: AlertTriangle,
     cls: 'text-cs-red',
     label: 'Risk',
-    path: (p, id) => `/project/${p}/risks?focus=${encodeURIComponent(id)}`,
+    path: (p, id) => `/project/${p}/risks/${encodeURIComponent(id)}`,
   },
   decision: {
     icon: Scale,

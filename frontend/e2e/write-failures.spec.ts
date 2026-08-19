@@ -30,16 +30,13 @@ test('a failed requirement update raises an error toast', async ({ app, server }
     },
   );
 
-  await app.goto(`${server.baseURL}/project/${P}/risks`);
+  await app.goto(`${server.baseURL}/project/${P}/risks/RSK00001`);
   await app.waitForSelector('main', { timeout: 20_000 });
   await setEditMode(app);
 
-  // Wait for risk cards to render.
-  await expect(app.locator('.card').filter({ hasText: /RSK/ }).first()).toBeVisible({ timeout: 15_000 });
-
-  // Find a risk card and use the "Threatens" LinkEditor to add a link.
-  // Picking a requirement triggers setRiskRequirements -> updateRisk ->
-  // PUT -> 500 -> toast.
+  // The risk detail page carries one LinkEditor per direction, so there is no
+  // per-risk card to scope to. Picking a requirement triggers
+  // setRiskRequirements -> updateRisk -> PUT -> 500 -> toast.
   //
   // Pick a linkable requirement, asserted rather than skipped. These were
   // early `return`s, which meant a demo with no linkable requirements — or a
@@ -55,14 +52,14 @@ test('a failed requirement update raises an error toast', async ({ app, server }
     return r.json();
   }, P);
   const requirements: any[] = reqsPage.items || reqsPage;
-  const risk = risks[0];
+  const risk = risks.find((r: any) => r.id === 'RSK00001') ?? risks[0];
   expect(risk).toBeTruthy();
   const linkable = requirements.find((r: any) => !risk.linked_requirements.includes(r.id));
   expect(linkable, 'the first real option must carry a value to select').toBeTruthy();
 
-  const riskCard = app.locator('.card').filter({ hasText: risk.id }).first();
-  await riskCard.waitFor({ timeout: 10_000 });
-  await pickLinkOption(riskCard.locator('[data-link-editor="Threatens"]'), linkable.id);
+  const editor = app.locator('[data-link-editor="Threatens"]');
+  await editor.waitFor({ timeout: 10_000 });
+  await pickLinkOption(editor, linkable.id);
 
   // The error toast should appear — the expect below has its own timeout,
   // so no fixed sleep is needed here.

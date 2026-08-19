@@ -367,7 +367,7 @@ export default function RequirementNav({ width = 300, collapsed, onToggleCollaps
     } else if (section === 'risks') {
       api.listRisks(projectId).then((risks) => set(risks.map((r) => ({
         id: r.id, label: r.title, sub: r.severity, dot: RISK_DOTS[r.severity] || 'bg-zinc-400',
-        to: `${base}/risks?focus=${encodeURIComponent(r.id)}`, children: [],
+        to: `${base}/risks/${encodeURIComponent(r.id)}`, children: [],
       })))).catch(() => set([]));
     }
     return () => { alive = false; };

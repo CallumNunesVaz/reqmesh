@@ -22,12 +22,15 @@ describe('entity routes', () => {
     expect(pathOf('component', 'demo', 'SPAR')).toBe('/project/demo/components/SPAR');
   });
 
+  it('sends risks to their detail page', () => {
+    expect(pathOf('risk', 'demo', 'RSK-001')).toBe('/project/demo/risks/RSK-001');
+  });
+
   it('deep-links the entity kinds that have no detail page', () => {
     // These only have list pages, so a reference focuses the row.
     expect(pathOf('verification', 'demo', 'VC-001')).toBe('/project/demo/verification?focus=VC-001');
     expect(pathOf('specification', 'demo', 'SRS-001')).toBe('/project/demo/specifications?focus=SRS-001');
     expect(pathOf('change', 'demo', 'CR-001')).toBe('/project/demo/change-requests?focus=CR-001');
-    expect(pathOf('risk', 'demo', 'RSK-001')).toBe('/project/demo/risks?focus=RSK-001');
     expect(pathOf('baseline', 'demo', 'PDR')).toBe('/project/demo/baselines?focus=PDR');
   });
 

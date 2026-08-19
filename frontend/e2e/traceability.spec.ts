@@ -14,30 +14,25 @@ test.describe('risk matrix', () => {
   test('a risk rating is derived from the matrix, and re-banding re-rates it', async ({ app, server }) => {
     await signIn(app);
 
-    // Put a known risk at a known cell, through the inline editors on the list.
-    await app.goto(`${server.baseURL}/project/${P}/risks`);
+    // Put a known risk at a known cell, through the pickers on its detail page.
+    await app.goto(`${server.baseURL}/project/${P}/risks/RSK00006`);
     await app.waitForSelector('main');
     await setEditMode(app, true);
 
-    const card = app.locator('main .card').filter({ hasText: 'RSK00006' }).first();
-    await card.locator('select').filter({ has: app.locator('option[value=critical]') }).first()
-      .selectOption('critical');
+    await app.getByLabel('Severity').selectOption('critical');
     // Wait for the severity PATCH to land before touching the likelihood select.
     await expect(async () => {
-      const risks = (await api<{ items: any[] }>(app, `/projects/${P}/risks`)).items;
-      const r = risks.find((r2: any) => r2.id === 'RSK00006');
-      expect(r?.severity).toBe('critical');
+      const risk = await api<any>(app, `/projects/${P}/risks/RSK00006`);
+      expect(risk?.severity).toBe('critical');
     }).toPass({ timeout: 10_000 });
-    await card.locator('select').filter({ has: app.locator('option[value=possible]') }).first()
-      .selectOption('possible');
+    await app.getByLabel('Likelihood').selectOption('possible');
     // Wait for the likelihood PATCH to land before checking the rating.
     await expect(async () => {
-      const risks = (await api<{ items: any[] }>(app, `/projects/${P}/risks`)).items;
-      const r = risks.find((r2: any) => r2.id === 'RSK00006');
-      expect(r?.rating?.likelihood).toBe('possible');
+      const risk = await api<any>(app, `/projects/${P}/risks/RSK00006`);
+      expect(risk?.rating?.likelihood).toBe('possible');
     }).toPass({ timeout: 10_000 });
 
-    const before = (await api<{ items: any[] }>(app, `/projects/${P}/risks`)).items.find((r) => r.id === 'RSK00006');
+    const before = await api<any>(app, `/projects/${P}/risks/RSK00006`);
     expect(before.severity).toBe('critical');
     expect(before.rating.likelihood).toBe('possible');
     const bandBefore = before.rating.band;
@@ -68,15 +63,15 @@ test.describe('risk matrix', () => {
     const criticalRow = stored.cells[stored.severities.length - 1];
     expect(criticalRow[2]).not.toBe('high');
 
-    const after = (await api<{ items: any[] }>(app, `/projects/${P}/risks`)).items.find((r) => r.id === 'RSK00006');
+    const after = await api<any>(app, `/projects/${P}/risks/RSK00006`);
     expect(after.rating.band).not.toBe(bandBefore);
 
-    // And the severity indicator on the card follows the matrix rather than a
-    // table in the client — the coloured dot next to the title should carry
+    // And the band indicator on the list row follows the matrix rather than a
+    // table in the client — the coloured dot in the band column should carry
     // the band that was just reassigned.
     await app.goto(`${server.baseURL}/project/${P}/risks`);
     await app.waitForSelector('main');
-    const dot = app.locator('main .card').filter({ hasText: 'RSK00006' })
+    const dot = app.locator('#entity-RSK00006')
       .locator('span.w-2.h-2.rounded-full').first();
     const expected = hexToRgb(after.rating.color);
     await expect(dot).toHaveCSS('background-color', expected);

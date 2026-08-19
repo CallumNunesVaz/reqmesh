@@ -55,16 +55,18 @@ describe('keyboard shortcut route lists stay in sync', () => {
     expect(isListPath('/project/cessna-172/')).toBe(false);
   });
 
-  it('DETAIL_ROUTES is unchanged — only requirements and components have detail pages', () => {
-    expect([...DETAIL_ROUTES]).toEqual(['requirements', 'components']);
+  it('DETAIL_ROUTES is unchanged — only requirements, components and risks have detail pages', () => {
+    expect([...DETAIL_ROUTES]).toEqual(['requirements', 'components', 'risks']);
   });
 
-  it('isDetailPath matches only requirements and components details', () => {
+  it('isDetailPath matches only requirements, components and risks details', () => {
     expect(isDetailPath('/project/cessna-172/requirements/R1')).toBe(true);
     expect(isDetailPath('/project/cessna-172/components/C1')).toBe(true);
+    expect(isDetailPath('/project/cessna-172/risks/RSK-1')).toBe(true);
     expect(isDetailPath('/project/cessna-172/specifications/S1')).toBe(false);
     expect(isDetailPath('/project/cessna-172/verification/V1')).toBe(false);
     expect(isDetailPath('/project/cessna-172/requirements')).toBe(false);
     expect(isDetailPath('/project/cessna-172/components')).toBe(false);
+    expect(isDetailPath('/project/cessna-172/risks')).toBe(false);
   });
 });
