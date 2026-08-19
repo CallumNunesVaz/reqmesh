@@ -1,12 +1,19 @@
 """Tests for CRUD and orchestration of project system states."""
 from pathlib import Path
 
+import pytest
+
 from app.core.config import settings
 from app.services.yaml_store import YamlStore
 
 
 def _store(project_id: str) -> YamlStore:
     return YamlStore(Path(settings.data_root) / project_id)
+
+
+def _names(client, project) -> list[str]:
+    data = client.get(f"/api/projects/{project}/system-states").json()
+    return [s["name"] for s in data["states"]]
 
 
 # ── Create ────────────────────────────────────────────────────────────────────
@@ -188,4 +195,96 @@ def test_patch_empty_name_is_400(client, project):
                        json={"name": "   "})
     assert res.status_code == 400
     assert "required" in res.json()["detail"]
+
+
+# ── Reorder ───────────────────────────────────────────────────────────────────
+
+def test_reorder_happy_path(client, project):
+    for name in ("takeoff", "cruise", "landing"):
+        client.post(f"/api/projects/{project}/system-states", json={"name": name})
+
+    res = client.put(f"/api/projects/{project}/system-states/order", json={
+        "names": ["landing", "takeoff", "cruise"],
+    })
+    assert res.status_code == 200
+    returned = [s["name"] for s in res.json()["states"]]
+    assert returned == ["landing", "takeoff", "cruise"]
+    assert [s["order"] for s in res.json()["states"]] == [1, 2, 3]
+
+    # Reading back confirms the new order.
+    assert _names(client, project) == ["landing", "takeoff", "cruise"]
+    orders = [s["order"] for s in client.get(f"/api/projects/{project}/system-states").json()["states"]]
+    assert orders == [1, 2, 3]
+
+
+def test_reorder_missing_name(client, project):
+    for name in ("A", "B"):
+        client.post(f"/api/projects/{project}/system-states", json={"name": name})
+    res = client.put(f"/api/projects/{project}/system-states/order", json={
+        "names": ["A"],  # missing B
+    })
+    assert res.status_code == 400
+    assert "must list every defined system state exactly once" in res.json()["detail"]
+    assert _names(client, project) == ["A", "B"]
+
+
+def test_reorder_duplicate_name(client, project):
+    for name in ("A", "B"):
+        client.post(f"/api/projects/{project}/system-states", json={"name": name})
+    res = client.put(f"/api/projects/{project}/system-states/order", json={
+        "names": ["A", "B", "A"],
+    })
+    assert res.status_code == 400
+    assert "must list every defined system state exactly once" in res.json()["detail"]
+    assert _names(client, project) == ["A", "B"]
+
+
+def test_reorder_unknown_name(client, project):
+    for name in ("A", "B"):
+        client.post(f"/api/projects/{project}/system-states", json={"name": name})
+    res = client.put(f"/api/projects/{project}/system-states/order", json={
+        "names": ["A", "B", "C"],
+    })
+    assert res.status_code == 400
+    assert "must list every defined system state exactly once" in res.json()["detail"]
+    assert _names(client, project) == ["A", "B"]
+
+
+def test_reorder_writes_no_order_key(client, project):
+    for name in ("A", "B", "C"):
+        client.post(f"/api/projects/{project}/system-states", json={"name": name})
+    res = client.put(f"/api/projects/{project}/system-states/order", json={
+        "names": ["C", "A", "B"],
+    })
+    assert res.status_code == 200
+
+    meta = _store(project).read_meta()
+    for d in meta["system_states"]:
+        assert "order" not in d, f"order was written to _meta.yaml: {d}"
+
+
+# ── Permissions ───────────────────────────────────────────────────────────────
+
+@pytest.fixture()
+def admin_client(_real_role_client):
+    with _real_role_client("admin", "ss_admin") as c:
+        yield c
+
+
+@pytest.fixture()
+def viewer_project(admin_client):
+    r = admin_client.post("/api/projects", json={"id": "ss-roles", "name": "SS Roles"})
+    assert r.status_code == 201, r.text
+    admin_client.patch("/api/projects/ss-roles", json={"naming": {"enforce": False}})
+    admin_client.post("/api/projects/ss-roles/system-states", json={"name": "A"})
+    admin_client.post("/api/projects/ss-roles/system-states", json={"name": "B"})
+    return "ss-roles"
+
+
+def test_reorder_viewer_is_refused(viewer_project, guest_client):
+    res = guest_client.put(
+        f"/api/projects/{viewer_project}/system-states/order",
+        json={"names": ["B", "A"]},
+    )
+    assert res.status_code == 403, f"viewer reordered system states: {res.status_code}"
 

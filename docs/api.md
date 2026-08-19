@@ -104,6 +104,7 @@ operation; a path served by several methods therefore appears several times.
 |--------|----------|-------------|
 | GET | `/api/projects/{project_id}/system-states` | List System States |
 | POST | `/api/projects/{project_id}/system-states` | Create System State |
+| PUT | `/api/projects/{project_id}/system-states/order` | Reorder System States |
 | GET | `/api/projects/{project_id}/system-states/{name}` | Get System State |
 | PATCH | `/api/projects/{project_id}/system-states/{name}` | Update System State |
 | DELETE | `/api/projects/{project_id}/system-states/{name}` | Delete System State |

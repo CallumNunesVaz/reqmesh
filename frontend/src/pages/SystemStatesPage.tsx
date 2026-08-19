@@ -1,7 +1,11 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Trash2, Edit3, Check, Layers, Loader, AlertTriangle, Square, CheckSquare } from 'lucide-react';
+import { Plus, Trash2, Edit3, Check, Layers, Loader, AlertTriangle, Square, CheckSquare, GripVertical } from 'lucide-react';
+import { DndContext, DragOverlay, closestCenter, PointerSensor, KeyboardSensor, useSensor, useSensors, type DragStartEvent, type DragEndEvent } from '@dnd-kit/core';
+import { useSortable, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import type { CSSProperties } from 'react';
+import { moveToIndex } from '../lib/reorder';
 import { api, type SystemStateDef } from '../api/client';
 import { useAuthStore } from '../store/auth';
 import { useConfirm } from '../components/ConfirmDialog';
@@ -12,6 +16,43 @@ import { useRangeSelection } from '../hooks/useRangeSelection';
 import { useBulkActions } from '../hooks/useBulkActions';
 import BulkActionBar from '../components/BulkActionBar';
 import LoadingSplash from '../components/LoadingSplash';
+
+/**
+ * One draggable row.
+ *
+ * This has to be a component rather than a callback inside the map: `useSortable`
+ * is a hook, and calling it in a loop makes the hook count depend on how many
+ * states exist. Creating or deleting one then changes that count between
+ * renders and React throws, taking the whole page down — the same reason the
+ * baselines page splits this out.
+ */
+function SortableStateRow({ name, children }: { name: string; children: React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: name });
+  const style: CSSProperties = {
+    transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
+    transition,
+    opacity: isDragging ? 0.4 : undefined,
+    position: 'relative',
+    zIndex: isDragging ? 10 : undefined,
+  };
+  return (
+    <div ref={setNodeRef} style={style}>
+      <div className="flex items-start gap-1">
+        <div className="pt-3">
+          <button
+            {...attributes}
+            {...listeners}
+            className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-grab active:cursor-grabbing"
+            title="Drag to reorder"
+          >
+            <GripVertical size={14} />
+          </button>
+        </div>
+        <div className="flex-1 min-w-0">{children}</div>
+      </div>
+    </div>
+  );
+}
 
 export default function SystemStatesPage() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -29,6 +70,11 @@ export default function SystemStatesPage() {
   const [formDesc, setFormDesc] = useState('');
   const [editingName, setEditingName] = useState<string | null>(null);
   const [formSaving, setFormSaving] = useState(false);
+  const [activeDragName, setActiveDragName] = useState<string | null>(null);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor),
+  );
 
   const load = useCallback(async () => {
     if (!projectId) return;
@@ -107,6 +153,49 @@ export default function SystemStatesPage() {
     }
   };
 
+  const commitReorder = async (newOrder: string[]) => {
+    if (!projectId || !editable) return;
+    const prev = states;
+    setStates((current) =>
+      current.map((s) => {
+        const idx = newOrder.indexOf(s.name);
+        return idx === -1 ? s : { ...s, order: idx + 1 };
+      }),
+    );
+    try {
+      const result = await api.reorderSystemStates(projectId, newOrder);
+      setStates((current) =>
+        current.map((s) => {
+          const updated = result.states.find((def) => def.name === s.name);
+          return updated ? { ...s, order: updated.order } : s;
+        }),
+      );
+    } catch (err: any) {
+      setStates(prev);
+      setError(err.message || 'Reorder failed');
+    }
+  };
+
+  const handleDragStart = (e: DragStartEvent) => {
+    setActiveDragName(String(e.active.id));
+  };
+
+  const handleDragEnd = (e: DragEndEvent) => {
+    setActiveDragName(null);
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+
+    const inSequence = states
+      .filter((s) => s.order > 0)
+      .sort((a, b) => a.order - b.order)
+      .map((s) => s.name);
+    const fromIdx = inSequence.indexOf(String(active.id));
+    const toIdx = inSequence.indexOf(String(over.id));
+    if (fromIdx === -1 || toIdx === -1) return;
+
+    commitReorder(moveToIndex(inSequence, fromIdx, toIdx));
+  };
+
   const { focusId: selectedId, onListDown, onListUp, onListOpen, onListEscape } = useListSelection(
     states.map((s) => s.name),
     (name) => { const s = states.find((x) => x.name === name); if (s) openEdit(s); },
@@ -144,6 +233,63 @@ export default function SystemStatesPage() {
       recreate: (item) => api.createSystemState(projectId, { name: item.name, description: item.description }),
     });
   };
+
+  const renderRow = (s: SystemStateDef) => (
+    <motion.div
+      key={s.name}
+      id={`entity-${s.name}`}
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className={`card p-4 ${selectedId === s.name ? 'ring-2 ring-primary/50' : ''}`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            {editable && (
+              <span className="shrink-0">
+                {selectedIds.has(s.name) ? (
+                  <CheckSquare size={14} className="text-primary cursor-pointer" onClick={(e) => toggleSelect(s.name, e)} />
+                ) : (
+                  <Square size={14} className="text-muted-foreground/40 cursor-pointer hover:text-muted-foreground" onClick={(e) => toggleSelect(s.name, e)} />
+                )}
+              </span>
+            )}
+            <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-muted text-muted-foreground text-[10px] font-mono">
+              {s.order}
+            </span>
+            <h3 className="font-semibold text-card-foreground font-mono">{s.name}</h3>
+          </div>
+          {s.description && (
+            <p className="text-sm text-muted-foreground mt-1 opacity-80">
+              {s.description}
+            </p>
+          )}
+        </div>
+
+        {editable && (
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              onClick={() => openEdit(s)}
+              className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              title="Edit state"
+            >
+              <Edit3 size={14} />
+            </button>
+            <button
+              onClick={() => handleDelete(s.name)}
+              className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+              title="Delete state"
+            >
+              <Trash2 size={14} />
+            </button>
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+
+  const inSequence = states.filter((s) => s.order > 0).sort((a, b) => a.order - b.order);
+  const activeDrag = activeDragName ? states.find((s) => s.name === activeDragName) ?? null : null;
 
   return (
     <div className="relative flex flex-col h-full overflow-y-auto">
@@ -278,61 +424,31 @@ export default function SystemStatesPage() {
             )}
           </div>
         ) : (
-          <div className="space-y-3">
-            {states.map((s) => (
-              <motion.div
-                key={s.name}
-                id={`entity-${s.name}`}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className={`card p-4 ${selectedId === s.name ? 'ring-2 ring-primary/50' : ''}`}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      {editable && (
-                        <span className="shrink-0">
-                          {selectedIds.has(s.name) ? (
-                            <CheckSquare size={14} className="text-primary cursor-pointer" onClick={(e) => toggleSelect(s.name, e)} />
-                          ) : (
-                            <Square size={14} className="text-muted-foreground/40 cursor-pointer hover:text-muted-foreground" onClick={(e) => toggleSelect(s.name, e)} />
-                          )}
-                        </span>
-                      )}
-                      <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-muted text-muted-foreground text-[10px] font-mono">
-                        {s.order}
-                      </span>
-                      <h3 className="font-semibold text-card-foreground font-mono">{s.name}</h3>
-                    </div>
-                    {s.description && (
-                      <p className="text-sm text-muted-foreground mt-1 opacity-80">
-                        {s.description}
-                      </p>
-                    )}
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+            <SortableContext items={inSequence.map((s) => s.name)} strategy={verticalListSortingStrategy}>
+              <div className="space-y-3">
+                {inSequence.map((s) => (
+                  <SortableStateRow key={s.name} name={s.name}>
+                    {renderRow(s)}
+                  </SortableStateRow>
+                ))}
+              </div>
+            </SortableContext>
+            <DragOverlay>
+              {activeDrag && (
+                <div className="flex items-start gap-1">
+                  <div className="pt-3">
+                    <button className="p-1 rounded-md text-muted-foreground bg-muted/40 cursor-grabbing" title="Drag to reorder">
+                      <GripVertical size={14} />
+                    </button>
                   </div>
-
-                  {editable && (
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button
-                        onClick={() => openEdit(s)}
-                        className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                        title="Edit state"
-                      >
-                        <Edit3 size={14} />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(s.name)}
-                        className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                        title="Delete state"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  )}
+                  <div className="flex-1 min-w-0 opacity-90">
+                    {renderRow(activeDrag)}
+                  </div>
                 </div>
-              </motion.div>
-            ))}
-          </div>
+              )}
+            </DragOverlay>
+          </DndContext>
         )}
 
         {selectedIds.size > 0 && editable && (

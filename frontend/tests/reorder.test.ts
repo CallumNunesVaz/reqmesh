@@ -54,6 +54,12 @@ describe('moveToIndex', () => {
     expect(moveToIndex(BASELINES, 0, 3)).toEqual(['PDR', 'CDR', 'FCA', 'SRR']);
   });
 
+  it('moves from index 0 to index 2 and back', () => {
+    const moved = moveToIndex(BASELINES, 0, 2);
+    expect(moved).toEqual(['PDR', 'CDR', 'SRR', 'FCA']);
+    expect(moveToIndex(moved, 2, 0)).toEqual(BASELINES);
+  });
+
   it('moves the last item to the beginning', () => {
     expect(moveToIndex(BASELINES, 3, 0)).toEqual(['FCA', 'SRR', 'PDR', 'CDR']);
   });

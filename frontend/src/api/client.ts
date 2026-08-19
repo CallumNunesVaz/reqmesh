@@ -1279,6 +1279,13 @@ export const api = {
     request<SystemStateDef>(`/projects/${projectId}/system-states/${encodeURIComponent(name)}`, { method: 'PATCH', body: data }),
   deleteSystemState: (projectId: string, name: string) =>
     request<{ name: string; requirements_cleared: number }>(`/projects/${projectId}/system-states/${encodeURIComponent(name)}`, { method: 'DELETE' }),
+  /** Rewrite the whole sequence. `names` must be a permutation of every defined
+   *  system state — a partial list is rejected rather than appended to, so a
+   *  stale client cannot silently reorder around states it does not know about. */
+  reorderSystemStates: (projectId: string, names: string[]) =>
+    request<{ states: SystemStateDef[] }>(
+      `/projects/${projectId}/system-states/order`,
+      { method: 'PUT', body: { names } }),
   freezeBaseline: (projectId: string, name: string) =>
     request<{ name: string; symbol: string; description: string; requirements: number }>(
       `/projects/${projectId}/baselines/${encodeURIComponent(name)}/freeze`,

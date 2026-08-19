@@ -1044,6 +1044,10 @@ class SystemStateUpdate(BaseModel):
     description: Optional[str] = None
 
 
+class ReorderSystemStates(BaseModel):
+    names: list[str]
+
+
 @router.get("/projects/{project_id}/system-states")
 def list_system_states(project_id: str):
     store = get_store(project_id)
@@ -1093,6 +1097,36 @@ def create_system_state(project_id: str, data: SystemStateCreate,
         store._write_meta_unlocked(meta)
 
     return {"name": name, "description": data.description, "order": len(defs)}
+
+
+@router.put("/projects/{project_id}/system-states/order")
+def reorder_system_states(project_id: str, data: ReorderSystemStates, user: dict = Depends(require_maintain)):
+    """Rewrite the system-state sequence."""
+    store = get_store(project_id)
+    with store.meta_lock():
+        meta = store.read_meta()
+        current_defs = normalize_system_states(meta.get("system_states", []))
+        defined_names = [d["name"] for d in current_defs]
+
+        # Must be exactly the same set — a permutation, no duplicates, no missing.
+        if set(data.names) != set(defined_names) or len(data.names) != len(defined_names):
+            raise HTTPException(
+                status_code=400,
+                detail="names must list every defined system state exactly once",
+            )
+
+        # Build the new list in the requested order, preserving other fields.
+        by_name = {d["name"]: d for d in current_defs}
+        # `order` is left alone here: serialize_meta_defs is the one place it is
+        # dropped, and duplicating that responsibility is how the derived value and
+        # the list position start to disagree.
+        reordered = [dict(by_name[nm]) for nm in data.names]
+
+        serialized = serialize_meta_defs(reordered)
+        meta["system_states"] = serialized
+        store._write_meta_unlocked(meta)
+
+    return {"states": normalize_system_states(serialized)}
 
 
 @router.patch("/projects/{project_id}/system-states/{name}")
