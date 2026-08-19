@@ -14,7 +14,30 @@
  *     bare ids on read and adding markup would put `[[…]]` in front of users of
  *     every other renderer, the YAML file and the exports.
  * Neither introduces a new storage format — `@` is an input affordance only.
+ *
+ * Parameters extend the same two rules rather than adding a third:
+ *   - rich text stores `[[ID.param]]` — the same bracket token, with the owner
+ *     id and parameter name separated by a dot;
+ *   - plain text stores the bare `ID.param`.
+ * A bare-name pick of the holder's own parameter is still persisted fully
+ * qualified, because a description can be quoted elsewhere and `temp_max`
+ * alone has no meaning outside its requirement.
  */
+
+import type { IndexedEntity } from './entityIndex';
+import type { ParameterRef } from './parameterIndex';
+
+/** One selectable row in the `@` picker: an entity or a parameter. */
+export interface ParamOption {
+  type: 'param';
+  ref: string;
+  name: string;
+  unit: string;
+  value: number | null;
+  own: boolean;
+}
+
+export type MentionOption = { type: 'entity'; entity: IndexedEntity } | ParamOption;
 
 export interface MentionTrigger {
   /** Text typed after the `@`; empty right after typing the `@` itself. */
@@ -111,4 +134,49 @@ export function caretRect(textarea: HTMLTextAreaElement, caret: number): DOMRect
   document.body.removeChild(mirror);
 
   return new DOMRect(left, top, 0, height);
+}
+
+/**
+ * Rank the project's parameters against a mention query.
+ *
+ * The holder's own parameters are offered by bare name (and persist fully
+ * qualified); everyone else's are offered as `ID.param`. An empty query returns
+ * own parameters first, then the rest, so a user browsing the picker sees the
+ * names they can type directly.
+ */
+export function searchParameters(
+  parameters: ParameterRef[],
+  holderId: string | undefined,
+  query: string,
+  limit = 8,
+): ParamOption[] {
+  const q = query.trim().toLowerCase();
+  const scored: { option: ParamOption; score: number }[] = [];
+
+  for (const p of parameters) {
+    const own = holderId !== undefined && p.entityId === holderId;
+    const label = own ? p.name : p.ref;
+    // Match against both the display label and the qualified ref, so `@temp`
+    // also finds a parameter whose owner is some other requirement.
+    const targets = (own ? [p.name, p.ref] : [p.ref, p.name]).map((s) => s.toLowerCase());
+    let score = -1;
+    if (!q) {
+      score = own ? 6200 : 5000;
+    } else if (targets.includes(q)) {
+      score = 6000;
+    } else if (targets.some((t) => t.startsWith(q))) {
+      score = 5700;
+    } else if (targets.some((t) => t.includes(q))) {
+      score = 5500;
+    }
+    if (score < 0) continue;
+    if (own) score += 50;
+    scored.push({
+      option: { type: 'param', ref: p.ref, name: label, unit: p.unit, value: p.value, own },
+      score,
+    });
+  }
+
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, limit).map((s) => s.option);
 }

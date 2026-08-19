@@ -1,15 +1,21 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { Sigma } from 'lucide-react';
 import { entityIconMeta } from './entities';
 import { searchEntities, type IndexedEntity } from './entityIndex';
+import { searchParameters, type MentionOption } from './mentions';
+import { formatParamValue, type ParameterRef } from './parameterIndex';
 
 /**
- * The floating entity picker shown while an `@`-mention is being typed.
+ * The floating mention picker shown while an `@`-mention is being typed.
  *
  * Rendered in a portal and positioned from a caret rectangle, because both
  * callers sit inside scrollable, overflow-hidden containers — the rich-text
  * editor's rounded border box and the cards on the plain-text pages — where an
  * absolutely-positioned child would be clipped.
+ *
+ * Offers entities and, additionally, parameters: the holder's own by bare name,
+ * everyone else's as `ID.param`.
  *
  * Selection is driven from the parent: focus stays in the editor the whole
  * time, so the picker never takes it. It is a display surface with an index,
@@ -25,32 +31,45 @@ const OFFSET = 4;
 export interface MentionPickerProps {
   /** All linkable entities in the project. */
   entities: IndexedEntity[];
+  /** All parameters in the project. */
+  parameters: ParameterRef[];
+  /** The entity whose parameters are "own" (offered by bare name). */
+  holderId?: string;
   /** Text typed after the `@`. */
   query: string;
   /** Caret rectangle in viewport coordinates. */
   anchor: DOMRect;
   /** Highlighted row, owned by the parent so keys work without focus. */
   activeIndex: number;
-  onSelect: (entity: IndexedEntity) => void;
+  onSelect: (option: MentionOption) => void;
   /** Reports the current result list so the parent can bound its index. */
-  onResults: (results: IndexedEntity[]) => void;
+  onResults: (results: MentionOption[]) => void;
 }
 
 export default function MentionPicker({
-  entities, query, anchor, activeIndex, onSelect, onResults,
+  entities, parameters, holderId, query, anchor, activeIndex, onSelect, onResults,
 }: MentionPickerProps) {
   const listRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
 
-  const results = query
+  const entityOptions: MentionOption[] = (query
     ? searchEntities(entities, query, MAX_RESULTS)
-    : entities.slice(0, MAX_RESULTS);
+    : entities.slice(0, MAX_RESULTS)
+  ).map((entity) => ({ type: 'entity', entity }));
+  const paramOptions = searchParameters(parameters, holderId, query, MAX_RESULTS);
+  // With a query the picker is narrowing in on a specific reference, so
+  // parameters (the more specific match) lead; while browsing, keep the
+  // existing head-of-index entity order and append parameters below.
+  const results = (query
+    ? [...paramOptions, ...entityOptions]
+    : [...entityOptions, ...paramOptions]
+  ).slice(0, MAX_RESULTS);
 
   // Report upward in an effect, not during render — calling a parent's setState
   // mid-render is what turns a picker into an infinite loop.
   useEffect(() => { onResults(results); },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [query, entities]);
+    [query, entities, parameters, holderId]);
 
   // Flip above the caret when there is no room below, and keep the picker
   // inside the viewport horizontally. Measured after layout so the real height
@@ -80,7 +99,7 @@ export default function MentionPicker({
         className="fixed z-[70] text-xs text-muted-foreground bg-popover border rounded-lg shadow-lg px-3 py-2"
         style={{ top: pos.top, left: pos.left, width: PICKER_WIDTH }}
       >
-        No entity matches “{query}”
+        No entity or parameter matches “{query}”
       </div>,
       document.body,
     );
@@ -94,11 +113,32 @@ export default function MentionPicker({
     <div
       ref={listRef}
       role="listbox"
-      aria-label="Link an entity"
+      aria-label="Link an entity or parameter"
       className="fixed z-[70] max-h-64 overflow-y-auto bg-popover border rounded-lg shadow-lg py-1"
       style={{ top: pos.top, left: pos.left, width: PICKER_WIDTH }}
     >
-      {results.map((entity, i) => {
+      {results.map((result, i) => {
+        if (result.type === 'param') {
+          return (
+            <div
+              key={result.ref}
+              role="option"
+              tabIndex={-1}
+              aria-selected={i === activeIndex}
+              onMouseDown={(e) => { e.preventDefault(); onSelect(result); }}
+              className={`flex items-center gap-2 px-2.5 py-1.5 cursor-pointer ${
+                i === activeIndex ? 'bg-accent' : ''
+              }`}
+            >
+              <Sigma size={13} className="shrink-0 text-cs-teal" />
+              <span className="font-mono text-[11px] shrink-0">{result.name}</span>
+              <span className="text-xs text-muted-foreground truncate">
+                {result.value != null ? paramDisplay(result.value, result.unit) : result.unit || ''}
+              </span>
+            </div>
+          );
+        }
+        const entity = result.entity;
         const meta = entityIconMeta(entity.kind, entity.subtype);
         const Icon = meta.icon;
         return (
@@ -112,7 +152,7 @@ export default function MentionPicker({
             aria-selected={i === activeIndex}
             // The editor keeps focus, so this is a mousedown handler: a click
             // would fire after blur has already torn the mention down.
-            onMouseDown={(e) => { e.preventDefault(); onSelect(entity); }}
+            onMouseDown={(e) => { e.preventDefault(); onSelect(result); }}
             className={`flex items-center gap-2 px-2.5 py-1.5 cursor-pointer ${
               i === activeIndex ? 'bg-accent' : ''
             }`}
@@ -127,4 +167,9 @@ export default function MentionPicker({
     /* oxlint-enable jsx-a11y/prefer-tag-over-role */
     document.body,
   );
+}
+
+/** `value unit`, using the same number formatter as read-mode resolution. */
+function paramDisplay(value: number, unit: string): string {
+  return unit ? `${formatParamValue(value)} ${unit}` : formatParamValue(value);
 }

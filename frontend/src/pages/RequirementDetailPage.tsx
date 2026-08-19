@@ -1017,6 +1017,7 @@ export default function RequirementDetailPage() {
                 onBlur={(html) => save({ description: html })}
                 disabled={false}
                 placeholder="Write a requirement description…"
+                holderId={req.id}
               />
             ) : (
               // Read mode: render the rich text with entity ids linked and
@@ -1688,6 +1689,7 @@ export default function RequirementDetailPage() {
                     onChange={(html) => { setReq({ ...req, rationale: html }); }}
                     onBlur={(html) => save({ rationale: html })}
                     disabled={false}
+                    holderId={req.id}
                   />
                 ) : (
                   <AutoLinkHtml

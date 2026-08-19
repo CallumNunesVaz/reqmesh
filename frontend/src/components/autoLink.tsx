@@ -1,44 +1,122 @@
 import { Fragment, createElement, type ReactNode } from 'react';
+import { useParams } from 'react-router-dom';
+import { AlertTriangle } from 'lucide-react';
 import { EntityLink, type EntityKind } from './entities';
+import { resolveParam, useParameterValues, type ParameterValue } from './parameterIndex';
 
-export type AutoLinkSegment = { text: string } | { id: string };
+export type AutoLinkSegment = { text: string } | { id: string } | { param: string };
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+// A parameter reference written as a bracket token: [[ID.param]]. The dot
+// separates the owner id from the parameter name, which is exactly how the
+// rich-text editor distinguishes a parameter mention from an entity link (whose
+// ids never match this pattern). Recognised even when the parameter no longer
+// exists, so a deleted reference renders broken rather than as literal text.
+const PARAM_BRACKET_RE = /\[\[([\w-]+\.[\w.-]+)\]\]/g;
+
+/** Split a text run on param-shaped bracket tokens it still contains. */
+function pushParamBrackets(parts: AutoLinkSegment[], text: string): void {
+  if (!text) return;
+  let last = 0;
+  for (const m of text.matchAll(PARAM_BRACKET_RE)) {
+    if (m.index! > last) parts.push({ text: text.slice(last, m.index) });
+    parts.push({ param: m[1] });
+    last = m.index! + m[0].length;
+  }
+  if (last < text.length) parts.push({ text: text.slice(last) });
+}
+
 /**
- * Split free text into plain segments and known-entity-id segments.
+ * Split free text into plain segments, known-entity-id segments and parameter
+ * segments.
  *
  * Ids only match on their own — "REQ" must not light up inside "REQ-042", so
  * the boundary treats `-` like a word character (plain \b would split there).
- * Longest ids win when one id is a prefix of another.
+ * Longest tokens win when one is a prefix of another, and the parameter branch
+ * is tried before the id branch, so a known `REQM0002.temp_max` matches whole
+ * rather than the id `REQM0002` being split out of it. A full stop after an id
+ * is ordinary sentence punctuation, so the id boundary must still link
+ * `REQM0002.`.
  */
-export function autoLinkParts(text: string, ids: Iterable<string>): AutoLinkSegment[] {
-  const sorted = [...ids].filter(Boolean).sort((a, b) => b.length - a.length);
-  if (!text || sorted.length === 0) return text ? [{ text }] : [];
-  const alternation = sorted.map(escapeRe).join('|');
-  // Two forms, explicit first:
-  //   [[ID]] — written deliberately in the editor (the `@` picker inserts it).
-  //            The server strips the editor's <span> wrapper, since `span` is
-  //            not in its allowlist, so this bracket token is what actually
-  //            persists — and the brackets must not survive into the render.
-  //   ID     — a bare mention anywhere in prose, linked opportunistically.
-  // Every id is escapeRe'd and joined as a flat alternation of literals — no
-  // nesting, so no catastrophic backtracking. The ids are entity ids from this
-  // project, not free user input.
+export function autoLinkParts(text: string, ids: Iterable<string>, params?: Iterable<string>): AutoLinkSegment[] {
+  const idList = [...ids].filter(Boolean);
+  const paramList = [...(params ?? [])].filter(Boolean);
+
+  if (!text) return [];
+
+  // One map so the bracket branch can name a token's kind; sorted longest
+  // first so a parameter ref matches before the entity id that is its prefix.
+  const kindByToken = new Map<string, 'id' | 'param'>();
+  for (const id of idList) kindByToken.set(id, 'id');
+  for (const p of paramList) kindByToken.set(p, 'param');
+  const combined = [...kindByToken.entries()].sort((a, b) => b[0].length - a[0].length);
+
+  if (combined.length === 0) {
+    const parts: AutoLinkSegment[] = [];
+    pushParamBrackets(parts, text);
+    return parts;
+  }
+
+  const paramAlt = paramList.slice().sort((a, b) => b.length - a.length).map(escapeRe).join('|');
+  const idAlt = idList.slice().sort((a, b) => b.length - a.length).map(escapeRe).join('|');
+  const combinedAlt = combined.map(([t]) => escapeRe(t)).join('|');
+
+  // Three forms, explicit first:
+  //   [[ID]] / [[ID.param]] — written deliberately in the editor (the `@`
+  //            picker inserts it). The server strips the editor's <span>
+  //            wrapper, since `span` is not in its allowlist, so this bracket
+  //            token is what actually persists — and the brackets must not
+  //            survive into the render.
+  //   ID.param — a bare parameter mention, linked opportunistically. A
+  //            trailing sentence `.` is not part of the name, so the boundary
+  //            only excludes word/hyphen characters.
+  //   ID      — a bare entity id. Tried after the parameter branch, so it can
+  //            only win where the parameter branch did not. A full stop is
+  //            ordinary sentence punctuation, so the boundary still links an id
+  //            before `.` — it only declines when the `.` is followed by a word
+  //            or hyphen character (the shape of a `ID.param` suffix).
+  // Every token is escapeRe'd and joined as a flat alternation of literals — no
+  // nesting, so no catastrophic backtracking. The tokens are entity ids and
+  // parameter refs from this project, not free user input.
   // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp
-  const re = new RegExp(
-    `\\[\\[(${alternation})\\]\\]|(?<![\\w-])(${alternation})(?![\\w-])`, 'g',
-  );
+  const alternatives = `\\[\\[(?<bracket>${combinedAlt})\\]\\]` +
+    (paramAlt ? `|(?<![\\w-])(?<param>${paramAlt})(?![\\w-])` : '') +
+    (idAlt ? `|(?<![\\w-])(?<id>${idAlt})(?!\\.?[\\w-])` : '');
+  const re = new RegExp(alternatives, 'g');
 
   const parts: AutoLinkSegment[] = [];
   let last = 0;
   for (const m of text.matchAll(re)) {
-    if (m.index! > last) parts.push({ text: text.slice(last, m.index) });
-    parts.push({ id: m[1] ?? m[2] });
+    const g = m.groups!;
+    let token: string;
+    let kind: 'id' | 'param';
+    if (g.id !== undefined) { token = g.id; kind = 'id'; }
+    else if (g.param !== undefined) { token = g.param; kind = 'param'; }
+    else { token = g.bracket; kind = kindByToken.get(token)!; }
+    if (m.index! > last) pushParamBrackets(parts, text.slice(last, m.index));
+    parts.push(kind === 'param' ? { param: token } : { id: token });
     last = m.index! + m[0].length;
   }
-  if (last < text.length) parts.push({ text: text.slice(last) });
+  if (last < text.length) pushParamBrackets(parts, text.slice(last));
   return parts;
+}
+
+/** A parameter mention in read mode. Resolved value reads as prose; an
+ *  unresolvable ref renders in place, obviously broken. */
+function ParamMention({ paramRef, params }: { paramRef: string; params: Map<string, ParameterValue> }) {
+  const r = resolveParam(paramRef, params);
+  if (r.kind === 'value') return <>{r.text}</>;
+  const reason = params.has(paramRef) ? `parameter ${paramRef} has no value` : `parameter ${paramRef} not found`;
+  return (
+    <span
+      title={reason}
+      className="inline-flex items-center gap-0.5 align-baseline rounded bg-cs-orange/10 px-1 text-cs-orange"
+    >
+      <AlertTriangle size={11} className="shrink-0" />
+      <span className="font-mono text-[0.9em]">{paramRef}</span>
+    </span>
+  );
 }
 
 interface AutoLinkTextProps {
@@ -53,15 +131,20 @@ interface AutoLinkTextProps {
   renderPlain?: (text: string) => ReactNode;
 }
 
-/** Plain text with every mention of a known entity id turned into a link. */
+/** Plain text with every mention of a known entity id turned into a link and
+ *  every parameter reference resolved to its value. */
 export function AutoLinkText({ text, kinds, className, renderPlain }: AutoLinkTextProps) {
-  const parts = autoLinkParts(text, kinds.keys());
+  const { projectId } = useParams<{ projectId: string }>();
+  const params = useParameterValues(projectId);
+  const parts = autoLinkParts(text, kinds.keys(), params.keys());
   return (
     <span className={className}>
       {parts.map((p, i) =>
-        'id' in p
-          ? <EntityLink key={i} kind={kinds.get(p.id)!} id={p.id} className="text-inherit" />
-          : <Fragment key={i}>{renderPlain ? renderPlain(p.text) : p.text}</Fragment>,
+        'param' in p
+          ? <ParamMention key={i} paramRef={p.param} params={params} />
+          : 'id' in p
+            ? <EntityLink key={i} kind={kinds.get(p.id)!} id={p.id} className="text-inherit" />
+            : <Fragment key={i}>{renderPlain ? renderPlain(p.text) : p.text}</Fragment>,
       )}
     </span>
   );
@@ -115,8 +198,9 @@ interface AutoLinkHtmlProps {
 }
 
 /**
- * Read-only rendering of rich-text (TipTap) HTML with entity ids linked.
- * Used where the editor would otherwise render a disabled copy of itself.
+ * Read-only rendering of rich-text (TipTap) HTML with entity ids linked and
+ * parameter references resolved. Used where the editor would otherwise render
+ * a disabled copy of itself.
  */
 export function AutoLinkHtml({ html, kinds, className, renderPlain }: AutoLinkHtmlProps) {
   const doc = new DOMParser().parseFromString(html || '', 'text/html');

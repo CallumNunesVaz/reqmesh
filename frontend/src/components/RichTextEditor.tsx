@@ -9,8 +9,9 @@ import { Bold, Italic, List, ListOrdered, Heading1, Undo2, Redo2 } from 'lucide-
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { loadEntityIndex, useEntityKinds, type IndexedEntity } from './entityIndex';
+import { loadParameterIndex, type ParameterRef } from './parameterIndex';
 import { ENTITY_META, entityIconMeta, entityPath, type EntityKind } from './entities';
-import { findMentionTrigger } from './mentions';
+import { findMentionTrigger, type MentionOption } from './mentions';
 import MentionPicker from './MentionPicker';
 
 interface RichTextEditorProps {
@@ -20,10 +21,15 @@ interface RichTextEditorProps {
   disabled?: boolean;
   placeholder?: string;
   id?: string;
+  /** The entity whose parameters are "own" in the picker, if any. */
+  holderId?: string;
 }
 
-const ENTITY_LINK_GLOBAL_REGEX = /\[\[([\w\-_.]+)\]\]/g;
-const ENTITY_LINK_INPUT_REGEX = /\[\[([\w\-_.]+)\]\]$/;
+// Entity ids only: a parameter reference is `[[ID.param]]`, so a token with a
+// dot is deliberately left unwrapped — it persists as the literal bracket text
+// and resolves on read. See autoLinkParts for the matching split.
+const ENTITY_LINK_GLOBAL_REGEX = /\[\[([\w-]+)\]\]/g;
+const ENTITY_LINK_INPUT_REGEX = /\[\[([\w-]+)\]\]$/;
 
 function preprocessContent(html: string): string {
   // Avoid double-wrapping: split on existing <span data-entity-id> blocks,
@@ -122,7 +128,7 @@ const EntityLinkExtension = Node.create({
   },
 });
 
-export default function RichTextEditor({ content, onChange, onBlur, disabled = false, placeholder, id }: RichTextEditorProps) {
+export default function RichTextEditor({ content, onChange, onBlur, disabled = false, placeholder, id, holderId }: RichTextEditorProps) {
   const isInternalChange = useRef(false);
   const navigate = useNavigate();
   const { projectId } = useParams<{ projectId: string }>();
@@ -133,15 +139,16 @@ export default function RichTextEditor({ content, onChange, onBlur, disabled = f
   // rectangle to anchor the picker to. Focus never leaves the editor, so the
   // highlighted index and the result list live here rather than in the picker.
   const [entities, setEntities] = useState<IndexedEntity[]>([]);
+  const [parameters, setParameters] = useState<ParameterRef[]>([]);
   const [mention, setMention] = useState<{ query: string; from: number; to: number; rect: DOMRect } | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
-  const mentionResults = useRef<IndexedEntity[]>([]);
+  const mentionResults = useRef<MentionOption[]>([]);
   // `editorProps` is captured once when the editor is created, so its key
   // handler cannot read the state above directly — it would see the values from
   // first render forever. These refs are the bridge.
   const mentionOpen = useRef(false);
   const mentionIndexRef = useRef(0);
-  const insertMention = useRef<((entity: IndexedEntity) => void) | null>(null);
+  const insertMention = useRef<((option: MentionOption) => void) | null>(null);
 
   useEffect(() => { mentionOpen.current = mention !== null; }, [mention]);
   useEffect(() => { mentionIndexRef.current = mentionIndex; }, [mentionIndex]);
@@ -150,6 +157,7 @@ export default function RichTextEditor({ content, onChange, onBlur, disabled = f
     if (!projectId || disabled) return;
     let live = true;
     loadEntityIndex(projectId).then((list) => { if (live) setEntities(list); });
+    loadParameterIndex(projectId).then((i) => { if (live) setParameters(i.refs); });
     return () => { live = false; };
   }, [projectId, disabled]);
 
@@ -274,14 +282,19 @@ export default function RichTextEditor({ content, onChange, onBlur, disabled = f
     }
   }, [disabled, editor]);
 
-  // Replace the `@query` range with an entity-link node. A trailing space keeps
-  // typing flowing — without it the caret sits welded to an atom node and the
-  // next character is fiddly to place.
-  const handleMentionSelect = useCallback((entity: IndexedEntity) => {
+  // Replace the `@query` range with the selected mention. An entity becomes an
+  // entity-link node; a parameter becomes the literal `[[ID.param]]` bracket
+  // text that persists through the server's span-stripping and resolves on
+  // read. A trailing space keeps typing flowing — without it the caret sits
+  // welded to an atom node and the next character is fiddly to place.
+  const handleMentionSelect = useCallback((option: MentionOption) => {
     if (!editor || !mention) return;
+    const inserted = option.type === 'param'
+      ? { type: 'text', text: `[[${option.ref}]]` }
+      : { type: 'entityLink', attrs: { entityId: option.entity.id } };
     editor.chain().focus()
       .insertContentAt({ from: mention.from, to: mention.to }, [
-        { type: 'entityLink', attrs: { entityId: entity.id } },
+        inserted,
         { type: 'text', text: ' ' },
       ])
       .run();
@@ -373,6 +386,8 @@ export default function RichTextEditor({ content, onChange, onBlur, disabled = f
       {mention && !disabled && (
         <MentionPicker
           entities={entities}
+          parameters={parameters}
+          holderId={holderId}
           query={mention.query}
           anchor={mention.rect}
           activeIndex={mentionIndex}

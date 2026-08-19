@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { loadEntityIndex, type IndexedEntity } from './entityIndex';
-import { caretRect, findMentionTrigger } from './mentions';
+import { loadParameterIndex, type ParameterRef } from './parameterIndex';
+import { caretRect, findMentionTrigger, type MentionOption } from './mentions';
 import MentionPicker from './MentionPicker';
 
 /**
@@ -29,14 +30,16 @@ export default function MentionTextarea({ value, onChange, ...rest }: MentionTex
   const ref = useRef<HTMLTextAreaElement>(null);
 
   const [entities, setEntities] = useState<IndexedEntity[]>([]);
+  const [parameters, setParameters] = useState<ParameterRef[]>([]);
   const [mention, setMention] = useState<{ query: string; from: number; to: number; rect: DOMRect } | null>(null);
   const [index, setIndex] = useState(0);
-  const results = useRef<IndexedEntity[]>([]);
+  const results = useRef<MentionOption[]>([]);
 
   useEffect(() => {
     if (!projectId || rest.disabled) return;
     let live = true;
     loadEntityIndex(projectId).then((list) => { if (live) setEntities(list); });
+    loadParameterIndex(projectId).then((i) => { if (live) setParameters(i.refs); });
     return () => { live = false; };
   }, [projectId, rest.disabled]);
 
@@ -53,15 +56,17 @@ export default function MentionTextarea({ value, onChange, ...rest }: MentionTex
     setIndex(0);
   }, []);
 
-  const select = useCallback((entity: IndexedEntity) => {
+  const select = useCallback((option: MentionOption) => {
     const el = ref.current;
     if (!el || !mention) return;
-    // Trailing space so the next word does not run into the id — and so the
-    // bare-id link boundary in AutoLinkText still matches.
-    const next = `${value.slice(0, mention.from)}${entity.id} ${value.slice(mention.to)}`;
+    // A parameter stores the bare `ID.param`; an entity the bare id. Trailing
+    // space so the next word does not run into it — and so the bare-id link
+    // boundary in AutoLinkText still matches.
+    const token = option.type === 'param' ? option.ref : option.entity.id;
+    const next = `${value.slice(0, mention.from)}${token} ${value.slice(mention.to)}`;
     onChange(next);
     setMention(null);
-    const caret = mention.from + entity.id.length + 1;
+    const caret = mention.from + token.length + 1;
     requestAnimationFrame(() => { el.focus(); el.setSelectionRange(caret, caret); });
   }, [mention, onChange, value]);
 
@@ -95,6 +100,7 @@ export default function MentionTextarea({ value, onChange, ...rest }: MentionTex
       {mention && !rest.disabled && (
         <MentionPicker
           entities={entities}
+          parameters={parameters}
           query={mention.query}
           anchor={mention.rect}
           activeIndex={index}
