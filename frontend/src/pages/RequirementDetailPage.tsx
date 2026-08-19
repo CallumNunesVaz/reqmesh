@@ -8,7 +8,7 @@ import { ParametricsCard } from '../components/parametrics';
 import WhatIfPanel from '../components/WhatIfPanel';
 import RichTextEditor from '../components/RichTextEditor';
 import AutocompleteInput from '../components/AutocompleteInput';
-import { CopyLinkButton, EntityLink, type EntityKind } from '../components/entities';
+import { CopyLinkButton, EntityLink, entityPath, type EntityKind } from '../components/entities';
 import { AutoLinkHtml } from '../components/autoLink';
 import { ModalText } from '../components/ModalText';
 import { useEntityKinds } from '../components/entityIndex';
@@ -1678,7 +1678,11 @@ export default function RequirementDetailPage() {
         intent={createIntent ?? undefined}
         onCreated={(created) => {
           setCreateIntent(null);
-          if (created) navigate(`/project/${projectId}/requirements/${created.id}`);
+          if (created) {
+            navigate(`/project/${projectId}/requirements/${created.id}`);
+            const to = entityPath('requirement', projectId!, created.id);
+            if (to) addToast('success', 'Created', { label: created.id, to });
+          }
         }}
       />
 

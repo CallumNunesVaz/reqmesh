@@ -26,6 +26,7 @@ import ReparentDialog from '../components/ReparentDialog';
 import { DndContext, DragOverlay } from '@dnd-kit/core';
 import { useTreeDrag } from '../hooks/useTreeDrag';
 import { DropRow, DragGrip, TopLevelDropZone } from '../components/TreeDragRow';
+import { entityPath } from '../components/entities';
 
 const statusStyles: Record<string, { dot: string; text: string }> = {
   proposed: { dot: 'bg-cs-blue', text: 'text-cs-blue' },
@@ -770,7 +771,13 @@ export default function RequirementsPage() {
         projectId={projectId!}
         requirements={requirements}
         intent={createIntent ?? undefined}
-        onCreated={load}
+        onCreated={(created) => {
+          load();
+          if (created) {
+            const to = entityPath('requirement', projectId!, created.id);
+            if (to) addToast('success', 'Created', { label: created.id, to });
+          }
+        }}
       />
     </div>
   );

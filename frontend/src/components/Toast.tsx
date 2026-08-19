@@ -1,21 +1,23 @@
 import { useState, useCallback, useEffect, useRef, createContext, useContext } from 'react';
 import { X, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { GuardedLink } from './navGuard';
 
 export type ToastKind = 'success' | 'error';
-export interface Toast { id: number; kind: ToastKind; message: string }
+export interface ToastAction { label: string; to: string }
+export interface Toast { id: number; kind: ToastKind; message: string; action?: ToastAction }
 
 /** Append a toast, keeping at most `limit` — the newest win. Pure, so the
  *  queue logic is testable without rendering. */
 export function pushToast(current: Toast[], kind: ToastKind, message: string,
-                          nextId: number, limit = 3): Toast[] {
-  const next = [...current, { id: nextId, kind, message }];
+                          nextId: number, limit = 3, action?: ToastAction): Toast[] {
+  const next = [...current, { id: nextId, kind, message, ...(action ? { action } : {}) }];
   while (next.length > limit) next.shift();
   return next;
 }
 
 interface ToastCtxValue {
   toasts: Toast[];
-  addToast: (kind: ToastKind, message: string) => void;
+  addToast: (kind: ToastKind, message: string, action?: ToastAction) => void;
   removeToast: (id: number) => void;
 }
 
@@ -29,7 +31,7 @@ export function useToasts() {
   return useContext(ToastCtx);
 }
 
-function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: (id: number) => void }) {
+export function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: (id: number) => void }) {
   const reducedMotion = useRef(false);
   useEffect(() => {
     reducedMotion.current = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -57,7 +59,17 @@ function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: (id: number) =
       } ${entering ? 'translate-y-4 opacity-0' : 'translate-y-0 opacity-100'}`}
     >
       {toast.kind === 'success' ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
-      <span className="flex-1">{toast.message}</span>
+      <span className="flex-1">
+        {toast.message}{toast.action ? ' ' : null}
+        {toast.action && (
+          <GuardedLink
+            to={toast.action.to}
+            className="underline underline-offset-2 hover:opacity-80"
+          >
+            {toast.action.label}
+          </GuardedLink>
+        )}
+      </span>
       <button
         onClick={() => onRemove(toast.id)}
         className="p-0.5 rounded hover:bg-white/20 transition-colors"
@@ -73,9 +85,9 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const nextId = useRef(1);
 
-  const addToast = useCallback((kind: ToastKind, message: string) => {
+  const addToast = useCallback((kind: ToastKind, message: string, action?: ToastAction) => {
     const id = nextId.current++;
-    setToasts((prev) => pushToast(prev, kind, message, id));
+    setToasts((prev) => pushToast(prev, kind, message, id, 3, action));
   }, []);
 
   const removeToast = useCallback((id: number) => {

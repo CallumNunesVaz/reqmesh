@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { pushToast, type Toast } from '../src/components/Toast';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { StaticRouter } from 'react-router-dom/server';
+import { pushToast, ToastItem, type Toast, type ToastAction } from '../src/components/Toast';
 import { countMessage } from '../src/lib/feedback';
 
 describe('pushToast', () => {
@@ -45,6 +48,37 @@ describe('pushToast', () => {
     const frozen = [...initial];
     pushToast(initial, 'error', 'B', 2, 1);
     expect(initial).toEqual(frozen);
+  });
+
+  it('round-trips an action link through the queue', () => {
+    const action: ToastAction = { label: 'REQM0042', to: '/project/p/requirements/REQM0042' };
+    const result = pushToast([], 'success', 'Created', 1, 3, action);
+    expect(result).toEqual([
+      { id: 1, kind: 'success', message: 'Created', action },
+    ]);
+  });
+});
+
+describe('ToastItem', () => {
+  const render = (toast: Toast) => renderToStaticMarkup(
+    createElement(StaticRouter, { location: '/' },
+      createElement(ToastItem, { toast, onRemove: () => {} })),
+  );
+
+  it('renders an anchor with the right href when the toast has a link', () => {
+    const html = render({
+      id: 1,
+      kind: 'success',
+      message: 'Created',
+      action: { label: 'REQM0042', to: '/project/p/requirements/REQM0042' },
+    });
+    expect(html).toContain('href="/project/p/requirements/REQM0042"');
+    expect(html).toContain('>REQM0042</a>');
+  });
+
+  it('renders no anchor when the toast has no link', () => {
+    const html = render({ id: 1, kind: 'success', message: 'Saved' });
+    expect(html).not.toContain('<a ');
   });
 });
 
