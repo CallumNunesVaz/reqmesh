@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   branchIds, subtreeOf, validParents, isValidDrop, dragPayload, topLevelOf,
+  depthFirstOrder,
 } from '../src/lib/hierarchy';
 
 /** A → B → C, plus an unrelated X. */
@@ -118,5 +119,44 @@ describe('topLevelOf', () => {
       { id: 'Q', parent: 'P' },
     ];
     expect(topLevelOf(cyclic, ['P']).length).toBeLessThanOrEqual(1);
+  });
+});
+
+describe('depthFirstOrder', () => {
+  it('walks a three-level tree parents-first with correct depths', () => {
+    const three = [
+      { id: 'C', parent: 'B' },
+      { id: 'A', parent: null },
+      { id: 'B', parent: 'A' },
+      { id: 'D', parent: 'A' },
+    ];
+    // Input is shuffled; the order comes from the tree, not the array.
+    expect(depthFirstOrder(three)).toEqual([
+      { id: 'A', depth: 0 },
+      { id: 'B', depth: 1 },
+      { id: 'C', depth: 2 },
+      { id: 'D', depth: 1 },
+    ]);
+  });
+
+  it('shows an orphan whose parent is not present at depth 0', () => {
+    const orphaned = [
+      { id: 'A', parent: null },
+      { id: 'O', parent: 'MISSING' },
+    ];
+    expect(depthFirstOrder(orphaned)).toEqual([
+      { id: 'A', depth: 0 },
+      { id: 'O', depth: 0 },
+    ]);
+  });
+
+  it('terminates on a parent cycle and still emits every member', () => {
+    const cyclic = [
+      { id: 'P', parent: 'Q' },
+      { id: 'Q', parent: 'P' },
+    ];
+    const result = depthFirstOrder(cyclic);
+    expect(result.map((n) => n.id).sort()).toEqual(['P', 'Q']);
+    expect(result[0].depth).toBe(0);
   });
 });

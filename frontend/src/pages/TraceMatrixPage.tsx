@@ -5,6 +5,7 @@ import { GitBranch, Plus, X, LayoutGrid, LayoutList, Search, Download } from 'lu
 import { api } from '../api/client';
 import type { TraceModelLink, Requirement, VerificationCase } from '../api/client';
 import { removeTraceLink } from '../lib/traceLinks';
+import { depthFirstOrder } from '../lib/hierarchy';
 import { matrixToCsv, type MatrixCsvInput } from '../lib/matrixCsv';
 import { useAuthStore } from '../store/auth';
 import { useStore } from '../store';
@@ -22,6 +23,13 @@ const LINK_TYPE_COLORS: Record<string, string> = {
   derives: 'bg-orange-500/20 text-orange-400',
   conflicts: 'bg-red-500/20 text-red-400',
 };
+
+// Axis-label indentation per tree level. Capped so a pathologically deep tree
+// (or a corrupt cycle) cannot push a label out of its sticky header column.
+const MAX_AXIS_DEPTH = 6;
+const AXIS_INDENT = 10;
+
+const axisIndent = (depth: number) => `${Math.min(depth, MAX_AXIS_DEPTH) * AXIS_INDENT}px`;
 
 export default function TraceMatrixPage() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -116,14 +124,14 @@ export default function TraceMatrixPage() {
     if (!projectId) return;
     const input: MatrixCsvInput = {
       columns: matrixTargets.map((tgt) => ({
-        id: tgt,
-        label: nameOf(tgt) || tgt,
+        id: tgt.id,
+        label: nameOf(tgt.id) || tgt.id,
       })),
       rows: matrixSources.map((src) => ({
-        id: src,
-        label: nameOf(src) || src,
+        id: src.id,
+        label: nameOf(src.id) || src.id,
         cells: matrixTargets.map((tgt) =>
-          filteredLinks.some((l) => l.source === src && l.target === tgt),
+          filteredLinks.some((l) => l.source === src.id && l.target === tgt.id),
         ),
       })),
       rowHeader: 'Source',
@@ -140,21 +148,47 @@ export default function TraceMatrixPage() {
     a.remove();
   };
 
+  // Position every requirement in the tree (depth-first, with depth), so each
+  // axis can list requirements as a hierarchy rather than a flat id sort.
+  // Either end of a link may also be a verification case (or any other id a
+  // registry edge names), which has no tree position; those keep their flat id
+  // order and trail the requirements on the axis.
+  const treePosition = useMemo(() => {
+    const order = depthFirstOrder(requirements);
+    return new Map(order.map((n, i) => [n.id, { index: i, depth: n.depth }]));
+  }, [requirements]);
+
+  const orderAxis = (ids: string[]): Array<{ id: string; depth: number }> => {
+    const reqs = ids.filter((id) => treePosition.has(id));
+    const others = ids.filter((id) => !treePosition.has(id));
+    reqs.sort((a, b) => treePosition.get(a)!.index - treePosition.get(b)!.index);
+    others.sort((a, b) => a.localeCompare(b));
+    return [
+      ...reqs.map((id) => ({ id, depth: treePosition.get(id)!.depth })),
+      ...others.map((id) => ({ id, depth: 0 })),
+    ];
+  };
+
   // A general trace matrix: rows are every distinct link source, columns every
   // distinct link target. Either end may be a requirement or a verification
   // case, so requirement→requirement links (refines/derives/…) render as cells
   // too — not just requirement→VC pairings.
   const matrixSources = useMemo(
-    () => [...new Set(filteredLinks.map((l) => l.source))].sort(),
-    [filteredLinks],
+    () => orderAxis([...new Set(filteredLinks.map((l) => l.source))]),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [filteredLinks, treePosition],
   );
   const matrixTargets = useMemo(
-    () => [...new Set(filteredLinks.map((l) => l.target))].sort(),
-    [filteredLinks],
+    () => orderAxis([...new Set(filteredLinks.map((l) => l.target))]),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [filteredLinks, treePosition],
   );
 
   return (
-    <div className="relative max-w-5xl mx-auto p-8">
+    // The matrix wants every pixel, so the list's reading-measure cap is lifted
+    // in grid mode. Unbounded running text is worse, not better, so the list
+    // view keeps `max-w-5xl mx-auto`.
+    <div className={viewMode === 'list' ? 'relative max-w-5xl mx-auto p-8' : 'relative p-8'}>
       {loading && links.length === 0 && requirements.length === 0 && <LoadingSplash label="Loading trace matrix…" />}
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
         <h1 className="text-2xl font-bold tracking-tight text-foreground">{SECTION_TITLES.traces}</h1>
@@ -330,32 +364,36 @@ export default function TraceMatrixPage() {
                 </th>
                 {matrixTargets.map((tgt) => (
                   <th
-                    key={tgt}
+                    key={tgt.id}
                     className="sticky top-0 z-10 bg-card border-b px-2 py-2 text-[9px] font-mono whitespace-nowrap"
                   >
-                    <EntityLink kind={kindOf(tgt)} id={tgt} name={nameOf(tgt)} showIcon={false} className="text-muted-foreground hover:text-primary" />
+                    <span className="inline-block" style={{ paddingLeft: axisIndent(tgt.depth) }}>
+                      <EntityLink kind={kindOf(tgt.id)} id={tgt.id} name={nameOf(tgt.id)} showIcon={false} className="text-muted-foreground hover:text-primary" />
+                    </span>
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {matrixSources.map((src) => {
-                const srcLinks = filteredLinks.filter((l) => l.source === src);
+                const srcLinks = filteredLinks.filter((l) => l.source === src.id);
                 return (
-                  <tr key={src} className="group">
+                  <tr key={src.id} className="group">
                     <td className="sticky left-0 z-10 bg-card border-r px-3 py-1.5 text-[10px] font-mono whitespace-nowrap group-hover:bg-accent/40">
-                      <EntityLink kind={kindOf(src)} id={src} name={nameOf(src)} showIcon={false} className="text-foreground hover:text-primary" />
+                      <span className="inline-block" style={{ paddingLeft: axisIndent(src.depth) }}>
+                        <EntityLink kind={kindOf(src.id)} id={src.id} name={nameOf(src.id)} showIcon={false} className="text-foreground hover:text-primary" />
+                      </span>
                     </td>
                     {matrixTargets.map((tgt) => {
-                      const link = srcLinks.find((l) => l.target === tgt);
+                      const link = srcLinks.find((l) => l.target === tgt.id);
                       return (
-                        <td key={tgt} className="border-b px-2 py-1.5 text-center">
+                        <td key={tgt.id} className="border-b px-2 py-1.5 text-center">
                           {link ? (
                             // The headers already link both ends; the cell
                             // itself takes you to the target the pairing hits.
                             <Link
-                              to={entityPath(kindOf(tgt), projectId!, tgt) ?? '#'}
-                              title={`${src} ${link.type} ${tgt}`}
+                              to={entityPath(kindOf(tgt.id), projectId!, tgt.id) ?? '#'}
+                              title={`${src.id} ${link.type} ${tgt.id}`}
                               className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-medium hover:ring-1 hover:ring-primary/40 transition-shadow ${LINK_TYPE_COLORS[link.type] || 'bg-muted text-muted-foreground'}`}
                             >
                               {link.type}

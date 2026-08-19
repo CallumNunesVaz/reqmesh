@@ -97,3 +97,56 @@ export function topLevelOf<T extends Node>(items: T[], ids: string[]): string[] 
     return true;
   });
 }
+
+/** A node id and its depth in the tree, for indenting axis labels. */
+export interface OrderedNode {
+  id: string;
+  depth: number;
+}
+
+/** Depth-first ordering of a node list by its parent links.
+ *
+ *  Parents come before their children, and each child sits one level deeper
+ *  than its parent. A node whose parent id is absent from the list is a root at
+ *  depth 0 rather than being dropped — the YAML store is hand-editable, and an
+ *  axis that silently omits a row is worse than one that shows an orphan at
+ *  depth 0. A parent cycle terminates at the first revisit instead of hanging;
+ *  the members a cycle keeps out of any root then surface as roots themselves.
+ */
+export function depthFirstOrder<T extends Node>(items: T[]): OrderedNode[] {
+  const ids = new Set(items.map((i) => i.id));
+  const children = new Map<string, T[]>();
+  for (const item of items) {
+    const parent = item.parent && ids.has(item.parent) ? item.parent : null;
+    if (parent === null) continue;
+    if (!children.has(parent)) children.set(parent, []);
+    children.get(parent)!.push(item);
+  }
+  for (const list of children.values()) list.sort((a, b) => a.id.localeCompare(b.id));
+
+  const ordered: OrderedNode[] = [];
+  const seen = new Set<string>();
+
+  const emit = (root: string) => {
+    const stack: Array<{ id: string; depth: number }> = [{ id: root, depth: 0 }];
+    while (stack.length) {
+      const { id, depth } = stack.pop()!;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      ordered.push({ id, depth });
+      const kids = children.get(id) ?? [];
+      for (let i = kids.length - 1; i >= 0; i--) {
+        stack.push({ id: kids[i].id, depth: depth + 1 });
+      }
+    }
+  };
+
+  // Roots first — top-level nodes and orphans — then anything a cycle kept out.
+  const roots = items
+    .filter((item) => !item.parent || !ids.has(item.parent))
+    .sort((a, b) => a.id.localeCompare(b.id));
+  for (const root of roots) emit(root.id);
+  for (const item of items) if (!seen.has(item.id)) emit(item.id);
+
+  return ordered;
+}
