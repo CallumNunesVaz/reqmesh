@@ -953,9 +953,16 @@ check "the service is told where the warmed cache is" \
 # The timeout has to exceed a cold-cache compile, or the fallback is guaranteed
 # on any install whose warming did not happen. It is a parameter now, so the
 # assertion is on the *default* — that is what an ordinary export gets.
+#
+# Asserted as "every timeout default is >= 300", not as a fixed count: there are
+# two compile entry points now (the bool wrapper and the detailed seam), and a
+# hardcoded count fails the moment a third is added while saying nothing about
+# whether the defaults are actually safe.
 check "the compile timeout allows for a cold cache" \
       "$(grep -cE 'timeout: int = (3[0-9]{2}|[4-9][0-9]{2}|[0-9]{4,})' \
-         "$REPO/backend/app/services/publishers/latex_helpers.py")" "1"
+         "$REPO/backend/app/services/publishers/latex_helpers.py")" \
+      "$(grep -cE 'timeout: int =' \
+         "$REPO/backend/app/services/publishers/latex_helpers.py")"
 # Warming is the cold-cache case by definition, so it asks for more than the
 # default rather than relying on it.
 check "cache warming gets its own, larger budget" \
