@@ -664,25 +664,83 @@ export default function RequirementDetailPage() {
   };
   const flipRelation = async (index: number, targetId: string, relType: string) => {
     if (!projectId || !reqId || !req) return;
+    const originalRelations = req.relations;
     const updatedRelations = req.relations.filter((_, i) => i !== index);
-    // Anchor on the server's response, not a locally rebuilt object: the local
-    // one carries the *old* `modified`, which becomes a stale If-Match token
-    // and refuses the user's own next save.
-    const saved = await api.updateRequirement(projectId, reqId, { relations: updatedRelations });
-    const updated = { ...req, ...saved, relations: updatedRelations };
-    setReq(updated);
-    savedRef.current = updated;
     try {
-      const targetReq = await api.getRequirement(projectId, targetId);
-      const targetRelations = [...(targetReq.relations || []), { type: relType, target: reqId }];
-      await api.updateRequirement(projectId, targetId, { relations: targetRelations });
-      setAllReqs((prev) => {
-        const exists = prev.find((r) => r.id === targetId);
-        if (exists) return prev.map((r) => r.id === targetId ? { ...r, relations: targetRelations } : r);
-        return prev;
-      });
+      // Anchor on the server's response, not a locally rebuilt object: the local
+      // one carries the *old* `modified`, which becomes a stale If-Match token
+      // and refuses the user's own next save.
+      const saved = await api.updateRequirement(projectId, reqId, { relations: updatedRelations });
+      const updated = { ...req, ...saved, relations: updatedRelations };
+      setReq(updated);
+      savedRef.current = updated;
+      try {
+        const targetReq = await api.getRequirement(projectId, targetId);
+        // A reversed relation is fresh against its new target: it has never
+        // been reviewed against it, so its review fingerprint is cleared
+        // rather than inheriting the one that fingerprinted the old target.
+        const targetRelations = [...(targetReq.relations || []), { type: relType, target: reqId, reviewed_fingerprint: null }];
+        await api.updateRequirement(projectId, targetId, { relations: targetRelations });
+        setAllReqs((prev) => {
+          const exists = prev.find((r) => r.id === targetId);
+          if (exists) return prev.map((r) => r.id === targetId ? { ...r, relations: targetRelations } : r);
+          return prev;
+        });
+      } catch (e: any) {
+        // The second write failed — put this requirement back so the flip is
+        // atomic from the user's point of view, not a half-change.
+        try {
+          const restored = await api.updateRequirement(projectId, reqId, { relations: originalRelations });
+          setReq({ ...req, ...restored, relations: originalRelations });
+          savedRef.current = { ...req, ...restored, relations: originalRelations };
+        } catch { /* the rollback failed; the next reload re-syncs from the server */ }
+        throw e;
+      }
     } catch (e: any) {
-      console.warn('Relation flip on target %s failed: %s', targetId, e?.message || e);
+      addToast('error', `Could not flip relation: ${e?.message || e}`);
+    }
+    bumpGraphVersion();
+  };
+  /** Mirror of `flipRelation` for the derived Incoming list: the relation lives
+   *  on the source record, so the flip removes it there and appends the
+   *  reversed relation to this requirement. */
+  const flipIncomingRelation = async (sourceId: string, relType: string) => {
+    if (!projectId || !reqId || !req) return;
+    try {
+      // Read the source fresh — it owns the relation. A stale view (source
+      // deleted elsewhere) must fail here, before any write, rather than after
+      // a half-change.
+      const sourceReq = await api.getRequirement(projectId, sourceId);
+      const sourceRelations = sourceReq.relations || [];
+      const removeAt = sourceRelations.findIndex((rel) => rel.type === relType && rel.target === reqId);
+      if (removeAt === -1) {
+        addToast('error', `Could not flip relation: it is no longer on ${sourceId}`);
+        return;
+      }
+      const nextSourceRelations = sourceRelations.filter((_, i) => i !== removeAt);
+      // A reversed relation is fresh against its new target (the former
+      // source), so its review fingerprint is cleared rather than carrying the
+      // one that fingerprinted this requirement.
+      const nextRelations = [...req.relations, { type: relType, target: sourceId, reviewed_fingerprint: null }];
+      // The source loses the relation; write it first so the mirrored second
+      // write can be rolled back against this snapshot if it fails.
+      await api.updateRequirement(projectId, sourceId, { relations: nextSourceRelations });
+      try {
+        const saved = await api.updateRequirement(projectId, reqId, { relations: nextRelations });
+        const updated = { ...req, ...saved, relations: nextRelations };
+        setReq(updated);
+        savedRef.current = updated;
+        setAllReqs((prev) => prev.map((r) => (r.id === sourceId ? { ...r, relations: nextSourceRelations } : r)));
+      } catch (e) {
+        // Roll the source back so neither record ends up half-changed.
+        try {
+          await api.updateRequirement(projectId, sourceId, { relations: sourceRelations });
+          setAllReqs((prev) => prev.map((r) => (r.id === sourceId ? { ...r, relations: sourceRelations } : r)));
+        } catch { /* the rollback failed; the next reload re-syncs from the server */ }
+        throw e;
+      }
+    } catch (e: any) {
+      addToast('error', `Could not flip relation: ${e?.message || e}`);
     }
     bumpGraphVersion();
   };
@@ -1060,7 +1118,7 @@ export default function RequirementDetailPage() {
               ) : (
                 <div className="space-y-1">
                   {incomingRelations.map((inc, i) => (
-                    <div key={`in-${i}`} className="flex items-center gap-2 text-xs py-1.5 px-2 rounded hover:bg-accent/50">
+                    <div key={`in-${i}`} className="flex items-center gap-2 text-xs group py-1.5 px-2 rounded hover:bg-accent/50">
                       <EntityLink
                         kind={kindOf(inc.source)}
                         id={inc.source}
@@ -1071,6 +1129,15 @@ export default function RequirementDetailPage() {
                       <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-500/10 text-emerald-400 shrink-0">{inc.type.replace(/_/g, ' ')}</span>
                       <ArrowRight size={11} className="text-muted-foreground shrink-0" />
                       <span className="font-mono text-[11px] font-semibold text-foreground shrink-0">{req.id}</span>
+                      {editable && (
+                        <button
+                          onClick={() => flipIncomingRelation(inc.source, inc.type)}
+                          className="p-1 rounded hover:bg-primary/10 text-muted-foreground hover:text-primary opacity-0 group-hover:opacity-100 transition-all"
+                          title={`Flip: make ${req.id} → ${inc.type} → ${inc.source}`}
+                        >
+                          <ArrowLeftRight size={11} />
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
