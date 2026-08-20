@@ -1524,7 +1524,7 @@ class Publisher:
                 baselines = ", ".join(r.get("baselines", []))
                 vc_links = ", ".join(self._latex_link(vid) for vid in r.get("verification_cases", []))
                 rel_links = ", ".join(
-                    f"{rel['type']} \\textrightarrow\\ {self._latex_link(rel['target'])}"
+                    f"{_latex_escape(rel['type'])} \\textrightarrow\\ {self._latex_link(rel['target'])}"
                     for rel in r.get("relations", [])
                 )
 
