@@ -176,19 +176,82 @@ app.add_middleware(
 if settings.allowed_hosts and settings.allowed_hosts != ["*"]:
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts)
 
-@app.middleware("http")
-async def content_length_cap_middleware(request: Request, call_next):
-    content_type = request.headers.get("content-type", "")
-    if "application/json" in content_type:
-        content_length = request.headers.get("content-length")
+class BodySizeLimitMiddleware:
+    """Cap JSON request bodies as they arrive, not from ``Content-Length``.
+
+    Counting the bytes of every ``http.request`` message as they stream in keeps
+    the limit honest for a chunked body that declares no length at all. The cap
+    is read from ``settings.max_json_body_mb`` on every request, so a runtime
+    override (or a test flipping the setting) takes effect without a restart.
+    Non-HTTP scopes (WebSocket) and non-JSON content types pass through
+    untouched.
+    """
+
+    def __init__(self, app, *, max_bytes: int) -> None:
+        # The cap is re-read from settings on every request (see __call__), so
+        # ``max_bytes`` is deliberately not stored: a runtime override must take
+        # effect without rebuilding the middleware stack.
+        self.app = app
+
+    async def __call__(self, scope, receive, send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        headers = {
+            key.decode("latin-1").lower(): value.decode("latin-1")
+            for key, value in scope.get("headers", [])
+        }
+        if "application/json" not in headers.get("content-type", ""):
+            await self.app(scope, receive, send)
+            return
+
+        max_bytes = settings.max_json_body_mb * 1024 * 1024
+        content_length = headers.get("content-length")
         if content_length is not None:
             try:
-                cl = int(content_length)
+                declared = int(content_length)
             except ValueError:
-                return JSONResponse(status_code=400, content={"detail": "Invalid Content-Length"})
-            if cl > settings.max_json_body_mb * 1024 * 1024:
-                return JSONResponse(status_code=413, content={"detail": "Request body too large"})
-    return await call_next(request)
+                await self._refuse(scope, send, 400, "Invalid Content-Length")
+                return
+            if declared > max_bytes:
+                await self._refuse(scope, send, 413, "Request body too large")
+                return
+
+        received = 0
+        refused = False
+
+        async def limited_receive():
+            nonlocal received, refused
+            message = await receive()
+            if message["type"] == "http.request":
+                received += len(message.get("body", b""))
+                if received > max_bytes:
+                    await self._refuse(scope, send, 413, "Request body too large")
+                    refused = True
+                    return {"type": "http.disconnect"}
+            return message
+
+        async def guarded_send(message):
+            # Once the 413 has been sent the response is committed; the
+            # downstream app will still try to answer (FastAPI turns the
+            # disconnect into its own error response), so drop anything that
+            # arrives after the refusal.
+            if refused:
+                return
+            await send(message)
+
+        try:
+            await self.app(scope, limited_receive, guarded_send)
+        except Exception:
+            if refused:
+                return
+            raise
+
+    @staticmethod
+    async def _refuse(scope, send, status_code: int, detail: str) -> None:
+        response = JSONResponse(status_code=status_code, content={"detail": detail})
+        await response(scope, None, send)
 
 
 # Endpoints reachable without a session — the ones used to *obtain* one, plus
@@ -296,7 +359,7 @@ async def security_headers_middleware(request: Request, call_next):
     response = await call_next(request)
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("X-Frame-Options", "DENY")
-    response.headers.setdefault("X-XSS-Protection", "1; mode=block")
+    response.headers.setdefault("X-XSS-Protection", "0")
     response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
     response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
     csp = settings.csp_default or "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'"
@@ -398,6 +461,13 @@ async def git_autocommit_middleware(request: Request, call_next):
                 "path": request.url.path,
             })
     return response
+
+
+# Registered last (and therefore outermost) so the body cap fires before auth:
+# an oversized unauthenticated request is refused without ever reading its
+# credentials or routing it. The decorator middlewares above are registered
+# earlier and run inside this one.
+app.add_middleware(BodySizeLimitMiddleware, max_bytes=0)
 
 
 @app.exception_handler(Exception)

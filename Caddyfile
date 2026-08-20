@@ -17,9 +17,16 @@ localserver.reqmesh.com {
         Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'"
         X-Content-Type-Options "nosniff"
         X-Frame-Options "DENY"
-        X-XSS-Protection "1; mode=block"
+        X-XSS-Protection "0"
         Referrer-Policy "strict-origin-when-cross-origin"
         Permissions-Policy "camera=(), microphone=(), geolocation=()"
+    }
+
+    # Defence in depth: refuse oversized request bodies at the proxy too. Set
+    # slightly above the app's own JSON body cap so the app produces its
+    # friendlier error in the normal case.
+    request_body {
+        max_size 12MB
     }
 
     reverse_proxy reqmesh:8000 {
