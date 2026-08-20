@@ -12,8 +12,9 @@ import uuid
 
 from fastapi import WebSocket, WebSocketDisconnect
 
-from app.core.auth import get_user_from_token
+from app.core.auth import GUEST_USER, decode_token, get_user_from_token
 from app.core.config import settings
+from app.core.dependencies import PERMISSION_LEVELS, _user_permission_level
 from app.services.event_bus import get_event_bus
 
 logger = logging.getLogger(__name__)
@@ -23,13 +24,55 @@ _ws_conns_by_user: dict[str, int] = {}
 _ws_conns_global: int = 0
 
 
+def _resolve_socket_user(token: str | None) -> dict | None:
+    """Resolve a WebSocket token to a user, or None.
+
+    A token is valid for the socket when it decodes, its ``scp`` claim is
+    ``ws`` or ``session`` (a token minted before this change has no ``scp`` and
+    is treated as ``session``), and ``get_user_from_token`` still accepts it —
+    which also re-checks the ``tv`` against the stored token version.
+    """
+    if not token:
+        return None
+    payload = decode_token(token)
+    if payload is None:
+        return None
+    if payload.get("scp", "session") not in ("ws", "session"):
+        return None
+    return get_user_from_token(token)
+
+
 async def websocket_handler(websocket: WebSocket, project_id: str, token: str | None = None):
+    # Resolve identity before accepting the socket. The SPA authenticates by
+    # cookie, so a cookie-only client must still connect: query parameter first,
+    # then the ``token`` cookie.
+    token = token or websocket.cookies.get("token")
+    user = _resolve_socket_user(token)
+
+    if settings.require_auth:
+        # With auth required, no token (or a token that resolves to the guest
+        # role) is refused before the socket is accepted — the hole being closed
+        # here used to accept first and only then treat the token as an optional
+        # identity upgrade.
+        if user is None or user.get("role", "guest") == "guest":
+            await websocket.close(code=1008)
+            return
+    elif user is None:
+        user = dict(GUEST_USER)
+
+    # Same per-project permission check the HTTP routes get. Below the read tier
+    # ("view") the subscriber cannot read the project, so refuse rather than
+    # accept and then feed it mutations it has no business seeing.
+    if _user_permission_level(user, project_id) < PERMISSION_LEVELS["view"]:
+        await websocket.close(code=1008)
+        return
+
     await websocket.accept()
     bus = get_event_bus()
     queue: asyncio.Queue = bus.subscribe(project_id)
     client_id = uuid.uuid4().hex
-    username = "guest"
-    role = "guest"
+    username = user.get("username", "guest")
+    role = user.get("role", "guest")
     global _ws_conns_global
     # Only decrement what we actually incremented: the limit checks below
     # `return` from inside the try, so the finally runs for rejected
@@ -37,13 +80,10 @@ async def websocket_handler(websocket: WebSocket, project_id: str, token: str | 
     counted = False
 
     try:
-        if token:
-            user = get_user_from_token(token)
-            if user:
-                username = user.get("username", "guest")
-                role = user.get("role", "guest")
-
-        if not token:
+        if token is None:
+            # Post-accept identity upgrade, for the no-token, auth-not-required
+            # case only. It must never be what admits a connection when
+            # ``require_auth`` is on — that check already ran above.
             try:
                 raw = await asyncio.wait_for(websocket.receive_text(), timeout=5.0)
                 data = json.loads(raw)

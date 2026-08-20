@@ -273,13 +273,15 @@ def _token_ttl() -> int:
         return TOKEN_TTL
 
 
-def create_token(username: str, role: str, token_version: int = 0) -> str:
+def create_token(username: str, role: str, token_version: int = 0,
+                 *, ttl: int | None = None, scope: str = "session") -> str:
     payload = {
         "sub": username,
         "role": role,
         "tv": token_version,
+        "scp": scope,
         "iat": int(time.time()),
-        "exp": int(time.time()) + _token_ttl(),
+        "exp": int(time.time()) + (ttl if ttl is not None else _token_ttl()),
     }
     return jwt.encode(payload, get_secret(), algorithm="HS256")
 

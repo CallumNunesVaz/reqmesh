@@ -40,6 +40,7 @@ class FakeWebSocket:
     def __init__(self, sends_before_drop: int = 1):
         self.closed_code = None
         self.sent: list[dict] = []
+        self.cookies: dict[str, str] = {}
         self._budget = sends_before_drop
 
     async def accept(self):
@@ -60,12 +61,19 @@ class FakeWebSocket:
 
 
 @pytest.fixture
-def bus(monkeypatch):
+def bus(workspace, monkeypatch):
     from app.services import websocket_bus as wb
+    from app.core import auth
     monkeypatch.setattr(wb.settings, "max_sse_conns_global", 2, raising=False)
     monkeypatch.setattr(wb.settings, "max_sse_conns_per_user", 1, raising=False)
+    # The handler now authenticates before accepting; require_auth on and a
+    # valid token let these tests reach the connection-limit logic they pin.
+    monkeypatch.setattr(wb.settings, "require_auth", True, raising=False)
     wb._ws_conns_global = 0
     wb._ws_conns_by_user.clear()
+    auth.register_user("wstest", "Password123!long", "contributor")
+    wb._test_token = auth.create_token("wstest", "contributor")
+    wb._test_user = "wstest"
     yield wb
     wb._ws_conns_global = 0
     wb._ws_conns_by_user.clear()
@@ -74,7 +82,7 @@ def bus(monkeypatch):
 def test_a_connection_over_the_global_limit_is_refused(bus):
     bus._ws_conns_global = 2
     ws = FakeWebSocket()
-    asyncio.run(bus.websocket_handler(ws, "p"))
+    asyncio.run(bus.websocket_handler(ws, "p", bus._test_token))
     assert ws.closed_code == 1013
     assert any("Too many" in str(m) for m in ws.sent)
 
@@ -84,23 +92,23 @@ def test_rejected_connections_do_not_corrupt_the_counter(bus):
     once left the count below the threshold and the limit stopped applying."""
     bus._ws_conns_global = 2
     for _ in range(5):
-        asyncio.run(bus.websocket_handler(FakeWebSocket(), "p"))
+        asyncio.run(bus.websocket_handler(FakeWebSocket(), "p", bus._test_token))
     assert bus._ws_conns_global == 2, (
         f"counter drifted to {bus._ws_conns_global} — rejections are decrementing"
     )
 
 
 def test_rejected_connections_do_not_corrupt_the_per_user_counter(bus):
-    bus._ws_conns_by_user["guest"] = 1          # already at the per-user limit
+    bus._ws_conns_by_user[bus._test_user] = 1   # already at the per-user limit
     bus._ws_conns_global = 0
     for _ in range(3):
-        asyncio.run(bus.websocket_handler(FakeWebSocket(), "p"))
-    assert bus._ws_conns_by_user.get("guest", 0) == 1
+        asyncio.run(bus.websocket_handler(FakeWebSocket(), "p", bus._test_token))
+    assert bus._ws_conns_by_user.get(bus._test_user, 0) == 1
 
 
 def test_an_accepted_connection_releases_its_slot(bus):
     """The client drops after the handshake, so the handler runs to completion
     and the finally must give the slot back."""
-    asyncio.run(bus.websocket_handler(FakeWebSocket(sends_before_drop=1), "p"))
+    asyncio.run(bus.websocket_handler(FakeWebSocket(sends_before_drop=1), "p", bus._test_token))
     assert bus._ws_conns_global == 0
     assert bus._ws_conns_by_user == {}

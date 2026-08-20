@@ -151,7 +151,8 @@ def whoami(request: Request, response: Response,
     ws_token = ""
     if user.get("role", "guest") != "guest":
         tv = int(u.get("token_version", 0))
-        ws_token = _create_token(user["username"], user.get("role", "guest"), tv)
+        ws_token = _create_token(user["username"], user.get("role", "guest"), tv,
+                                 ttl=120, scope="ws")
         # Return the CSRF token so the frontend can rehydrate after a page
         # refresh — the csrftoken cookie persists but the in-memory store was
         # lost.  Use the existing cookie value if present; only mint a fresh
