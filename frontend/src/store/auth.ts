@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { safeNext } from '../lib/safeNext';
 
 interface AuthUser {
   username: string;
@@ -25,6 +26,16 @@ interface AuthState {
   canToggleEdit: () => boolean;
 }
 
+// Honour the post-login redirect carried from session expiry. The `next`
+// value is read off the query string, so it must be validated before it is
+// assigned to `location.href`: a crafted link redirects a freshly
+// authenticated user off-origin, and a `javascript:` URL is an XSS sink.
+function redirectAfterLogin(): void {
+  if (typeof window === 'undefined') return;
+  const target = safeNext(new URLSearchParams(window.location.search).get('next'));
+  if (target) window.location.href = target;
+}
+
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   csrfToken: null,
@@ -47,14 +58,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       editMode: false,
       passwordChangeRequired: passwordChangeRequired ?? false,
     });
-    // Honour the post-login redirect carried from session expiry.
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      const next = params.get('next');
-      if (next) {
-        window.location.href = next;
-      }
-    }
+    redirectAfterLogin();
   },
 
   loginGuest: (csrfToken) => {
@@ -66,14 +70,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       editMode: false,
       passwordChangeRequired: false,
     });
-    // Honour the post-login redirect carried from session expiry.
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      const next = params.get('next');
-      if (next) {
-        window.location.href = next;
-      }
-    }
+    redirectAfterLogin();
   },
 
   logout: () => {
