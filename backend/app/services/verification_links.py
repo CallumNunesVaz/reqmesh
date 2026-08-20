@@ -45,24 +45,17 @@ UNVERIFIED_STATUS = "pending"
 UNVERIFIED_METHOD = "test"
 
 
-def derive_verification(requirement_id: str, vcs: list[dict]) -> dict:
-    """The verification status and method implied by the cases that verify this.
+def group_cases_by_requirement(vcs: list[dict]) -> dict[str, list[dict]]:
+    """Verification cases keyed by the requirement id each one verifies."""
+    grouped: dict[str, list[dict]] = {}
+    for vc in vcs:
+        for req_id in (vc.get("verified_requirements") or []):
+            grouped.setdefault(req_id, []).append(vc)
+    return grouped
 
-    Returns ``{"verification_status": str, "verification_method": str,
-    "verification_methods": list[str]}``.
 
-    ``verification_status`` is the worst status among the verifying cases, by
-    :data:`_STATUS_PRECEDENCE`. An unrecognised status counts as ``pending``:
-    the vocabulary is open on disk and an unknown value is not evidence of
-    success.
-
-    ``verification_methods`` is every distinct method, sorted — a requirement
-    verified by both a test and an analysis genuinely has two.
-    ``verification_method`` is the singular form kept for the many existing
-    readers, and is the first of those; it is the *only* lossy part of this and
-    is why the list is exposed alongside it.
-    """
-    mine = [vc for vc in vcs if requirement_id in (vc.get("verified_requirements") or [])]
+def derive_verification_from(mine: list[dict]) -> dict:
+    """The derived fields, given only the cases that verify one requirement."""
     if not mine:
         return {
             "verification_status": UNVERIFIED_STATUS,
@@ -83,6 +76,28 @@ def derive_verification(requirement_id: str, vcs: list[dict]) -> dict:
     }
 
 
+def derive_verification(requirement_id: str, vcs: list[dict]) -> dict:
+    """The verification status and method implied by the cases that verify this.
+
+    Returns ``{"verification_status": str, "verification_method": str,
+    "verification_methods": list[str]}``.
+
+    ``verification_status`` is the worst status among the verifying cases, by
+    :data:`_STATUS_PRECEDENCE`. An unrecognised status counts as ``pending``:
+    the vocabulary is open on disk and an unknown value is not evidence of
+    success.
+
+    ``verification_methods`` is every distinct method, sorted — a requirement
+    verified by both a test and an analysis genuinely has two.
+    ``verification_method`` is the singular form kept for the many existing
+    readers, and is the first of those; it is the *only* lossy part of this and
+    is why the list is exposed alongside it.
+    """
+    return derive_verification_from(
+        group_cases_by_requirement(vcs).get(requirement_id, [])
+    )
+
+
 def attach(store, requirements: list[dict], vcs: list[dict] | None = None) -> list[dict]:
     """Set the case-derived fields on each requirement from the owning side.
 
@@ -97,13 +112,11 @@ def attach(store, requirements: list[dict], vcs: list[dict] | None = None) -> li
     """
     if vcs is None:
         vcs = store.list_verification_cases()
-    owned: dict[str, list[str]] = {}
-    for vc in vcs:
-        for req_id in (vc.get("verified_requirements") or []):
-            owned.setdefault(req_id, []).append(vc["id"])
+    grouped = group_cases_by_requirement(vcs)
     for r in requirements:
-        r["verification_cases"] = sorted(owned.get(r["id"], []))
-        r.update(derive_verification(r["id"], vcs))
+        mine = grouped.get(r["id"], [])
+        r["verification_cases"] = sorted(vc["id"] for vc in mine)
+        r.update(derive_verification_from(mine))
     return requirements
 
 
