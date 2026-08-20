@@ -217,13 +217,16 @@ def get_project(project_id: str, request: Request,
     }
     # Git settings can hold a credentialed remote URL, so unlike the rest of
     # the project metadata they are only shown to those who manage settings
-    # (the maintainer tier that the settings page itself requires).
+    # (the edit tier that the settings page itself requires). The check is
+    # project-scoped through the same permissions map every other project check
+    # uses, so a maintainer demoted to `view` on this project gets the payload
+    # minus the `git` key.
     # Resolved through get_current_user so the HttpOnly session cookie counts —
     # checking only the Authorization header stopped working for the UI when
     # auth moved to cookies, silently hiding git settings from maintainers.
-    from app.core.dependencies import get_current_user
+    from app.core.dependencies import PERMISSION_LEVELS, get_current_user, user_permission_level
     user = get_current_user(request=request, authorization=authorization)
-    if user.get("role") in ("maintainer", "admin"):
+    if user_permission_level(user, project_id) >= PERMISSION_LEVELS["edit"]:
         out["git"] = meta.get("git", {})
     return out
 

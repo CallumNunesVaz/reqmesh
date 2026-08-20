@@ -235,3 +235,180 @@ def test_a_relation_to_an_id_in_no_collection_is_still_dangling(client, project)
 
     issues = client.get(f"/api/projects/{project}/validate").json()["issues"]
     assert any(i["type"] == "dangling_link" for i in issues), issues
+
+
+# ── LINKS coupling: what each consumer does with each row ─────────────────────
+#
+# ``link_registry.LINKS`` is read by five consumers — rename, delete_guard,
+# integrity, tracing and fingerprint — and nothing pinned which rows a given
+# consumer actually honours. A row added to make rename work silently changed
+# delete protection and ``GET /validate`` before. This test records, for every
+# row, the *observed* behaviour of all five consumers, so any change to that
+# behaviour fails loudly instead of drifting past 1,779 passing tests.
+
+
+def _row(rename, *, delete_guard=True, tracing=True, fingerprint=False):
+    """One recorded expectation for a LINKS row.
+
+    ``rename`` is the collection whose rename repoints this reference — always
+    ``"requirements"`` or ``"components"``, since those are the only two kinds
+    with a rename path — or ``None`` when no rename exists for the row's target.
+
+    ``integrity`` is deliberately not a parameter: ``find_dangling`` reports a
+    missing target for *every* row, including the tree rows that the delete
+    guard and the trace graph skip.
+    """
+    return {
+        "rename": rename,
+        "delete_guard": delete_guard,   # True = refused, False = allowed (tree rows)
+        "integrity": True,
+        "tracing": tracing,             # True = edge appears in the trace graph
+        "fingerprint": fingerprint,     # True = feeds the suspect-link check
+    }
+
+
+# Keyed by (holder, field, target) — the unique identity of a registry row. A row
+# added later has no key here and fails the test with a message saying to add one.
+EXPECTATIONS = {
+    # requirement → requirement
+    ("requirements", "parent", "requirements"): _row("requirements",
+                                                      delete_guard=False, tracing=False),
+    ("requirements", "cascade_from", "requirements"): _row("requirements"),
+    ("requirements", "subject", "components"): _row("components"),
+    # component →
+    ("components", "parent", "components"): _row("components",
+                                                  delete_guard=False, tracing=False),
+    ("components", "satisfies", "requirements"): _row("requirements", fingerprint=True),
+    ("components", "verification_cases", "verification_cases"): _row(None),
+    # verification case →
+    ("verification_cases", "verified_requirements", "requirements"): _row("requirements",
+                                                                            fingerprint=True),
+    # specifications →
+    ("specifications", "requirements", "requirements"): _row("requirements", fingerprint=True),
+    ("specifications", "components", "components"): _row("components"),
+    # change requests →
+    ("change_requests", "affected_requirements", "requirements"): _row("requirements",
+                                                                         fingerprint=True),
+    ("change_requests", "affected_components", "components"): _row("components"),
+    # analysis cases →
+    ("analysis_cases", "scope", "requirements"): _row("requirements", fingerprint=True),
+    ("analysis_cases", "scope_components", "components"): _row("components"),
+    # decisions →
+    ("decisions", "linked_requirements", "requirements"): _row("requirements",
+                                                                fingerprint=True),
+    ("decisions", "linked_components", "components"): _row("components"),
+    # risks →
+    ("risks", "linked_requirements", "requirements"): _row("requirements", fingerprint=True),
+    ("risks", "mitigating_requirements", "requirements"): _row("requirements",
+                                                                fingerprint=True),
+    ("risks", "linked_components", "components"): _row("components"),
+    ("risks", "mitigating_components", "components"): _row("components"),
+    # comments → anything (one row per commentable collection, kind-discriminated)
+    ("comments", "entity_id", "requirements"): _row("requirements", fingerprint=True),
+    ("comments", "entity_id", "components"): _row("components"),
+    ("comments", "entity_id", "risks"): _row(None),
+    ("comments", "entity_id", "change_requests"): _row(None),
+    ("comments", "entity_id", "decisions"): _row(None),
+    ("comments", "entity_id", "specifications"): _row(None),
+    ("comments", "entity_id", "verification_cases"): _row(None),
+    ("comments", "entity_id", "analysis_cases"): _row(None),
+    ("comments", "entity_id", "definitions"): _row(None),
+}
+
+
+def _field_value(link, target_id):
+    return target_id if not link.many else [target_id]
+
+
+def _holder_record(link, holder_id, target_id):
+    data = {"id": holder_id, link.field: _field_value(link, target_id)}
+    if link.kind_field:
+        data[link.kind_field] = link.target
+    return data
+
+
+@pytest.mark.parametrize("link", lr.LINKS,
+                         ids=lambda l: f"{l.holder}.{l.field}->{l.target}")
+def test_each_links_row_is_pinned_to_all_five_consumers(client, project, link):
+    """A row behaves the same in every consumer today that it did yesterday.
+
+    Any change to how rename, delete_guard, integrity, tracing or fingerprint
+    treats a row fails here — including a *new* row with no recorded expectation.
+    """
+    from fastapi import HTTPException
+
+    from app.core.dependencies import get_store
+    from app.services.delete_guard import check_deletable
+    from app.services.fingerprint import check_suspect_links
+    from app.services.rename import rename_component, rename_requirement
+    from app.services.tracing import all_links
+
+    key = (link.holder, link.field, link.target)
+    exp = EXPECTATIONS.get(key)
+    if exp is None:
+        raise AssertionError(
+            f"no expectation recorded for link {key} — add an entry to "
+            f"EXPECTATIONS in test_link_registry.py describing what rename, "
+            f"delete_guard, integrity, tracing and fingerprint do with it."
+        )
+
+    store = get_store(project)
+    target_id, renamed_id = "TGT", "TGTR"
+    holder_id, ghost_holder_id, ghost_target = "HLD", "GST", "GHOST"
+
+    # The referenced target (a reviewed-and-changed requirement where the target
+    # is a requirement, so the fingerprint's `changed` set picks it up) …
+    target_data = {"id": target_id}
+    if link.target == "requirements":
+        target_data["reviewed"] = "stale-sentinel"
+    store.create_item(link.target, target_data)
+    # … a holder citing it, and a holder citing a missing id (for integrity).
+    store.create_item(link.holder, _holder_record(link, holder_id, target_id))
+    store.create_item(link.holder, _holder_record(link, ghost_holder_id, ghost_target))
+
+    # integrity — a reference to a missing id is (or is not) reported dangling.
+    dangling = lr.find_dangling(store)
+    reported = any(
+        d["holder"] == link.holder and d["id"] == ghost_holder_id
+        and d["field"] == link.field and d["target"] == ghost_target
+        for d in dangling
+    )
+    assert reported is exp["integrity"], f"integrity mismatch for {key}"
+
+    # tracing — the edge does (or does not) appear in the trace graph.
+    appears = any(
+        e["source"] == holder_id and e["target"] == target_id
+        for e in all_links(store)
+    )
+    assert appears is exp["tracing"], f"tracing mismatch for {key}"
+
+    # fingerprint — the reference does (or does not) feed the suspect-link check.
+    flagged = any(
+        s.get("source") == holder_id and s.get("source_collection") == link.holder
+        for s in check_suspect_links(store)
+    )
+    assert flagged is exp["fingerprint"], f"fingerprint mismatch for {key}"
+
+    # delete_guard — deleting a referenced target is refused (or allowed).
+    refused = False
+    try:
+        check_deletable(store, link.target, target_id)
+    except HTTPException as exc:
+        if exc.status_code == 409:
+            refused = True
+        else:
+            raise
+    assert refused is exp["delete_guard"], f"delete_guard mismatch for {key}"
+
+    # rename — renaming the target rewrites (or does not rewrite) this reference.
+    if exp["rename"] == "requirements":
+        rename_requirement(store, target_id, renamed_id)
+        assert renamed_id in lr.targets_of(store.get_item(link.holder, holder_id), link), key
+    elif exp["rename"] == "components":
+        rename_component(store, target_id, renamed_id)
+        assert renamed_id in lr.targets_of(store.get_item(link.holder, holder_id), link), key
+    else:
+        # No rename operation exists for the row's target collection, so no
+        # rename can repoint it.
+        assert link not in lr.links_into("requirements"), f"requirement rename sweeps {key}"
+        assert link not in lr.links_into("components"), f"component rename sweeps {key}"

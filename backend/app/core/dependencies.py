@@ -45,7 +45,7 @@ def get_project_permissions(project_id: str) -> dict:
         return dict(DEFAULT_PERMISSIONS)
 
 
-def _user_permission_level(user: dict, project_id: str) -> int:
+def user_permission_level(user: dict, project_id: str) -> int:
     role = user.get("role", "guest")
     # A project's permissions map can never demote a global admin.
     if role == "admin":
@@ -122,7 +122,7 @@ def require_edit(project_id: str, request: Request,
     per-project via the ``permissions`` map, so a project can grant/deny beyond
     the role defaults."""
     user = get_current_user(request=request, authorization=authorization)
-    if _user_permission_level(user, project_id) < PERMISSION_LEVELS["propose"]:
+    if user_permission_level(user, project_id) < PERMISSION_LEVELS["propose"]:
         raise HTTPException(status_code=403, detail="Propose permission required")
     return user
 
@@ -132,7 +132,7 @@ def require_maintain(project_id: str, request: Request,
     """Edit tier — effective permission must be at least ``edit`` (requirements,
     components, specs, baselines, bulk ops, review, import/publish)."""
     user = get_current_user(request=request, authorization=authorization)
-    if _user_permission_level(user, project_id) < PERMISSION_LEVELS["edit"]:
+    if user_permission_level(user, project_id) < PERMISSION_LEVELS["edit"]:
         raise HTTPException(status_code=403, detail="Maintainer or admin permission required")
     return user
 
