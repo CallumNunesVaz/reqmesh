@@ -139,15 +139,18 @@ jobs:
   e2e:
     name: End-to-end (Playwright)
     runs-on: ubuntu-latest
+    # 30 minutes against a ~18-minute run. This is the guard that matters: the
+    # v0.3.4 release hung in `playwright install --with-deps` for 5h59m25s
+    # against azure.archive.ubuntu.com before GitHub's 360-minute default killed
+    # it. A stalled mirror is now a 30-minute failure, not a lost afternoon.
+    #
+    # Running this job in mcr.microsoft.com/playwright was tried and reverted:
+    # the browsers come pre-installed, but `actions/setup-python` cannot provide
+    # a working pip inside that image and the job dies on
+    # `spawn /__t/Python/3.12.14/x64/bin/pip ENOENT` before installing the
+    # backend. If you retry it, the backend's Python is the problem to solve
+    # first — not the browsers.
     timeout-minutes: 30
-    # Run in the official Playwright container so the browsers and their system
-    # dependencies come pre-installed: no `npx playwright install --with-deps`
-    # shells out to apt-get against azure.archive.ubuntu.com (the v0.3.4 release
-    # hung there for 5h59m25s). The image tag must match the `@playwright/test`
-    # version in frontend/package.json — the browser bundle and the client must
-    # move together. Bump both, never one.
-    container:
-      image: mcr.microsoft.com/playwright:v1.62.1-noble
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -155,12 +158,19 @@ jobs:
           python-version: '3.12'
           cache: pip
           cache-dependency-path: backend/requirements-dev.txt
-      # The image ships Node.js pre-installed; frontend has no `engines` pin, so
-      # setup-node is dropped and the build uses the image's node.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
       - run: pip install -r backend/requirements.txt
       - run: npm ci --prefix frontend
       # The e2e fixture serves frontend/dist, so a stale build tests stale code.
       - run: npm run build --prefix frontend
+      # `npx --prefix` is not a thing — resolve the local binary by running in
+      # the package directory.
+      - run: npx playwright install --with-deps chromium
+        working-directory: frontend
       - run: npm run e2e
         working-directory: frontend
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

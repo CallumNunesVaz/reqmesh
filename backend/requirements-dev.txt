@@ -3,6 +3,13 @@ pytest==9.1.1
 httpx==0.28.1
 # Property-based coverage of every documented API operation
 # (tests/test_openapi_contract.py).
+# hypothesis is schemathesis's engine and was left unpinned, so a fresh CI
+# install picked up 6.165.x, which dropped the CanonicalSchema.is_satisfiable
+# that schemathesis 4.24.3 calls — 188 of 197 contract tests failed with
+# AttributeError while the same suite passed locally on 6.164.0. Same reasoning
+# as the starlette pin in requirements.txt: pin the transitive dependency whose
+# break we have actually been bitten by.
+hypothesis==6.164.0
 schemathesis==4.24.3
 # The `sarif` extra is not optional: the security workflow runs bandit with
 # `-f sarif`, and without it bandit exits 2 with "invalid choice: 'sarif'".

@@ -30,14 +30,19 @@ for k, v in (lock.get('packages') or {}).items():
         print(v.get('version', '')); break
 " 2>/dev/null)"
 
-check "ci.yml pins a playwright container tag" \
-      "$([ -n "$image_tag" ] && echo yes || echo no)" "yes"
-
 check "package-lock resolves @playwright/test" \
       "$([ -n "$lock_version" ] && echo yes || echo no)" "yes"
 
-check "container tag == locked client version ($image_tag vs $lock_version)" \
-      "$image_tag" "$lock_version"
+# The container is optional — it was tried and reverted because setup-python
+# cannot provide a working pip inside that image. The coupling only needs
+# enforcing while a container tag is actually pinned, so this asserts the match
+# conditionally rather than demanding the container exist.
+if [ -n "$image_tag" ]; then
+    check "container tag == locked client version ($image_tag vs $lock_version)" \
+          "$image_tag" "$lock_version"
+else
+    check "no playwright container pinned (nothing to keep in step)" "none" "none"
+fi
 
 # ══════════════════════════════════════════════════════════════════════════════
 section "every CI job is bounded"
