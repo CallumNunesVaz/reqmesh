@@ -23,8 +23,10 @@ jobs:
   # the tag-version verification below and the CI gate share the same fate.
   ci:
     name: CI
+    # No timeout-minutes here: GitHub rejects it on a job that calls a reusable
+    # workflow, and the whole release fails to even start. The called workflow's
+    # own jobs each carry one, which is where the bound belongs anyway.
     uses: ./.github/workflows/ci.yml
-    timeout-minutes: 30
 
   bundle:
     name: Build bundle & publish release

@@ -45,15 +45,23 @@ section "every CI job is bounded"
 # GitHub's default job timeout is 360 minutes. One unbounded job burned a full
 # six-hour runner slot on a stalled apt mirror and blocked the v0.3.4 release.
 
-missing="$(python3 -c "
+# A job that calls a reusable workflow (`uses:`) must NOT carry timeout-minutes —
+# GitHub rejects the workflow file outright and the run fails before any job
+# starts. Asserting presence alone let exactly that reach main.
+report="$(python3 -c "
 import yaml, pathlib
-bad = []
+missing, invalid = [], []
 for f in sorted(pathlib.Path('$REPO/.github/workflows').glob('*.yml')):
     doc = yaml.safe_load(f.read_text()) or {}
     for name, job in (doc.get('jobs') or {}).items():
-        if 'timeout-minutes' not in job:
-            bad.append(f'{f.name}:{name}')
-print(','.join(bad))
+        calls_workflow = 'uses' in job
+        has_timeout = 'timeout-minutes' in job
+        if calls_workflow and has_timeout:
+            invalid.append(f'{f.name}:{name}')
+        elif not calls_workflow and not has_timeout:
+            missing.append(f'{f.name}:{name}')
+print(','.join(missing) + '|' + ','.join(invalid))
 " 2>/dev/null)"
 
-check "no workflow job is missing timeout-minutes" "$missing" ""
+check "no runs-on job is missing timeout-minutes" "${report%%|*}" ""
+check "no reusable-workflow job carries timeout-minutes" "${report##*|}" ""
