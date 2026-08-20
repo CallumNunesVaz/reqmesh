@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from app.core.config import settings
 from app.services.fingerprint import compute_fingerprint
 from app.services.yaml_store import YamlStore
@@ -340,3 +342,111 @@ def test_existing_cr_without_creates_field_is_unaffected(client, project):
     res = client.post(f"/api/projects/{project}/change-requests/CR-OLD/execute")
     assert res.status_code == 200, res.text
     assert store.get_requirement("SYST-C8")["name"] == "C8 New"
+
+
+# ── Lifecycle fields are not writable through the generic PUT ─────────────────
+
+def _tok(username: str, role: str) -> dict:
+    from app.core import auth
+    auth.register_user(username, "Password123!", role)
+    return {"Authorization": f"Bearer {auth.create_token(username, role)}"}
+
+
+def _make_project_demo(guest_client) -> None:
+    """Create project ``demo`` with naming enforcement off, using a real admin."""
+    adm = _tok("adm", "admin")
+    assert guest_client.post("/api/projects", json={"id": "demo", "name": "Demo"},
+                             headers=adm).status_code == 201
+    assert guest_client.patch("/api/projects/demo", json={"naming": {"enforce": False}},
+                              headers=adm).status_code == 200
+
+
+@pytest.mark.parametrize("field,value", [
+    ("status", "approved"),
+    ("approved_by", "admin"),
+    ("reviewed_by", "admin"),
+    ("submitted_by", "admin"),
+])
+def test_contributor_cannot_put_lifecycle_fields(guest_client, field, value):
+    """A propose-tier caller cannot set a lifecycle field through PUT — the
+    generic write path must not out-rank the execute/reject approval gates."""
+    _make_project_demo(guest_client)
+    project = "demo"
+    cont = _tok("cont", "contributor")
+
+    res = guest_client.post(
+        f"/api/projects/{project}/change-requests",
+        json={"id": f"CR-LF-{field}", "title": "x"},
+        headers=cont,
+    )
+    assert res.status_code == 201, res.text
+
+    res = guest_client.put(
+        f"/api/projects/{project}/change-requests/CR-LF-{field}",
+        json={field: value},
+        headers=cont,
+    )
+    assert res.status_code == 422, res.text
+
+    cr = guest_client.get(
+        f"/api/projects/{project}/change-requests/CR-LF-{field}",
+        headers=cont).json()
+    assert cr["status"] == "submitted"
+    assert cr["approved_by"] == ""
+
+
+def test_maintainer_can_execute_change_request(guest_client):
+    """The lifecycle-field tightening must not lock the legitimate approval path —
+    a maintainer's execute still works end-to-end."""
+    _make_project_demo(guest_client)
+    project = "demo"
+    store = _store(None, project)
+    store.create_requirement({"id": "SYST-MT", "name": "MT Orig", "description": "desc"})
+    fp = compute_fingerprint(store.get_requirement("SYST-MT"))
+    _make_cr(store, "CR-MT",
+             changes={"SYST-MT": {"name": "MT Updated"}},
+             base_fingerprints={"SYST-MT": fp})
+
+    maint = _tok("maint", "maintainer")
+    res = guest_client.post(f"/api/projects/{project}/change-requests/CR-MT/execute",
+                            headers=maint)
+    assert res.status_code == 200, res.text
+    assert store.get_requirement("SYST-MT")["name"] == "MT Updated"
+
+
+# ── changes are validated against RequirementUpdate on execute ────────────────
+
+def test_execute_rejects_unknown_key_in_changes(client, project):
+    """An unknown key in a proposed change is a 400 with the envelope, not a
+    silently-merged write."""
+    store = _store(client, project)
+    store.create_requirement({"id": "SYST-UK", "name": "UK Orig", "description": "desc"})
+    fp = compute_fingerprint(store.get_requirement("SYST-UK"))
+    _make_cr(store, "CR-UK",
+             changes={"SYST-UK": {"name": "UK New", "bogus_field": "x"}},
+             base_fingerprints={"SYST-UK": fp})
+
+    res = client.post(f"/api/projects/{project}/change-requests/CR-UK/execute")
+    assert res.status_code == 400, res.text
+    detail = res.json()["detail"]
+    assert detail["error"] == "invalid_change"
+    assert detail["requirement_id"] == "SYST-UK"
+    assert detail["errors"]
+    assert store.get_requirement("SYST-UK")["name"] == "UK Orig"
+
+
+def test_execute_rejects_wrong_typed_change(client, project):
+    """A well-formed but wrong-typed value in a proposed change is a 400 with
+    the envelope."""
+    store = _store(client, project)
+    store.create_requirement({"id": "SYST-WT", "name": "WT Orig", "description": "desc"})
+    fp = compute_fingerprint(store.get_requirement("SYST-WT"))
+    _make_cr(store, "CR-WT",
+             changes={"SYST-WT": {"priority": "not-a-priority"}},
+             base_fingerprints={"SYST-WT": fp})
+
+    res = client.post(f"/api/projects/{project}/change-requests/CR-WT/execute")
+    assert res.status_code == 400, res.text
+    detail = res.json()["detail"]
+    assert detail["error"] == "invalid_change"
+    assert detail["requirement_id"] == "SYST-WT"

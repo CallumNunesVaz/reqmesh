@@ -20,6 +20,22 @@ DEFAULT_PERMISSIONS = {
 PERMISSION_LEVELS = {"view": 0, "propose": 1, "edit": 2, "admin": 3}
 
 
+#: The permission tier required to write each entity kind, whether one at a
+#: time or in bulk. Split tiers are what let a propose-tier caller approve
+#: their own change request through the generic PUT. Values map onto the guards
+#: below: "propose" -> ``require_edit``, "edit" -> ``require_maintain``.
+WRITE_TIER: dict[str, str] = {
+    "change_requests": "propose",
+    "risks": "propose",
+    "comments": "propose",
+    "decisions": "propose",
+    "requirements": "edit",
+    "components": "edit",
+    "specifications": "edit",
+    "verification_cases": "edit",
+}
+
+
 def get_project_permissions(project_id: str) -> dict:
     try:
         store = get_store(project_id)

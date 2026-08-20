@@ -93,7 +93,6 @@ export interface ChangeRequestCreate {
 }
 
 export interface CommentCreate {
-  author?: string;
   entity_id?: string;
   entity_kind?: string;
   text?: string;
@@ -203,14 +202,10 @@ export interface AnalysisCaseUpdate {
 export interface ChangeRequestUpdate {
   affected_components?: string[] | null;
   affected_requirements?: string[] | null;
-  approved_by?: string | null;
   changes?: Record<string, Record<string, unknown>> | null;
   creates?: string[] | null;
   description?: string | null;
   rationale?: string | null;
-  reviewed_by?: string | null;
-  status?: string | null;
-  submitted_by?: string | null;
   title?: string | null;
   urgency?: string | null;
 }

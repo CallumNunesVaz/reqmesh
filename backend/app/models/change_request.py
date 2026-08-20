@@ -6,7 +6,7 @@ from typing import Optional
 
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class CRStatus(str, Enum):
@@ -92,15 +92,19 @@ class ChangeRequestCreate(BaseModel):
 
 
 class ChangeRequestUpdate(BaseModel):
+    # Lifecycle fields (`status`, `submitted_by`, `reviewed_by`,
+    # `approved_by`) are deliberately absent: they are owned by the dedicated
+    # `/execute` and `/reject` endpoints, which are `require_maintain`-gated.
+    # `extra="forbid"` makes a body that still sends them fail loudly (422)
+    # rather than silently drop them — a silent drop would leave the caller
+    # believing an approval succeeded.
+    model_config = ConfigDict(extra="forbid")
+
     title: Optional[str] = None
     description: Optional[str] = None
-    status: Optional[CRStatus] = None
     urgency: Optional[CRUrgency] = None
     rationale: Optional[str] = None
     changes: Optional[dict[str, dict[str, Any]]] = None
     creates: Optional[list[str]] = None
     affected_requirements: Optional[list[str]] = None
     affected_components: Optional[list[str]] = None
-    submitted_by: Optional[str] = None
-    reviewed_by: Optional[str] = None
-    approved_by: Optional[str] = None

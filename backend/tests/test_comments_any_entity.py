@@ -136,6 +136,41 @@ def test_invalid_entity_kind_is_422(client, project):
     assert res.status_code == 422
 
 
+# ── author is set from the session, never the body ───────────────────────────
+
+def _tok(username: str, role: str) -> dict:
+    from app.core import auth
+    auth.register_user(username, "Password123!", role)
+    return {"Authorization": f"Bearer {auth.create_token(username, role)}"}
+
+
+def test_comment_author_is_from_session_not_body(guest_client):
+    """A contributor posting `author: admin` gets 201 with the *stored* author
+    equal to their own username — attribution cannot be spoofed via the body."""
+    adm = _tok("adm", "admin")
+    assert guest_client.post("/api/projects", json={"id": "demo", "name": "Demo"},
+                             headers=adm).status_code == 201
+    assert guest_client.patch("/api/projects/demo", json={"naming": {"enforce": False}},
+                              headers=adm).status_code == 200
+    assert guest_client.post("/api/projects/demo/requirements",
+                             json={"id": "REQ-AUTHOR", "name": "REQ-AUTHOR"},
+                             headers=adm).status_code == 201
+
+    cont = _tok("cont", "contributor")
+    res = guest_client.post(
+        "/api/projects/demo/comments",
+        json={"entity_kind": "requirements", "entity_id": "REQ-AUTHOR",
+              "text": "spoof attempt", "author": "admin"},
+        headers=cont,
+    )
+    assert res.status_code == 201, res.text
+    assert res.json()["author"] == "cont"
+
+    from app.core.dependencies import get_store
+    stored = get_store("demo").get_item("comments", res.json()["id"])
+    assert stored["author"] == "cont"
+
+
 # ── same id, different collections ───────────────────────────────────────────
 
 

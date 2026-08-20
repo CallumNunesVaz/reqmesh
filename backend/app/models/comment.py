@@ -39,8 +39,8 @@ class Comment(BaseModel):
 class CommentCreate(BaseModel):
     entity_kind: str = ""
     entity_id: str = ""
-    author: str = ""
     text: str = ""
+    # `author` removed — set server-side from the session, never from the body.
 
     @model_validator(mode="after")
     def _resolve_target(self) -> "CommentCreate":

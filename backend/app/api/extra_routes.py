@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, Depends, File, Form, Request, Response, UploadFile
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from app.core.config import settings
 from app.core.dependencies import get_store, require_edit, require_maintain, require_admin
@@ -22,9 +22,10 @@ from app.core.ids import safe_id
 from app.services.meta_defs import normalize_baseline_defs
 from app.api._utils import sorted_by_modified, read_upload_capped, paginate, check_precondition, enforce_naming
 from app.models.change_request import ChangeRequestCreate, ChangeRequestUpdate
-from app.models.requirement import RequirementCreate
+from app.models.requirement import RequirementCreate, RequirementUpdate
 from app.services.change_requests import redline as compute_redline
 from app.models.risk import RiskCreate, RiskUpdate, CommentCreate, DecisionRecordCreate, DecisionRecordUpdate
+from app.services.errors import error_envelope
 from app.services.history import record_change
 from app.services.delete_guard import check_deletable
 from app.services.integrity import IntegrityChecker
@@ -37,6 +38,16 @@ logger = logging.getLogger(__name__)
 class CommentUpdate(BaseModel):
     resolved: Optional[bool] = None
     text: Optional[str] = None
+
+
+class _StrictRequirementUpdate(RequirementUpdate):
+    """`RequirementUpdate` with unknown keys forbidden.
+
+    Used only when executing a change request, where a proposed patch must be
+    validated before it is merged. `RequirementUpdate` itself stays permissive
+    on the normal requirement PUT path — tightening that is out of scope here.
+    """
+    model_config = ConfigDict(extra="forbid")
 
 
 class ReviewRequest(BaseModel):
@@ -179,6 +190,24 @@ def execute_change_request(
         proposed = changes.get(target_id, {})
         if not proposed:
             continue
+
+        # Validate the proposal before merging it into a requirement. Unknown
+        # keys and wrong-typed values are rejected here rather than silently
+        # dropped (a silent drop would "succeed" while writing nothing the
+        # caller asked for).
+        try:
+            _StrictRequirementUpdate.model_validate(proposed)
+        except ValidationError as exc:
+            errors = exc.errors()
+            raise HTTPException(
+                status_code=400,
+                detail=error_envelope(
+                    "invalid_change",
+                    f"{target_id}: {errors[0]['msg']}",
+                    requirement_id=target_id,
+                    errors=errors,
+                ),
+            ) from exc
 
         if target.get("creates"):
             safe_id(target_id)
@@ -367,7 +396,7 @@ def create_comment(project_id: str, data: CommentCreate, user: dict = Depends(re
     c = data.model_dump(mode="json")
     c["id"] = f"COMMENT-{uuid.uuid4().hex[:8].upper()}"
     c["resolved"] = False
-    c.setdefault("author", user.get("username", ""))
+    c["author"] = user.get("username", "")
     store = get_store(project_id)
     result = store.create_item("comments", c)
     record_change(store, result["id"], "create", None, result, user.get("username", ""))

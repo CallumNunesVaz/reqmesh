@@ -30,11 +30,11 @@ class TestBulkChangeRequests:
         self._mk(client, project, "CR-1")
         self._mk(client, project, "CR-2")
         res = client.post(f"/api/projects/{project}/change-requests/bulk",
-                          json={"ids": ["CR-1", "CR-2"], "updates": {"status": "approved"}})
+                          json={"ids": ["CR-1", "CR-2"], "updates": {"title": "Bulk updated"}})
         assert res.status_code == 200, res.text
         assert res.json()["updated"] == 2
         listed = client.get(f"/api/projects/{project}/change-requests").json()["items"]
-        assert {c["status"] for c in listed} == {"approved"}
+        assert {c["title"] for c in listed} == {"Bulk updated"}
 
     def test_bulk_delete_succeeds(self, client, project):
         self._mk(client, project, "CR-1")

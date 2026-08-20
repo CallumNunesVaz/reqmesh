@@ -318,3 +318,110 @@ def test_mutating_route_uses_correct_permission_dep(route, method):
         f"{method} {route.path} has dependencies {sorted(dep_names)} — "
         f"expected {guard}"
     )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# WRITE_TIER — the single source of truth for per-entity write tiers. Both the
+# single-item and bulk write endpoints must agree with it, so the two paths
+# cannot drift apart again.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+from app.core.dependencies import WRITE_TIER
+
+_TIER_LEVEL = {"propose": 1, "edit": 2}
+
+_GUARD_LEVEL = {
+    "require_edit": 1,            # propose tier
+    "require_maintain": 2,        # edit tier
+    "require_maintain_global": 2,
+    "require_admin": 3,
+}
+
+_KIND_TO_SEGMENT = {
+    "requirements": "requirements",
+    "components": "components",
+    "specifications": "specifications",
+    "verification_cases": "verification",
+    "risks": "risks",
+    "change_requests": "change-requests",
+    "comments": "comments",
+    "decisions": "decisions",
+}
+_SEGMENT_TO_KIND = {seg: kind for kind, seg in _KIND_TO_SEGMENT.items()}
+
+
+def _guard_names(route) -> set[str]:
+    names = set()
+    for d in getattr(route, "dependencies", []) or []:
+        name = _dep_name(d)
+        if name:
+            names.add(name)
+    if hasattr(route, "dependant") and route.dependant:
+        for dd in getattr(route.dependant, "dependencies", []) or []:
+            call = getattr(dd, "call", None)
+            if call and hasattr(call, "__name__"):
+                names.add(call.__name__)
+    return names
+
+
+def _write_routes_by_kind() -> dict[str, dict[str, list[set[str]]]]:
+    """Classify each entity write route as (kind, category) -> guard names.
+
+    ``category`` is ``single`` for the create/update endpoints, ``bulk`` for the
+    ``/bulk*`` endpoints, and ``action`` for deeper sub-routes (execute/reject/
+    cascade/review) that are stricter by design.
+    """
+    result: dict[str, dict[str, list[set[str]]]] = {
+        kind: {"single": [], "bulk": [], "action": []} for kind in _KIND_TO_SEGMENT
+    }
+    for r in _API_ROUTES:
+        methods = r.methods or set()
+        if not (methods & {"POST", "PUT", "PATCH"}):
+            continue
+        m = re.match(r"^/api/projects/\{[^}]+\}/(.*)$", r.path)
+        if not m:
+            continue
+        segs = m.group(1).split("/")
+        kind = _SEGMENT_TO_KIND.get(segs[0])
+        if kind is None:
+            continue
+        guards = _guard_names(r)
+        if any(s.startswith("bulk") for s in segs[1:]):
+            result[kind]["bulk"].append(guards)
+        elif len(segs) <= 2:
+            result[kind]["single"].append(guards)
+        else:
+            result[kind]["action"].append(guards)
+    return result
+
+
+def _max_guard_level(guards: set[str]) -> int:
+    return max((_GUARD_LEVEL.get(g, 0) for g in guards), default=0)
+
+
+def test_write_endpoints_agree_with_write_tier():
+    """Each entity kind's bulk and single-item write endpoints agree with WRITE_TIER.
+
+    The generic single-item create/update endpoints must be exactly the tier the
+    table records; bulk and sub-action endpoints must never be *looser* than it
+    (a bulk path that is stricter is safe, and is noted rather than widened).
+    """
+    by_kind = _write_routes_by_kind()
+    for kind, tier in WRITE_TIER.items():
+        assert kind in _KIND_TO_SEGMENT, f"WRITE_TIER key '{kind}' has no route segment"
+        level = _TIER_LEVEL[tier]
+        routes = by_kind[kind]
+
+        assert routes["single"], f"no single-item write endpoint found for {kind}"
+        for guards in routes["single"]:
+            assert _max_guard_level(guards) == level, (
+                f"{kind}: single-item write guard {sorted(guards)} "
+                f"disagrees with WRITE_TIER '{tier}'"
+            )
+
+        for category in ("bulk", "action"):
+            for guards in routes[category]:
+                assert _max_guard_level(guards) >= level, (
+                    f"{kind}: {category} guard {sorted(guards)} is looser "
+                    f"than WRITE_TIER '{tier}'"
+                )
