@@ -3,12 +3,20 @@ pytest==9.1.1
 httpx==0.28.1
 # Property-based coverage of every documented API operation
 # (tests/test_openapi_contract.py).
-# hypothesis is schemathesis's engine and was left unpinned, so a fresh CI
-# install picked up 6.165.x, which dropped the CanonicalSchema.is_satisfiable
-# that schemathesis 4.24.3 calls — 188 of 197 contract tests failed with
-# AttributeError while the same suite passed locally on 6.164.0. Same reasoning
-# as the starlette pin in requirements.txt: pin the transitive dependency whose
-# break we have actually been bitten by.
+# schemathesis pulls three dependencies with no upper bound, and a fresh CI
+# install resolved onto a jsonschema-rs that broke it: 188 of 197 contract tests
+# failed with
+#     AttributeError: 'builtins.CanonicalSchema' object has no attribute 'is_satisfiable'
+# while the same suite passed locally. `CanonicalSchema` is the PyO3 class from
+# jsonschema-rs (hence the `builtins` module in that message), schemathesis
+# calls `canonical.is_satisfiable()` at
+# specs/openapi/_hypothesis.py:1209, and 0.50.0 dropped the method that 0.49.2
+# has. Same reasoning as the starlette pin in requirements.txt: pin the
+# transitive dependency whose break we have actually been bitten by.
+jsonschema-rs==0.49.2
+# hypothesis is the engine underneath, pinned so a property-based suite's
+# behaviour does not move under us. It was NOT the cause of the failure above —
+# the first fix attempt pinned it and the suite failed identically.
 hypothesis==6.164.0
 schemathesis==4.24.3
 # The `sarif` extra is not optional: the security workflow runs bandit with
