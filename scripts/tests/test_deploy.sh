@@ -983,4 +983,30 @@ for dockerfile in "$REPO/Dockerfile.prod" "$REPO/backend/Dockerfile"; do
         "$(grep -cE '^[[:space:]]*openssh-client' "$dockerfile")" "1"
 done
 
+# ══════════════════════════════════════════════════════════════════════════════
+section "production image supply-chain hygiene"
+# ══════════════════════════════════════════════════════════════════════════════
+# Four defects in the published image: an unpinned remote script piped into a
+# shell, git config written where the runtime user cannot read it, build args
+# that no ARG/ENV could ever set, and two dead dependencies.
+DF="$REPO/Dockerfile.prod"
+REQ="$REPO/backend/requirements.txt"
+
+# The only thing that used to pipe a remote script into a shell was the tectonic
+# installer; nothing else in the image may do it either.
+check "the Dockerfile pipes nothing into a shell" \
+      "$(grep -cE '\|\s*(sh|bash)\b' "$DF")" "0"
+# The tectonic download is verified against a recorded SHA-256, so a wrong asset
+# or a bad pin fails the build rather than baking in unknown bytes.
+check "tectonic is checksum-verified" "$(grep -c 'sha256sum -c' "$DF")" "1"
+check "the tectonic checksum is recorded" \
+      "$(grep -cE 'ARG TECTONIC_SHA256=[0-9a-f]{64}' "$DF")" "1"
+# --system writes /etc/gitconfig (world-readable, so the `reqmesh` user can read
+# it); --global landed in /root/.gitconfig, which the runtime user never sees.
+check "git config is system-wide" "$(grep -c 'git config --system' "$DF")" "3"
+check "no git config --global remains" "$(grep -c 'git config --global' "$DF")" "0"
+# Neither dependency has a single reference in backend/app/, so both pins are dead.
+check "requirements.txt drops slowapi and Jinja2" \
+      "$(grep -cE 'slowapi|Jinja2' "$REQ")" "0"
+
 finish

@@ -12,8 +12,6 @@ ruamel.yaml==0.19.1
 python-multipart==0.0.32
 bcrypt==5.0.0
 PyJWT==2.13.0
-Jinja2==3.1.6
 weasyprint==69.0
 click==8.4.2
 openpyxl==3.1.5
-slowapi==0.1.10

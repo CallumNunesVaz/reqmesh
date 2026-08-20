@@ -51,8 +51,16 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-reco
     && rm -rf /var/lib/apt/lists/*
 
 # tectonic: self-contained LaTeX engine for the primary (LaTeX) PDF report path.
-RUN curl --proto '=https' --tlsv1.2 -fsSL https://drop-sh.fullyjustified.net | sh \
-    && mv tectonic /usr/local/bin/tectonic
+# Pinned to a release tarball and verified against a recorded SHA-256; the old
+# installer piped an unpinned remote script straight into a shell. Architecture
+# is x86_64 only — there is no arm64 build today.
+ARG TECTONIC_VERSION=0.17.0
+ARG TECTONIC_SHA256=1a715688baf591e650c8aeb160ae934e181685eecbb38b317de30b269ac5d606
+RUN curl --proto '=https' --tlsv1.2 -fsSL -o /tmp/tectonic.tar.gz \
+      "https://github.com/tectonic-typesetting/tectonic/releases/download/tectonic%40${TECTONIC_VERSION}/tectonic-${TECTONIC_VERSION}-x86_64-unknown-linux-gnu.tar.gz" \
+ && echo "${TECTONIC_SHA256}  /tmp/tectonic.tar.gz" | sha256sum -c - \
+ && tar -xzf /tmp/tectonic.tar.gz -C /usr/local/bin tectonic \
+ && rm /tmp/tectonic.tar.gz
 
 # The cache lives in the *image*, not on the /data volume.
 #
@@ -96,9 +104,9 @@ COPY LICENSE THIRD_PARTY_NOTICES.md /app/
 RUN mkdir -p /data/projects && \
     groupadd -r reqmesh && useradd -r -g reqmesh -d /app reqmesh && \
     chown -R reqmesh:reqmesh /app /data /opt/tectonic-cache && \
-    git config --global user.email "${GIT_USER_EMAIL:-reqmesh@localhost}" && \
-    git config --global user.name "${GIT_USER_NAME:-reqmesh}" && \
-    git config --global init.defaultBranch main
+    git config --system user.email "reqmesh@localhost" && \
+    git config --system user.name "reqmesh" && \
+    git config --system init.defaultBranch main
 
 EXPOSE 8000
 
