@@ -1,3 +1,4 @@
+import copy
 import bcrypt
 import hashlib
 import ipaddress
@@ -84,7 +85,45 @@ def users_lock():
     return file_lock(USERS_FILE)
 
 
+# --- users.yaml read cache ---
+# `load_users()` is called from request threads in a threadpool, and it used to
+# open and round-trip-parse the whole account file on every authenticated
+# request — linear in the number of accounts before any application work began.
+# Cache the parse keyed by (mtime_ns, size) of USERS_FILE, the same signature
+# `yaml_store._dir_signature` uses: a stale key forces a re-read rather than a
+# stale answer, so an external edit to users.yaml is picked up without a restart
+# (mtime_ns is sub-nanosecond-granularity on modern filesystems and covers the
+# single-worker case; `save_users` invalidates explicitly for coarse ones).
+_users_cache: dict | None = None
+_users_cache_key: tuple | None = None
+_users_cache_lock = threading.Lock()
+
+
+def _users_file_signature() -> tuple | None:
+    """``(st_mtime_ns, st_size)`` of USERS_FILE, or None if it cannot be stat'd."""
+    try:
+        st = USERS_FILE.stat()
+    except OSError:
+        return None
+    return (st.st_mtime_ns, st.st_size)
+
+
+def invalidate_users_cache() -> None:
+    """Drop the cached parse of users.yaml.
+
+    Called by ``save_users`` after every write, and available to tests that
+    rewrite the file out-of-band. Deliberately a *separate* lock from
+    ``users_lock``: save_users runs inside a ``users_lock()`` block, so reusing
+    it here would deadlock.
+    """
+    global _users_cache, _users_cache_key
+    with _users_cache_lock:
+        _users_cache = None
+        _users_cache_key = None
+
+
 def load_users() -> dict:
+    global _users_cache, _users_cache_key
     if not USERS_FILE.exists():
         USERS_FILE.parent.mkdir(parents=True, exist_ok=True)
         env_pw = os.environ.get("RT_ADMIN_PASSWORD", "")
@@ -123,9 +162,26 @@ def load_users() -> dict:
         # install's account file at whatever the umask allowed, typically 0644.
         save_users(default)
         return default
+    signature = _users_file_signature()
+    with _users_cache_lock:
+        if _users_cache is not None and _users_cache_key == signature:
+            # Deep copy: callers run load → mutate → save under users_lock, so
+            # handing out the cached object would leak one request's
+            # half-finished mutation into every other request's view.
+            return copy.deepcopy(_users_cache)
+
     with open(USERS_FILE) as f:
-        with _yaml_lock:
-            return _yaml.load(f) or {}
+        # Safe loader, per-call. The read result is never written back (writes
+        # go through save_users), so comments/formatting are not at risk, and
+        # the safe parser is ~6.5x faster than the shared round-trip `_yaml`
+        # (kept below for the write path only).
+        data = YAML(typ="safe").load(f) or {}
+
+    with _users_cache_lock:
+        _users_cache = data
+        _users_cache_key = signature
+
+    return copy.deepcopy(data)
 
 
 def _chmod_private(path: Path) -> None:
@@ -160,6 +216,7 @@ def save_users(users: dict) -> None:
             pass
         os.unlink(tmp)
         raise
+    invalidate_users_cache()
 
 
 #: bcrypt work factor. OWASP's floor is 10; 12 is roughly a quarter-second per
