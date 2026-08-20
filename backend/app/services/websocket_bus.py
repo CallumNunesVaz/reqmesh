@@ -14,7 +14,7 @@ from fastapi import WebSocket, WebSocketDisconnect
 
 from app.core.auth import GUEST_USER, decode_token, get_user_from_token
 from app.core.config import settings
-from app.core.dependencies import PERMISSION_LEVELS, _user_permission_level
+from app.core.dependencies import PERMISSION_LEVELS, user_permission_level
 from app.services.event_bus import get_event_bus
 
 logger = logging.getLogger(__name__)
@@ -63,7 +63,7 @@ async def websocket_handler(websocket: WebSocket, project_id: str, token: str | 
     # Same per-project permission check the HTTP routes get. Below the read tier
     # ("view") the subscriber cannot read the project, so refuse rather than
     # accept and then feed it mutations it has no business seeing.
-    if _user_permission_level(user, project_id) < PERMISSION_LEVELS["view"]:
+    if user_permission_level(user, project_id) < PERMISSION_LEVELS["view"]:
         await websocket.close(code=1008)
         return
 
