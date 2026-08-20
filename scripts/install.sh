@@ -329,12 +329,18 @@ non_interactive() {
     #
     # An explicit value always wins. A carried-over value is kept only while it
     # still fits the deployment, so a custom host survives an unrelated re-run.
+    # BASE_URL_PINNED distinguishes "the operator chose this URL" from "the
+    # installer derived it". Only the former is written into .env and pinned on
+    # the app; a derived URL stays CFG-internal (summary, proxy config, health
+    # check) and leaves the admin-editable base_url field unlocked.
     if [ -n "${RT_BASE_URL:-}" ]; then
         save_cfg "BASE_URL" "$RT_BASE_URL"
+        save_cfg "BASE_URL_PINNED" "true"
     else
         _prev_base="$(prev_env RT_BASE_URL '')"
         if [ -n "$_prev_base" ] && base_url_fits_shape "$_prev_base"; then
             save_cfg "BASE_URL" "$_prev_base"
+            save_cfg "BASE_URL_PINNED" "true"
         else
             _derived="$(derive_base_url)"
             if [ -n "$_prev_base" ] && [ "$_prev_base" != "$_derived" ]; then
@@ -343,6 +349,7 @@ non_interactive() {
                 info "  now $_derived"
             fi
             save_cfg "BASE_URL" "$_derived"
+            save_cfg "BASE_URL_PINNED" "false"
         fi
     fi
     # Which image tag to deploy: the newest published release unless pinned.
@@ -378,7 +385,10 @@ non_interactive() {
     [ -z "$_admin_pw" ] && _admin_pw="$(rand_secret 12)"
     save_cfg "ADMIN_PASSWORD" "$_admin_pw"
     save_cfg "REQUIRE_AUTH" "${RT_REQUIRE_AUTH:-$(prev_env RT_REQUIRE_AUTH 'true')}"
-    save_cfg "SELF_REG" "${RT_ALLOW_SELF_REGISTRATION:-$(prev_env RT_ALLOW_SELF_REGISTRATION 'false')}"
+    # allow_self_registration is admin-editable, so it is recorded (and later
+    # emitted) only when the operator chose it — not defaulted to the profile's
+    # value, which would pin it and grey the field out in the admin UI.
+    save_cfg "SELF_REG" "${RT_ALLOW_SELF_REGISTRATION:-$(prev_env RT_ALLOW_SELF_REGISTRATION '')}"
     # A Secure cookie is never sent over plain HTTP, so hardcoding `true` here
     # produced a deployment where login returned 200 and every request after it
     # returned 401 — the session cookie was set and then never sent back. The
@@ -401,13 +411,13 @@ non_interactive() {
             "No TLS configured — cookies will not be marked Secure. Do not expose this deployment to the internet."
     fi
     save_cfg "TLS_ACTIVE" "$_tls_active"
-    save_cfg "REQUIRE_EMAIL_VERIFICATION" "${RT_REQUIRE_EMAIL_VERIFICATION:-$(prev_env RT_REQUIRE_EMAIL_VERIFICATION 'false')}"
+    save_cfg "REQUIRE_EMAIL_VERIFICATION" "${RT_REQUIRE_EMAIL_VERIFICATION:-$(prev_env RT_REQUIRE_EMAIL_VERIFICATION '')}"
     save_cfg "SMTP_HOST" "${RT_SMTP_HOST:-$(prev_env RT_SMTP_HOST '')}"
-    save_cfg "SMTP_PORT" "${RT_SMTP_PORT:-$(prev_env RT_SMTP_PORT '587')}"
+    save_cfg "SMTP_PORT" "${RT_SMTP_PORT:-$(prev_env RT_SMTP_PORT '')}"
     save_cfg "SMTP_USERNAME" "${RT_SMTP_USERNAME:-$(prev_env RT_SMTP_USERNAME '')}"
     save_cfg "SMTP_PASSWORD" "${RT_SMTP_PASSWORD:-$(prev_env RT_SMTP_PASSWORD '')}"
-    save_cfg "SMTP_FROM" "${RT_SMTP_FROM:-$(prev_env RT_SMTP_FROM 'reqmesh@localhost')}"
-    save_cfg "SMTP_USE_TLS" "${RT_SMTP_USE_TLS:-$(prev_env RT_SMTP_USE_TLS 'true')}"
+    save_cfg "SMTP_FROM" "${RT_SMTP_FROM:-$(prev_env RT_SMTP_FROM '')}"
+    save_cfg "SMTP_USE_TLS" "${RT_SMTP_USE_TLS:-$(prev_env RT_SMTP_USE_TLS '')}"
     save_cfg "GIT_REMOTE_URL" "${RT_GIT_REMOTE_URL:-$(prev_env RT_GIT_REMOTE_URL '')}"
     save_cfg "GIT_AUTOCOMMIT" "${RT_GIT_AUTOCOMMIT:-$(prev_env RT_GIT_AUTOCOMMIT 'true')}"
     save_cfg "GIT_PUSH_ON_COMMIT" "${RT_GIT_PUSH_ON_COMMIT:-$(prev_env RT_GIT_PUSH_ON_COMMIT 'false')}"
@@ -421,7 +431,7 @@ non_interactive() {
     save_cfg "REPORT_DOCUMENT_TITLE" "${RT_REPORT_DOCUMENT_TITLE:-$(prev_env RT_REPORT_DOCUMENT_TITLE '')}"
     save_cfg "REPORT_LOGO_URL" "${RT_REPORT_LOGO_URL:-$(prev_env RT_REPORT_LOGO_URL '')}"
     save_cfg "SEED_DEMO" "${RT_SEED_DEMO:-$(prev_env RT_SEED_DEMO 'true')}"
-    save_cfg "OFFLINE_MODE" "${RT_OFFLINE_MODE:-$(prev_env RT_OFFLINE_MODE 'false')}"
+    save_cfg "OFFLINE_MODE" "${RT_OFFLINE_MODE:-$(prev_env RT_OFFLINE_MODE '')}"
     save_cfg "INSTALL_DIR" "${REQMESH_INSTALL_DIR:-/opt/reqmesh}"
     save_cfg "PROXY_TRUSTED_CIDR" "${RT_PROXY_TRUSTED_CIDR:-127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}"
     save_cfg "UPDATE_CONTROL_DIR" "${RT_UPDATE_CONTROL_DIR:-/control}"

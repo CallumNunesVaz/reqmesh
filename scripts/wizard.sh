@@ -532,12 +532,17 @@ p7_integrations() {
         save_cfg "SMTP_FROM" "$(gum_input "From address" "${CFG[SMTP_FROM]:-reqmesh@localhost}" "reqmesh@example.com")"
         save_cfg "SMTP_USE_TLS" "true"
     else
+        # Empty, not defaults. `emit_overridable_env` writes a line only for a
+        # non-empty value, and any RT_* that reaches the environment is seen by
+        # `is_env_locked` as operator-pinned — so saving 587/localhost/true here
+        # would grey out the SMTP fields in Settings on an install that
+        # explicitly declined to configure SMTP.
         save_cfg "SMTP_HOST" ""
-        save_cfg "SMTP_PORT" "587"
+        save_cfg "SMTP_PORT" ""
         save_cfg "SMTP_USERNAME" ""
         save_cfg "SMTP_PASSWORD" ""
-        save_cfg "SMTP_FROM" "reqmesh@localhost"
-        save_cfg "SMTP_USE_TLS" "true"
+        save_cfg "SMTP_FROM" ""
+        save_cfg "SMTP_USE_TLS" ""
     fi
 
     # Git remote
@@ -635,7 +640,10 @@ p8_paths() {
         save_cfg "HOST" "127.0.0.1"  # Proxy handles external binding
     fi
 
-    save_cfg "OFFLINE_MODE" "false"
+    # Empty, not "false": the wizard never asks about offline mode, and writing
+    # a value the operator did not choose pins RT_OFFLINE_MODE and greys the
+    # toggle out in Settings. The app's own default is false either way.
+    save_cfg "OFFLINE_MODE" ""
     save_cfg "CORS_ORIGINS" ""
     save_cfg "UPDATE_CONTROL_DIR" "${CFG[UPDATE_CONTROL_DIR]:-/control}"
 }

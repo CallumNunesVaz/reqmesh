@@ -1043,6 +1043,55 @@ prev_env() {
     fi
 }
 
+# ── Overridable runtime settings ────────────────────────────────────────────────
+# settings_store.OVERRIDABLE is the set of keys an admin can edit at runtime, and
+# `is_env_locked` treats any RT_<KEY> present in the environment as pinned — an
+# empty `RT_SMTP_HOST=` still counts as present and still locks the field. The
+# installer therefore emits one of these only when the operator actually chose a
+# value: install.sh records the choice in CFG (empty when unset), and this
+# function prints the RT_* line only for a non-empty value. Emitting a defaulted
+# value would render the admin Settings page read-only, which is the defect this
+# guards against (see test_compose_overridable.sh).
+#
+# base_url is the exception in form, not intent: the installer always derives a
+# base URL for its own summary/proxy/health output, so CFG[BASE_URL] is never
+# empty. BASE_URL_PINNED records whether the operator chose it explicitly (or a
+# previous install pinned it), and only then is RT_BASE_URL emitted.
+emit_overridable_env() {
+    [ "${CFG[BASE_URL_PINNED]:-false}" = "true" ] \
+        && printf 'RT_BASE_URL=%s\n' "${CFG[BASE_URL]:-}"
+
+    [ -n "${CFG[SELF_REG]:-}" ] \
+        && printf 'RT_ALLOW_SELF_REGISTRATION=%s\n' "${CFG[SELF_REG]}"
+    [ -n "${CFG[REQUIRE_EMAIL_VERIFICATION]:-}" ] \
+        && printf 'RT_REQUIRE_EMAIL_VERIFICATION=%s\n' "${CFG[REQUIRE_EMAIL_VERIFICATION]}"
+    [ -n "${CFG[OFFLINE_MODE]:-}" ] \
+        && printf 'RT_OFFLINE_MODE=%s\n' "${CFG[OFFLINE_MODE]}"
+    [ -n "${CFG[SMTP_HOST]:-}" ] \
+        && printf 'RT_SMTP_HOST=%s\n' "${CFG[SMTP_HOST]}"
+    [ -n "${CFG[SMTP_PORT]:-}" ] \
+        && printf 'RT_SMTP_PORT=%s\n' "${CFG[SMTP_PORT]}"
+    [ -n "${CFG[SMTP_USERNAME]:-}" ] \
+        && printf 'RT_SMTP_USERNAME=%s\n' "${CFG[SMTP_USERNAME]}"
+    [ -n "${CFG[SMTP_PASSWORD]:-}" ] \
+        && printf 'RT_SMTP_PASSWORD=%s\n' "${CFG[SMTP_PASSWORD]}"
+    [ -n "${CFG[SMTP_FROM]:-}" ] \
+        && printf 'RT_SMTP_FROM=%s\n' "${CFG[SMTP_FROM]}"
+    [ -n "${CFG[SMTP_USE_TLS]:-}" ] \
+        && printf 'RT_SMTP_USE_TLS=%s\n' "${CFG[SMTP_USE_TLS]}"
+    [ -n "${CFG[REPORT_COMPANY_NAME]:-}" ] \
+        && printf 'RT_REPORT_COMPANY_NAME=%s\n' "${CFG[REPORT_COMPANY_NAME]}"
+    [ -n "${CFG[REPORT_DOCUMENT_TITLE]:-}" ] \
+        && printf 'RT_REPORT_DOCUMENT_TITLE=%s\n' "${CFG[REPORT_DOCUMENT_TITLE]}"
+    [ -n "${CFG[REPORT_LOGO_URL]:-}" ] \
+        && printf 'RT_REPORT_LOGO_URL=%s\n' "${CFG[REPORT_LOGO_URL]}"
+
+    # The trailing `&& printf` above short-circuits to non-zero when the key is
+    # unset, which under `set -e` would abort a caller that assigns our output
+    # (`overrides="$(emit_overridable_env)"`). Succeed explicitly.
+    return 0
+}
+
 # ── Backups ────────────────────────────────────────────────────────────────────
 # backup_file <path> — copy to <path>.bak.<ts>, elevating if needed.
 #

@@ -199,7 +199,8 @@ generate_configs() {
     # `cat >` into a root-owned INSTALL_DIR and then sudo-moved it, so on a
     # clean host it died with "/opt/reqmesh/.env.tmp: Permission denied" —
     # the same defect the Docker path had.
-    write_root_file "$env_file" 600 << EOF
+    local content
+    content="$(cat << EOF
 # reqmesh environment — generated $(date -u +"%Y-%m-%dT%H:%M:%SZ")
 #
 # The REQMESH_* lines record the installer's own choices so a re-run rebuilds
@@ -228,13 +229,9 @@ RT_STATE_DIR=$STATE_DIR
 # them again, or falls back to the degraded renderer if it cannot.
 TECTONIC_CACHE_DIR=$(dirname "$data_root")/.tectonic-cache
 RT_STATIC_DIR=${CFG[STATIC_DIR]:-$INSTALL_DIR/frontend/dist}
-RT_BASE_URL=${CFG[BASE_URL]:-http://localhost:8000}
 RT_COOKIE_SECURE=${CFG[COOKIE_SECURE]:-true}
 RT_REQUIRE_AUTH=${CFG[REQUIRE_AUTH]:-true}
-RT_ALLOW_SELF_REGISTRATION=${CFG[SELF_REG]:-false}
-RT_REQUIRE_EMAIL_VERIFICATION=${CFG[REQUIRE_EMAIL_VERIFICATION]:-false}
 RT_SEED_DEMO=${CFG[SEED_DEMO]:-true}
-RT_OFFLINE_MODE=${CFG[OFFLINE_MODE]:-false}
 RT_GIT_AUTOCOMMIT=${CFG[GIT_AUTOCOMMIT]:-true}
 RT_GIT_REMOTE_URL=${CFG[GIT_REMOTE_URL]:-}
 RT_GIT_PUSH_ON_COMMIT=${CFG[GIT_PUSH_ON_COMMIT]:-false}
@@ -242,18 +239,20 @@ RT_GIT_PUSH_INTERVAL_MINUTES=${CFG[GIT_PUSH_INTERVAL_MINUTES]:-0}
 RT_GIT_COMMIT_SCHEDULE=${CFG[GIT_COMMIT_SCHEDULE]:-every_change}
 RT_GIT_COMMIT_INTERVAL_HOURS=${CFG[GIT_COMMIT_INTERVAL_HOURS]:-0}
 RT_GIT_COMMIT_CHANGES_THRESHOLD=${CFG[GIT_COMMIT_CHANGES_THRESHOLD]:-0}
-RT_SMTP_HOST=${CFG[SMTP_HOST]:-}
-RT_SMTP_PORT=${CFG[SMTP_PORT]:-587}
-RT_SMTP_USERNAME=${CFG[SMTP_USERNAME]:-}
-RT_SMTP_PASSWORD=${CFG[SMTP_PASSWORD]:-}
-RT_SMTP_FROM=${CFG[SMTP_FROM]:-reqmesh@localhost}
-RT_SMTP_USE_TLS=${CFG[SMTP_USE_TLS]:-true}
-RT_REPORT_COMPANY_NAME=${CFG[REPORT_COMPANY_NAME]:-}
-RT_REPORT_DOCUMENT_TITLE=${CFG[REPORT_DOCUMENT_TITLE]:-}
-RT_REPORT_LOGO_URL=${CFG[REPORT_LOGO_URL]:-}
 RT_ALLOWED_HOSTS=${CFG[ALLOWED_HOSTS]:-}
 RT_PROXY_TRUSTED_CIDR=$proxy_cidr
 EOF
+)"
+    # Admin-editable settings are emitted only when the operator chose a value,
+    # so the rest stay editable from the Settings page.
+    local overrides
+    overrides="$(emit_overridable_env)"
+    if [ -n "$overrides" ]; then
+        content="$content
+$overrides"
+    fi
+
+    printf '%s\n' "$content" | write_root_file "$env_file" 600
     sudo chown "$REQMESH_USER:$REQMESH_GROUP" "$env_file" 2>/dev/null || true
 
     # Tectonic cache directory

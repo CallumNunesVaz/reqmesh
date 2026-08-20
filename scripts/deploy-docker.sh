@@ -19,7 +19,8 @@ generate_env() {
     # This file holds RT_SECRET, the admin password and the SMTP password, so it
     # is created 0600 before any content is written — see write_root_file, which
     # also supplies the sudo this path previously lacked entirely.
-    write_root_file "$env_file" 600 << EOF
+    local content
+    content="$(cat << EOF
 # reqmesh environment — generated $(date -u +"%Y-%m-%dT%H:%M:%SZ")
 #
 # The REQMESH_* lines below are the installer's own choices, not application
@@ -37,17 +38,13 @@ REQMESH_DATA_ROOT=${CFG[DATA_ROOT]:-/data/projects}
 RT_PROFILE=${CFG[PROFILE]:-team}
 RT_SECRET=${CFG[RT_SECRET]}
 RT_ADMIN_PASSWORD=${CFG[ADMIN_PASSWORD]}
-RT_BASE_URL=${CFG[BASE_URL]}
 RT_DATA_HOST=$(dirname "${CFG[DATA_ROOT]:-/data/projects}")
 RT_UID=$DATA_UID
 RT_GID=$DATA_GID
 RT_BIND=$(effective_bind)
 RT_COOKIE_SECURE=${CFG[COOKIE_SECURE]:-true}
 RT_REQUIRE_AUTH=${CFG[REQUIRE_AUTH]:-true}
-RT_ALLOW_SELF_REGISTRATION=${CFG[SELF_REG]:-false}
-RT_REQUIRE_EMAIL_VERIFICATION=${CFG[REQUIRE_EMAIL_VERIFICATION]:-false}
 RT_SEED_DEMO=${CFG[SEED_DEMO]:-true}
-RT_OFFLINE_MODE=${CFG[OFFLINE_MODE]:-false}
 RT_GIT_AUTOCOMMIT=${CFG[GIT_AUTOCOMMIT]:-true}
 RT_GIT_REMOTE_URL=${CFG[GIT_REMOTE_URL]:-}
 RT_GIT_PUSH_ON_COMMIT=${CFG[GIT_PUSH_ON_COMMIT]:-false}
@@ -55,20 +52,22 @@ RT_GIT_PUSH_INTERVAL_MINUTES=${CFG[GIT_PUSH_INTERVAL_MINUTES]:-0}
 RT_GIT_COMMIT_SCHEDULE=${CFG[GIT_COMMIT_SCHEDULE]:-every_change}
 RT_GIT_COMMIT_INTERVAL_HOURS=${CFG[GIT_COMMIT_INTERVAL_HOURS]:-0}
 RT_GIT_COMMIT_CHANGES_THRESHOLD=${CFG[GIT_COMMIT_CHANGES_THRESHOLD]:-0}
-RT_SMTP_HOST=${CFG[SMTP_HOST]:-}
-RT_SMTP_PORT=${CFG[SMTP_PORT]:-587}
-RT_SMTP_USERNAME=${CFG[SMTP_USERNAME]:-}
-RT_SMTP_PASSWORD=${CFG[SMTP_PASSWORD]:-}
-RT_SMTP_FROM=${CFG[SMTP_FROM]:-reqmesh@localhost}
-RT_SMTP_USE_TLS=${CFG[SMTP_USE_TLS]:-true}
-RT_REPORT_COMPANY_NAME=${CFG[REPORT_COMPANY_NAME]:-}
-RT_REPORT_DOCUMENT_TITLE=${CFG[REPORT_DOCUMENT_TITLE]:-}
-RT_REPORT_LOGO_URL=${CFG[REPORT_LOGO_URL]:-}
 RT_CORS_ORIGINS=${CFG[CORS_ORIGINS]:-[]}
 RT_ALLOWED_HOSTS=${CFG[ALLOWED_HOSTS]:-}
 GIT_USER_NAME=${CFG[GIT_USER_NAME]:-reqmesh}
 GIT_USER_EMAIL=${CFG[GIT_USER_EMAIL]:-reqmesh@localhost}
 EOF
+)"
+    # Admin-editable settings are emitted only when the operator chose a value,
+    # so the rest stay editable from the Settings page.
+    local overrides
+    overrides="$(emit_overridable_env)"
+    if [ -n "$overrides" ]; then
+        content="$content
+$overrides"
+    fi
+
+    printf '%s\n' "$content" | write_root_file "$env_file" 600
 
     success "Environment written to $env_file (mode 0600)"
 }
