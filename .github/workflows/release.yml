@@ -24,11 +24,13 @@ jobs:
   ci:
     name: CI
     uses: ./.github/workflows/ci.yml
+    timeout-minutes: 30
 
   bundle:
     name: Build bundle & publish release
     needs: ci
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -83,6 +85,7 @@ jobs:
   docker:
     name: Build & push Docker image
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: bundle   # the release must exist before we attach the image archive
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
