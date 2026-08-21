@@ -427,27 +427,11 @@ p5_profile() {
     local profile=$(gum_choose "Security profile" "team" "hardened" "personal")
     save_cfg "PROFILE" "$profile"
 
-    # Derive defaults from profile
-    case "$profile" in
-        personal)
-            save_cfg "REQUIRE_AUTH" "false"
-            save_cfg "SELF_REG" "true"
-            save_cfg "COOKIE_SECURE" "false"
-            save_cfg "REQUIRE_EMAIL_VERIFICATION" "false"
-            ;;
-        team)
-            save_cfg "REQUIRE_AUTH" "true"
-            save_cfg "SELF_REG" "false"
-            save_cfg "COOKIE_SECURE" "true"
-            save_cfg "REQUIRE_EMAIL_VERIFICATION" "false"
-            ;;
-        hardened)
-            save_cfg "REQUIRE_AUTH" "true"
-            save_cfg "SELF_REG" "false"
-            save_cfg "COOKIE_SECURE" "true"
-            save_cfg "REQUIRE_EMAIL_VERIFICATION" "true"
-            ;;
-    esac
+    # The profile preset itself implies REQUIRE_AUTH, SELF_REG, COOKIE_SECURE and
+    # REQUIRE_EMAIL_VERIFICATION (config.py applies PROFILE_PRESETS[profile] to
+    # any field the operator did not set). Writing them here adds nothing except
+    # pinning them, which removes the fields from the Settings UI. Only the two
+    # choices the user makes later (p6) should be pinned.
 
     # Override cookie_secure for HTTP-only deployments.
     #

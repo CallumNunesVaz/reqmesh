@@ -102,7 +102,7 @@ check "PROXY"  "$(cfg_get PROXY "$B")"  "caddy"
 check "TLS"    "$(cfg_get TLS "$B")"    "internal"
 lan="$(cfg_get LAN_IP "$B")"
 check "BASE_URL is https on the LAN IP" "$(cfg_get BASE_URL "$B")" "https://$lan"
-check "COOKIE_SECURE on for TLS" "$(cfg_get COOKIE_SECURE "$B")" "true"
+if grep -q '^COOKIE_SECURE=' <<<"$B"; then bad "COOKIE_SECURE pinned despite active TLS"; else ok "COOKIE_SECURE not pinned for TLS (preset applies)"; fi
 if [[ "$lan" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then ok "LAN_IP is an address ($lan)"; else bad "LAN_IP bogus: [$lan]"; fi
 
 section "the Caddyfile this config actually produces"
