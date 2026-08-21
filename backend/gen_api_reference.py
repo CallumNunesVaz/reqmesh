@@ -137,7 +137,7 @@ def _section(path: str) -> str:
     Paths arrive from ``app.openapi()`` with their real parameter names intact
     (``{project_id}``, ``{req_id}``, …). Matching is on those names directly.
     """
-    if path in ("/health", "/version"):
+    if path in ("/health", "/ready", "/version"):
         return "Health & version"
     if path == "/api/version":
         return "Health & version"

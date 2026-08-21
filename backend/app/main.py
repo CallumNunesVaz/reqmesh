@@ -6,6 +6,8 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import anyio.to_thread
+
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -498,6 +500,39 @@ app.include_router(collab_router, prefix="/api")
 @app.get("/health")
 async def health():
     return {"status": "ok", "version": get_version(), "profile": settings.profile}
+
+
+def _threadpool_snapshot() -> dict:
+    """Read the sync threadpool's saturation counters without submitting work.
+
+    Starlette runs sync endpoints (the CPU-bound routes) on anyio's worker
+    threadpool, so its limiter is the thing that actually saturates under load.
+    ``total_tokens`` is the pool's capacity and ``borrowed_tokens`` is how many
+    threads are currently in flight; ``statistics().tasks_waiting`` is the queue
+    of tasks waiting for a free thread. Reading these is a pure counter read —
+    it never blocks and never enqueues.
+    """
+    limiter = anyio.to_thread.current_default_thread_limiter()
+    return {
+        "capacity": int(limiter.total_tokens),
+        "busy": int(limiter.borrowed_tokens),
+        "queued": int(limiter.statistics().tasks_waiting),
+    }
+
+
+@app.get("/ready")
+async def ready():
+    pool = _threadpool_snapshot()
+    saturated = pool["capacity"] > 0 and pool["busy"] >= pool["capacity"]
+    return JSONResponse(
+        status_code=503 if saturated else 200,
+        content={
+            "ready": not saturated,
+            "reason": "threadpool-saturated" if saturated else "",
+            "threadpool": pool,
+            "version": get_version(),
+        },
+    )
 
 
 @app.get("/version")
