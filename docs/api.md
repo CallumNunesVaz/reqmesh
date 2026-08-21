@@ -316,6 +316,7 @@ operation; a path served by several methods therefore appears several times.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
+| POST | `/api/projects/{project_id}/parameters/{owner_id}/rename` | Rename a parameter |
 | GET | `/api/projects/{project_id}/{kind}/next-id` | Next free id for a kind |
 
 ## Notes
@@ -324,3 +325,4 @@ Routes below accept an untyped JSON body (`data: dict`) and so carry no request 
 
 - `POST /api/projects/{project_id}/requirements/{req_id}/rename`
 - `POST /api/projects/{project_id}/components/{component_id}/rename`
+- `POST /api/projects/{project_id}/parameters/{owner_id}/rename`

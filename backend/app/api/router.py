@@ -22,7 +22,7 @@ from app.services.meta_defs import (
     normalize_system_states,
     serialize_meta_defs,
 )
-from app.services.rename import matches_scheme, rename_requirement, suggest_id
+from app.services.rename import matches_scheme, rename_parameter, rename_requirement, suggest_id
 from app.services.naming import KINDS, ids_for, next_id as generate_next_id
 from app.api._utils import check_precondition, enforce_naming, paginate
 from app.models.specification import SpecificationCreate, SpecificationUpdate
@@ -390,6 +390,32 @@ def rename_requirement_route(project_id: str, req_id: str, data: dict,
             store, req["id"], new_id, user.get("username", ""),
             cascade=cascade, dry_run=dry_run,
         )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return result
+
+
+@router.post("/projects/{project_id}/parameters/{owner_id}/rename", summary="Rename a parameter")
+def rename_parameter_route(project_id: str, owner_id: str, data: dict,
+                           user: dict = Depends(require_maintain)):
+    """Rename a parameter, repointing every reference project-wide.
+
+    A parameter is addressed by its owner (a requirement or component id) and
+    its current name. Every ``owner.old`` / bare-name reference in expressions
+    and every ``[[owner.old]]`` / ``owner.old`` mention in text is rewritten,
+    the way the requirement and component renames rewrite their references.
+    """
+    store = get_store(project_id)
+    owner_id = safe_id(owner_id, "owner id")
+
+    old_name = (data.get("old_name") or "").strip()
+    new_name = (data.get("new_name") or "").strip()
+    if not old_name or not new_name:
+        raise HTTPException(status_code=400, detail="old_name and new_name are required")
+
+    try:
+        result = rename_parameter(store, owner_id, old_name, new_name,
+                                  user.get("username", ""))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return result
