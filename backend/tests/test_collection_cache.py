@@ -1,10 +1,11 @@
 """The collection cache bound: it is honoured, LRU still evicts the right
-entry, an invalid bound is rejected, and a benchmark proves the default bound
-covers 32 projects without re-parsing.
+entry, an invalid bound is rejected, and a benchmark showing that a working set
+which fits the bound is never re-parsed.
 
-The benchmark is marked ``contract`` (this repo's registered "slow" marker, see
-pytest.ini) so it does not run in the default fast suite; run it explicitly with
-``pytest tests/test_collection_cache.py -m contract -s``.
+The benchmark is marked ``bench``, not ``contract`` — ``contract`` means the
+OpenAPI property suite and is its own CI gate, so a performance measurement
+filed there would fail that job for reasons unrelated to the API contract. Run
+it explicitly with ``pytest tests/test_collection_cache.py -m bench -s``.
 """
 import time
 from pathlib import Path
@@ -82,7 +83,7 @@ def test_invalid_configured_bound_rejected(bad):
         Settings(collection_cache_max_entries=bad)
 
 
-@pytest.mark.contract
+@pytest.mark.bench
 def test_benchmark_cache_hit_rate_across_project_counts(tmp_path: Path, monkeypatch):
     """Measure hit rate and wall time for a sweep across N projects.
 
@@ -97,7 +98,13 @@ def test_benchmark_cache_hit_rate_across_project_counts(tmp_path: Path, monkeypa
     collections = yaml_store.COLLECTIONS
     results = []
 
-    for n_projects in (4, 8, 16, 32):
+    # Only sweep sizes whose working set fits the bound — past that the cache
+    # is *supposed* to evict, so re-parsing there is correct behaviour, not a
+    # regression. Deriving this from the bound keeps the test honest if the
+    # default changes again.
+    _fitting = [n for n in (4, 8, 16, 32) if n * len(collections) <= bound]
+    assert _fitting, "bound too small for even the smallest sweep size"
+    for n_projects in _fitting:
         stores = []
         for p in range(n_projects):
             root = tmp_path / f"proj-{p}"
