@@ -7,10 +7,10 @@ This test measures that cost at 100, 1,000 and 10,000 requirements: wall time
 for the first, middle and last page, plus the peak memory of the cold
 materialisation.
 
-The benchmark is marked ``contract`` (the repo's registered "slow" marker — see
+The benchmark is marked ``bench`` (the repo's registered "slow" marker — see
 pytest.ini) so it does not run in the default fast suite. Run it explicitly:
 
-    pytest tests/test_pagination_bench.py -m contract -s
+    pytest tests/test_pagination_bench.py -m bench -s
 
 The numbers it prints are the deliverable: they decide whether a maintained
 index earns its complexity, or whether the collection cache already makes
@@ -100,7 +100,7 @@ def test_pagination_pages_are_correct_and_complete(client, project):
     assert ids(0, limit=1) == ["REQ-000"]
 
 
-@pytest.mark.contract
+@pytest.mark.bench
 def test_pagination_benchmark(pagination_projects, monkeypatch):
     """Print the cost of a page, at each size, and leave the numbers visible.
 
