@@ -980,6 +980,59 @@ class Publisher:
         L.append(r"\newpage")
         return L
 
+    def _risk_table_latex(self, risks_list: list[dict]) -> list[str]:
+        """LaTeX lines for the Risk Register section, or ``[]`` when empty.
+
+        Extracted from ``build_latex`` so the risk block can change (and be
+        tested) on its own. Returns the ``\\section{Risk Register}`` line and
+        every table line it used to append to ``L``; the caller owns the
+        section gating.
+        """
+        if not risks_list:
+            return []
+        L: list[str] = []
+        L.append(r"\section{Risk Register}")
+        L.append(r"\begin{longtable}{@{}>{\raggedright\arraybackslash}p{\dimexpr0.12\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.28\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.12\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.12\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.12\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.24\textwidth-2\tabcolsep\relax}@{}}")
+        L.append(r"\toprule")
+        L.append(r"\rowcolor{tabhead}")
+        L.append(r"\textbf{ID} & \textbf{Title} & \textbf{Severity} & \textbf{Probability} & \textbf{Status} & \textbf{Mitigation} \\")
+        L.append(r"\midrule")
+        L.append(r"\endfirsthead")
+        L.append(r"\toprule")
+        L.append(r"\rowcolor{tabhead}")
+        L.append(r"\textbf{ID} & \textbf{Title} & \textbf{Severity} & \textbf{Probability} & \textbf{Status} & \textbf{Mitigation} \\")
+        L.append(r"\midrule")
+        L.append(r"\endhead")
+        L.append(r"\bottomrule")
+        L.append(r"\endfoot")
+        for r in risks_list:
+            rid = _latex_escape(r["id"])
+            title = _latex_escape(r.get("title", ""))
+            sev = r.get("severity", "medium")
+            prob = _latex_escape(r.get("probability", ""))
+            status = r.get("status", "open")
+            mitigation = _latex_escape(_truncate_words(r.get("mitigation", ""), 180))
+            L.append(f"\\texttt{{{rid}}} & {title} & \\prioritybadge{{{_latex_escape(sev)}}} & {prob} & \\statusbadge{{{_latex_escape(status)}}} & {mitigation} \\\\")
+            # FMECA fields ride a full-width detail row beneath the header
+            # row, exactly like the requirements-by-type table's description.
+            # They are rich text, so strip the markup before escaping.
+            fmeca_parts = []
+            if r.get("failure_mode", "").strip():
+                fmeca_parts.append(
+                    f"\\textbf{{Failure Mode:}} {_latex_escape(_truncate_words(strip_html(r.get('failure_mode', '')), 240))}")
+            if r.get("effect", "").strip():
+                fmeca_parts.append(
+                    f"\\textbf{{Effect:}} {_latex_escape(_truncate_words(strip_html(r.get('effect', '')), 240))}")
+            if r.get("cause", "").strip():
+                fmeca_parts.append(
+                    f"\\textbf{{Cause:}} {_latex_escape(_truncate_words(strip_html(r.get('cause', '')), 240))}")
+            if fmeca_parts:
+                detail = " \\newline ".join(fmeca_parts)
+                L.append(f"\\multicolumn{{6}}{{@{{}}p{{\\dimexpr\\textwidth-2\\tabcolsep\\relax}}@{{}}}}{{\\small {detail}}} \\\\[-3pt]")
+            L.append(r"\midrule")
+        L.append(r"\end{longtable}")
+        return L
+
     def build_latex(self, sections: list[str] | None = None,
                     changelog_from: str = "", changelog_to: str = "") -> str:
         if sections is None:
@@ -1619,47 +1672,7 @@ class Publisher:
 
         # ── 6. Risks ──────────────────────────────────────────────────────
         begin_section()
-        if risks_list:
-            L.append(r"\section{Risk Register}")
-            L.append(r"\begin{longtable}{@{}>{\raggedright\arraybackslash}p{\dimexpr0.12\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.28\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.12\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.12\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.12\textwidth-2\tabcolsep\relax} >{\raggedright\arraybackslash}p{\dimexpr0.24\textwidth-2\tabcolsep\relax}@{}}")
-            L.append(r"\toprule")
-            L.append(r"\rowcolor{tabhead}")
-            L.append(r"\textbf{ID} & \textbf{Title} & \textbf{Severity} & \textbf{Probability} & \textbf{Status} & \textbf{Mitigation} \\")
-            L.append(r"\midrule")
-            L.append(r"\endfirsthead")
-            L.append(r"\toprule")
-            L.append(r"\rowcolor{tabhead}")
-            L.append(r"\textbf{ID} & \textbf{Title} & \textbf{Severity} & \textbf{Probability} & \textbf{Status} & \textbf{Mitigation} \\")
-            L.append(r"\midrule")
-            L.append(r"\endhead")
-            L.append(r"\bottomrule")
-            L.append(r"\endfoot")
-            for r in risks_list:
-                rid = _latex_escape(r["id"])
-                title = _latex_escape(r.get("title", ""))
-                sev = r.get("severity", "medium")
-                prob = _latex_escape(r.get("probability", ""))
-                status = r.get("status", "open")
-                mitigation = _latex_escape(_truncate_words(r.get("mitigation", ""), 180))
-                L.append(f"\\texttt{{{rid}}} & {title} & \\prioritybadge{{{_latex_escape(sev)}}} & {prob} & \\statusbadge{{{_latex_escape(status)}}} & {mitigation} \\\\")
-                # FMECA fields ride a full-width detail row beneath the header
-                # row, exactly like the requirements-by-type table's description.
-                # They are rich text, so strip the markup before escaping.
-                fmeca_parts = []
-                if r.get("failure_mode", "").strip():
-                    fmeca_parts.append(
-                        f"\\textbf{{Failure Mode:}} {_latex_escape(_truncate_words(strip_html(r.get('failure_mode', '')), 240))}")
-                if r.get("effect", "").strip():
-                    fmeca_parts.append(
-                        f"\\textbf{{Effect:}} {_latex_escape(_truncate_words(strip_html(r.get('effect', '')), 240))}")
-                if r.get("cause", "").strip():
-                    fmeca_parts.append(
-                        f"\\textbf{{Cause:}} {_latex_escape(_truncate_words(strip_html(r.get('cause', '')), 240))}")
-                if fmeca_parts:
-                    detail = " \\newline ".join(fmeca_parts)
-                    L.append(f"\\multicolumn{{6}}{{@{{}}p{{\\dimexpr\\textwidth-2\\tabcolsep\\relax}}@{{}}}}{{\\small {detail}}} \\\\[-3pt]")
-                L.append(r"\midrule")
-            L.append(r"\end{longtable}")
+        L.extend(self._risk_table_latex(risks_list))
         end_section("risks")
 
         # ── Traceability Matrix ───────────────────────────────────────────
