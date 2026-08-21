@@ -12,6 +12,10 @@ ruamel.yaml==0.19.1
 python-multipart==0.0.32
 bcrypt==5.0.0
 PyJWT==2.13.0
+# Ed25519 signature verification for update bundles (SEC-9). PyJWT needs
+# cryptography as its backend for anything but HMAC, and bundle signing uses it
+# directly, so it is pinned here rather than resolved transitively.
+cryptography==50.0.0
 weasyprint==69.0
 click==8.4.2
 openpyxl==3.1.5

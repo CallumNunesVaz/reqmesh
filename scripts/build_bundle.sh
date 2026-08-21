@@ -4,6 +4,8 @@
 #
 #   dist/reqmesh-vX.Y.Z.tar.gz          the bundle
 #   dist/reqmesh-vX.Y.Z.tar.gz.sha256   its checksum
+#   dist/reqmesh-vX.Y.Z.tar.gz.sig      an Ed25519 signature, only when
+#                                       REQMESH_SIGNING_KEY is set (SEC-9)
 #
 # The bundle contains the backend source, the built frontend, the Cessna 172S
 # example project, deployment configs, an install.sh, and a manifest.json.
@@ -11,6 +13,8 @@
 # Reused by both scripts/release.sh (local) and the GitHub Actions workflow (CI).
 # Set PYTHON to the interpreter used to seed the example project — defaults to the
 # backend venv locally; CI passes its own interpreter.
+# Set REQMESH_SIGNING_KEY to an Ed25519 private key to emit a detached signature
+# alongside the tarball. Unset → no signature, exactly as before.
 #
 set -euo pipefail
 
@@ -122,6 +126,20 @@ echo "==> Creating tarball"
 TARBALL="$OUT_DIR/${NAME}.tar.gz"
 tar -czf "$TARBALL" -C "$STAGE" "$NAME"
 ( cd "$OUT_DIR" && sha256sum "${NAME}.tar.gz" > "${NAME}.tar.gz.sha256" )
+
+# ── 7b. Optional signature (SEC-9) ───────────────────────────────────────────
+# With REQMESH_SIGNING_KEY naming an Ed25519 private key, emit a detached
+# signature over the raw tarball bytes. A release that silently ships unsigned
+# is the failure mode to avoid, so any signing failure aborts the build loudly.
+if [ -n "${REQMESH_SIGNING_KEY:-}" ]; then
+  echo "==> Signing tarball (Ed25519)"
+  openssl pkeyutl -sign \
+    -inkey "$REQMESH_SIGNING_KEY" \
+    -in "$TARBALL" \
+    -rawin \
+    -out "${TARBALL}.sig"
+  echo "==> Signature written: ${TARBALL}.sig"
+fi
 
 SIZE="$(du -h "$TARBALL" | cut -f1)"
 echo "==> Done: $TARBALL ($SIZE)"

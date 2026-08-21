@@ -21,6 +21,8 @@ Docker socket and no privileged helper are involved.
 
 from __future__ import annotations
 
+import base64
+import binascii
 import json
 import logging
 import os
@@ -32,6 +34,9 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
+
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 from app.core.config import settings
 from app.core.version import get_build_info, get_version
@@ -165,6 +170,56 @@ def _safe_extract(tar: tarfile.TarFile, dest: Path) -> None:
         tar.extractall(dest)  # nosec B202
 
 
+def _archive_bytes(archive: Path) -> bytes:
+    """Read the whole archive into memory.
+
+    Plain Ed25519 is not a streaming construction — ``verify()`` needs the
+    complete message — so chunked reading cannot reduce the peak here. Doing it
+    in chunks and joining them is strictly worse than one read: it holds the
+    archive twice while the join runs. So this is deliberately a single read,
+    bounded by ``settings.max_update_upload_mb`` at the upload boundary.
+    """
+    return archive.read_bytes()
+
+
+def verify_bundle_signature(archive: Path, signature: Path | None) -> None:
+    """Verify the Ed25519 detached signature over the bundle archive bytes.
+
+    Raises ``RuntimeError`` on any failure. With ``settings.update_public_key``
+    unset the signature is not checked — unsigned bundles remain accepted, with
+    a single prominent SEC-9 warning logged — so existing deployments keep
+    working until an operator configures a key.
+    """
+    key_b64 = settings.update_public_key
+    if not key_b64:
+        logger.warning(
+            "SEC-9: update bundle signing is not enabled (RT_UPDATE_PUBLIC_KEY is "
+            "unset) — accepting an unsigned bundle."
+        )
+        return
+
+    if signature is None:
+        raise RuntimeError(
+            "Bundle is not signed, and this instance requires signed updates."
+        )
+
+    try:
+        public_key = Ed25519PublicKey.from_public_bytes(
+            base64.b64decode(key_b64, validate=True)
+        )
+    except (binascii.Error, ValueError) as exc:
+        raise RuntimeError(
+            "RT_UPDATE_PUBLIC_KEY is not a valid Ed25519 public key."
+        ) from exc
+
+    try:
+        public_key.verify(signature.read_bytes(), _archive_bytes(archive))
+    except (InvalidSignature, ValueError) as exc:
+        raise RuntimeError(
+            "Bundle signature is not valid for this instance's update key."
+        ) from exc
+
+
 def stage_from_archive(archive: Path, requested_by: str) -> dict:
     """Validate + stage an uploaded bundle tarball and record a pending update.
 
@@ -178,6 +233,12 @@ def stage_from_archive(archive: Path, requested_by: str) -> dict:
     updates.mkdir(parents=True, exist_ok=True)
     extract_tmp = Path(tempfile.mkdtemp(prefix="reqmesh-extract-", dir=updates))
     try:
+        # Verify the signature over the raw archive bytes *before* the tarball is
+        # opened — an unverified tar must never be opened, because anything
+        # satisfying the shape checks would otherwise be extracted and re-exec'd.
+        sig_path = Path(str(archive) + ".sig")
+        verify_bundle_signature(archive, sig_path if sig_path.exists() else None)
+
         try:
             with tarfile.open(archive, "r:*") as tar:
                 _safe_extract(tar, extract_tmp)

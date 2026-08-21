@@ -238,6 +238,11 @@ class Settings(BaseSettings):
     update_control_dir: str = "/control"
     update_check_ttl_seconds: int = 3600
     max_update_upload_mb: int = 2048
+    # Base64-encoded raw Ed25519 public key (32 bytes) used to verify the
+    # detached signature on uploaded update bundles. Empty (default) → unsigned
+    # bundles are still accepted, with a SEC-9 warning logged; set → a valid
+    # signature is mandatory.
+    update_public_key: str = ""
 
     # ── Logging ───────────────────────────────────────────────────────────
     log_level: str = "INFO"
