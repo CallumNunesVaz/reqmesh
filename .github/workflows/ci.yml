@@ -65,6 +65,14 @@ jobs:
       - run: pip install -r backend/requirements-dev.txt
       - run: python -m pytest tests/ -q
         working-directory: backend
+      # The benchmarks are deselected from the default run (pytest.ini addopts)
+      # because they are measurements, not gates. They still run here: each one
+      # asserts only on correctness — page ids and ordering, cache hit/miss
+      # counts — and prints its timings as evidence, so there is nothing
+      # timing-dependent to make this flaky. Without a CI step they would rot
+      # unnoticed, which is exactly what happened to the numbers they replace.
+      - run: python -m pytest -m bench -q
+        working-directory: backend
 
   contract:
     name: API contract (OpenAPI, property-based)
