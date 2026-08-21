@@ -184,14 +184,30 @@ function forceLayout(nodes: Node[], edges: Edge[]) {
 }
 
 // Lazy, code-split ELK singleton — keeps the ~1 MB engine out of the main
-// chunk and off the critical path until the graph is actually rendered.
-let elkInstance: any = null;
-async function getElk() {
-  if (!elkInstance) {
-    const ELK = (await import('elkjs/lib/elk.bundled.js')).default;
-    elkInstance = new ELK();
+// chunk and off the critical path until the graph is actually rendered. The
+// engine runs in a Web Worker so layout never blocks the UI thread; if the
+// worker cannot be constructed we fall back to the bundled in-process engine.
+import ElkWorker from 'elkjs/lib/elk-worker.min.js?worker';
+
+// The *promise* is memoised, not the resolved instance: `getElk` awaits before
+// assigning, so caching the instance alone let two concurrent first callers
+// both fall through the guard and each construct an engine — which spawned two
+// 1.4 MB workers and orphaned one of them. Observed in a browser at 500 nodes.
+let elkPromise: Promise<any> | null = null;
+export function getElk(): Promise<any> {
+  if (!elkPromise) {
+    elkPromise = (async () => {
+      try {
+        const ELK = (await import('elkjs/lib/elk-api.js')).default;
+        return new ELK({ workerFactory: () => new ElkWorker() });
+      } catch (err) {
+        console.warn('ELK worker failed to start; falling back to in-process layout.', err);
+        const ELK = (await import('elkjs/lib/elk.bundled.js')).default;
+        return new ELK();
+      }
+    })();
   }
-  return elkInstance;
+  return elkPromise;
 }
 
 const ELK_DIRECTION: Record<string, string> = { LR: 'RIGHT', RL: 'LEFT', TB: 'DOWN', BT: 'UP' };
