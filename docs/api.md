@@ -310,6 +310,7 @@ operation; a path served by several methods therefore appears several times.
 |--------|----------|-------------|
 | GET | `/api/version` | Build metadata |
 | GET | `/health` | Health |
+| GET | `/ready` | Ready |
 | GET | `/version` | Version |
 ## Other
 
