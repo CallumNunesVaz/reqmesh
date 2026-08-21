@@ -1,7 +1,6 @@
 import { memo, useState } from 'react';
 import { Handle, Position, useStore, type NodeProps } from '@xyflow/react';
 import { Copy, Plus, Sigma, ChevronRight, ChevronDown } from 'lucide-react';
-import { useGraphSelection } from './GraphPane';
 import { glow, shiftLightness } from './graphColors';
 import { zoomLevel, labelScale, type ZoomLevel } from './semanticZoom';
 import { useAuthStore } from '../store/auth';
@@ -41,6 +40,9 @@ interface CircularNodeData {
   onAddChild?: () => void;
   /** Set by the canvas while the shared hover points here (cross-highlight). */
   crossHighlighted?: boolean;
+  /** Selection-derived styling, computed by the canvas into node data. */
+  dimmed?: boolean;
+  isSelected?: boolean;
 }
 
 const verdictColors: Record<string, string> = {
@@ -54,7 +56,6 @@ function CircularNode({ data }: NodeProps) {
   const nodeData = data as unknown as CircularNodeData;
   const [hover, setHover] = useState(false);
   const canEdit = useAuthStore((s) => s.canEdit());
-  const { connectedIds, selectedReqId, hasSelection } = useGraphSelection();
   // Semantic zoom: far out only the hub (parent) nodes keep their names, as
   // scaled map labels; close in every node reveals id, status and parametrics.
   const level: ZoomLevel = useStore((s) => zoomLevel(s.transform[2]));
@@ -63,8 +64,8 @@ function CircularNode({ data }: NodeProps) {
   const ringColor = priorityRingColors[nodeData.priority] || 'hsl(195,6%,62%)';
   const isCascade = !!nodeData.cascadeFrom;
   const childCount = nodeData.childCount || 0;
-  const dimmed = hasSelection && !connectedIds.has(nodeData.label);
-  const isSelected = selectedReqId === nodeData.label;
+  const dimmed = !!nodeData.dimmed;
+  const isSelected = !!nodeData.isSelected;
   const crossHighlighted = !!nodeData.crossHighlighted;
 
   const cr = childCount > 1 ? Math.min(22, 14 + childCount * 1.2) : 14;

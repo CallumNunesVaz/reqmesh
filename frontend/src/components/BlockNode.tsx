@@ -1,7 +1,6 @@
 import { memo, useState } from 'react';
 import { Handle, Position, useStore, type NodeProps } from '@xyflow/react';
 import { ChevronDown, ChevronRight, ChevronUp, Minus, ChevronsDown, ChevronsUp, FlaskConical, Sigma, AlertTriangle, Plus } from 'lucide-react';
-import { useGraphSelection } from './GraphPane';
 import { statusColors } from './RequirementNode';
 import { glow } from './graphColors';
 import { useAuthStore } from '../store/auth';
@@ -69,6 +68,9 @@ export interface BlockNodeData {
   desc: string;
   /** Set by the canvas while the shared hover points here (cross-highlight). */
   crossHighlighted?: boolean;
+  /** Selection-derived styling, computed by the canvas into node data. */
+  dimmed?: boolean;
+  isSelected?: boolean;
 }
 
 export const BLOCK_W = 216;
@@ -81,7 +83,6 @@ function BlockNode({ data }: NodeProps) {
   const d = data as unknown as BlockNodeData;
   const [hover, setHover] = useState(false);
   const canEdit = useAuthStore((s) => s.canEdit());
-  const { connectedIds, selectedReqId, hasSelection } = useGraphSelection();
   // Selector returns the bucketed level, so nodes re-render only when the
   // zoom crosses a threshold — not on every wheel tick.
   const level: ZoomLevel = useStore((s) => zoomLevel(s.transform[2]));
@@ -91,8 +92,8 @@ function BlockNode({ data }: NodeProps) {
   const colors = statusColors[d.status] || statusColors.proposed;
   const prio = priorityIndicators[d.priority] || priorityIndicators.medium;
   const PriorityIcon = prio.icon;
-  const dimmed = hasSelection && !connectedIds.has(d.label);
-  const isSelected = selectedReqId === d.label;
+  const dimmed = !!d.dimmed;
+  const isSelected = !!d.isSelected;
   const crossHighlighted = !!d.crossHighlighted;
   const verdictColor = d.verdict ? constraintColors[d.verdict] || constraintColors.unknown : null;
 

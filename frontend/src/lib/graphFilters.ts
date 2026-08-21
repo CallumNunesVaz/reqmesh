@@ -74,6 +74,40 @@ export function isReqHiddenByComponents(
 }
 
 /**
+ * Builds a `reqId -> componentIds` index over which components satisfy which
+ * requirements. Inverting the scan this way turns the per-requirement
+ * O(components) lookup in `isReqHiddenByComponents` into an O(1) map read.
+ */
+export function buildSatisfyingIndex(
+  components: readonly SatisfyingComponent[],
+): Map<string, string[]> {
+  const index = new Map<string, string[]>();
+  for (const c of components) {
+    for (const reqId of c.satisfies ?? []) {
+      const list = index.get(reqId);
+      if (list) list.push(c.id);
+      else index.set(reqId, [c.id]);
+    }
+  }
+  return index;
+}
+
+/**
+ * Indexed equivalent of `isReqHiddenByComponents`: same hidden/visible verdict
+ * as scanning the component list, but reading a pre-built `reqId -> componentIds`
+ * index instead of rescanning every component per requirement.
+ */
+export function isReqHiddenByComponentsIndexed(
+  satisfyingIndex: ReadonlyMap<string, readonly string[]>,
+  reqId: string,
+  effectiveHidden: ReadonlySet<string>,
+): boolean {
+  const satisfyingIds = satisfyingIndex.get(reqId);
+  if (!satisfyingIds || satisfyingIds.length === 0) return false;
+  return satisfyingIds.every((id) => effectiveHidden.has(id));
+}
+
+/**
  * Returns true when a requirement is hidden by baseline visibility.
  *
  * If the requirement has no baselines (undefined or empty), it is never hidden.
