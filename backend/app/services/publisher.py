@@ -10,6 +10,7 @@ from app.services.sanitize import sanitize_html
 from app.services.html_text import strip_html
 from app.services.verification_links import attach as attach_verification_cases
 from app.services.entity_kinds import resolve_entity_label
+from app.services.mention_resolve import ParamValue, resolve_parameter_mentions
 from app.services.publishers.css import CSS
 from app.services.publishers.latex_helpers import (
     latex_engine_available,
@@ -186,6 +187,8 @@ class Publisher:
         self._comp_by_id = {c["id"]: c for c in self.components}
         self._spec_by_id = {s["id"]: s for s in self.specs}
         self._all_req_ids = {r["id"]: r for r in self.reqs}
+        # Built lazily on first mention resolution (see _parameter_lookup).
+        self._parameter_lookup_cache = None
 
     # ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -200,6 +203,54 @@ class Publisher:
         if entity_id in self._project_ids:
             return " (not in this document)"
         return " (unresolved reference)"
+
+    def _parameter_lookup(self):
+        """The ``lookup`` callable passed to ``resolve_parameter_mentions``.
+
+        Built once and cached. Resolves a reference against every parameter in
+        the project — requirements and components alike — with the same
+        evaluator the ``/evaluation`` endpoint uses. A derived parameter's
+        computed value is rounded to 6 dp to match what the API surfaces; a
+        literal parameter resolves to its stored value. Returns ``None`` for a
+        reference that cannot be resolved (unknown id, unknown name, no value).
+        """
+        if self._parameter_lookup_cache is not None:
+            return self._parameter_lookup_cache
+
+        from app.services.evaluation import EvalError, Evaluator, UnknownValue
+
+        try:
+            definitions = self.store.list_items("definitions")
+        except Exception:
+            definitions = []
+
+        evaluator = Evaluator(
+            self.store.list_requirements(),
+            self.store.list_components(),
+            definitions=definitions,
+        )
+
+        def lookup(entity_id: str, name: str) -> ParamValue | None:
+            ref = f"{entity_id}.{name}"
+            param = evaluator.params.get(ref)
+            if param is None:
+                return None
+            try:
+                value = evaluator.resolve(ref)
+            except (UnknownValue, EvalError):
+                return None
+            if param.get("expr") or param.get("calc_def"):
+                value = round(value, 6)
+            return ParamValue(value=value, unit=param.get("unit", "") or "")
+
+        self._parameter_lookup_cache = lookup
+        return lookup
+
+    def _resolve(self, text: str) -> str:
+        """Resolve parameter mentions in *text*, leaving everything else alone."""
+        if not text or "[[" not in text:
+            return text
+        return resolve_parameter_mentions(text, self._parameter_lookup())
 
     def _link(self, entity_id: str, label: str | None = None) -> str:
         """Hyperlink to a requirement, VC, component, spec, or risk by ID."""
@@ -522,7 +573,7 @@ class Publisher:
                 # the one that must be sanitised. Applied here as well as on
                 # write, because descriptions stored before sanitisation
                 # existed are still in the YAML.
-                desc = sanitize_html(r.get("description", "")).replace("<p>", "").replace("</p>", "")
+                desc = sanitize_html(self._resolve(r.get("description", ""))).replace("<p>", "").replace("</p>", "")
                 relations = r.get("relations", [])
                 attrs = r.get("attributes", [])
 
@@ -534,9 +585,9 @@ class Publisher:
                 for a in attrs:
                     attr_html += f'<span style="margin-right:8px;font-size:9pt;"><strong>{esc(a["key"])}:</strong> {esc(a["value"])}</span>'
 
-                rationale = sanitize_html(r.get("rationale", "")).replace("<p>", "").replace("</p>", "")
-                source = esc(r.get("source", ""))
-                allocated = esc(r.get("allocated_to", ""))
+                rationale = sanitize_html(self._resolve(r.get("rationale", ""))).replace("<p>", "").replace("</p>", "")
+                source = esc(self._resolve(r.get("source", "")))
+                allocated = esc(self._resolve(r.get("allocated_to", "")))
                 baseline = esc(", ".join(r.get("baselines", [])))
                 subject = r.get("subject")
                 subject_link = self._link(subject) if subject else ""
@@ -631,7 +682,7 @@ class Publisher:
         self._add_toc(1, "Specifications", "sec-specifications")
         for spec in self.specs:
             html += f"""<h2 {self._anchor('spec', spec['id'])}>{esc(spec['id'])} — {esc(spec.get('name', ''))}</h2>
-            <p class="desc">{esc(spec.get('description', '')[:300])}</p>
+            <p class="desc">{esc(self._resolve(spec.get('description', ''))[:300])}</p>
             <div class="field"><strong>Requirements:</strong> {", ".join(self._link(rid) for rid in spec.get('requirements', [])) or '—'}</div>"""
         return html
 
@@ -671,7 +722,7 @@ class Publisher:
             # The FMECA fields are stored as rich text (the UI edits them with
             # the same editor as descriptions), so sanitise and drop the outer
             # paragraph wrapper the way the requirement hierarchy does.
-            return sanitize_html(value or "").replace("<p>", "").replace("</p>", "")
+            return sanitize_html(self._resolve(value or "")).replace("<p>", "").replace("</p>", "")
 
         for r in risks:
             sev = esc(r.get("severity", "medium"), quote=True)
@@ -898,13 +949,13 @@ class Publisher:
         for r in self.reqs:
             status = r.get("status", "proposed")
             md += f"### {r['id']} - {r.get('name','Untitled')} `{status}`\n\n"
-            desc = r.get("description", "").replace("<p>", "").replace("</p>", "").replace("<br>", "\n")
+            desc = self._resolve(r.get("description", "")).replace("<p>", "").replace("</p>", "").replace("<br>", "\n")
             if desc.strip():
                 md += f"{desc}\n\n"
             if r.get("rationale"):
-                md += f"**Rationale:** {r['rationale']}\n\n"
+                md += f"**Rationale:** {self._resolve(r['rationale'])}\n\n"
             if r.get("source"):
-                md += f"**Source:** {r['source']}\n\n"
+                md += f"**Source:** {self._resolve(r['source'])}\n\n"
             rels = r.get("relations", [])
             if rels:
                 md += "**Relations:** "
@@ -1011,7 +1062,7 @@ class Publisher:
             sev = r.get("severity", "medium")
             prob = _latex_escape(r.get("probability", ""))
             status = r.get("status", "open")
-            mitigation = _latex_escape(_truncate_words(r.get("mitigation", ""), 180))
+            mitigation = _latex_escape(_truncate_words(self._resolve(r.get("mitigation", "")), 180))
             L.append(f"\\texttt{{{rid}}} & {title} & \\prioritybadge{{{_latex_escape(sev)}}} & {prob} & \\statusbadge{{{_latex_escape(status)}}} & {mitigation} \\\\")
             # FMECA fields ride a full-width detail row beneath the header
             # row, exactly like the requirements-by-type table's description.
@@ -1019,13 +1070,13 @@ class Publisher:
             fmeca_parts = []
             if r.get("failure_mode", "").strip():
                 fmeca_parts.append(
-                    f"\\textbf{{Failure Mode:}} {_latex_escape(_truncate_words(strip_html(r.get('failure_mode', '')), 240))}")
+                    f"\\textbf{{Failure Mode:}} {_latex_escape(_truncate_words(strip_html(self._resolve(r.get('failure_mode', ''))), 240))}")
             if r.get("effect", "").strip():
                 fmeca_parts.append(
-                    f"\\textbf{{Effect:}} {_latex_escape(_truncate_words(strip_html(r.get('effect', '')), 240))}")
+                    f"\\textbf{{Effect:}} {_latex_escape(_truncate_words(strip_html(self._resolve(r.get('effect', ''))), 240))}")
             if r.get("cause", "").strip():
                 fmeca_parts.append(
-                    f"\\textbf{{Cause:}} {_latex_escape(_truncate_words(strip_html(r.get('cause', '')), 240))}")
+                    f"\\textbf{{Cause:}} {_latex_escape(_truncate_words(strip_html(self._resolve(r.get('cause', ''))), 240))}")
             if fmeca_parts:
                 detail = " \\newline ".join(fmeca_parts)
                 L.append(f"\\multicolumn{{6}}{{@{{}}p{{\\dimexpr\\textwidth-2\\tabcolsep\\relax}}@{{}}}}{{\\small {detail}}} \\\\[-3pt]")
@@ -1566,14 +1617,14 @@ class Publisher:
                 status = r.get("status", "proposed")
                 priority = r.get("priority", "medium")
                 desc = _latex_escape(
-                    r.get("description", "")
+                    self._resolve(r.get("description", ""))
                     .replace("<p>", "\n\n").replace("</p>", "")
                     .replace("<br />", "\n").replace("<br>", "\n")
                     .replace("\n\n\n", "\n\n").strip()[:600]
                 ).replace("\n\n", r" \par ").replace("\n", r" \\ ")
-                rationale = _latex_escape(r.get("rationale", ""))
-                source = _latex_escape(r.get("source", ""))
-                allocated = _latex_escape(r.get("allocated_to", ""))
+                rationale = _latex_escape(self._resolve(r.get("rationale", "")))
+                source = _latex_escape(self._resolve(r.get("source", "")))
+                allocated = _latex_escape(self._resolve(r.get("allocated_to", "")))
                 baselines = ", ".join(r.get("baselines", []))
                 vc_links = ", ".join(self._latex_link(vid) for vid in r.get("verification_cases", []))
                 rel_links = ", ".join(
@@ -1708,7 +1759,7 @@ class Publisher:
             for spec in self.specs:
                 sid = _latex_escape(spec["id"])
                 name = _latex_escape(spec.get("name", ""))
-                desc = _latex_escape(_truncate_words(spec.get("description", ""), 240))
+                desc = _latex_escape(_truncate_words(self._resolve(spec.get("description", "")), 240))
                 reqs = _latex_escape(", ".join(spec.get("requirements", [])))
                 L.append(f"\\subsection*{{{sid} -- {name}}}")
                 L.append(f"{desc}")
@@ -1864,8 +1915,8 @@ class Publisher:
                 for d in decisions:
                     did = _latex_escape(d["id"])
                     title = _latex_escape(d.get("title", ""))
-                    decision = _latex_escape(_truncate_words(d.get("decision", ""), 200))
-                    rationale = _latex_escape(_truncate_words(d.get("rationale", ""), 200))
+                    decision = _latex_escape(_truncate_words(self._resolve(d.get("decision", "")), 200))
+                    rationale = _latex_escape(_truncate_words(self._resolve(d.get("rationale", "")), 200))
                     status = d.get("status", "open")
                     L.append(f"\\texttt{{{did}}} & {title} & {decision} & {rationale} & \\statusbadge{{{_latex_escape(status)}}} \\\\")
                     L.append(r"\midrule")
