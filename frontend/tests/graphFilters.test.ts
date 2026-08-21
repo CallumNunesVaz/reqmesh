@@ -4,6 +4,8 @@ import {
   effectiveHiddenComponents,
   filterableComponentIds,
   isReqHiddenByComponents,
+  isReqHiddenByComponentsIndexed,
+  buildSatisfyingIndex,
   isReqHiddenByBaselines,
   migrateLegacyFilterList,
   requirementsRevealed,
@@ -142,6 +144,42 @@ describe('isReqHiddenByComponents', () => {
       { id: 'B', satisfies: ['R1'] },
     ];
     expect(isReqHiddenByComponents('R1', satisfying, effective)).toBe(true);
+  });
+});
+
+// ── buildSatisfyingIndex + indexed lookup ──────────────────────────────────
+
+describe('buildSatisfyingIndex / isReqHiddenByComponentsIndexed', () => {
+  const mc = (id: string, satisfies?: string[]): SatisfyingComponent => ({ id, satisfies });
+
+  // Every case the indexed lookup must agree with the scanning implementation.
+  const CASES: { name: string; comps: SatisfyingComponent[]; reqId: string; hidden: string[] }[] = [
+    { name: 'no satisfying component', comps: [mc('C1', ['R2'])], reqId: 'R1', hidden: ['C1'] },
+    { name: 'one hidden', comps: [mc('C1', ['R1'])], reqId: 'R1', hidden: ['C1'] },
+    { name: 'one visible one hidden', comps: [mc('C1', ['R1']), mc('C2', ['R1'])], reqId: 'R1', hidden: ['C1'] },
+    { name: 'all hidden', comps: [mc('C1', ['R1']), mc('C2', ['R1'])], reqId: 'R1', hidden: ['C1', 'C2'] },
+    { name: 'empty hidden set', comps: [mc('C1', ['R1'])], reqId: 'R1', hidden: [] },
+    { name: 'component without satisfies', comps: [mc('C1', ['R1']), { id: 'C2' }], reqId: 'R1', hidden: ['C1'] },
+  ];
+
+  for (const c of CASES) {
+    it(`agrees with the scan for: ${c.name}`, () => {
+      const effective = new Set(c.hidden);
+      const indexed = isReqHiddenByComponentsIndexed(
+        buildSatisfyingIndex(c.comps), c.reqId, effective);
+      expect(indexed).toBe(isReqHiddenByComponents(c.reqId, c.comps, effective));
+    });
+  }
+
+  it('indexes each requirement to its satisfying components', () => {
+    const index = buildSatisfyingIndex([
+      mc('C1', ['R1', 'R2']),
+      mc('C2', ['R2']),
+      mc('C3'),
+    ]);
+    expect(index.get('R1')).toEqual(['C1']);
+    expect(index.get('R2')).toEqual(['C1', 'C2']);
+    expect(index.get('R3')).toBeUndefined();
   });
 });
 

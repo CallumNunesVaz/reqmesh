@@ -35,9 +35,12 @@ import { useStore } from '../store';
 import { useWhatIf } from './WhatIfContext';
 import { requirementVerdict } from '../lib/whatIfVerdict';
 import { formatReqType, reqTypeColor } from '../lib/requirementTypes';
-import { effectiveHiddenComponents, filterableComponentIds, isReqHiddenByComponents, isReqHiddenByBaselines, migrateLegacyFilterList, requirementsRevealed, pruneUnknownIds } from '../lib/graphFilters';
+import { buildSatisfyingIndex, effectiveHiddenComponents, filterableComponentIds, isReqHiddenByComponentsIndexed, isReqHiddenByBaselines, migrateLegacyFilterList, requirementsRevealed, pruneUnknownIds } from '../lib/graphFilters';
 import { hoistEdges } from '../lib/hoistEdges';
 import { requirementsSatisfiedByComponent } from '../lib/crossHighlight';
+import { computeVisibleNodeIds } from '../lib/visibleNodes';
+import { dimEdges, type EdgeDimEntry } from '../lib/dimmedEdges';
+import { applySelectionToNodes } from '../lib/selectionRestyle';
 
 const edgeColors: Record<string, string> = {
   refines: 'hsl(207,90%,64%)',
@@ -745,6 +748,10 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
     [components, hiddenComponents],
   );
 
+  // `reqId -> componentIds` index so the per-requirement component-visibility
+  // check below is an O(1) read rather than a rescan of every component.
+  const satisfyingIndex = useMemo(() => buildSatisfyingIndex(components), [components]);
+
   const filteredReqs = useMemo(() => {
     let out = reqs;
     if (search) {
@@ -758,11 +765,11 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
     if (filterVerStatus) out = out.filter(r => r.verification_status === filterVerStatus);
     if (filterVerMethod) out = out.filter(r => r.verification_method === filterVerMethod);
     if (filterAllocated) out = out.filter(r => r.allocated_to === filterAllocated);
-    if (hiddenComponents.length > 0) out = out.filter(r => !isReqHiddenByComponents(r.id, components, effectiveHidden));
+    if (hiddenComponents.length > 0) out = out.filter(r => !isReqHiddenByComponentsIndexed(satisfyingIndex, r.id, effectiveHidden));
     if (hideRoots) out = out.filter(r => r.parent);
     return out;
   }, [reqs, search, filterStatus, filterPriority, hiddenBaselines, filterType,
-      filterVerStatus, filterVerMethod, filterAllocated, hiddenComponents, components, effectiveHidden, hideRoots]);
+      filterVerStatus, filterVerMethod, filterAllocated, hiddenComponents, satisfyingIndex, effectiveHidden, hideRoots]);
 
   const distinct = (pick: (r: typeof reqs[number]) => string) =>
     [...new Set(reqs.map(pick).filter(Boolean))].sort();
@@ -913,26 +920,13 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
     setGroupsOnly(new Set());
   };
 
-  const visibleNodeIds = useMemo(() => {
-    const visible = new Set<string>();
-    function collect(id: string) {
-      // A collapsed node is still shown (with its expand button); only its
-      // descendants are hidden. So add it first, then stop recursing.
-      visible.add(id);
-      if (collapsed.has(id)) return;
-      // In groups-only mode, reveal only the children that are parents; leaf
-      // children stay hidden until the node is fully expanded.
-      const gOnly = groupsOnly.has(id);
-      for (const r of reqs) {
-        if (r.parent !== id) continue;
-        if (gOnly && !parentIds.has(r.id)) continue;
-        collect(r.id);
-      }
-    }
-    for (const r of reqs) { if (!r.parent) collect(r.id); }
-    if (visible.size === 0) reqs.forEach(r => visible.add(r.id));
-    return visible;
-  }, [reqs, collapsed, groupsOnly, parentIds]);
+  const visibleNodeIds = useMemo(() => computeVisibleNodeIds({
+    childrenByParent,
+    parentIds,
+    collapsed,
+    groupsOnly,
+    allIds: reqs.map(r => r.id),
+  }), [childrenByParent, parentIds, collapsed, groupsOnly, reqs]);
 
   // Track which nodes were visible *before* the current collapsed state, so we
   // can detect newly-appearing children and give them an entrance animation.
@@ -1023,6 +1017,11 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
           hasChildren: reqs.some(r => r.parent === req.id),
           collapsed: collapsed.has(req.id),
           groupsOnly: groupsOnly.has(req.id),
+          // Selection-derived styling lives on the node's own data (not the
+          // graph context) so `memo(...)` can bail on unaffected nodes. The
+          // initial values are false; a targeted effect re-syncs them below.
+          dimmed: false,
+          isSelected: false,
           childCount: childCounts.get(req.id) || 0,
           subgroupCount: subgroupCounts.get(req.id) || 0,
           onSelect: () => selectReq(req.id),
@@ -1068,14 +1067,15 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
               if (expand) {
                 const removeDescendants = (nodeId: string) => {
                   next.delete(nodeId);
-                  for (const r of reqs) { if (r.parent === nodeId) removeDescendants(r.id); }
+                  for (const childId of childrenByParent.get(nodeId) || []) removeDescendants(childId);
                 };
                 removeDescendants(req.id);
               } else {
                 next.add(req.id);
                 const collapseDescendants = (nodeId: string) => {
-                  for (const r of reqs) {
-                    if (r.parent === nodeId) { next.add(r.id); collapseDescendants(r.id); }
+                  for (const childId of childrenByParent.get(nodeId) || []) {
+                    next.add(childId);
+                    collapseDescendants(childId);
                   }
                 };
                 collapseDescendants(req.id);
@@ -1088,7 +1088,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
               const next = new Set(prev);
               const clear = (nodeId: string) => {
                 next.delete(nodeId);
-                for (const r of reqs) { if (r.parent === nodeId) clear(r.id); }
+                for (const childId of childrenByParent.get(nodeId) || []) clear(childId);
               };
               clear(req.id);
               return next;
@@ -1707,12 +1707,12 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
 
     // Single-frame delay so dimmed node states commit before camera moves.
     const raf = requestAnimationFrame(() => {
-      const hasChildren = reqs.some(r => r.parent === selectedReqId);
+      const hasChildren = (childrenByParent.get(selectedReqId)?.length ?? 0) > 0;
       if (hasChildren) {
         const descendants = new Set<string>();
         const collect = (id: string) => {
           descendants.add(id);
-          for (const r of reqs) { if (r.parent === id) collect(r.id); }
+          for (const childId of childrenByParent.get(id) || []) collect(childId);
         };
         collect(selectedReqId);
         const subsetNodes = nodes.filter(n => descendants.has(n.id));
@@ -1917,45 +1917,26 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
 
   const hasSelection = wfActive || derivationActive || !!(selectedReqId || hoveredNodeId);
 
+  // Selection restyle: `dimmed`/`isSelected` live on each node's own `data` so
+  // the memoised node components re-render only when their own booleans flip.
+  // This targeted setNodes update (the same pattern as cross-highlight below)
+  // keeps the re-render scope to the nodes whose styling actually changed, and
+  // `nodes` is a dependency so a relayout that rebuilds the node objects
+  // re-applies the current selection to the fresh data.
+  useEffect(() => {
+    setNodes((nds) => applySelectionToNodes(nds, { selectedReqId, hasSelection, connectedIds }));
+  }, [selectedReqId, hasSelection, connectedIds, setNodes, nodes]);
+
   // Fidelity drops automatically on big graphs — see PERF_NODE_LIMIT.
   const perfMode = initialNodes.length > PERF_NODE_LIMIT;
 
+  const dimmedPrevRef = useRef<Map<string, EdgeDimEntry>>(new Map());
   const dimmedEdges = useMemo(() => {
-    if (!hasSelection) return edges;
-    return edges.map((e) => {
-      // Both ends must be in the highlighted neighbourhood. By default only
-      // radial edges (endpoints at different hop distances) light — the paths
-      // fanning out from the focus. With "show all links" on, same-distance
-      // cross-links between neighbours light too.
-      const bothIn = connectedIds.has(e.source) && connectedIds.has(e.target);
-      // In a derivation trace every link inside the closure is part of the
-      // story, so they all light. Otherwise: radial edges only by default,
-      // and "radial" respects the chosen direction — with an incoming/outgoing
-      // filter an edge must also point the way the walk travelled.
-      const ds = focus.dist.get(e.source);
-      const dt = focus.dist.get(e.target);
-      const radial = linkDir === 'out' ? dt === (ds ?? -99) + 1
-        : linkDir === 'in' ? ds === (dt ?? -99) + 1
-        : ds !== dt;
-      const connected = derivationActive
-        ? bothIn
-        : bothIn && (showAllLinks || radial);
-      const stroke = (e.style as any)?.stroke as string | undefined;
-      const dashed = ((e.style as any)?.strokeDasharray ?? 'none') !== 'none';
-      return {
-        ...e,
-        data: { ...e.data, showLabel: connected },
-        // Highlighted dashed relations drift slowly along their direction.
-        className: connected && dashed && !perfMode ? 'rt-drift' : undefined,
-        style: {
-          ...(e.style as Record<string, any>),
-          opacity: connected ? Math.max((e.style as any)?.opacity || 0.55, 0.9) : 0.04,
-          // A hint of bloom on active edges — just enough to trace them.
-          // (Skipped in perf mode: SVG filters force slow re-rasterisation.)
-          filter: connected && stroke && !perfMode ? `drop-shadow(0 0 2px ${stroke})` : undefined,
-        },
-      };
+    const res = dimEdges(edges, dimmedPrevRef.current, {
+      hasSelection, connectedIds, focusDist: focus.dist, linkDir, showAllLinks, perfMode, derivationActive,
     });
+    dimmedPrevRef.current = res.prev;
+    return res.edges;
   }, [edges, hasSelection, connectedIds, focus, showAllLinks, perfMode, linkDir, derivationActive]);
 
   const handleNodeDoubleClick = useCallback(
