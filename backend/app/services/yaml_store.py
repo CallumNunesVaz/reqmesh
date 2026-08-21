@@ -13,6 +13,7 @@ from typing import Optional
 from fastapi import HTTPException
 from ruamel.yaml import YAML
 
+from app.core.config import settings
 from app.core.filelock import file_lock
 from app.core.ids import safe_id
 
@@ -62,7 +63,13 @@ def _fast_reader() -> YAML:
 # cheap signature of the directory (each file's mtime_ns + size) — one scandir
 # instead of re-parsing every file on every call. Without it a single page load
 # re-parsed the whole project a dozen times over.
-_CACHE_MAX_ENTRIES = 64
+#
+# The bound is the number of *directories* held, not projects: a project has 11
+# collection directories, so 64 entries was ~six projects before the cache
+# started evicting entries it was about to need again. The live value comes from
+# Settings.collection_cache_max_entries (RT_COLLECTION_CACHE_MAX_ENTRIES); this
+# constant is the default and is kept so existing imports don't break.
+_CACHE_MAX_ENTRIES = 256
 _collection_cache: "OrderedDict[str, tuple[tuple, list[dict]]]" = OrderedDict()
 _cache_lock = threading.Lock()
 
@@ -285,7 +292,7 @@ class YamlStore:
         items = self._read_collection(d)
         with _cache_lock:
             _collection_cache[key] = (signature, [dict(i) for i in items])
-            while len(_collection_cache) > _CACHE_MAX_ENTRIES:
+            while len(_collection_cache) > settings.collection_cache_max_entries:
                 _collection_cache.popitem(last=False)
         return items
 

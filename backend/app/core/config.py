@@ -4,7 +4,7 @@ import logging
 from pathlib import Path
 from typing import get_args, get_origin
 
-from pydantic import SecretStr
+from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, DotEnvSettingsSource, EnvSettingsSource
 
 #: Security warnings share the ``security`` named channel (see ``app.main``'s
@@ -193,6 +193,19 @@ class Settings(BaseSettings):
     instance_name: str = "reqmesh"
     support_email: str = ""
 
+    # Maximum number of parsed-collection *directories* the store keeps cached
+    # at once — not projects. A project has 11 collection directories, so 256
+    # covers ~23 projects, up from the ~6 the old bound of 64 allowed.
+    #
+    # The bound is on entry count, so memory depends on what is cached. Measured:
+    # a 1000-requirement directory is 2.84 MB and a large project (1000 reqs,
+    # 1000 verification cases, nine small collections) totals 3.8 MB. A full
+    # cache of large projects is therefore ~88 MB; 512 would have been ~177 MB,
+    # which is why the default is not higher. Raise it via
+    # RT_COLLECTION_CACHE_MAX_ENTRIES if you host many projects and have the RAM.
+    # Bound + LRU is the design — there is no TTL or eviction thread.
+    collection_cache_max_entries: int = 256
+
     # ── SMTP ──────────────────────────────────────────────────────────────
     smtp_host: str = ""
     smtp_port: int = 587
@@ -237,6 +250,16 @@ class Settings(BaseSettings):
     # plain str to smtp_password are re-coerced back into a SecretStr, so the field
     # is always masked regardless of how it was set.
     model_config = {"env_prefix": "RT_", "env_file": ".env", "validate_assignment": True}
+
+    @field_validator("collection_cache_max_entries")
+    @classmethod
+    def _collection_cache_bound_positive(cls, v: int) -> int:
+        if v < 1:
+            raise ValueError(
+                "collection_cache_max_entries must be >= 1 (got %r): a value "
+                "below 1 would evict every cached collection immediately" % v,
+            )
+        return v
 
     @classmethod
     def settings_customise_sources(cls, settings_cls, init_settings, env_settings,
