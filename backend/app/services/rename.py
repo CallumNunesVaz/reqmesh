@@ -11,6 +11,7 @@ means a re-prefixed move is now reversible, where before there was no way back.
 """
 from __future__ import annotations
 
+import keyword
 import re
 
 from app.services.history import record_change
@@ -159,6 +160,203 @@ def _rewrite_text_references(store, id_map: dict[str, str]) -> None:
 
         if patch:
             store.update_requirement(req["id"], patch)
+
+
+def _is_valid_parameter_name(name: str) -> bool:
+    """Whether *name* is a usable identifier in an expression.
+
+    Expressions are parsed with :mod:`ast`, so a parameter name is referenced
+    as a Python name (bare) or attribute (``id.name``). Anything ``ast`` cannot
+    parse as a name — including the Python keywords, which ``isidentifier``
+    alone accepts — is refused.
+    """
+    return bool(name) and name.isidentifier() and not keyword.iskeyword(name)
+
+
+def _rewrite_param_qualified(text: str, owner_id: str, old_name: str,
+                             new_name: str) -> str:
+    """Rewrite ``owner.old`` → ``owner.new`` in *text*.
+
+    The lookarounds treat ``-`` as a word character (as ``_rewrite_text`` does),
+    so ``owner.old`` only matches on its own — ``owner.temp_max_limit`` is not
+    touched when renaming ``temp_max``, and ``PREQ-1.temp_max`` is not touched
+    when the owner is ``REQ-1``.
+    """
+    if not text:
+        return text
+    replacement = f"{owner_id}.{new_name}"
+    pattern = re.compile(
+        r"(?<![\w-])" + re.escape(owner_id) + r"\." + re.escape(old_name) + r"(?![\w-])"
+    )
+    return pattern.sub(lambda _m, repl=replacement: repl, text)
+
+
+def _rewrite_param_bare(text: str, old_name: str, new_name: str) -> str:
+    """Rewrite a bare ``old`` identifier → ``new``.
+
+    Only ever used inside the owner's own record, where a bare ``temp_max`` is
+    that owner's parameter. The lookbehind also refuses a preceding ``.`` so a
+    qualified reference to a *different* owner (``OTHER.temp_max``) is never
+    mistaken for the bare form.
+    """
+    if not text:
+        return text
+    pattern = re.compile(r"(?<![\w.-])" + re.escape(old_name) + r"(?![\w-])")
+    return pattern.sub(lambda _m, new=new_name: new, text)
+
+
+def _rewrite_param_rollup(text: str, owner_id: str, old_name: str,
+                          new_name: str) -> str:
+    """Rewrite ``rollup('owner', 'old')`` → ``rollup('owner', 'new')``.
+
+    Only the quoted string arguments are touched, and only when the component
+    id is the owner and the parameter name matches in full — the closing quote
+    is the boundary, so ``rollup('C172', 'mass_factor')`` is never half-rewritten
+    when renaming ``mass``.
+    """
+    if not text:
+        return text
+    pattern = re.compile(
+        r"rollup\(\s*(['\"])" + re.escape(owner_id) + r"\1\s*,\s*(['\"])"
+        + re.escape(old_name) + r"\2\s*\)"
+    )
+
+    def repl(m: re.Match) -> str:
+        q1, q2 = m.group(1), m.group(2)
+        return f"rollup({q1}{owner_id}{q1}, {q2}{new_name}{q2})"
+
+    return pattern.sub(repl, text)
+
+
+def _rewrite_param_expr_string(text: str, owner_id: str, old_name: str,
+                               new_name: str, own: bool) -> str:
+    """Rewrite one expression string against a parameter rename.
+
+    Qualified ``owner.old`` references and component rollups are swept on every
+    record; the bare ``old`` form is rewritten only when *own* is true (the
+    owner's own record), where a bare name is that owner's parameter.
+    """
+    rewritten = _rewrite_param_qualified(text, owner_id, old_name, new_name)
+    rewritten = _rewrite_param_rollup(rewritten, owner_id, old_name, new_name)
+    if own:
+        rewritten = _rewrite_param_bare(rewritten, old_name, new_name)
+    return rewritten
+
+
+def _rewrite_param_expr_fields(record: dict, owner_id: str, old_name: str,
+                               new_name: str, own: bool) -> tuple[int, bool]:
+    """Rewrite ``expr``/``assume``/``bindings`` on a record's parameters and
+    constraints. Mutates *record* in place; returns ``(strings_rewritten,
+    changed)``.
+    """
+    strings = 0
+    changed = False
+    for list_key in ("parameters", "constraints"):
+        items = record.get(list_key)
+        if not isinstance(items, list) or not items:
+            continue
+        new_items: list[dict] = []
+        list_changed = False
+        for item in items:
+            if not isinstance(item, dict):
+                new_items.append(item)
+                continue
+            copy = dict(item)
+            item_strings = 0
+            for key in ("expr", "assume"):
+                value = copy.get(key)
+                if isinstance(value, str) and value:
+                    rewritten = _rewrite_param_expr_string(
+                        value, owner_id, old_name, new_name, own)
+                    if rewritten != value:
+                        copy[key] = rewritten
+                        item_strings += 1
+            bindings = copy.get("bindings")
+            if isinstance(bindings, dict) and bindings:
+                new_bindings = {}
+                for k, v in bindings.items():
+                    if isinstance(v, str) and v:
+                        rewritten = _rewrite_param_expr_string(
+                            v, owner_id, old_name, new_name, own)
+                        if rewritten != v:
+                            new_bindings[k] = rewritten
+                            item_strings += 1
+                        else:
+                            new_bindings[k] = v
+                    else:
+                        new_bindings[k] = v
+                if new_bindings != bindings:
+                    copy["bindings"] = new_bindings
+            if item_strings:
+                list_changed = True
+                strings += item_strings
+            new_items.append(copy)
+        if list_changed:
+            record[list_key] = new_items
+            changed = True
+    return strings, changed
+
+
+def _rewrite_param_text_fields(record: dict, owner_id: str, old_name: str,
+                               new_name: str,
+                               text_fields: tuple[str, ...]) -> tuple[int, bool]:
+    """Rewrite parameter mentions in a record's text fields; returns
+    ``(strings_rewritten, changed)``. Mentions are always fully qualified, so
+    only the ``owner.old`` form applies.
+    """
+    strings = 0
+    changed = False
+    for field in text_fields:
+        value = record.get(field)
+        if isinstance(value, str) and value:
+            rewritten = _rewrite_param_qualified(value, owner_id, old_name, new_name)
+            if rewritten != value:
+                record[field] = rewritten
+                strings += 1
+                changed = True
+    return strings, changed
+
+
+def _rewrite_parameter_references(store, owner_id: str, old_name: str,
+                                  new_name: str) -> tuple[int, int, set[str]]:
+    """Sweep every requirement and component, rewriting references to the
+    renamed parameter. Returns ``(expressions, mentions, touched_ids)``.
+    """
+    expressions = 0
+    mentions = 0
+    touched: set[str] = set()
+
+    for req in store.list_requirements():
+        before = dict(req)
+        own = req["id"] == owner_id
+        expr_count, expr_changed = _rewrite_param_expr_fields(
+            before, owner_id, old_name, new_name, own)
+        text_count, text_changed = _rewrite_param_text_fields(
+            before, owner_id, old_name, new_name, ("description", "rationale", "source"))
+        if expr_changed or text_changed:
+            patch = {k: before[k] for k in before if req.get(k) != before[k]}
+            if patch:
+                store.update_requirement(req["id"], patch)
+                touched.add(req["id"])
+            expressions += expr_count
+            mentions += text_count
+
+    for comp in store.list_components():
+        before = dict(comp)
+        own = comp["id"] == owner_id
+        expr_count, expr_changed = _rewrite_param_expr_fields(
+            before, owner_id, old_name, new_name, own)
+        text_count, text_changed = _rewrite_param_text_fields(
+            before, owner_id, old_name, new_name, ("description",))
+        if expr_changed or text_changed:
+            patch = {k: before[k] for k in before if comp.get(k) != before[k]}
+            if patch:
+                store.update_component(comp["id"], patch)
+                touched.add(comp["id"])
+            expressions += expr_count
+            mentions += text_count
+
+    return expressions, mentions, touched
 
 
 def _plan_rename_id_map(requirements: list[dict], old_id: str, new_id: str,
@@ -493,3 +691,69 @@ def rename_component(store, old_id: str, new_id: str, username: str = "") -> dic
 
     record_change(store, new_id, "rename", before, store.get_component(new_id), username)
     return {"id": new_id, "children": children, "relinked": relinked}
+
+
+def rename_parameter(store, owner_id: str, old_name: str, new_name: str,
+                     username: str = "") -> dict:
+    """Rename a parameter on *owner_id*, rewriting every reference to it.
+
+    A parameter is referenced three ways the link registry does not cover, and
+    editing the name in place silently breaks all three: ``owner.old`` in
+    parameter/constraint expressions, bare ``old`` inside the owner's own
+    expressions, and ``[[owner.old]]`` / ``owner.old`` mentions in text. All of
+    them are swept here, the same way the requirement and component renames
+    sweep their own text references.
+
+    Returns ``{"owner", "old", "new", "expressions_rewritten",
+    "mentions_rewritten", "records_touched"}`` — ``expressions_rewritten`` and
+    ``mentions_rewritten`` count the expression and text strings rewritten, and
+    ``records_touched`` is the sorted ids of every record changed (always
+    including the owner, whose parameter's ``name`` moved).
+    """
+    owner = store.get_requirement(owner_id)
+    kind = "requirements"
+    if owner is None:
+        owner = store.get_component(owner_id)
+        kind = "components"
+    if owner is None:
+        raise ValueError(f"unknown owner: {owner_id}")
+
+    parameters = owner.get("parameters") or []
+    names = [p.get("name") for p in parameters if isinstance(p, dict) and p.get("name")]
+    if old_name not in names:
+        raise ValueError(f"unknown parameter: {old_name}")
+    if not _is_valid_parameter_name(new_name):
+        raise ValueError(f"invalid parameter name: {new_name}")
+    if new_name != old_name and new_name in names:
+        raise ValueError(f"parameter already exists: {new_name}")
+
+    if new_name == old_name:
+        return {"owner": owner_id, "old": old_name, "new": new_name,
+                "expressions_rewritten": 0, "mentions_rewritten": 0,
+                "records_touched": []}
+
+    before = dict(owner)
+
+    new_parameters = []
+    for p in parameters:
+        if isinstance(p, dict) and p.get("name") == old_name:
+            new_parameters.append({**p, "name": new_name})
+        else:
+            new_parameters.append(p)
+    if kind == "requirements":
+        store.update_requirement(owner_id, {"parameters": new_parameters})
+    else:
+        store.update_component(owner_id, {"parameters": new_parameters})
+
+    expressions, mentions, touched = _rewrite_parameter_references(
+        store, owner_id, old_name, new_name)
+    touched.add(owner_id)
+
+    after = store.get_requirement(owner_id) if kind == "requirements" \
+        else store.get_component(owner_id)
+    record_change(store, owner_id, "rename", before, after, username)
+
+    return {"owner": owner_id, "old": old_name, "new": new_name,
+            "expressions_rewritten": expressions,
+            "mentions_rewritten": mentions,
+            "records_touched": sorted(touched)}
