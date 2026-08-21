@@ -397,7 +397,7 @@ export default function RisksPage() {
               <tr className="border-b bg-muted/30">
                 {canBulk && <th className="px-3 py-2.5 w-0" aria-label="Select" />}
                 <th className="px-4 py-2.5 w-28"><SortHead col="id" label="ID" /></th>
-                <th className="px-4 py-2.5"><SortHead col="title" label="Title" /></th>
+                <th className="px-4 py-2.5 min-w-[14rem]"><SortHead col="title" label="Title" /></th>
                 <th className="px-4 py-2.5 w-28"><SortHead col="severity" label="Severity" /></th>
                 <th className="px-4 py-2.5 w-32"><SortHead col="likelihood" label="Likelihood" /></th>
                 <th className="px-4 py-2.5 w-28"><SortHead col="band" label="Band" /></th>
@@ -428,7 +428,7 @@ export default function RisksPage() {
                       </div>
                     </td>
                     <td className="px-4 py-2.5 text-xs text-card-foreground">
-                      <span className="line-clamp-1">{r.title || <span className="text-muted-foreground/40 italic">—</span>}</span>
+                      <span className="line-clamp-1" title={r.title || undefined}>{r.title || <span className="text-muted-foreground/40 italic">—</span>}</span>
                     </td>
                     <td className="px-4 py-2.5 text-xs text-card-foreground">{r.severity ? formatLevel(r.severity) : '—'}</td>
                     <td className="px-4 py-2.5 text-xs text-card-foreground">{likelihoodOf(r) ? formatLevel(likelihoodOf(r)) : '—'}</td>
