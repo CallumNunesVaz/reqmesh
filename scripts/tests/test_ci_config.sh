@@ -68,5 +68,13 @@ for f in sorted(pathlib.Path('$REPO/.github/workflows').glob('*.yml')):
 print(','.join(missing) + '|' + ','.join(invalid))
 " 2>/dev/null)"
 
+# A silent tool failure must not read as a pass. Without this, a missing PyYAML
+# makes the command print nothing, `report` is empty, and both checks below
+# compare "" to "" and go green — a guard that cannot fail is worse than none.
+if [ -z "$report" ]; then
+    printf 'test_ci_config: could not inspect the workflows (is PyYAML installed?)\n' >&2
+    exit 1
+fi
+
 check "no runs-on job is missing timeout-minutes" "${report%%|*}" ""
 check "no reusable-workflow job carries timeout-minutes" "${report##*|}" ""

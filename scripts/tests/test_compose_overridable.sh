@@ -22,11 +22,25 @@ TMPL="$REPO/scripts/templates/docker-compose.prod.yml.tmpl"
 # RT_<KEY> names for every key in backend/app/core/settings_store.py's
 # OVERRIDABLE table. Driven from the model rather than hardcoded, so a key
 # added there later is covered here without touching this file.
-OVERRIDABLE="$(cd "$REPO/backend" && .venv/bin/python -c \
-    'from app.core.settings_store import OVERRIDABLE; print(" ".join("RT_" + k.upper() for k in OVERRIDABLE))' \
-    2>/dev/null)"
+# Parsed from the source, not imported. This suite runs in CI's `deploy-checks`
+# job, which is checkout + bash with no Python environment at all — importing
+# app.core.settings_store needs pydantic and fails there, while passing locally
+# against backend/.venv. `ast` is stdlib and reads the dict literal without
+# executing the module.
+OVERRIDABLE="$(python3 -c '
+import ast, sys
+src = open("'"$REPO"'/backend/app/core/settings_store.py").read()
+for node in ast.walk(ast.parse(src)):
+    targets = getattr(node, "targets", []) or ([node.target] if hasattr(node, "target") else [])
+    for t in targets:
+        if getattr(t, "id", None) == "OVERRIDABLE" and isinstance(node.value, ast.Dict):
+            keys = [k.value for k in node.value.keys if isinstance(k, ast.Constant)]
+            print(" ".join("RT_" + k.upper() for k in keys))
+            sys.exit(0)
+sys.exit(1)
+')"
 if [ -z "$OVERRIDABLE" ]; then
-    printf 'could not read OVERRIDABLE from backend/app/core/settings_store.py\n' >&2
+    printf 'could not parse OVERRIDABLE from backend/app/core/settings_store.py\n' >&2
     exit 1
 fi
 
