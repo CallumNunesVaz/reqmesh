@@ -749,14 +749,31 @@ def git_init(project_id: str, user: dict = Depends(require_maintain)):
 def git_push(project_id: str, user: dict = Depends(require_maintain)):
     """Push commits to the configured remote synchronously.
 
-    Returns the real outcome, including the redacted error on failure.
-    Unlike ``schedule_push``, which runs from a background timer and logs
-    to a file nobody reads, this route makes a broken remote immediately
-    diagnosable.
+    Commits any pending changes first so a manual push backs up the whole
+    working tree, not just what was already committed. Returns the real
+    outcome, including whether a commit was made and the redacted error on
+    failure. Unlike ``schedule_push``, which runs from a background timer
+    and logs to a file nobody reads, this route makes a broken remote
+    immediately diagnosable.
     """
     from app.services import git_service
 
     store = get_store(project_id)
+
+    committed = False
+    if git_service.get_status(store.root).get("dirty"):
+        committed = git_service.auto_commit(
+            store.root,
+            "Manual push from the web UI",
+            user.get("username", ""),
+        )
+        if not committed:
+            logger.warning("Manual push commit failed for %s", project_id)
+            raise HTTPException(
+                status_code=500,
+                detail="Commit failed — changes were not committed, so nothing was pushed",
+            )
+
     ok = git_service.push_to_remote(store.root)
     outcome = git_service._push_outcomes.get(store.root.resolve(), {})
 
@@ -765,7 +782,7 @@ def git_push(project_id: str, user: dict = Depends(require_maintain)):
         logger.warning("Manual push failed for %s: %s", project_id, error)
         raise HTTPException(status_code=502, detail=error)
 
-    return {"ok": True, "error": None}
+    return {"ok": True, "error": None, "committed": committed}
 
 
 @router.delete("/projects/{project_id}/git/remote")

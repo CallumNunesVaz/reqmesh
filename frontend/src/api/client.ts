@@ -1596,7 +1596,7 @@ export const api = {
     request<{ initialised: boolean }>(`/projects/${projectId}/git/init`, { method: 'POST' }),
 
   gitPush: (projectId: string) =>
-    request<{ ok: boolean }>(`/projects/${projectId}/git/push`, { method: 'POST' }),
+    request<{ ok: boolean; committed: boolean }>(`/projects/${projectId}/git/push`, { method: 'POST' }),
 
   gitDeleteRemote: (projectId: string) =>
     request<{ ok: boolean }>(`/projects/${projectId}/git/remote`, { method: 'DELETE' }),
