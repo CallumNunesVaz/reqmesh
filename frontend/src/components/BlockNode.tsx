@@ -1,8 +1,7 @@
 import { memo, useState } from 'react';
 import { Handle, Position, useStore, type NodeProps } from '@xyflow/react';
 import { ChevronDown, ChevronRight, ChevronUp, Minus, ChevronsDown, ChevronsUp, FlaskConical, Sigma, AlertTriangle, Plus } from 'lucide-react';
-import { statusColors } from './RequirementNode';
-import { glow } from './graphColors';
+import { statusColors, priorityColors, constraintColors, glow } from './graphColors';
 import { useAuthStore } from '../store/auth';
 import { zoomLevel, labelScale, type ZoomLevel } from './semanticZoom';
 
@@ -10,19 +9,14 @@ import { zoomLevel, labelScale, type ZoomLevel } from './semanticZoom';
 // canvas altitude (semantic zoom): far out only the name survives; close in it
 // grows stereotype, parameter and constraint compartments like a SysML block.
 
-const priorityIndicators: Record<string, { color: string; icon: typeof ChevronUp }> = {
-  low: { color: 'hsl(195,6%,62%)', icon: ChevronDown },
-  medium: { color: 'hsl(207,90%,64%)', icon: Minus },
-  high: { color: 'hsl(28,100%,53%)', icon: ChevronUp },
-  critical: { color: 'hsl(0,84%,68%)', icon: ChevronsUp },
-};
-
-const constraintColors: Record<string, string> = {
-  pass: 'hsl(179,100%,38%)',
-  fail: 'hsl(0,84%,68%)',
-  error: 'hsl(0,84%,68%)',
-  unknown: 'hsl(45,90%,55%)',
-  not_applicable: 'hsl(195,6%,62%)',
+// Priority as a lucide arrow ramp rather than unicode circles — the direction
+// reads as urgency at a glance, and it survives font differences. Only the
+// icons live here; the colours come from the shared priorityColors map.
+const priorityIcons: Record<string, typeof ChevronUp> = {
+  low: ChevronDown,
+  medium: Minus,
+  high: ChevronUp,
+  critical: ChevronsUp,
 };
 
 export interface BlockParam {
@@ -90,8 +84,8 @@ function BlockNode({ data }: NodeProps) {
   const textScale = useStore((s) => labelScale(s.transform[2]));
 
   const colors = statusColors[d.status] || statusColors.proposed;
-  const prio = priorityIndicators[d.priority] || priorityIndicators.medium;
-  const PriorityIcon = prio.icon;
+  const PriorityIcon = priorityIcons[d.priority] || Minus;
+  const priorityColor = priorityColors[d.priority] || priorityColors.medium;
   const dimmed = !!d.dimmed;
   const isSelected = !!d.isSelected;
   const crossHighlighted = !!d.crossHighlighted;
@@ -321,9 +315,9 @@ function BlockNode({ data }: NodeProps) {
         </span>
       )}
       {d.hasMissingInfo && (
-        <span title="Missing information"><AlertTriangle size={10} className="text-amber-400" /></span>
+        <span title="Missing information"><AlertTriangle size={10} className="text-cs-yellow" /></span>
       )}
-      <PriorityIcon size={11} color={prio.color} strokeWidth={2.5} className="ml-auto shrink-0" />
+      <PriorityIcon size={11} color={priorityColor} strokeWidth={2.5} className="ml-auto shrink-0" />
     </div>
   );
 

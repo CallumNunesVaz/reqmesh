@@ -25,7 +25,7 @@ import { Search, RotateCw, ListTree, Orbit, SlidersHorizontal, ChevronsUpDown, C
 import { api, type Requirement, type TraceLink, type EvaluatedRequirement, type EvaluatedParameter, type Component } from '../api/client';
 import CircularNode from './CircularNode';
 import BlockNode, { BLOCK_W, STACK_OVERHANG, type BlockParam, type BlockConstraint } from './BlockNode';
-import { statusColors } from './RequirementNode';
+import { statusColors, priorityColors, edgeColors, FALLBACK_COLOR } from './graphColors';
 import OrthoEdge from './OrthoEdge';
 import LoadingSplash from './LoadingSplash';
 import { zoomLevel, LEVEL_LABELS } from './semanticZoom';
@@ -42,44 +42,32 @@ import { computeVisibleNodeIds } from '../lib/visibleNodes';
 import { dimEdges, type EdgeDimEntry } from '../lib/dimmedEdges';
 import { applySelectionToNodes } from '../lib/selectionRestyle';
 
-const edgeColors: Record<string, string> = {
-  refines: 'hsl(207,90%,64%)',
-  satisfies: 'hsl(145,55%,42%)',
-  verified_by: 'hsl(260,100%,78%)',
-  derives: 'hsl(28,100%,53%)',
-  conflicts: 'hsl(0,84%,68%)',
-  duplicates: 'hsl(195,6%,62%)',
-  cascades: 'hsl(300,60%,64%)',
-};
-
 // ── Filter-option colours ─────────────────────────────────────────────────
 // Match the colour language used elsewhere: statuses reuse the canvas node
-// status palette; priorities reuse the block priority indicators; types reuse
-// the same `cs` palette tokens as the Requirements list (RequirementsPage).
-const priorityFilterColors: Record<string, string> = {
-  low: 'hsl(195,6%,62%)',
-  medium: 'hsl(207,90%,64%)',
-  high: 'hsl(28,100%,53%)',
-  critical: 'hsl(0,84%,68%)',
-};
+// status palette; priorities reuse the shared priority map; types reuse the
+// same `cs` palette tokens as the Requirements list (RequirementsPage). The
+// verification-status keys (`passed`/`failed`/`pending`/`na`) don't match
+// `constraintColors`, so its literals are retargeted at the `--cs-*` tokens
+// in place.
 const verifStatusFilterColors: Record<string, string> = {
-  passed: 'hsl(145,55%,42%)',
-  failed: 'hsl(0,84%,68%)',
-  pending: 'hsl(195,6%,62%)',
-  na: 'hsl(195,6%,62%)',
+  passed: 'hsl(var(--cs-green))',
+  failed: 'hsl(var(--cs-red))',
+  pending: 'hsl(var(--cs-grey))',
+  na: 'hsl(var(--cs-grey))',
 };
 const statusOptionColor = (s: string) => statusColors[s]?.text;
-const priorityOptionColor = (p: string) => priorityFilterColors[p];
+const priorityOptionColor = (p: string) => priorityColors[p];
 const verifStatusOptionColor = (v: string) => verifStatusFilterColors[v];
 const typeOptionColor = (t: string) => reqTypeColor(t);
 
-const statusMinimapColors: Record<string, string> = {
-  proposed: '#539fe6',
-  approved: '#29ad55',
-  implemented: '#b291ff',
-  verified: '#009d96',
-  rejected: '#ff5d64',
-  deprecated: '#95a5a6',
+export const statusMinimapColors: Record<string, string> = {
+  proposed: 'hsl(var(--cs-blue))',
+  in_review: 'hsl(var(--cs-yellow))',
+  approved: 'hsl(var(--cs-green))',
+  implemented: 'hsl(var(--cs-purple))',
+  verified: 'hsl(var(--cs-teal))',
+  rejected: 'hsl(var(--cs-red))',
+  deprecated: 'hsl(var(--cs-grey))',
 };
 
 // Reserved footprint per block for the layered layout.  Height is enlarged
@@ -358,7 +346,7 @@ function FloatingEdge({ id, source, target, data, style, markerEnd }: EdgeProps)
   const labelX = 0.25 * sx + 0.5 * mx + 0.25 * tx;
   const labelY = 0.25 * sy + 0.5 * my + 0.25 * ty;
 
-  const edgeColor = (data?.color as string) || (style as any)?.stroke || 'hsl(207,90%,64%)';
+  const edgeColor = (data?.color as string) || (style as any)?.stroke || 'hsl(var(--cs-blue))';
   const edgeLabel = (data?.label as string) || '';
   const hoisted = !!data?.hoisted;
   const count = (data?.count as number) || 1;
@@ -1137,7 +1125,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
       const k = hoisted ? `${src}-${tgt}-${typ}-hoist` : `${src}-${tgt}-${typ}`;
       if (seen.has(k)) return; seen.add(k);
       const style = edgeMarkers[typ] || { markerEnd: MarkerType.ArrowClosed, strokeDasharray: 'none', strokeWidth: 1 };
-      const color = edgeColors[typ] || '#64748b';
+      const color = edgeColors[typ] || FALLBACK_COLOR;
       edges.push({
         id: k, source: src, target: tgt, type: 'floating',
         data: { color, label: typ, hoisted, count },
@@ -1174,7 +1162,8 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
       // A parent edge into a hidden child is internal to a collapsed group —
       // drop it rather than draw a dangling line to a node that isn't there.
       if (!visIds.has(req.id)) continue;
-      // Parent edges: solid line, diamond-style composition marker
+      // Parent edges: solid line with a closed-arrow marker, like every other
+      // edge type.
       const pk = `${req.parent}-${req.id}-parent`;
       if (seen.has(pk)) continue; seen.add(pk);
       edges.push({
@@ -2092,7 +2081,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
             move, which is exactly the work a big graph can't afford. */}
         {!perfMode && (
           <MiniMap
-            nodeColor={(node) => statusMinimapColors[(node.data?.status as string) || 'proposed'] || '#64748b'}
+            nodeColor={(node) => statusMinimapColors[(node.data?.status as string) || 'proposed'] || FALLBACK_COLOR}
             bgColor="hsl(var(--graph-minimap))"
             maskColor="hsl(var(--graph-minimap) / 0.9)"
             className="!bg-graph-minimap !border-graph-border rounded-lg overflow-hidden shadow-lg !hidden @lg:!block"
@@ -2506,10 +2495,6 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
         .react-flow__controls-button { width: 24px; height: 24px; }
         .react-flow__background { background-color: transparent !important; }
         .react-flow__minimap { background-color: hsl(var(--graph-minimap)) !important; }
-        @keyframes pulse-ring {
-          0% { transform: scale(1); opacity: 0.6; }
-          100% { transform: scale(2.5); opacity: 0; }
-        }
         /* Shared node keyframes, hoisted here so BlockNode/CircularNode don't
            each inject a per-instance <style> tag (one per node adds up). */
         @keyframes fadeIn {

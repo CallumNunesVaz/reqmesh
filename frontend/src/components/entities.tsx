@@ -340,7 +340,7 @@ export function CopyLinkButton({ kind, id, projectId, className = '' }: CopyLink
       className={`p-1 rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-colors ${className}`}
     >
       {copied === 'ok' ? <Check size={12} className="text-cs-green" />
-       : copied === 'fail' ? <AlertTriangle size={12} className="text-cs-amber" />
+       : copied === 'fail' ? <AlertTriangle size={12} className="text-cs-yellow" />
        : <Link2 size={12} />}
     </button>
   );

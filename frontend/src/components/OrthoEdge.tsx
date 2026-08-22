@@ -37,7 +37,7 @@ function OrthoEdge({ id, data, style, markerEnd }: EdgeProps) {
 
   if (!path) return null;
 
-  const edgeColor = (data?.color as string) || (style as { stroke?: string })?.stroke || 'hsl(207,90%,64%)';
+  const edgeColor = (data?.color as string) || (style as { stroke?: string })?.stroke || 'hsl(var(--cs-blue))';
   const edgeLabel = (data?.label as string) || '';
   const active = !!data?.showLabel;
   const hoisted = !!data?.hoisted;
