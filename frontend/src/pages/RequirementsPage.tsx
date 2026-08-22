@@ -591,7 +591,7 @@ export default function RequirementsPage() {
                     that every column to the right of the name starts at the
                     same x on every row whatever its depth. */}
                 <div
-                  className="flex items-center gap-2 min-w-0 flex-1"
+                  className="flex items-center gap-2 min-w-0 flex-1 @3xl:flex-none @3xl:w-[38%]"
                   style={{ paddingLeft: `${12 + depth * 22}px` }}
                 >
                 {editMode && <DragGrip id={req.id} label={req.id} />}
@@ -644,11 +644,14 @@ export default function RequirementsPage() {
                 )}
                 </div>
 
-                {/* Description column. Fixed share of the row — not flex-1 —
-                    so its left edge lines up down the list rather than
-                    floating with the length of the name beside it. Rendered
-                    even when empty to hold the column open. */}
-                <span className="hidden @3xl:block w-[28%] shrink-0 truncate text-xs text-muted-foreground/70">
+                {/* Description column. Takes the slack the name no longer
+                    absorbs; the name wrapper is the fixed share at @3xl, so
+                    this column's left edge still lines up down the list.
+                    Rendered even when empty to hold the column open. */}
+                <span
+                  className="hidden @3xl:block flex-1 min-w-0 truncate text-xs text-muted-foreground/70"
+                  title={stripHtml(req.description) || undefined}
+                >
                   {req.description ? stripHtml(req.description) : ''}
                 </span>
 
