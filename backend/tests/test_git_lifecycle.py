@@ -357,6 +357,106 @@ def test_status_is_not_blocked_by_unreachable_remote(client, project, monkeypatc
     assert elapsed < 5, f"status took {elapsed:.1f}s — looks like a network call"
 
 
+# ── manual push commits pending changes ───────────────────────────────────────
+
+def _git_porcelain(store_root: Path) -> str:
+    return subprocess.run(
+        ["git", "status", "--porcelain"],
+        cwd=str(store_root), capture_output=True, text=True,
+    ).stdout.strip()
+
+
+def _git_commit_messages(store_root: Path) -> list[str]:
+    r = subprocess.run(
+        ["git", "log", "--format=%s"],
+        cwd=str(store_root), capture_output=True, text=True,
+    )
+    return r.stdout.splitlines()
+
+
+def _commit_all(store_root: Path, message: str) -> None:
+    subprocess.run(["git", "add", "-A"], cwd=str(store_root), capture_output=True, text=True)
+    subprocess.run(
+        ["git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-m", message],
+        cwd=str(store_root), capture_output=True, text=True,
+    )
+
+
+def test_push_commits_pending_changes(client, project, monkeypatch):
+    """A repo with an uncommitted file: push commits it, then pushes."""
+    monkeypatch.setattr(git_service, "push_to_remote", lambda root, branch="main": True)
+    client.post(f"/api/projects/{project}/git/init")
+
+    store_root = Path(settings.data_root) / project
+    (store_root / "tracked").write_text("initial")
+    _commit_all(store_root, "initial")
+    (store_root / "tracked").write_text("changed")
+
+    res = client.post(f"/api/projects/{project}/git/push")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["ok"] is True
+    assert body["committed"] is True
+
+    assert _git_porcelain(store_root) == ""
+    assert "Manual push from the web UI" in _git_commit_messages(store_root)
+
+
+def test_push_clean_repo_does_not_commit(client, project, monkeypatch):
+    """A clean repo: push reports committed: false and creates no commit."""
+    monkeypatch.setattr(git_service, "push_to_remote", lambda root, branch="main": True)
+    client.post(f"/api/projects/{project}/git/init")
+
+    store_root = Path(settings.data_root) / project
+    (store_root / "tracked").write_text("initial")
+    _commit_all(store_root, "initial")
+
+    before = len(_git_commit_messages(store_root))
+
+    res = client.post(f"/api/projects/{project}/git/push")
+    assert res.status_code == 200
+    assert res.json()["committed"] is False
+
+    assert len(_git_commit_messages(store_root)) == before
+
+
+def test_push_commit_failure_returns_500_and_does_not_push(client, project, monkeypatch):
+    """A failed commit while dirty is a real failure: 500, and no push."""
+    pushed = {"called": False}
+
+    def fake_push(root, branch="main"):
+        pushed["called"] = True
+        return True
+
+    monkeypatch.setattr(git_service, "push_to_remote", fake_push)
+    monkeypatch.setattr(git_service, "auto_commit", lambda root, msg, username="": False)
+    client.post(f"/api/projects/{project}/git/init")
+
+    store_root = Path(settings.data_root) / project
+    (store_root / "tracked").write_text("uncommitted")
+
+    res = client.post(f"/api/projects/{project}/git/push")
+    assert res.status_code == 500
+    assert pushed["called"] is False
+
+
+def test_push_failure_after_commit_returns_502_and_commit_survives(client, project, monkeypatch):
+    """Push failing after a successful commit is 502, but the commit stays."""
+    monkeypatch.setattr(git_service, "push_to_remote", lambda root, branch="main": False)
+    client.post(f"/api/projects/{project}/git/init")
+
+    store_root = Path(settings.data_root) / project
+    (store_root / "tracked").write_text("initial")
+    _commit_all(store_root, "initial")
+    (store_root / "tracked").write_text("changed")
+
+    res = client.post(f"/api/projects/{project}/git/push")
+    assert res.status_code == 502
+
+    assert "Manual push from the web UI" in _git_commit_messages(store_root)
+    assert _git_porcelain(store_root) == ""
+
+
 # ── offline mode ──────────────────────────────────────────────────────────────
 
 def test_push_in_offline_mode_records_offline_status(client, project, monkeypatch):

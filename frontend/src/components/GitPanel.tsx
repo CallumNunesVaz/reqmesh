@@ -152,8 +152,10 @@ export default function GitPanel({ projectId, isAdmin, canEdit, remoteUrl, onRem
   const handlePush = async () => {
     setPushing(true);
     try {
-      await api.gitPush(projectId);
-      addToast('success', 'Push succeeded');
+      const res = await api.gitPush(projectId);
+      addToast('success', res.committed
+        ? 'Committed pending changes and pushed'
+        : 'Push succeeded — nothing to commit');
       await afterAction();
     } catch (err: any) {
       addToast('error', err.message || 'Push request failed');
