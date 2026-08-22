@@ -32,7 +32,7 @@ import LoadingSplash from '../components/LoadingSplash';
 import { HistoryPanel } from '../components/HistoryPanel';
 import { CommentThread } from '../components/CommentThread';
 import { useToasts } from '../components/Toast';
-import { statusColors } from '../components/RequirementNode';
+import { statusColors } from '../components/graphColors';
 import { REQUIREMENT_TYPE_META, formatReqType, reqTypeColor, typeOptionsFor } from '../lib/requirementTypes';
 const priorityOptions = ['low', 'medium', 'high', 'critical'];
 const priorityColorMap: Record<string, string> = {

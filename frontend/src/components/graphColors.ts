@@ -1,5 +1,43 @@
-// Colour helpers for the graph nodes. Status/priority colours are authored as
-// legacy comma-separated `hsl(h,s%,l%)`, which these keep working with.
+// Single home for the canvas palette. Every colour is a `--cs-*` token so it
+// re-steps for the light theme instead of freezing at its dark-mode value.
+
+export const statusColors: Record<string, { fill: string; text: string }> = {
+  proposed: { fill: 'hsl(var(--cs-blue))', text: 'hsl(var(--cs-blue))' },
+  in_review: { fill: 'hsl(var(--cs-yellow))', text: 'hsl(var(--cs-yellow))' },
+  approved: { fill: 'hsl(var(--cs-green))', text: 'hsl(var(--cs-green))' },
+  implemented: { fill: 'hsl(var(--cs-purple))', text: 'hsl(var(--cs-purple))' },
+  verified: { fill: 'hsl(var(--cs-teal))', text: 'hsl(var(--cs-teal))' },
+  rejected: { fill: 'hsl(var(--cs-red))', text: 'hsl(var(--cs-red))' },
+  deprecated: { fill: 'hsl(var(--cs-grey))', text: 'hsl(var(--cs-grey))' },
+};
+
+export const priorityColors: Record<string, string> = {
+  low: 'hsl(var(--cs-grey))',
+  medium: 'hsl(var(--cs-blue))',
+  high: 'hsl(var(--cs-orange))',
+  critical: 'hsl(var(--cs-red))',
+};
+
+export const constraintColors: Record<string, string> = {
+  pass: 'hsl(var(--cs-teal))',
+  fail: 'hsl(var(--cs-red))',
+  error: 'hsl(var(--cs-red))',
+  unknown: 'hsl(var(--cs-yellow))',
+  not_applicable: 'hsl(var(--cs-grey))',
+};
+
+export const edgeColors: Record<string, string> = {
+  refines: 'hsl(var(--cs-blue))',
+  satisfies: 'hsl(var(--cs-green))',
+  verified_by: 'hsl(var(--cs-purple))',
+  derives: 'hsl(var(--cs-orange))',
+  conflicts: 'hsl(var(--cs-red))',
+  duplicates: 'hsl(var(--cs-grey))',
+  cascades: 'hsl(var(--cs-pink))',
+};
+
+/** Fallback for an unknown status/priority/relation type. */
+export const FALLBACK_COLOR = 'hsl(var(--cs-grey))';
 
 /** Turn an `hsl(h,s%,l%)` status colour into a translucent glow colour so nodes
  *  can cast a soft, status-tinted bloom. Legacy comma-hsl in → hsla out; token
@@ -10,17 +48,4 @@ export function glow(hslColor: string, alpha: number): string {
     return hslColor.replace(/\)$/, ` / ${alpha})`);
   }
   return hslColor.replace('hsl(', 'hsla(').replace(/\)$/, `, ${alpha})`);
-}
-
-const HSL_RE = /^hsl\(\s*([\d.]+)\s*,\s*([\d.]+)%\s*,\s*([\d.]+)%\s*\)$/;
-
-/** Shift an `hsl()` colour's lightness by `delta` percentage points, clamped to
- *  0–100. Used to derive the highlight/shade stops of a node's fill gradient
- *  from its single status colour. Unparseable colours pass through. */
-export function shiftLightness(hslColor: string, delta: number): string {
-  const m = hslColor.match(HSL_RE);
-  if (!m) return hslColor;
-  const [, h, s, l] = m;
-  const lightness = Math.min(100, Math.max(0, Number(l) + delta));
-  return `hsl(${h},${s}%,${lightness}%)`;
 }

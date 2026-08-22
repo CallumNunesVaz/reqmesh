@@ -1,26 +1,9 @@
 import { memo, useState } from 'react';
 import { Handle, Position, useStore, type NodeProps } from '@xyflow/react';
 import { Copy, Plus, Sigma, ChevronRight, ChevronDown } from 'lucide-react';
-import { glow, shiftLightness } from './graphColors';
+import { glow, statusColors, priorityColors, constraintColors, FALLBACK_COLOR } from './graphColors';
 import { zoomLevel, labelScale, type ZoomLevel } from './semanticZoom';
 import { useAuthStore } from '../store/auth';
-
-const statusFillColors: Record<string, string> = {
-  proposed: 'hsl(207,90%,64%)',
-  in_review: 'hsl(45,90%,55%)',
-  approved: 'hsl(145,55%,42%)',
-  implemented: 'hsl(260,100%,78%)',
-  verified: 'hsl(179,100%,31%)',
-  rejected: 'hsl(0,84%,68%)',
-  deprecated: 'hsl(195,6%,62%)',
-};
-
-const priorityRingColors: Record<string, string> = {
-  low: 'hsl(195,6%,62%)',
-  medium: 'hsl(207,90%,64%)',
-  high: 'hsl(28,100%,53%)',
-  critical: 'hsl(0,84%,68%)',
-};
 
 interface CircularNodeData {
   label: string;
@@ -45,13 +28,6 @@ interface CircularNodeData {
   isSelected?: boolean;
 }
 
-const verdictColors: Record<string, string> = {
-  pass: 'hsl(179,100%,38%)',
-  fail: 'hsl(0,84%,68%)',
-  error: 'hsl(0,84%,68%)',
-  unknown: 'hsl(45,90%,55%)',
-};
-
 function CircularNode({ data }: NodeProps) {
   const nodeData = data as unknown as CircularNodeData;
   const [hover, setHover] = useState(false);
@@ -60,8 +36,8 @@ function CircularNode({ data }: NodeProps) {
   // scaled map labels; close in every node reveals id, status and parametrics.
   const level: ZoomLevel = useStore((s) => zoomLevel(s.transform[2]));
   const textScale = useStore((s) => labelScale(s.transform[2]));
-  const fill = statusFillColors[nodeData.status] || statusFillColors.proposed;
-  const ringColor = priorityRingColors[nodeData.priority] || 'hsl(195,6%,62%)';
+  const fill = statusColors[nodeData.status]?.fill ?? FALLBACK_COLOR;
+  const ringColor = priorityColors[nodeData.priority] || FALLBACK_COLOR;
   const isCascade = !!nodeData.cascadeFrom;
   const childCount = nodeData.childCount || 0;
   const dimmed = !!nodeData.dimmed;
@@ -110,8 +86,8 @@ function CircularNode({ data }: NodeProps) {
           {/* Lit from the top-left, so a flat disc reads as a sphere. Both
               stops derive from the one status colour. */}
           <radialGradient id={`circ-fill-${nodeData.label}`} cx="34%" cy="28%" r="80%">
-            <stop offset="0%" stopColor={shiftLightness(fill, 13)} />
-            <stop offset="100%" stopColor={shiftLightness(fill, -7)} />
+            <stop offset="0%" stopColor={`color-mix(in oklab, ${fill} 87%, white)`} />
+            <stop offset="100%" stopColor={`color-mix(in oklab, ${fill} 93%, black)`} />
           </radialGradient>
         </defs>
 
@@ -229,7 +205,7 @@ function CircularNode({ data }: NodeProps) {
                 <span style={{ color: 'hsl(var(--muted-foreground))' }} title={`${nodeData.vcCount} verification cases`}>&middot; {nodeData.vcCount} VC</span>
               )}
               {nodeData.verdict && (
-                <span className="flex items-center gap-0.5" style={{ color: verdictColors[nodeData.verdict] || verdictColors.unknown, fontWeight: 600 }}>
+                <span className="flex items-center gap-0.5" style={{ color: constraintColors[nodeData.verdict] || FALLBACK_COLOR, fontWeight: 600 }}>
                   <Sigma size={8} /> {nodeData.verdict === 'not_applicable' ? 'n/a' : nodeData.verdict}
                 </span>
               )}
@@ -265,7 +241,7 @@ function CircularNode({ data }: NodeProps) {
             <div className="font-semibold text-sm leading-tight mb-1.5">{nodeData.name || 'Untitled'}</div>
             <div className="flex items-center gap-1.5">
               <span className="px-1.5 py-0.5 rounded text-[10px] font-medium capitalize"
-                style={{ backgroundColor: fill + '20', color: fill }}>
+                style={{ backgroundColor: glow(fill, 0.125), color: fill }}>
                 {nodeData.status}
               </span>
               <span className="px-1.5 py-0.5 rounded text-[10px] font-medium capitalize bg-muted text-muted-foreground">
