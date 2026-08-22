@@ -66,6 +66,10 @@ export default {
           grey: 'hsl(var(--cs-grey) / <alpha-value>)',
         },
         graph: {
+          canvas: 'hsl(var(--graph-canvas) / <alpha-value>)',
+          node: 'hsl(var(--graph-node) / <alpha-value>)',
+          'node-border': 'hsl(var(--graph-node-border) / <alpha-value>)',
+          grid: 'hsl(var(--graph-grid) / <alpha-value>)',
           panel: 'hsl(var(--graph-panel-bg) / <alpha-value>)',
           border: 'hsl(var(--graph-panel-border) / <alpha-value>)',
           text: 'hsl(var(--graph-panel-text) / <alpha-value>)',

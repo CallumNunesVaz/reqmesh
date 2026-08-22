@@ -92,7 +92,7 @@ function OrthoEdge({ id, data, style, markerEnd }: EdgeProps) {
             className="nodrag nopan"
           >
             <span
-              className="text-[9px] font-semibold px-1.5 py-px rounded bg-card border shadow-sm"
+              className="text-[9px] font-semibold px-1.5 py-px rounded bg-graph-node border border-graph-node-border shadow-sm"
               style={{ color: edgeColor, whiteSpace: 'nowrap' }}>
               {edgeLabel}
             </span>

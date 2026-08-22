@@ -150,8 +150,8 @@ function CircularNode({ data }: NodeProps) {
           to the block header chevron. A collapsed hub shows its hidden count. */}
       {nodeData.hasChildren && (
         <button
-          className="absolute z-30 flex items-center gap-0.5 rounded-full border bg-card shadow-sm hover:bg-accent hover:border-foreground/40 transition-colors"
-          style={{ right: -7, bottom: -7, padding: '1px 3px', lineHeight: 1, borderColor: 'hsl(var(--border))' }}
+          className="absolute z-30 flex items-center gap-0.5 rounded-full border bg-graph-node shadow-sm hover:bg-accent hover:border-foreground/40 transition-colors"
+          style={{ right: -7, bottom: -7, padding: '1px 3px', lineHeight: 1, borderColor: 'hsl(var(--graph-node-border))' }}
           onClick={(e) => {
             e.stopPropagation();
             // Dismiss the hover tooltip: the relayout moves the node out from
@@ -174,8 +174,8 @@ function CircularNode({ data }: NodeProps) {
 
       {canEdit && hover && level >= 3 && (
         <button
-          className="absolute z-40 flex items-center justify-center rounded-full border bg-card shadow-sm hover:bg-accent hover:border-foreground/40 transition-colors"
-          style={{ left: -7, top: -7, width: 16, height: 16, borderColor: 'hsl(var(--border))', lineHeight: 1 }}
+          className="absolute z-40 flex items-center justify-center rounded-full border bg-graph-node shadow-sm hover:bg-accent hover:border-foreground/40 transition-colors"
+          style={{ left: -7, top: -7, width: 16, height: 16, borderColor: 'hsl(var(--graph-node-border))', lineHeight: 1 }}
           title="Add child requirement"
           onClick={(e) => { e.stopPropagation(); nodeData.onAddChild?.(); }}
           onDoubleClick={(e) => e.stopPropagation()}
