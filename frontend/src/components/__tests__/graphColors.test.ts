@@ -5,6 +5,7 @@ import {
   priorityColors,
   constraintColors,
   edgeColors,
+  previewRingColors,
 } from '../graphColors';
 import { statusMinimapColors } from '../GraphPane';
 
@@ -57,6 +58,10 @@ describe('canvas palette maps', () => {
 
   it('edgeColors values are all --cs-* tokens', () => {
     assertTokenValues(edgeColors, 'edgeColors');
+  });
+
+  it('previewRingColors values are all --cs-* tokens', () => {
+    assertTokenValues(previewRingColors, 'previewRingColors');
   });
 
   it('statusMinimapColors shares statusColors key set', () => {

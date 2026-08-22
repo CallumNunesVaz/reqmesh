@@ -36,6 +36,15 @@ export const edgeColors: Record<string, string> = {
   cascades: 'hsl(var(--cs-pink))',
 };
 
+/** What-if preview outcome → ring colour. `override` marks the node the
+ *  user is overriding; the rest describe what the override did downstream. */
+export const previewRingColors: Record<string, string> = {
+  broke: 'hsl(var(--cs-red))',
+  fixed: 'hsl(var(--cs-green))',
+  changed: 'hsl(var(--cs-orange))',
+  override: 'hsl(var(--cs-blue))',
+};
+
 /** Fallback for an unknown status/priority/relation type. */
 export const FALLBACK_COLOR = 'hsl(var(--cs-grey))';
 

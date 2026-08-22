@@ -1,7 +1,7 @@
 import { memo, useState } from 'react';
 import { Handle, Position, useStore, type NodeProps } from '@xyflow/react';
 import { ChevronDown, ChevronRight, ChevronUp, Minus, ChevronsDown, ChevronsUp, FlaskConical, Sigma, AlertTriangle, Plus } from 'lucide-react';
-import { statusColors, priorityColors, constraintColors, glow } from './graphColors';
+import { statusColors, priorityColors, constraintColors, previewRingColors, glow } from './graphColors';
 import { useAuthStore } from '../store/auth';
 import { zoomLevel, labelScale, type ZoomLevel } from './semanticZoom';
 
@@ -97,10 +97,9 @@ function BlockNode({ data }: NodeProps) {
       ? `drop-shadow(0 0 7px ${glow(colors.fill, 0.28)}) drop-shadow(0 2px 6px rgba(0,0,0,0.3))`
       : `drop-shadow(0 0 3px ${glow(colors.fill, 0.13)}) drop-shadow(0 1px 3px rgba(0,0,0,0.22))`;
 
-  const previewRingColor = d.previewDelta === 'broke' ? 'hsl(0,84%,68%)'
-    : d.previewDelta === 'fixed' ? 'hsl(145,55%,42%)'
-    : d.previewDelta === 'changed' ? 'hsl(28,100%,53%)'
-    : d.isOverrideRoot ? 'hsl(207,90%,64%)'
+  const previewRingColor = d.previewDelta
+    ? previewRingColors[d.previewDelta] ?? null
+    : d.isOverrideRoot ? previewRingColors.override
     : null;
 
   const borderColor = previewRingColor
