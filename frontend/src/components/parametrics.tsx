@@ -12,6 +12,7 @@ import {
   buildParameterReferences, filterReferences, identifierFragment, resolveParameterEdit,
   type ParamOwner, type ParamReference,
 } from '../lib/parametrics';
+import { tokenizeExpr, type ExprTokenKind } from '../lib/exprTokens';
 
 /** Shared <datalist> of known units for parameter-unit autocomplete. */
 const UNITS_LIST_ID = 'rm-known-units';
@@ -55,6 +56,32 @@ export function MarginTag({ margin }: { margin: NonNullable<EvaluatedConstraint[
     <span className={`text-[10px] font-mono ${ok ? 'text-emerald-400' : 'text-red-400'}`}>
       margin {margin.value > 0 ? '+' : ''}{margin.value}
       {margin.pct !== undefined ? ` (${margin.pct > 0 ? '+' : ''}${margin.pct}%)` : ''}
+    </span>
+  );
+}
+
+/** The `--cs-*` step per token class. Uses the theme tokens only — no raw hex
+ *  and no literal palette classes — so the colours re-step for the light theme
+ *  where literals would not. */
+const EXPR_TOKEN_CLASS: Record<ExprTokenKind, string> = {
+  number: 'text-cs-orange',
+  string: 'text-cs-green',
+  ref: 'text-cs-blue',
+  func: 'text-cs-purple',
+  ident: 'text-foreground',
+  operator: 'text-cs-pink',
+  punct: 'text-muted-foreground',
+  text: '',
+};
+
+/** Read-only, token-coloured rendering of one expression. `className` applies
+ *  to the wrapper (e.g. `font-mono`); each token gets its own colour span. */
+function Expr({ expr, className = '' }: { expr: string; className?: string }) {
+  return (
+    <span className={className}>
+      {tokenizeExpr(expr).map((t, i) => (
+        <span key={i} className={EXPR_TOKEN_CLASS[t.kind] || undefined}>{t.text}</span>
+      ))}
     </span>
   );
 }
@@ -404,11 +431,12 @@ export function ParametricsCard({ reqId, parameters, constraints, evaluated, edi
             const origVal = whatIf?.base[ref];
             const whatIfOpenNow = whatIfOpen.has(ref);
             return (
-              <div key={`${p.name}-${i}`} data-param={p.name} className={`flex items-center gap-2 text-xs py-1.5 px-2 rounded hover:bg-accent group ${isOverridden ? 'ring-1 ring-dashed ring-blue-400/50 bg-blue-500/5' : ''}`}>
+              <div key={`${p.name}-${i}`} data-param={p.name} className={`flex items-start gap-2 text-xs py-1.5 px-2 rounded hover:bg-accent group ${isOverridden ? 'ring-1 ring-dashed ring-blue-400/50 bg-blue-500/5' : ''}`}>
                 <span className="font-mono font-medium text-foreground w-28 shrink-0 truncate">{p.name}</span>
                 {p.expr || p.calc_def ? (
-                  <span className="flex-1 min-w-0 truncate">
-                    <span className="font-mono text-muted-foreground">= {p.expr || p.calc_def}</span>
+                  <span className="flex-1 min-w-0 break-words">
+                    <span className="font-mono text-muted-foreground">{'= '}</span>
+                    <Expr expr={p.expr || p.calc_def || ''} className="font-mono" />
                     <span className="font-mono text-cs-teal ml-2">
                       {ev?.value != null ? `→ ${ev.value}` : ev?.detail ? `(${ev.detail})` : ''}
                     </span>
@@ -538,10 +566,10 @@ export function ParametricsCard({ reqId, parameters, constraints, evaluated, edi
             const ev = evaluated?.constraints?.[i];
             const mev = evaluated?.measured_constraints?.[i];
             return (
-              <div key={i} className="flex items-center gap-2 text-xs py-1.5 px-2 rounded hover:bg-accent group">
-                <div className="flex-1 min-w-0">
-                  <span className="font-mono text-foreground">{c.expr}</span>
-                  {c.assume && <span className="font-mono text-muted-foreground ml-2">when {c.assume}</span>}
+              <div key={i} className="flex items-start gap-2 text-xs py-1.5 px-2 rounded hover:bg-accent group">
+                <div className="flex-1 min-w-0 break-words">
+                  <Expr expr={c.expr ?? ''} className="font-mono" />
+                  {c.assume && <span className="font-mono text-muted-foreground ml-2">{'when '}<Expr expr={c.assume} /></span>}
                   {ev?.detail && <span className="text-muted-foreground ml-2">({ev.detail})</span>}
                 </div>
                 {ev?.margin && <MarginTag margin={ev.margin} />}
