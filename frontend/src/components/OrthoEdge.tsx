@@ -42,6 +42,7 @@ function OrthoEdge({ id, data, style, markerEnd }: EdgeProps) {
   const active = !!data?.showLabel;
   const hoisted = !!data?.hoisted;
   const count = (data?.count as number) || 1;
+  const dimmed = !!data?.dimmed;
 
   return (
     <>
@@ -55,13 +56,21 @@ function OrthoEdge({ id, data, style, markerEnd }: EdgeProps) {
       {hoisted && count > 1 && (
         // A hoisted edge is several relations collapsed onto one group pair —
         // badge the count so the merge reads as intentional, not as a missing
-        // line. Always shown, not gated on selection.
+        // line. Shown whether or not the edge is focused, but dimmed in
+        // step with the rest of the canvas when something else is.
         <EdgeLabelRenderer>
           <div
             style={{
               position: 'absolute',
               transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
               pointerEvents: 'none',
+              // The badge lives in EdgeLabelRenderer's portal, so it does not
+              // inherit the dim opacity applied to the edge path — without this
+              // it stays at full strength over a graph that has faded out.
+              // 0.18 matches the dimmed-node opacity so the whole recessed
+              // layer reads as one.
+              opacity: dimmed ? 0.18 : 1,
+              transition: 'opacity 0.25s ease',
             }}
             className="nodrag nopan"
           >

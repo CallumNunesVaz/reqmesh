@@ -77,3 +77,35 @@ describe('dimEdges', () => {
     expect(res.edges).toBe(edges);
   });
 });
+
+describe('dimEdges — hoisted badge dim state', () => {
+  const connected = edge('c', 'A', 'B');
+  const unrelated = edge('u', 'D', 'E');
+
+  it('marks an unconnected edge dimmed so its ×N badge can recede', () => {
+    const { edges } = dimEdges([connected, unrelated], new Map<string, EdgeDimEntry>(), opts(['A', 'B']));
+    expect((edges[0].data as Record<string, unknown>).dimmed).toBe(false);
+    expect((edges[1].data as Record<string, unknown>).dimmed).toBe(true);
+  });
+
+  it('leaves `dimmed` absent when nothing is selected, so the badge stays full strength', () => {
+    // The badge is deliberately visible with no selection — it says "this line
+    // is really N relations". Regression guard for the bug where it also stayed
+    // full strength while the rest of the canvas faded out.
+    const { edges } = dimEdges([connected, unrelated], new Map<string, EdgeDimEntry>(), {
+      ...opts([]),
+      hasSelection: false,
+    });
+    for (const e of edges) {
+      expect((e.data as Record<string, unknown>)?.dimmed).toBeUndefined();
+    }
+  });
+
+  it('keeps `dimmed` the inverse of `showLabel` while a selection is active', () => {
+    const { edges } = dimEdges([connected, unrelated], new Map<string, EdgeDimEntry>(), opts(['A', 'B']));
+    for (const e of edges) {
+      const d = e.data as Record<string, unknown>;
+      expect(d.dimmed).toBe(!d.showLabel);
+    }
+  });
+});

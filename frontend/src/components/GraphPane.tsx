@@ -351,6 +351,7 @@ function FloatingEdge({ id, source, target, data, style, markerEnd }: EdgeProps)
   const hoisted = !!data?.hoisted;
   const count = (data?.count as number) || 1;
   const showLabel = !!(data?.showLabel && edgeLabel && !(hoisted && count > 1));
+  const dimmed = !!data?.dimmed;
 
   return (
     <>
@@ -368,6 +369,13 @@ function FloatingEdge({ id, source, target, data, style, markerEnd }: EdgeProps)
               position: 'absolute',
               transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
               pointerEvents: 'none',
+              // The badge lives in EdgeLabelRenderer's portal, so it does not
+              // inherit the dim opacity applied to the edge path — without this
+              // it stays at full strength over a graph that has faded out.
+              // 0.18 matches the dimmed-node opacity so the whole recessed
+              // layer reads as one.
+              opacity: dimmed ? 0.18 : 1,
+              transition: 'opacity 0.25s ease',
             }}
             className="nodrag nopan"
           >

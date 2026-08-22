@@ -82,7 +82,11 @@ export function dimEdges(
 
     const dimmed: Edge = {
       ...e,
-      data: { ...e.data, showLabel: connected },
+      // `dimmed` rather than reusing `showLabel`: an unconnected edge has
+      // showLabel false, but so does *every* edge when nothing is selected, and
+      // the hoisted badge must stay at full strength in that case. dimEdges
+      // returns early with no selection, so `dimmed` is simply absent there.
+      data: { ...e.data, showLabel: connected, dimmed: !connected },
       className,
       style: {
         ...(e.style as Record<string, any>),
