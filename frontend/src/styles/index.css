@@ -52,13 +52,22 @@
     --cs-pink: 300 60% 64%;
     --cs-grey: 195 6% 62%;
 
-    --graph-panel-bg: 215 25% 16%;
-    --graph-panel-border: 215 20% 24%;
+    /* Canvas surface ramp. The canvas is deliberately recessed *below*
+       --background: on a dark ground elevation is carried by surface lightness,
+       not by shadow, so the nodes need a floor to sit above. Measured against
+       the canvas: node 1.25:1, node border 2.19:1, grid 1.36:1. */
+    --graph-canvas: 215 26% 9%;
+    --graph-node: 215 22% 17%;
+    --graph-node-border: 215 16% 32%;
+    --graph-grid: 215 16% 32%;
+
+    --graph-panel-bg: 215 24% 17%;
+    --graph-panel-border: 215 16% 30%;
     --graph-panel-text: 215 15% 65%;
     --graph-panel-muted: 215 15% 45%;
-    --graph-control: 215 25% 18%;
-    --graph-control-hover: 215 20% 26%;
-    --graph-minimap: 215 25% 10%;
+    --graph-control: 215 22% 20%;
+    --graph-control-hover: 215 20% 28%;
+    --graph-minimap: 215 26% 12%;
 
     /* Activity chart palette — resteps of the entity hues into the chart
      * lightness band (OKLCH L 0.48–0.67), validated against the CVD palette
@@ -108,8 +117,15 @@
     --cs-pink: 300 60% 54%;
     --cs-grey: 195 6% 55%;
 
+    /* See .dark — light mode recesses the canvas off white instead, so the
+       white node cards have something to sit on. */
+    --graph-canvas: 210 22% 94%;
+    --graph-node: 0 0% 100%;
+    --graph-node-border: 212 16% 72%;
+    --graph-grid: 212 16% 72%;
+
     --graph-panel-bg: 0 0% 100%;
-    --graph-panel-border: 210 14% 83%;
+    --graph-panel-border: 212 16% 78%;
     --graph-panel-text: 215 16% 42%;
     --graph-panel-muted: 210 12% 52%;
     --graph-control: 210 15% 94%;

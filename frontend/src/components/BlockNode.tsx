@@ -114,7 +114,7 @@ function BlockNode({ data }: NodeProps) {
     : isSelected ? colors.fill
     : hover ? 'hsl(var(--foreground) / 0.3)'
     : crossHighlighted ? 'hsl(var(--primary))'
-    : 'hsl(var(--border))';
+    : 'hsl(var(--graph-node-border))';
 
   const pulseGlow = previewRingColor
     ? `drop-shadow(0 0 9px ${glow(previewRingColor, 0.45)}) drop-shadow(0 3px 8px rgba(0,0,0,0.35))`
@@ -136,11 +136,11 @@ function BlockNode({ data }: NodeProps) {
   const showStack = d.hasChildren && d.collapsed;
   const stackCard = (offset: number, op: number) => (
     <div
-      className="absolute rounded-md border bg-card"
+      className="absolute rounded-md border bg-graph-node"
       style={{
         inset: 0,
         transform: `translate(${offset}px, ${offset}px)`,
-        borderColor: 'hsl(var(--border))',
+        borderColor: 'hsl(var(--graph-node-border))',
         opacity: (dimmed ? 0.18 : 1) * op,
         boxShadow: '0 1px 3px rgba(0,0,0,0.22)',
         pointerEvents: 'none',
@@ -162,7 +162,7 @@ function BlockNode({ data }: NodeProps) {
         </>
       )}
       <div
-        className={`relative rounded-md border bg-card ${clip ? 'overflow-hidden' : ''} ${pulseClass}`}
+        className={`relative rounded-md border bg-graph-node ${clip ? 'overflow-hidden' : ''} ${pulseClass}`}
         style={{
           width: BLOCK_W,
           minHeight: minNodeH,
@@ -179,8 +179,8 @@ function BlockNode({ data }: NodeProps) {
       </div>
       {canEdit && hover && level >= 3 && (
         <button
-          className="absolute z-40 flex items-center justify-center rounded-full border bg-card shadow-sm hover:bg-accent hover:border-foreground/40 transition-colors"
-          style={{ top: -9, left: -9, width: 18, height: 18, borderColor: 'hsl(var(--border))', lineHeight: 1 }}
+          className="absolute z-40 flex items-center justify-center rounded-full border bg-graph-node shadow-sm hover:bg-accent hover:border-foreground/40 transition-colors"
+          style={{ top: -9, left: -9, width: 18, height: 18, borderColor: 'hsl(var(--graph-node-border))', lineHeight: 1 }}
           title="Add child requirement"
           onClick={(e) => { e.stopPropagation(); d.onAddChild?.(); }}
           onDoubleClick={(e) => e.stopPropagation()}
@@ -299,7 +299,7 @@ function BlockNode({ data }: NodeProps) {
   );
 
   const footer = (
-    <div className="px-2.5 py-1 border-t flex items-center gap-1.5" style={{ borderColor: 'hsl(var(--border) / 0.6)' }}>
+    <div className="px-2.5 py-1 border-t flex items-center gap-1.5" style={{ borderColor: 'hsl(var(--graph-node-border) / 0.6)' }}>
       <span className="px-1.5 rounded text-[8.5px] font-semibold" style={{ backgroundColor: glow(colors.fill, 0.15), color: colors.text }}>
         {d.status}
       </span>
@@ -359,7 +359,7 @@ function BlockNode({ data }: NodeProps) {
             </div>
           )}
           {paramRows.length > 0 && (
-            <div className="border-t px-2.5 py-1.5" style={{ borderColor: 'hsl(var(--border) / 0.6)' }}>
+            <div className="border-t px-2.5 py-1.5" style={{ borderColor: 'hsl(var(--graph-node-border) / 0.6)' }}>
               <div className="text-[7.5px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">values</div>
               {paramRows.map((p) => (
                 <div key={p.name} className="font-mono text-[9px] leading-relaxed flex items-center gap-1" style={{ color: 'hsl(var(--foreground) / 0.85)' }}>
@@ -374,7 +374,7 @@ function BlockNode({ data }: NodeProps) {
             </div>
           )}
           {constraintRows.length > 0 && (
-            <div className="border-t px-2.5 py-1.5" style={{ borderColor: 'hsl(var(--border) / 0.6)' }}>
+            <div className="border-t px-2.5 py-1.5" style={{ borderColor: 'hsl(var(--graph-node-border) / 0.6)' }}>
               <div className="text-[7.5px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">constraints</div>
               {constraintRows.map((c, i) => (
                 <div key={i} className="font-mono text-[8.5px] leading-relaxed flex items-center gap-1.5">

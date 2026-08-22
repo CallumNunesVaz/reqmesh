@@ -404,7 +404,7 @@ function FloatingEdge({ id, source, target, data, style, markerEnd }: EdgeProps)
             className="nodrag nopan"
           >
             <span
-              className="text-[9px] font-semibold px-1.5 py-px rounded bg-card border shadow-sm"
+              className="text-[9px] font-semibold px-1.5 py-px rounded bg-graph-node border border-graph-node-border shadow-sm"
               style={{ color: edgeColor, whiteSpace: 'nowrap' }}>
               {edgeLabel}
             </span>
@@ -2033,10 +2033,10 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
   return (
     <div
       ref={graphBoxRef}
-      className={`w-full h-full bg-background relative @container${perfMode ? ' rt-perf' : ''}`}
+      className={`w-full h-full bg-graph-canvas relative @container${perfMode ? ' rt-perf' : ''}`}
       // Subtle centre glow for depth so node blooms read against some atmosphere.
       // ReactFlow is transparent, so this backdrop shows through behind the nodes.
-      style={{ background: 'radial-gradient(ellipse at 50% 38%, hsl(var(--foreground) / 0.035), transparent 62%), hsl(var(--background))' }}
+      style={{ background: 'radial-gradient(ellipse at 50% 38%, hsl(var(--foreground) / 0.035), transparent 62%), hsl(var(--graph-canvas))' }}
     >
     {/* The remount key lives on this inner wrapper, NOT the outer div: the
         splash must survive the swap so the old diagram fades straight into
@@ -2077,7 +2077,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
         defaultViewport={{ x: 0, y: 0, zoom: 0.75 }}
         style={{ background: 'transparent' }}
       >
-        <Background variant={BackgroundVariant.Dots} gap={22} size={0.3} color="hsl(var(--border) / 0.2)" />
+        <Background variant={BackgroundVariant.Dots} gap={22} size={0.5} color="hsl(var(--graph-grid) / 0.45)" />
 
         {/* Loose, rounded buttons that speak the same language as the search
             and layout panels — the default is a hard-edged welded strip. */}
@@ -2429,7 +2429,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
         {/* Relations legend — reference chrome; below @2xl it would collide
             with the (wrapping) toolbar, so it only appears on wider panes. */}
         <Panel position="top-right" className="mr-2 mt-2 hidden @2xl:block">
-          <div className="rounded-lg bg-graph-panel/85 border border-graph-border px-2.5 py-1.5 shadow-sm opacity-75 hover:opacity-100 transition-opacity">
+          <div className="rounded-lg bg-graph-panel border border-graph-border px-2.5 py-1.5 shadow-sm opacity-90 hover:opacity-100 transition-opacity">
             <div className="text-[9px] font-semibold uppercase tracking-wider text-graph-muted mb-1">Relations</div>
             <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
               {Object.entries(edgeColors).map(([type, color]) => (
