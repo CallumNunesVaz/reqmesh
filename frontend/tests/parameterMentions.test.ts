@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { searchParameters } from '../src/components/mentions';
-import { resolveParam, type ParameterRef, type ParameterValue } from '../src/components/parameterIndex';
+import {
+  overlayLocalParams, resolveParam, type ParameterRef, type ParameterValue,
+} from '../src/components/parameterIndex';
+import type { Parameter } from '../src/api/client';
 
 const ref = (entityId: string, name: string, value: number | null, unit = '', derived = false): ParameterRef =>
   ({ ref: `${entityId}.${name}`, entityId, name, unit, value, derived });
@@ -62,5 +65,57 @@ describe('resolveParam', () => {
   it('renders a valueless parameter broken', () => {
     const v = new Map<string, ParameterValue>([['REQM0002.temp_max', { value: null, unit: '°C' }]]);
     expect(resolveParam('REQM0002.temp_max', v)).toEqual({ kind: 'broken' });
+  });
+});
+
+describe('overlayLocalParams', () => {
+  // The regression this exists for: a parameter added to the parametrics card
+  // lives in the page's draft state until the requirement is saved, so the
+  // server-built index cannot know about it and the `@`-picker could not
+  // mention it without a full page reload.
+  const draft = (name: string, value: number | null, unit = '', expr: string | null = null): Parameter =>
+    ({ name, value, unit, expr } as Parameter);
+
+  it('offers a parameter that has been added but not yet saved', () => {
+    const out = overlayLocalParams(index, 'REQM0002', [
+      draft('temp_max', 30, '°C'), draft('temp_min', -5, '°C'), draft('pressure', 101, 'kPa'),
+    ]);
+    expect(out.map((r) => r.ref)).toContain('REQM0002.pressure');
+    expect(searchParameters(out, 'REQM0002', 'pressure')[0]).toEqual({
+      type: 'param', ref: 'REQM0002.pressure', name: 'pressure', unit: 'kPa', value: 101, own: true,
+    });
+  });
+
+  it('prefers the draft value and unit over the saved ones', () => {
+    const out = overlayLocalParams(index, 'REQM0002', [draft('temp_max', 45, 'K')]);
+    const hit = out.find((r) => r.ref === 'REQM0002.temp_max');
+    expect(hit).toMatchObject({ value: 45, unit: 'K' });
+    expect(out.filter((r) => r.ref === 'REQM0002.temp_max')).toHaveLength(1);
+  });
+
+  it('drops a saved parameter the draft has removed', () => {
+    const out = overlayLocalParams(index, 'REQM0002', [draft('temp_max', 30, '°C')]);
+    expect(out.map((r) => r.ref)).not.toContain('REQM0002.temp_min');
+  });
+
+  it('leaves every other entity’s parameters untouched', () => {
+    const out = overlayLocalParams(index, 'REQM0002', [draft('temp_max', 30, '°C')]);
+    expect(out.find((r) => r.ref === 'AFRM0000.empty_mass')).toEqual(index[2]);
+  });
+
+  it('marks a derived draft parameter valueless — the server has not evaluated it yet', () => {
+    const out = overlayLocalParams(index, 'REQM0002', [draft('span', null, 'm', 'temp_max * 2')]);
+    expect(out.find((r) => r.ref === 'REQM0002.span')).toMatchObject({ value: null, derived: true });
+  });
+
+  it('ignores a half-typed row with no name', () => {
+    const out = overlayLocalParams(index, 'REQM0002', [draft('  ', 5)]);
+    expect(out).toBe(index);
+  });
+
+  it('passes the index straight through with no holder or no draft', () => {
+    expect(overlayLocalParams(index, undefined, [draft('x', 1)])).toBe(index);
+    expect(overlayLocalParams(index, 'REQM0002', [])).toBe(index);
+    expect(overlayLocalParams(index, 'REQM0002', undefined)).toBe(index);
   });
 });

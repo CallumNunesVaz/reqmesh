@@ -94,6 +94,47 @@ function buildIndex(
   return { refs, values };
 }
 
+/**
+ * Overlay one entity's in-progress parameters onto the index's ref list.
+ *
+ * The index is built from the API, so it only ever knows what has been saved.
+ * A parameter typed into the parametrics card lives in the page's draft state
+ * until the requirement is saved, and without this it is invisible to the
+ * `@`-picker — you cannot mention the parameter you just added. The expression
+ * helper never had the problem because it is handed the draft list directly
+ * (`buildParameterReferences`); this brings the description surfaces in line.
+ *
+ * Local entries win on `ref`, so a parameter edited but not yet saved offers
+ * its *draft* name and unit rather than the stale saved ones. A derived
+ * parameter carries no value until the server evaluates it, which the picker
+ * already renders as "no value yet" rather than as an error.
+ */
+export function overlayLocalParams(
+  refs: ParameterRef[],
+  entityId: string | undefined,
+  params: Parameter[] | undefined,
+): ParameterRef[] {
+  if (!entityId || !params?.length) return refs;
+  const local: ParameterRef[] = [];
+  for (const p of params) {
+    const name = p.name?.trim();
+    if (!name) continue;
+    local.push({
+      ref: `${entityId}.${name}`,
+      entityId,
+      name,
+      unit: p.unit ?? '',
+      value: p.expr || p.calc_def ? null : (p.value ?? null),
+      derived: Boolean(p.expr || p.calc_def),
+    });
+  }
+  if (!local.length) return refs;
+  const overridden = new Set(local.map((r) => r.ref));
+  // Anything the draft still owns is replaced; every other entity's parameters
+  // (and this entity's saved-but-since-deleted ones) keep the index's ordering.
+  return [...refs.filter((r) => !overridden.has(r.ref) && r.entityId !== entityId), ...local];
+}
+
 let cache: { key: string; promise: Promise<ParameterIndex> } | null = null;
 
 /**

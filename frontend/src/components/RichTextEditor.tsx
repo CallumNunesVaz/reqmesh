@@ -6,12 +6,14 @@ import CharacterCount from '@tiptap/extension-character-count';
 import { Node } from '@tiptap/core';
 import { nodeInputRule } from '@tiptap/core';
 import { Bold, Italic, List, ListOrdered, Heading1, Undo2, Redo2 } from 'lucide-react';
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { loadEntityIndex, useEntityKinds, type IndexedEntity } from './entityIndex';
-import { loadParameterIndex, type ParameterRef } from './parameterIndex';
+import { loadParameterIndex, overlayLocalParams, type ParameterRef } from './parameterIndex';
 import { ENTITY_META, entityIconMeta, entityPath, type EntityKind } from './entities';
 import { findMentionTrigger, type MentionOption } from './mentions';
+import { useStore } from '../store';
+import type { Parameter } from '../api/client';
 import MentionPicker from './MentionPicker';
 
 interface RichTextEditorProps {
@@ -23,6 +25,11 @@ interface RichTextEditorProps {
   id?: string;
   /** The entity whose parameters are "own" in the picker, if any. */
   holderId?: string;
+  /** `holderId`'s parameters as the page currently holds them, including any
+   *  not yet saved. Supplied by a page that edits parameters and description
+   *  together, so a parameter can be mentioned the moment it is added rather
+   *  than only after the entity is saved. */
+  localParams?: Parameter[];
 }
 
 // Entity ids only: a parameter reference is `[[ID.param]]`, so a token with a
@@ -128,7 +135,7 @@ const EntityLinkExtension = Node.create({
   },
 });
 
-export default function RichTextEditor({ content, onChange, onBlur, disabled = false, placeholder, id, holderId }: RichTextEditorProps) {
+export default function RichTextEditor({ content, onChange, onBlur, disabled = false, placeholder, id, holderId, localParams }: RichTextEditorProps) {
   const isInternalChange = useRef(false);
   const navigate = useNavigate();
   const { projectId } = useParams<{ projectId: string }>();
@@ -153,13 +160,25 @@ export default function RichTextEditor({ content, onChange, onBlur, disabled = f
   useEffect(() => { mentionOpen.current = mention !== null; }, [mention]);
   useEffect(() => { mentionIndexRef.current = mentionIndex; }, [mentionIndex]);
 
+  // `dataVersion` has to be a *dependency*, not just the indexes' cache key.
+  // A mutation does reach us — the backend publishes one per mutating request
+  // and Layout's SSE listener bumps dataVersion — but with the effect keyed on
+  // [projectId, disabled] a mounted editor never re-read, so it went on serving
+  // the list it loaded on mount. That is what made a newly added parameter
+  // unmentionable until the page was reloaded.
+  const dataVersion = useStore((s) => s.dataVersion);
   useEffect(() => {
     if (!projectId || disabled) return;
     let live = true;
     loadEntityIndex(projectId).then((list) => { if (live) setEntities(list); });
     loadParameterIndex(projectId).then((i) => { if (live) setParameters(i.refs); });
     return () => { live = false; };
-  }, [projectId, disabled]);
+  }, [projectId, disabled, dataVersion]);
+
+  const pickerParameters = useMemo(
+    () => overlayLocalParams(parameters, holderId, localParams),
+    [parameters, holderId, localParams],
+  );
 
   const processedContent = preprocessContent(content || '');
 
@@ -390,7 +409,7 @@ export default function RichTextEditor({ content, onChange, onBlur, disabled = f
       {mention && !disabled && (
         <MentionPicker
           entities={entities}
-          parameters={parameters}
+          parameters={pickerParameters}
           holderId={holderId}
           query={mention.query}
           anchor={mention.rect}
