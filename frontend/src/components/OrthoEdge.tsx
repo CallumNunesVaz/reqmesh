@@ -49,7 +49,7 @@ function OrthoEdge({ id, data, style, markerEnd }: EdgeProps) {
       <BaseEdge
         id={id}
         path={path}
-        style={{ ...style, stroke: edgeColor, fill: 'none', strokeLinecap: 'round', ...(active ? { cursor: 'pointer', pointerEvents: 'auto' as any } : {}) }}
+        style={{ ...style, stroke: edgeColor, fill: 'none', strokeLinecap: 'round', '--rt-edge-stroke': edgeColor, ...(active ? { cursor: 'pointer', pointerEvents: 'auto' as any } : {}) } as any}
         markerEnd={markerEnd}
         interactionWidth={selectedReqId ? 20 : 0}
       />

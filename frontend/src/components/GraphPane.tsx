@@ -358,7 +358,7 @@ function FloatingEdge({ id, source, target, data, style, markerEnd }: EdgeProps)
       <BaseEdge
         id={id}
         path={edgePath}
-        style={{ ...style, stroke: edgeColor, fill: 'none', strokeLinecap: 'round' }}
+        style={{ ...style, stroke: edgeColor, fill: 'none', strokeLinecap: 'round', '--rt-edge-stroke': edgeColor } as any}
         markerEnd={markerEnd}
         interactionWidth={selectedReqId ? 20 : 0}
       />
@@ -2030,7 +2030,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
   return (
     <div
       ref={graphBoxRef}
-      className={`w-full h-full bg-graph-canvas relative @container${perfMode ? ' rt-perf' : ''}`}
+      className={`w-full h-full bg-graph-canvas relative @container${perfMode ? ' rt-perf' : ''}${hasSelection ? ' rt-dimming' : ''}`}
       // Subtle centre glow for depth so node blooms read against some atmosphere.
       // ReactFlow is transparent, so this backdrop shows through behind the nodes.
       style={{ background: 'radial-gradient(ellipse at 50% 38%, hsl(var(--foreground) / 0.035), transparent 62%), hsl(var(--graph-canvas))' }}
@@ -2496,10 +2496,6 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
         .react-flow__edge-path { transition: stroke-opacity 0.2s, opacity 0.25s ease, filter 0.25s ease; }
         @keyframes retractEdge { to { stroke-dashoffset: var(--edge-len); } }
         @keyframes growEdge { from { stroke-dashoffset: var(--edge-len); } to { stroke-dashoffset: 0; } }
-        .react-flow__edge.rt-drift .react-flow__edge-path {
-          animation: rt-dash-drift 22s linear infinite;
-        }
-        @keyframes rt-dash-drift { to { stroke-dashoffset: -315; } }
         .react-flow__controls-button { width: 24px; height: 24px; }
         .react-flow__background { background-color: transparent !important; }
         .react-flow__minimap { background-color: hsl(var(--graph-minimap)) !important; }

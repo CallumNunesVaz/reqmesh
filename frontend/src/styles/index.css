@@ -212,4 +212,43 @@
     background-color: hsl(var(--primary) / 0.12);
     box-shadow: inset 2px 0 0 hsl(var(--primary));
   }
+
+  /* Edge dimming (H-13b). When a selection is active the React Flow container
+     carries `rt-dimming`, and edges inside the highlighted neighbourhood carry
+     `rt-connected`. The opacity values, the connected-edge bloom and the dashed
+     drift animation live here rather than as ~1,500 inline styles, so a
+     selection change flips a handful of class attributes and CSS does the rest
+     in a single style pass. The unconnected majority needs no per-edge
+     attribute at all: this dimmed default is what they fall through to. */
+  .rt-dimming .react-flow__edge-path {
+    /* !important is required to beat the inline baseline opacity every edge
+       carries (0.45 relations / 0.35 parents, raised to 0.55 / 0.7 after
+       layout) — the same reason `.rt-perf` needs it. */
+    opacity: 0.04 !important;
+    filter: none;
+  }
+  .rt-dimming .react-flow__edge.rt-connected .react-flow__edge-path {
+    /* `max(existing opacity, 0.9)` — existing edge opacities never exceed 0.9,
+       so the ceiling is a constant here. */
+    opacity: 0.9 !important;
+    /* The bloom interpolates the edge's own stroke colour via the custom
+       property written on the path at render time (see OrthoEdge/FloatingEdge). */
+    filter: drop-shadow(0 0 2px var(--rt-edge-stroke));
+  }
+  /* Perf mode must kill the bloom, and cannot do it from GraphPane's inline
+     <style>. That block is unlayered, and for `!important` declarations layer
+     precedence *inverts* — a layered important rule beats an unlayered one — so
+     `.rt-perf .react-flow__edge-path { filter: none !important }` loses to the
+     rule above no matter how the specificities compare. The override therefore
+     has to live in this layer, and outrank it here (0,5,0 vs 0,4,0). */
+  .rt-perf.rt-dimming .react-flow__edge.rt-connected .react-flow__edge-path {
+    filter: none !important;
+  }
+  .react-flow__edge.rt-drift .react-flow__edge-path {
+    animation: rt-dash-drift 22s linear infinite;
+  }
+}
+
+@keyframes rt-dash-drift {
+  to { stroke-dashoffset: -315; }
 }
