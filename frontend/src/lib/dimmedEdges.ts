@@ -7,10 +7,24 @@ import type { Edge } from '@xyflow/react';
 // allocations and 1,500 changed prop identities per click — and every edge
 // component re-renders whether or not its own state changed.
 //
-// This keeps an id-keyed map of the previous pass and returns the *same* object
-// identity for an edge whose computed `connected`/`opacity`/`className`/`filter`
-// are unchanged, so `memo(...)`-wrapped edge components bail out instead of
-// re-deriving their geometry.
+// Task 149 removed the allocation/re-render cost by returning the *same* object
+// identity for an edge whose computed state is unchanged, so `memo(...)`-wrapped
+// edge components bail out instead of re-deriving their geometry. This pass
+// keeps that guarantee. What it no longer does is write a fresh `opacity` and
+// `filter` into each edge's inline `style` — that was the remaining cost (one
+// click dirtied ~1,500 SVG elements and forced a full style + paint pass).
+//
+// Dimming is now expressed as a `rt-dimming` class on the React Flow container
+// plus a `rt-connected` class on edges inside the highlighted neighbourhood;
+// the opacity values, the drop-shadow bloom and the dashed drift animation live
+// in CSS (`frontend/src/styles/index.css`). A selection change flips a handful
+// of class attributes and CSS does the rest in one style pass. The unconnected
+// majority needs no per-edge attribute at all — it is the default under
+// `rt-dimming`.
+//
+// `data.dimmed` is still computed here: the hoisted ×N badge is portalled out
+// of the SVG by `EdgeLabelRenderer` and therefore cannot inherit the ancestor
+// opacity the CSS dimming provides, so it reads this flag to recede in step.
 
 export interface EdgeDimOptions {
   hasSelection: boolean;
@@ -27,9 +41,7 @@ export interface EdgeDimEntry {
   source: Edge;
   dimmed: Edge;
   connected: boolean;
-  opacity: number;
   className: string | undefined;
-  filter: string | undefined;
 }
 
 export interface EdgeDimResult {
@@ -64,18 +76,14 @@ export function dimEdges(
       : o.linkDir === 'in' ? ds === (dt ?? -99) + 1
       : ds !== dt;
     const connected = o.derivationActive ? bothIn : bothIn && (o.showAllLinks || radial);
-    const style = e.style as Record<string, any> | undefined;
-    const stroke = style?.stroke as string | undefined;
-    const dashed = ((style?.strokeDasharray ?? 'none') !== 'none');
-    const opacity = connected ? Math.max((style?.opacity as number) || 0.55, 0.9) : 0.04;
-    // A hint of bloom on active edges — just enough to trace them.
-    // (Skipped in perf mode: SVG filters force slow re-rasterisation.)
-    const filter = connected && stroke && !o.perfMode ? `drop-shadow(0 0 2px ${stroke})` : undefined;
-    const className = connected && dashed && !o.perfMode ? 'rt-drift' : undefined;
+    // Dashed edges get the travelling dash animation while connected. The dash
+    // pattern is construction data, not a per-selection write, so reading it
+    // here costs nothing and the class is only ~100 elements.
+    const dashed = (((e.style as Record<string, any> | undefined)?.strokeDasharray ?? 'none') !== 'none');
+    const className = connected ? `rt-connected${dashed && !o.perfMode ? ' rt-drift' : ''}` : undefined;
 
     const hit = prev.get(e.id);
-    if (hit && hit.source === e && hit.connected === connected && hit.opacity === opacity
-      && hit.className === className && hit.filter === filter) {
+    if (hit && hit.source === e && hit.connected === connected && hit.className === className) {
       next.set(e.id, hit);
       return hit.dimmed;
     }
@@ -88,13 +96,8 @@ export function dimEdges(
       // returns early with no selection, so `dimmed` is simply absent there.
       data: { ...e.data, showLabel: connected, dimmed: !connected },
       className,
-      style: {
-        ...(e.style as Record<string, any>),
-        opacity,
-        filter,
-      },
     };
-    next.set(e.id, { source: e, dimmed, connected, opacity, className, filter });
+    next.set(e.id, { source: e, dimmed, connected, className });
     return dimmed;
   });
   return { edges: out, prev: next };

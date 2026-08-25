@@ -62,13 +62,24 @@ describe('dimEdges', () => {
     expect((pass2.edges[0].style as any).stroke).toBe('#f00');
   });
 
-  it('applies the dimmed/connected styling to the computed values', () => {
+  it('marks connected edges with a class and does not write per-edge opacity/filter', () => {
     const res = dimEdges([e1, e2], new Map(), opts(['A', 'B']));
     // e1 connected, e2 dimmed.
-    expect((res.edges[0].style as any).opacity).toBeGreaterThanOrEqual(0.9);
+    expect(res.edges[0].className).toBe('rt-connected');
     expect((res.edges[0].data as any).showLabel).toBe(true);
-    expect((res.edges[1].style as any).opacity).toBe(0.04);
+    expect((res.edges[0].data as any).dimmed).toBe(false);
+
+    // The unconnected majority carries no per-edge attribute at all.
+    expect(res.edges[1].className).toBeUndefined();
     expect((res.edges[1].data as any).showLabel).toBe(false);
+    expect((res.edges[1].data as any).dimmed).toBe(true);
+
+    // Neither edge's inline style is touched: no dimming opacity, no bloom
+    // filter, and the style object itself is reused by reference.
+    expect(res.edges[0].style).toBe(e1.style);
+    expect(res.edges[1].style).toBe(e2.style);
+    expect((res.edges[0].style as any).filter).toBeUndefined();
+    expect((res.edges[1].style as any).filter).toBeUndefined();
   });
 
   it('returns the input edges untouched when there is no selection', () => {
