@@ -4,6 +4,7 @@ import { loadEntityIndex, type IndexedEntity } from './entityIndex';
 import { loadParameterIndex, type ParameterRef } from './parameterIndex';
 import { caretRect, findMentionTrigger, type MentionOption } from './mentions';
 import MentionPicker from './MentionPicker';
+import { useStore } from '../store';
 
 /**
  * A `<textarea>` with the same `@`-mention picker as the rich-text editor.
@@ -35,13 +36,17 @@ export default function MentionTextarea({ value, onChange, ...rest }: MentionTex
   const [index, setIndex] = useState(0);
   const results = useRef<MentionOption[]>([]);
 
+  // See RichTextEditor: `dataVersion` must be a dependency, or a mounted editor
+  // keeps serving the list it loaded on mount even after an SSE change event
+  // has invalidated both indexes underneath it.
+  const dataVersion = useStore((s) => s.dataVersion);
   useEffect(() => {
     if (!projectId || rest.disabled) return;
     let live = true;
     loadEntityIndex(projectId).then((list) => { if (live) setEntities(list); });
     loadParameterIndex(projectId).then((i) => { if (live) setParameters(i.refs); });
     return () => { live = false; };
-  }, [projectId, rest.disabled]);
+  }, [projectId, rest.disabled, dataVersion]);
 
   const refresh = useCallback(() => {
     const el = ref.current;

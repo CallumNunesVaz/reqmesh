@@ -1045,6 +1045,7 @@ export default function RequirementDetailPage() {
                 disabled={false}
                 placeholder="Write a requirement description…"
                 holderId={req.id}
+                localParams={req.parameters || []}
               />
             ) : (
               // Read mode: render the rich text with entity ids linked and
@@ -1717,6 +1718,7 @@ export default function RequirementDetailPage() {
                     onBlur={() => {}}
                     disabled={false}
                     holderId={req.id}
+                    localParams={req.parameters || []}
                   />
                 ) : (
                   <AutoLinkHtml
