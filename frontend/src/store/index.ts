@@ -1,6 +1,23 @@
 import { create } from 'zustand';
 import type { Project, Requirement, Specification, VerificationCase } from '../api/client';
 
+/** List/table density. `comfortable` is the default and renders exactly as the
+ *  app did before the setting existed (the `rt-row` marker is inert at
+ *  comfortable); `compact` tightens vertical padding on list rows. */
+export type Density = 'comfortable' | 'compact';
+
+// Read once at module load so a saved `compact` is available before first paint
+// (the same pre-paint read the theme does in its useState initializer). The
+// DOM attribute itself is applied by DensityProvider on mount.
+const initialDensity: Density = (() => {
+  if (typeof window === 'undefined') return 'comfortable';
+  try {
+    return localStorage.getItem('rt-density') === 'compact' ? 'compact' : 'comfortable';
+  } catch {
+    return 'comfortable';
+  }
+})();
+
 interface AppState {
   projects: Project[];
   currentProject: Project | null;
@@ -13,6 +30,8 @@ interface AppState {
   dataVersion: number;
   refocusGraph: number;
   helpersEnabled: boolean;
+  /** List/table density — `comfortable` (default) or `compact`. */
+  density: Density;
   /** Baselines explicitly hidden in the graph filter — empty = nothing hidden. */
   hiddenBaselines: string[];
   /** Components explicitly hidden in the graph filter — empty = nothing hidden. */
@@ -31,6 +50,7 @@ interface AppState {
   bumpGraphVersion: () => void;
   bumpDataVersion: () => void;
   toggleHelpers: () => void;
+  setDensity: (density: Density) => void;
   setNavGuard: (fn: (() => boolean | Promise<boolean>) | null) => void;
   setHiddenBaselines: (filters: string[]) => void;
   toggleHiddenBaseline: (name: string) => void;
@@ -60,6 +80,7 @@ export const useStore = create<AppState>((set) => ({
   dataVersion: 0,
   refocusGraph: 0,
   helpersEnabled: false,
+  density: initialDensity,
   hiddenBaselines: [],
   hiddenComponents: [],
   navGuard: null,
@@ -74,6 +95,7 @@ export const useStore = create<AppState>((set) => ({
   bumpGraphVersion: () => set((s) => ({ graphVersion: s.graphVersion + 1, refocusGraph: s.refocusGraph + 1 })),
   bumpDataVersion: () => set((s) => ({ dataVersion: s.dataVersion + 1 })),
   toggleHelpers: () => set((s) => ({ helpersEnabled: !s.helpersEnabled })),
+  setDensity: (density) => set({ density }),
   setNavGuard: (navGuard) => set({ navGuard }),
   setHiddenBaselines: (hiddenBaselines) => set({ hiddenBaselines }),
   toggleHiddenBaseline: (name) => set((s) => {

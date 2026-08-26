@@ -338,7 +338,7 @@ export default function DecisionsPage() {
                 transition={{ delay: i * 0.03 }}
                 className={`card hover:shadow-md transition-shadow group ${focusId === d.id || selectedId === d.id ? 'ring-2 ring-primary/50' : ''}`}
               >
-                <div className="flex items-center gap-3 p-4">
+                <div className="rt-row flex items-center gap-3 p-4">
                     {editable && (
                       <button
                         type="button"

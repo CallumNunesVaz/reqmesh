@@ -477,7 +477,7 @@ export default function UsersPage() {
                     const isSelf = u.username === username;
                     const isEditing = editingRow === u.username;
                     return (
-                      <tr key={u.username} className={`hover:bg-accent/30 transition-colors ${isSelf ? 'bg-primary/[0.02]' : ''} ${u.disabled ? 'opacity-60' : ''}`}>
+                      <tr key={u.username} className={`rt-row hover:bg-accent/30 transition-colors ${isSelf ? 'bg-primary/[0.02]' : ''} ${u.disabled ? 'opacity-60' : ''}`}>
                         <td className="px-3 py-2.5">
                           <input type="checkbox" checked={selected.has(u.username)} onChange={() => toggleSelect(u.username)} className="w-3.5 h-3.5 rounded-md border-muted-foreground/30" aria-label={`Select ${u.username}`} />
                         </td>

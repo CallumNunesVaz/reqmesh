@@ -384,7 +384,7 @@ export default function ComponentsPage() {
               navigate(`/project/${projectId}/components/${node.id}`);
             }
           }}
-          className={`group flex items-center gap-2 px-2 py-2 rounded-lg cursor-pointer transition-colors hover:bg-accent ${isFocused ? 'bg-accent ring-1 ring-ring/30' : ''} ${draggingIds.includes(node.id) ? 'opacity-40' : ''}`}
+          className={`group rt-row flex items-center gap-2 px-2 py-2 rounded-lg cursor-pointer transition-colors hover:bg-accent ${isFocused ? 'bg-accent ring-1 ring-ring/30' : ''} ${draggingIds.includes(node.id) ? 'opacity-40' : ''}`}
         >
           {/* Left cell. The tree indent lives here, not on the row, so the
               quantity, satisfies and action columns to its right start at the

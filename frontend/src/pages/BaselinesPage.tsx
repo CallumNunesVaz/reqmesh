@@ -287,7 +287,7 @@ export default function BaselinesPage() {
     <Reveal
       key={b.name}
       id={`entity-${b.name}`}
-      className={`card p-4 ${selectedId === b.name ? 'ring-2 ring-primary/50' : ''}`}
+      className={`card rt-row p-4 ${selectedId === b.name ? 'ring-2 ring-primary/50' : ''}`}
     >
       {/* Row header */}
       <div className="flex items-start justify-between gap-3">

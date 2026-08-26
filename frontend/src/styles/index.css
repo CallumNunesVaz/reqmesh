@@ -238,6 +238,23 @@
     box-shadow: inset 2px 0 0 hsl(var(--primary));
   }
 
+  /* List/table density (see 173-density). `rt-row` is a marker only: it
+     carries no styling of its own, so adding it to a row cannot change today's
+     appearance. Every rule that mentions it lives under
+     [data-density="compact"] — density.test.ts reads this file and fails if one
+     appears outside that selector. The `!important` beats the rows' `py-*`
+     utilities, which live in the later `utilities` layer (the same layer
+     inversion that forces `!important` on `.rt-perf` below). */
+  :root[data-density="compact"] .rt-row {
+    padding-top: 0.25rem !important;
+    padding-bottom: 0.25rem !important;
+  }
+  /* Table rows carry their vertical padding on the cells, not the <tr>. */
+  :root[data-density="compact"] .rt-row > td {
+    padding-top: 0.25rem !important;
+    padding-bottom: 0.25rem !important;
+  }
+
   /* Edge dimming (H-13b). When a selection is active the React Flow container
      carries `rt-dimming`, and edges inside the highlighted neighbourhood carry
      `rt-connected`. The opacity values, the connected-edge bloom and the dashed

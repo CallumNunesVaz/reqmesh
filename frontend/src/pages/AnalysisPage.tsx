@@ -325,7 +325,7 @@ export default function AnalysisPage() {
                   focusId === c.id || selectedId === c.id ? 'ring-2 ring-primary/50' : ''
                 }`}
               >
-                <div className="flex items-center gap-3 p-4">
+                <div className="rt-row flex items-center gap-3 p-4">
                     {editable && (
                       <button
                         type="button"
