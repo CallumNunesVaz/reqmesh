@@ -1,11 +1,11 @@
 import { useEffect, useId, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
 import { ArrowLeft, Save, Settings, X, Plus } from 'lucide-react';
 import { api, type StakeholderDef, type RiskMatrix } from '../api/client';
 import { useAuthStore } from '../store/auth';
 import { useToasts } from '../components/Toast';
 import GitPanel from '../components/GitPanel';
+import Reveal from '../components/Reveal';
 
 interface NamingRule {
   prefix_length: number;
@@ -193,7 +193,7 @@ export default function ProjectSettingsPage() {
       </div>
 
       {/* Project name */}
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="card p-5 mb-6">
+      <Reveal className="card p-5 mb-6">
         <h2 className="font-semibold text-sm text-card-foreground mb-3">Project Name</h2>
         <input
           className="input text-lg font-medium"
@@ -202,10 +202,10 @@ export default function ProjectSettingsPage() {
           disabled={!editable}
           placeholder="My Project"
         />
-      </motion.div>
+      </Reveal>
 
       {/* Naming standards */}
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="card p-5 mb-6">
+      <Reveal step={1} className="card p-5 mb-6">
         <h2 className="font-semibold text-sm text-card-foreground mb-1">Naming Standards</h2>
         <p className="text-xs text-muted-foreground mb-4">Define ID patterns for auto-generated entity IDs. Used by the "Next UID" feature and the create-requirement modal.</p>
 
@@ -265,10 +265,10 @@ export default function ProjectSettingsPage() {
             </div>
           ))}
         </div>
-      </motion.div>
+      </Reveal>
 
       {/* Stakeholders */}
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="card p-5 mb-6">
+      <Reveal step={2} className="card p-5 mb-6">
         <h2 className="font-semibold text-sm text-card-foreground mb-1">Stakeholders</h2>
         <p className="text-xs text-muted-foreground mb-3">
           Whose views requirements are scored against, and how much each one counts.
@@ -312,11 +312,11 @@ export default function ProjectSettingsPage() {
             </button>
           </div>
         )}
-      </motion.div>
+      </Reveal>
 
       {/* Risk matrix */}
       {riskMatrix && (
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="card p-5 mb-6">
+        <Reveal step={2} className="card p-5 mb-6">
           <h2 className="font-semibold text-sm text-card-foreground mb-1">Risk Matrix</h2>
           <p className="text-xs text-muted-foreground mb-3">
             Every risk states a severity and a likelihood; this grid turns that pair into its rating.
@@ -433,11 +433,11 @@ export default function ProjectSettingsPage() {
               </div>
             ))}
           </div>
-        </motion.div>
+        </Reveal>
       )}
 
       {/* Git Integration */}
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="card p-5 mb-6">
+      <Reveal step={3} className="card p-5 mb-6">
         <h2 className="font-semibold text-sm text-card-foreground mb-1">Git Integration</h2>
         <p className="text-xs text-muted-foreground mb-4">Configure how this project syncs with a git remote. These settings are stored in <code className="bg-muted px-1 rounded">_meta.yaml</code> and apply to this project only.</p>
 
@@ -534,7 +534,7 @@ export default function ProjectSettingsPage() {
             </div>
           </div>
         </div>
-      </motion.div>
+      </Reveal>
 
       {/* Git Panel — status, push, remote, hooks, history */}
       <GitPanel

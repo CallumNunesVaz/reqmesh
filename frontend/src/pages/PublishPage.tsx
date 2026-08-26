@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { FileDown, FileText, FileCode, File, Download, Loader, AlertTriangle } from 'lucide-react';
 import { api } from '../api/client';
 import EmptyState from '../components/EmptyState';
+import Reveal from '../components/Reveal';
 
 const formats = [
   { id: 'html', label: 'HTML Report', icon: FileCode, desc: 'Rich colorized web report with tables, charts, and hierarchy', ext: '.html' },
@@ -142,7 +143,7 @@ export default function PublishPage() {
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={() => setSelectedFormat(fmt.id)}
-              className={`card p-4 text-left transition-all cursor-pointer ${
+              className={`card p-4 text-left transition-[border-color,box-shadow] cursor-pointer ${
                 active ? 'ring-2 ring-primary border-primary' : 'hover:shadow-md'
               }`}
             >
@@ -166,7 +167,7 @@ export default function PublishPage() {
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={() => setSelectedFormat(fmt.id)}
-              className={`card p-4 text-left transition-all cursor-pointer ${
+              className={`card p-4 text-left transition-[border-color,box-shadow] cursor-pointer ${
                 active ? 'ring-2 ring-primary border-primary' : 'hover:shadow-md'
               }`}
             >
@@ -190,7 +191,7 @@ export default function PublishPage() {
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={() => setSelectedFormat(fmt.id)}
-              className={`card p-4 text-left transition-all cursor-pointer ${
+              className={`card p-4 text-left transition-[border-color,box-shadow] cursor-pointer ${
                 active ? 'ring-2 ring-primary border-primary' : 'hover:shadow-md'
               }`}
             >
@@ -221,7 +222,7 @@ export default function PublishPage() {
 
       <div className="grid grid-cols-1 @4xl:grid-cols-3 gap-6">
         <div className="@4xl:col-span-1">
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="card p-4">
+          <Reveal className="card p-4">
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-semibold text-sm text-card-foreground">
                 {reportFormatIds.has(selectedFormat) ? 'Sections' : 'Format Info'}
@@ -280,7 +281,7 @@ export default function PublishPage() {
                 )}
               </button>
             </div>
-          </motion.div>
+          </Reveal>
         </div>
 
         <div className="@4xl:col-span-2">

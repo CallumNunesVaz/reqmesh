@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef, createContext, useContext } from 'react';
 import { X, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { GuardedLink } from './navGuard';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 export type ToastKind = 'success' | 'error';
 export interface ToastAction { label: string; to: string }
@@ -32,10 +33,7 @@ export function useToasts() {
 }
 
 export function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: (id: number) => void }) {
-  const reducedMotion = useRef(false);
-  useEffect(() => {
-    reducedMotion.current = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  }, []);
+  const reducedMotion = useReducedMotion();
 
   const [entering, setEntering] = useState(true);
   useEffect(() => {
@@ -55,7 +53,7 @@ export function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: (id: nu
     <div
       role="alert"
       className={`flex items-center gap-2 px-4 py-2.5 rounded-lg shadow-lg text-white text-sm ${bg} ${
-        reducedMotion.current ? '' : 'transition-all duration-300'
+        reducedMotion ? '' : 'transition-[transform,opacity] duration-300'
       } ${entering ? 'translate-y-4 opacity-0' : 'translate-y-0 opacity-100'}`}
     >
       {toast.kind === 'success' ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}

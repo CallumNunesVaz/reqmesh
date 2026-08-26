@@ -163,7 +163,7 @@ export default function ProjectsPage() {
                     e.stopPropagation();
                     handleDelete(project.id);
                   }}
-                  className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                  className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-[color,background-color,opacity]"
                   title="Delete"
                 >
                   <Trash2 size={14} />
@@ -177,7 +177,7 @@ export default function ProjectsPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: projects.length * 0.05 }}
-              className="card p-5 border-dashed border-2 border-muted-foreground/25 hover:border-primary/40 hover:shadow-md transition-all cursor-pointer group flex items-center justify-center min-h-[140px]"
+              className="card p-5 border-dashed border-2 border-muted-foreground/25 hover:border-primary/40 hover:shadow-md transition-[border-color,box-shadow] cursor-pointer group flex items-center justify-center min-h-[140px]"
               onClick={() => setShowCreate(true)}
             >
               <div className="text-center">

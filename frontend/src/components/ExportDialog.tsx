@@ -305,7 +305,7 @@ export default function ExportDialog({ open, onClose, projectId }: ExportDialogP
                       <button
                         key={fmt.id}
                         onClick={() => setFormat(fmt.id)}
-                        className={`flex flex-col items-center gap-1 p-3 rounded-lg border text-xs transition-all ${
+                        className={`flex flex-col items-center gap-1 p-3 rounded-lg border text-xs transition-colors ${
                           active ? 'border-primary bg-primary/5 text-primary' : 'border bg-card text-muted-foreground hover:border-ring/30'
                         }`}
                       >
@@ -332,7 +332,7 @@ export default function ExportDialog({ open, onClose, projectId }: ExportDialogP
                       <button
                         key={fmt.id}
                         onClick={() => setFormat(fmt.id)}
-                        className={`flex flex-col items-center gap-1 p-3 rounded-lg border text-xs transition-all ${
+                        className={`flex flex-col items-center gap-1 p-3 rounded-lg border text-xs transition-colors ${
                           active ? 'border-primary bg-primary/5 text-primary' : 'border bg-card text-muted-foreground hover:border-ring/30'
                         }`}
                       >
@@ -359,7 +359,7 @@ export default function ExportDialog({ open, onClose, projectId }: ExportDialogP
                       <button
                         key={fmt.id}
                         onClick={() => setFormat(fmt.id)}
-                        className={`flex flex-col items-center gap-1 p-3 rounded-lg border text-xs transition-all ${
+                        className={`flex flex-col items-center gap-1 p-3 rounded-lg border text-xs transition-colors ${
                           active ? 'border-primary bg-primary/5 text-primary' : 'border bg-card text-muted-foreground hover:border-ring/30'
                         }`}
                       >

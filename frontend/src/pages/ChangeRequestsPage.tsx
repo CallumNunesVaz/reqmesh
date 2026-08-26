@@ -589,7 +589,7 @@ export default function ChangeRequestsPage() {
                     {canMaintain && (
                       <button
                         onClick={() => handleExecute(cr.id, rl)}
-                        className="p-1.5 rounded-md hover:bg-cs-green/10 text-muted-foreground hover:text-cs-green opacity-0 group-hover:opacity-100 transition-all"
+                        className="p-1.5 rounded-md hover:bg-cs-green/10 text-muted-foreground hover:text-cs-green opacity-0 group-hover:opacity-100 transition-[color,background-color,opacity]"
                         title="Execute"
                       >
                         <Play size={14} />
@@ -598,7 +598,7 @@ export default function ChangeRequestsPage() {
                     {editable && (
                       <button
                         onClick={() => startEditing(cr)}
-                        className="p-1.5 rounded-md hover:bg-primary/10 text-muted-foreground hover:text-primary opacity-0 group-hover:opacity-100 transition-all"
+                        className="p-1.5 rounded-md hover:bg-primary/10 text-muted-foreground hover:text-primary opacity-0 group-hover:opacity-100 transition-[color,background-color,opacity]"
                         title="Edit"
                       >
                         <Edit3 size={14} />
@@ -607,14 +607,14 @@ export default function ChangeRequestsPage() {
                     {canMaintain && (
                       <button
                         onClick={() => handleReject(cr.id)}
-                        className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                        className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-[color,background-color,opacity]"
                         title="Reject"
                       >
                         <Ban size={14} />
                       </button>
                     )}
                     {editable && (
-                      <button onClick={() => handleDelete(cr.id)} className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all" title="Delete">
+                      <button onClick={() => handleDelete(cr.id)} className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-[color,background-color,opacity]" title="Delete">
                         <Trash2 size={14} />
                       </button>
                     )}

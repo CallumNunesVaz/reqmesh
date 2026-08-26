@@ -13,6 +13,7 @@ import AutocompleteInput from '../components/AutocompleteInput';
 import { EntityLink, entityPath, SECTION_TITLES, type EntityKind } from '../components/entities';
 import LoadingSplash from '../components/LoadingSplash';
 import EmptyState from '../components/EmptyState';
+import Reveal from '../components/Reveal';
 
 // Cell tint per link type. Falls back to a neutral chip for any type not
 // listed here (importers emit types like `verifies`/`traces` too).
@@ -191,7 +192,7 @@ export default function TraceMatrixPage() {
     // view keeps `max-w-5xl mx-auto`.
     <div className={viewMode === 'list' ? 'relative max-w-5xl mx-auto p-8' : 'relative p-8'}>
       {loading && links.length === 0 && requirements.length === 0 && <LoadingSplash label="Loading trace matrix…" />}
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+      <Reveal>
         <h1 className="text-2xl font-bold tracking-tight text-foreground">{SECTION_TITLES.traces}</h1>
         <p className="text-sm text-muted-foreground mt-1">{filtering ? `${filteredLinks.length} of ${links.length} trace links` : `${links.length} trace links`}</p>
         <div className="flex gap-1 mt-2">
@@ -215,7 +216,7 @@ export default function TraceMatrixPage() {
             <Download size={13} /> CSV
           </button>
         </div>
-      </motion.div>
+      </Reveal>
 
       {error && <div className="mb-4 text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">{error}</div>}
 
@@ -249,7 +250,7 @@ export default function TraceMatrixPage() {
       </div>
 
       {editable && (
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="card p-4 mt-6">
+      <Reveal step={2} className="card p-4 mt-6">
         <h2 className="font-semibold text-sm text-card-foreground mb-3 flex items-center gap-2">
           <GitBranch size={16} /> Add Trace Link
         </h2>
@@ -291,7 +292,7 @@ export default function TraceMatrixPage() {
             <Plus size={14} /> Add
           </button>
         </div>
-      </motion.div>
+      </Reveal>
       )}
 
       {links.length === 0 ? (
@@ -333,7 +334,7 @@ export default function TraceMatrixPage() {
                     {editable && link.stored !== false && (
                     <button
                       onClick={() => removeLink(link)}
-                      className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                      className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-[color,background-color,opacity]"
                     >
                       <X size={12} />
                     </button>

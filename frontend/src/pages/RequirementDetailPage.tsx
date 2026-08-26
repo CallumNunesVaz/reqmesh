@@ -29,6 +29,7 @@ import ParametricsGuide from '../components/ParametricsGuide';
 import { LinkEditor } from '../components/LinkEditor';
 import { useKeyboardShortcuts } from '../components/useKeyboardShortcuts';
 import LoadingSplash from '../components/LoadingSplash';
+import Reveal from '../components/Reveal';
 import { HistoryPanel } from '../components/HistoryPanel';
 import { CommentThread } from '../components/CommentThread';
 import { useToasts } from '../components/Toast';
@@ -1025,7 +1026,7 @@ export default function RequirementDetailPage() {
       )}
       <div className="grid grid-cols-1 @4xl:grid-cols-3 gap-6">
         <div className="@4xl:col-span-2 space-y-6">
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="card p-5">
+          <Reveal className="card p-5">
             <label className="label">Name<input
               className="input text-lg font-medium"
               value={req.name}
@@ -1057,9 +1058,9 @@ export default function RequirementDetailPage() {
                 className="prose prose-sm dark:prose-invert max-w-none border rounded-lg p-3 min-h-[80px] opacity-90"
               />
             )}
-          </motion.div>
+          </Reveal>
           {qualityResult && (
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="card p-5">
+            <Reveal step={1} className="card p-5">
               <h2 className="font-semibold text-sm text-card-foreground mb-3 flex items-center gap-2"><Sparkles size={14} className="text-cs-purple" /> Quality</h2>
               <div className="flex items-center gap-3 mb-3">
                 <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-lg font-bold ${qualityScore >= 80 ? 'bg-cs-green/10 text-cs-green' : qualityScore >= 50 ? 'bg-cs-amber/10 text-cs-amber' : 'bg-cs-red/10 text-cs-red'}`}>
@@ -1067,7 +1068,7 @@ export default function RequirementDetailPage() {
                 </div>
                 <div className="flex-1">
                   <div className="w-full bg-muted rounded-full h-2">
-                    <div className={`h-full rounded-full transition-all duration-500 ${qualityScore >= 80 ? 'bg-cs-green' : qualityScore >= 50 ? 'bg-cs-amber' : 'bg-cs-red'}`} style={{ width: `${qualityScore}%` }} />
+                    <div className={`h-full rounded-full transition-[width,background-color] duration-500 ${qualityScore >= 80 ? 'bg-cs-green' : qualityScore >= 50 ? 'bg-cs-amber' : 'bg-cs-red'}`} style={{ width: `${qualityScore}%` }} />
                   </div>
                   <div className="text-[10px] text-muted-foreground mt-1">/100</div>
                 </div>
@@ -1081,9 +1082,9 @@ export default function RequirementDetailPage() {
                   ))}
                 </div>
               )}
-            </motion.div>
+            </Reveal>
           )}
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="card p-5">
+          <Reveal step={2} className="card p-5">
             <h2 className="font-semibold text-sm text-card-foreground mb-1">Relations</h2>
             <HelpTip>Link this requirement to others using relationship types like refines, satisfies, derives, or conflicts. Relations form the traceability graph — they show which requirements depend on or are detailed by others.</HelpTip>
             {/* Add outgoing relation */}
@@ -1113,7 +1114,7 @@ export default function RequirementDetailPage() {
               </div>
               <button
                 onClick={() => setReverseAdd(!reverseAdd)}
-                className={`p-2 rounded-lg border transition-all shrink-0 ${reverseAdd ? 'bg-primary/10 border-primary/30 text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-accent'}`}
+                className={`p-2 rounded-lg border transition-colors shrink-0 ${reverseAdd ? 'bg-primary/10 border-primary/30 text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-accent'}`}
                 title={reverseAdd ? 'Direction: target → this (click to swap)' : 'Direction: this → target (click to swap)'}
               >
                 <ArrowLeftRight size={14} />
@@ -1154,12 +1155,12 @@ export default function RequirementDetailPage() {
                         <div className="flex items-center gap-0.5">
                           <button
                             onClick={() => flipRelation(i, rel.target, rel.type)}
-                            className="p-1 rounded hover:bg-primary/10 text-muted-foreground hover:text-primary opacity-0 group-hover:opacity-100 transition-all"
+                            className="p-1 rounded hover:bg-primary/10 text-muted-foreground hover:text-primary opacity-0 group-hover:opacity-100 transition-[color,background-color,opacity]"
                             title={`Flip: make ${rel.target} → ${rel.type} → ${req.id}`}
                           >
                             <ArrowLeftRight size={11} />
                           </button>
-                          <button onClick={() => removeRelation(i)} className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all">
+                          <button onClick={() => removeRelation(i)} className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-[color,background-color,opacity]">
                             <X size={12} />
                           </button>
                         </div>
@@ -1197,7 +1198,7 @@ export default function RequirementDetailPage() {
                       {editable && (
                         <button
                           onClick={() => flipIncomingRelation(inc.source, inc.type)}
-                          className="p-1 rounded hover:bg-primary/10 text-muted-foreground hover:text-primary opacity-0 group-hover:opacity-100 transition-all"
+                          className="p-1 rounded hover:bg-primary/10 text-muted-foreground hover:text-primary opacity-0 group-hover:opacity-100 transition-[color,background-color,opacity]"
                           title={`Flip: make ${req.id} → ${inc.type} → ${inc.source}`}
                         >
                           <ArrowLeftRight size={11} />
@@ -1208,7 +1209,7 @@ export default function RequirementDetailPage() {
                 </div>
               )}
             </div>
-          </motion.div>
+          </Reveal>
           <ParametricsGuide />
           <ParametricsCard
             reqId={req.id}
@@ -1224,7 +1225,7 @@ export default function RequirementDetailPage() {
             ]}
           />
           <WhatIfPanel />
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="card p-5">
+          <Reveal step={4} className="card p-5">
             <h2 className="font-semibold text-sm text-card-foreground mb-1">Verification Cases</h2>
             <HelpTip>Verification cases prove that this requirement is met. They can be tests, analyses, demonstrations, or inspections. Link existing VCs or create new ones from the Verification page.</HelpTip>
             <div className="flex gap-2 mt-2 mb-3">
@@ -1251,7 +1252,7 @@ export default function RequirementDetailPage() {
                       className="hover:text-primary"
                     />
                     {editable && (
-                    <button onClick={() => removeVerificationCase(i)} className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all">
+                    <button onClick={() => removeVerificationCase(i)} className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-[color,opacity]">
                       <X size={10} />
                     </button>
                     )}
@@ -1259,7 +1260,7 @@ export default function RequirementDetailPage() {
                 ))}
               </div>
             )}
-          </motion.div>
+          </Reveal>
           {/* The design side of the house: which components satisfy this
               requirement — allocation, in ISO 29148 terms. Used to be
               read-only here with a comment pointing at the Components page,
@@ -1269,7 +1270,7 @@ export default function RequirementDetailPage() {
               Allocation Matrix page uses, so this can no longer disagree with
               the matrix or go stale. */}
           {(satisfiedBy.length > 0 || editable) && (
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.22 }} className="card p-5">
+            <Reveal step={4} className="card p-5">
               <h2 className="font-semibold text-sm text-card-foreground mb-1">Allocated To</h2>
               <LinkEditor
                 hint="Components that satisfy this requirement" kind="component"
@@ -1281,9 +1282,9 @@ export default function RequirementDetailPage() {
                 nameOf={(id) => satisfiedBy.find((c) => c.id === id)?.name
                   ?? allComponents.find((c) => c.id === id)?.name ?? ''}
               />
-            </motion.div>
+            </Reveal>
           )}
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="card p-5">
+          <Reveal step={3} className="card p-5">
             <h2 className="font-semibold text-sm text-card-foreground mb-3">Attributes</h2>
             <div className="flex gap-1 mb-3">
               <input className="input flex-1 text-xs" placeholder="Key" value={newAttrKey} onChange={(e) => setNewAttrKey(e.target.value)} disabled={!editable} />
@@ -1299,7 +1300,7 @@ export default function RequirementDetailPage() {
                     <span className="font-medium text-muted-foreground w-24 shrink-0 truncate">{attr.key}</span>
                     <span className="text-foreground flex-1 truncate">{attr.value}</span>
                     {editable && (
-                    <button onClick={() => removeAttribute(i)} className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all">
+                    <button onClick={() => removeAttribute(i)} className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-[color,opacity]">
                       <X size={12} />
                     </button>
                     )}
@@ -1307,13 +1308,13 @@ export default function RequirementDetailPage() {
                 ))}
               </div>
             )}
-          </motion.div>
+          </Reveal>
           {/* Everything that points at this requirement, computed server-side
               from the link registry rather than assembled from a handful of
               per-entity fetches. Read-only: each link is owned by the record
               holding it, so editing lives on that record's page. */}
           {backlinks && backlinks.total > 0 && (
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.225 }} className="card p-5">
+            <Reveal step={4} className="card p-5">
               <h2 className="font-semibold text-sm text-card-foreground mb-1">Referenced By</h2>
               <p className="text-[11px] text-muted-foreground mb-3">
                 {backlinks.total} record{backlinks.total === 1 ? '' : 's'} depend on this requirement.
@@ -1344,10 +1345,10 @@ export default function RequirementDetailPage() {
                   </div>
                 ))}
               </div>
-            </motion.div>
+            </Reveal>
           )}
           {inSpecs.length > 0 && (
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.23 }} className="card p-5">
+            <Reveal step={5} className="card p-5">
               <h2 className="font-semibold text-sm text-card-foreground mb-3">In Specifications</h2>
               <div className="flex flex-wrap gap-2">
                 {inSpecs.map((s) => (
@@ -1356,10 +1357,10 @@ export default function RequirementDetailPage() {
                   </span>
                 ))}
               </div>
-            </motion.div>
+            </Reveal>
           )}
           {(affectingCrs.length > 0 || linkedRisks.length > 0 || mitigatingRisks.length > 0 || editable) && (
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.24 }} className="card p-5">
+            <Reveal step={5} className="card p-5">
               <h2 className="font-semibold text-sm text-card-foreground mb-3">Change Requests &amp; Risks</h2>
               <div className="space-y-1.5">
                 {affectingCrs.map((c) => (
@@ -1396,10 +1397,10 @@ export default function RequirementDetailPage() {
                   />
                 </div>
               </div>
-            </motion.div>
+            </Reveal>
           )}
           {req.references && req.references.length > 0 && (
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="card p-5">
+            <Reveal step={5} className="card p-5">
               <h2 className="font-semibold text-sm text-card-foreground mb-3">References</h2>
               <div className="space-y-1.5">
                 {req.references.map((ref, i) => (
@@ -1410,13 +1411,13 @@ export default function RequirementDetailPage() {
                   </div>
                 ))}
               </div>
-            </motion.div>
+            </Reveal>
           )}
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.26 }} className="card p-5">
+          <Reveal step={5} className="card p-5">
             <CommentThread entityKind="requirements" entityId={reqId!} />
-          </motion.div>
+          </Reveal>
           {decisions.length > 0 && (
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.27 }} className="card p-5">
+            <Reveal step={5} className="card p-5">
               <h2 className="font-semibold text-sm text-card-foreground mb-3">Related Decisions ({decisions.length})</h2>
               <div className="space-y-2">
                 {decisions.map((d) => (
@@ -1430,15 +1431,15 @@ export default function RequirementDetailPage() {
                   </div>
                 ))}
               </div>
-            </motion.div>
+            </Reveal>
           )}
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28 }} className="card p-5">
+          <Reveal step={6} className="card p-5">
             <h2 className="font-semibold text-sm text-card-foreground mb-3">Change History</h2>
             <HistoryPanel itemId={reqId!} defaultOpen />
-          </motion.div>
+          </Reveal>
         </div>
         <div className="space-y-6">
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="card p-5">
+          <Reveal step={1} className="card p-5">
             <h2 className="font-semibold text-sm text-card-foreground mb-1">Properties</h2>
             <HelpTip>Classification metadata for this requirement. Type describes what kind of requirement it is. Status tracks its lifecycle. Priority reflects stakeholder importance. Verification method selects the approach used to prove it.</HelpTip>
             <div className="space-y-3 mt-2">
@@ -1468,7 +1469,7 @@ export default function RequirementDetailPage() {
                           save({ system_states: next });
                         }}
                         disabled={!editable}
-                        className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
+                        className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
                           active
                             ? 'bg-primary/15 text-primary border-primary/30'
                             : 'bg-muted text-muted-foreground border-transparent hover:border-primary/20'
@@ -1488,7 +1489,7 @@ export default function RequirementDetailPage() {
                         save({ system_states: current.filter(x => x !== name) });
                       }}
                       disabled={!editable}
-                      className="px-2.5 py-1 rounded-full text-xs font-medium border transition-all bg-cs-orange/10 text-cs-orange border-cs-orange/20"
+                      className="px-2.5 py-1 rounded-full text-xs font-medium border transition-colors bg-cs-orange/10 text-cs-orange border-cs-orange/20"
                       title={`"${name}" is not a defined system state`}
                     >
                       {name}
@@ -1761,7 +1762,7 @@ export default function RequirementDetailPage() {
                           save({ baselines: next });
                         }}
                         disabled={!editable}
-                        className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
+                        className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
                           active
                             ? 'bg-primary/15 text-primary border-primary/30'
                             : 'bg-muted text-muted-foreground border-transparent hover:border-primary/20'
@@ -1774,7 +1775,7 @@ export default function RequirementDetailPage() {
                 </div>
               </div>
             </div>
-          </motion.div>
+          </Reveal>
           <div className="text-xs text-muted-foreground space-y-1">
             <div>Created: {new Date(req.created).toLocaleString()}</div>
             <div>Modified: {new Date(req.modified).toLocaleString()}</div>

@@ -13,6 +13,7 @@ import { useToasts } from '../components/Toast';
 import { useKeyboardShortcuts } from '../components/useKeyboardShortcuts';
 import { useListSelection } from '../hooks/useListSelection';
 import { useRangeSelection } from '../hooks/useRangeSelection';
+import Reveal from '../components/Reveal';
 import { useBulkActions } from '../hooks/useBulkActions';
 import BulkActionBar from '../components/BulkActionBar';
 import LoadingSplash from '../components/LoadingSplash';
@@ -379,11 +380,7 @@ export default function SystemStatesPage() {
 
         {/* Orphans section */}
         {orphans.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="card p-4 border-l-2 border-l-cs-orange"
-          >
+          <Reveal className="card p-4 border-l-2 border-l-cs-orange">
             <div className="flex items-center gap-2 mb-3">
               <AlertTriangle size={16} className="text-cs-orange" />
               <h3 className="font-semibold text-sm">Undefined States</h3>
@@ -409,7 +406,7 @@ export default function SystemStatesPage() {
                 </div>
               ))}
             </div>
-          </motion.div>
+          </Reveal>
         )}
 
         {/* State list */}

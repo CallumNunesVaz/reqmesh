@@ -1032,7 +1032,7 @@ function BulkEditModal({
                               const next = active ? current.filter((x) => x !== s.name) : [...current, s.name];
                               setForm({ ...form, system_states: next });
                             }}
-                            className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
+                            className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
                               active
                                 ? 'bg-primary/15 text-primary border-primary/30'
                                 : anySet ? 'bg-muted text-muted-foreground border-transparent hover:border-primary/20' : 'bg-muted/50 text-muted-foreground/50 border-transparent'
@@ -1194,7 +1194,7 @@ function BulkEditModal({
                             const next = active ? current.filter(x => x !== b) : [...current, b];
                             setForm({ ...form, baselines: next });
                           }}
-                          className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
+                          className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
                             active
                               ? 'bg-primary/15 text-primary border-primary/30'
                               : anySet ? 'bg-muted text-muted-foreground border-transparent hover:border-primary/20' : 'bg-muted/50 text-muted-foreground/50 border-transparent'

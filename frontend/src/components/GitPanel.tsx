@@ -1,5 +1,4 @@
 import { useEffect, useState, useCallback } from 'react';
-import { motion } from 'framer-motion';
 import {
   GitBranch, Clock, User, RotateCw, AlertTriangle,
   CheckCircle, XCircle, Plug, Unplug, Trash2, Upload,
@@ -9,6 +8,7 @@ import { api, type GitStatus, type GitKeyInfo } from '../api/client';
 import { useToasts } from './Toast';
 import { useConfirm } from './ConfirmDialog';
 import { copyText } from '../lib/clipboard';
+import Reveal from './Reveal';
 
 interface Props {
   projectId: string;
@@ -291,10 +291,7 @@ export default function GitPanel({ projectId, isAdmin, canEdit, remoteUrl, onRem
   // ── Deploy key card (admin-only) ────────────────────────────────────────────
 
   const deployKeyCard = !isAdmin ? null : (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-      className="card p-5 mb-6"
-    >
+    <Reveal className="card p-5 mb-6">
       <div className="flex items-center gap-2 mb-3">
         <KeyRound size={14} className="text-muted-foreground" />
         <h2 className="font-semibold text-sm text-card-foreground">SSH Deploy Key</h2>
@@ -381,7 +378,7 @@ export default function GitPanel({ projectId, isAdmin, canEdit, remoteUrl, onRem
           </button>
         </div>
       )}
-    </motion.div>
+    </Reveal>
   );
 
   // ── Loading / error states ─────────────────────────────────────────────────
@@ -413,10 +410,7 @@ export default function GitPanel({ projectId, isAdmin, canEdit, remoteUrl, onRem
   if (!status?.is_repo) {
     return (
       <>
-        <motion.div
-          initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-          className="card p-5 mb-6"
-        >
+        <Reveal className="card p-5 mb-6">
           <div className="flex items-center gap-2 mb-3">
             <GitBranch size={14} className="text-muted-foreground" />
             <h2 className="font-semibold text-sm text-card-foreground">Version Control</h2>
@@ -446,7 +440,7 @@ export default function GitPanel({ projectId, isAdmin, canEdit, remoteUrl, onRem
               </button>
             )}
           </div>
-        </motion.div>
+        </Reveal>
         {deployKeyCard}
       </>
     );
@@ -473,10 +467,7 @@ export default function GitPanel({ projectId, isAdmin, canEdit, remoteUrl, onRem
 
   return (
     <>
-    <motion.div
-      initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-      className="card p-5 mb-6"
-    >
+    <Reveal className="card p-5 mb-6">
       {/* Header */}
       <div className="flex items-center gap-2 mb-3">
         <GitBranch size={14} className="text-muted-foreground" />
@@ -765,7 +756,7 @@ export default function GitPanel({ projectId, isAdmin, canEdit, remoteUrl, onRem
           </div>
         )}
       </div>
-    </motion.div>
+    </Reveal>
     {deployKeyCard}
     </>
   );
