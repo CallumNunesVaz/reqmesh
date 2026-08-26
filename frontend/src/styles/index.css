@@ -206,6 +206,16 @@
     @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium;
   }
 
+  /* The row you opened, marked briefly when you come back to the list. Applied
+     imperatively (see hooks/useListPosition) for the same reason as
+     .rt-cross-hover below: returning to a list must not re-render every row.
+     Deliberately distinct from .rt-cross-hover — this is "here is where you
+     were", not "this is hovered" — and it fades itself out so it never reads as
+     a persistent selection. */
+  .rt-last-visited {
+    animation: rt-last-visited-fade 2s ease-out forwards;
+  }
+
   /* Cross-highlight (canvas ↔ list hover). Applied imperatively to list rows
      via `useHoverHighlight`; a hover must not re-render the whole list. */
   .rt-cross-hover {
@@ -251,4 +261,10 @@
 
 @keyframes rt-dash-drift {
   to { stroke-dashoffset: -315; }
+}
+
+@keyframes rt-last-visited-fade {
+  0%   { background-color: hsl(var(--primary) / 0.22); box-shadow: inset 2px 0 0 hsl(var(--primary)); }
+  70%  { background-color: hsl(var(--primary) / 0.16); box-shadow: inset 2px 0 0 hsl(var(--primary)); }
+  100% { background-color: transparent;                box-shadow: inset 2px 0 0 transparent; }
 }

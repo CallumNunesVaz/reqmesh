@@ -18,6 +18,7 @@ import ImportDialog from './ImportDialog';
 import PresenceBar from './PresenceBar';
 import { useAuthStore } from '../store/auth';
 import { useStore } from '../store';
+import { useListPosition } from '../hooks/useListPosition';
 import { useUndoStore } from '../store/undo';
 import { api, type PresenceUser } from '../api/client';
 import { WhatIfProvider } from './WhatIfContext';
@@ -173,6 +174,11 @@ export default function Layout() {
   const location = useLocation();
   const pageKey = (location.pathname.split('/').filter(Boolean).pop() || 'overview')
     .replace(/[^a-z0-9-]/gi, '');
+
+  // The app's single scroll container. Both <main> branches below are
+  // mutually exclusive, so this ref always points at the mounted one.
+  const mainRef = useRef<HTMLElement | null>(null);
+  useListPosition(mainRef);
 
   const [graphOpen, setGraphOpen] = useState(() => readCanvasOpen(pageKey));
   const [contextOpen, setContextOpen] = useState(true);
@@ -659,6 +665,7 @@ export default function Layout() {
               )}
               {(!isInProject || contextOpen) && (
                 <main
+                  ref={mainRef}
                   className="overflow-auto @container relative"
                   style={{
                     // `1 - graphFrac` only makes sense while the canvas is
@@ -684,6 +691,7 @@ export default function Layout() {
           <div className="flex flex-1 min-h-0 overflow-hidden">
             {(!isInProject || contextOpen) && (
               <main
+                ref={mainRef}
                 className="overflow-auto @container relative"
                 style={{ flex: '1 1 0%', minWidth: 0 }}
               >
