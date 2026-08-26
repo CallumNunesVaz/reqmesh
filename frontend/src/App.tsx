@@ -12,6 +12,7 @@ const SpecificationsPage = lazy(() => import('./pages/SpecificationsPage'));
 const ComponentsPage = lazy(() => import('./pages/ComponentsPage'));
 const ComponentDetailPage = lazy(() => import('./pages/ComponentDetailPage'));
 const VerificationPage = lazy(() => import('./pages/VerificationPage'));
+const VerificationDetailPage = lazy(() => import('./pages/VerificationDetailPage'));
 const TraceMatrixPage = lazy(() => import('./pages/TraceMatrixPage'));
 const GraphView = lazy(() => import('./pages/GraphView'));
 const ChangeRequestsPage = lazy(() => import('./pages/ChangeRequestsPage'));
@@ -61,6 +62,7 @@ export default function App() {
           <Route path="/project/:projectId/specifications" element={<SpecificationsPage />} />
           <Route path="/project/:projectId/components/:componentId" element={<ComponentDetailPage />} />
           <Route path="/project/:projectId/components" element={<ComponentsPage />} />
+          <Route path="/project/:projectId/verification/:vcId" element={<VerificationDetailPage />} />
           <Route path="/project/:projectId/verification" element={<VerificationPage />} />
           <Route path="/project/:projectId/traces" element={<TraceMatrixPage />} />
           <Route path="/project/:projectId/graph" element={<GraphView />} />

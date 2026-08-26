@@ -1,26 +1,22 @@
-import { useCallback, useEffect, useState, useMemo } from 'react';
-import { usePersistedState, setCodec } from '../hooks/usePersistedState';
-import { useParams } from 'react-router-dom';
+import { useEffect, useState, useMemo } from 'react';
+import { usePersistedState } from '../hooks/usePersistedState';
+import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, CheckCircle2, Trash2, XCircle, Clock, ChevronDown, X, Link as LinkIcon, Play, ListChecks, ClipboardList, FlaskConical, Loader, Search, UploadCloud, Copy } from 'lucide-react';
-import { api, type VerificationCase, type Requirement, type Component, type TestResultImportSummary } from '../api/client';
+import { Plus, CheckCircle2, X, Link as LinkIcon, Loader, Search, UploadCloud, Copy } from 'lucide-react';
+import { api, type VerificationCase, type TestResultImportSummary } from '../api/client';
 import { useStore } from '../store';
 import { useAuthStore } from '../store/auth';
-import AutocompleteInput from '../components/AutocompleteInput';
-import { CopyLinkButton, EntityLink, SECTION_TITLES } from '../components/entities';
+import { CopyLinkButton, SECTION_TITLES } from '../components/entities';
 import { useFocusedEntity } from '../components/useFocusedEntity';
-import { AutoLinkText } from '../components/autoLink';
-import MentionTextarea from '../components/MentionTextarea';
-import { useEntityKinds } from '../components/entityIndex';
 import { HelpTip } from '../components/HelpTip';
-import { useConfirm } from '../components/ConfirmDialog';
-import { HistoryPanel } from '../components/HistoryPanel';
-import { CommentThread } from '../components/CommentThread';
 import { useToasts } from '../components/Toast';
 import { useBulkActions } from '../hooks/useBulkActions';
 import BulkActionBar from '../components/BulkActionBar';
 import LoadingSplash from '../components/LoadingSplash';
 import EmptyState from '../components/EmptyState';
+
+const METHOD_OPTIONS = ['test', 'analysis', 'demonstration', 'inspection'] as const;
+const STATUS_OPTIONS = ['pending', 'in_progress', 'passed', 'failed'] as const;
 
 const statusBadges: Record<string, string> = {
   pending: 'border-cs-amber/30 bg-cs-amber/10 text-cs-amber',
@@ -29,42 +25,19 @@ const statusBadges: Record<string, string> = {
   failed: 'border-cs-red/30 bg-cs-red/10 text-cs-red',
 };
 
-const statusIconColors: Record<string, string> = {
-  pending: 'bg-cs-amber/10 text-cs-amber',
-  in_progress: 'bg-cs-blue/10 text-cs-blue',
-  passed: 'bg-cs-green/10 text-cs-green',
-  failed: 'bg-cs-red/10 text-cs-red',
-};
-
-const statusIcons: Record<string, React.ComponentType<any>> = {
-  pending: Clock,
-  in_progress: XCircle,
-  passed: CheckCircle2,
-  failed: XCircle,
-};
-
 export default function VerificationPage() {
   const { projectId } = useParams<{ projectId: string }>();
-  const { verificationCases, setVerificationCases } = useStore();
+  const navigate = useNavigate();
   const editable = useAuthStore((s) => s.canEdit());
   const { addToast } = useToasts();
-  const showConfirm = useConfirm();
+  const dataVersion = useStore((s) => s.dataVersion);
+  const [verificationCases, setVerificationCases] = useState<VerificationCase[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [newVC, setNewVC] = useState({ id: '', name: '', description: '', method: 'test' });
   const [idExample, setIdExample] = useState('');
-  const [requirements, setRequirements] = useState<Requirement[]>([]);
-  const [components, setComponents] = useState<Component[]>([]);
   // Persisted per project — see RequirementsPage/ComponentsPage for why.
   const pk = (field: string) => (projectId ? `rt-verification-${field}-${projectId}` : null);
-  const [expanded, setExpanded] = usePersistedState<Set<string>>(pk('expanded'), new Set(), setCodec<string>());
-  const entityKinds = useEntityKinds(projectId);
-  const [linkReqInput, setLinkReqInput] = useState<Record<string, string>>({});
-  const [newStepAction, setNewStepAction] = useState<Record<string, string>>({});
-  const [newStepExpected, setNewStepExpected] = useState<Record<string, string>>({});
-  const [newMeasurement, setNewMeasurement] = useState<Record<string, { parameter: string; value: string; unit: string }>>({});
-  const [runningVcs, setRunningVcs] = useState<Set<string>>(new Set());
-  const [runFeedback, setRunFeedback] = useState<Record<string, { type: 'success' | 'error'; message: string }>>({});
   const [selectedVcs, setSelectedVcs] = useState<Set<string>>(new Set());
   const [bulkStatus, setBulkStatus] = useState('passed');
 
@@ -82,19 +55,14 @@ export default function VerificationPage() {
 
   const load = () => {
     if (!projectId) return;
-    Promise.all([
-      api.listVerificationCases(projectId),
-      api.listRequirements(projectId),
-    ]).then(([vcs, reqs]) => {
-      setVerificationCases(vcs);
-      setRequirements(reqs);
-    }).catch(console.error)
+    setLoading(true);
+    api.listVerificationCases(projectId)
+      .then(setVerificationCases)
+      .catch(console.error)
       .finally(() => setLoading(false));
-    api.listComponents(projectId).then(setComponents).catch(() => {});
   };
 
- // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { load(); }, [projectId]);
+  useEffect(load, [projectId, dataVersion]);
 
   const filteredVCs = useMemo(() => {
     if (!search && !filterStatus && !filterMethod) return verificationCases;
@@ -111,11 +79,6 @@ export default function VerificationPage() {
   }, [verificationCases, search, filterStatus, filterMethod]);
   const filtering = !!(search || filterStatus || filterMethod);
 
-  const reqSuggestions = useMemo(
-    () => requirements.map((r) => ({ id: r.id, label: r.name || r.id })),
-    [requirements],
-  );
-
   const openCreate = () => {
     setShowCreate(true);
     if (!projectId) return;
@@ -129,6 +92,7 @@ export default function VerificationPage() {
       })
       .catch(() => {});
   };
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!projectId || !newVC.id.trim() || !editable) return;
@@ -140,19 +104,6 @@ export default function VerificationPage() {
       load();
     } catch (err) {
       addToast('error', err instanceof Error ? err.message : 'Failed to create verification case');
-    }
-  };
-
-  const handleDelete = async (vcId: string) => {
-    if (!projectId) return;
-    const ok = await showConfirm(`Delete verification case ${vcId}?`, 'Delete Verification Case', { resultLabel: 'Delete', destructive: true });
-    if (!ok) return;
-    try {
-      await api.deleteVerificationCase(projectId, vcId);
-      setVerificationCases(verificationCases.filter((v) => v.id !== vcId));
-      addToast('success', `Verification case ${vcId} deleted`);
-    } catch (err) {
-      addToast('error', err instanceof Error ? err.message : 'Delete failed');
     }
   };
 
@@ -180,173 +131,6 @@ export default function VerificationPage() {
     }
   };
 
-  const handleStatusChange = async (vcId: string, status: string) => {
-    if (!projectId) return;
-    await api.updateVerificationCase(projectId, vcId, { status });
-    load();
-  };
-
-  const toggleExpand = (vcId: string) => {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(vcId)) next.delete(vcId);
-      else next.add(vcId);
-      return next;
-    });
-  };
-
-  const getLinkInput = (vcId: string) => linkReqInput[vcId] || '';
-  const setLinkInput = (vcId: string, val: string) => {
-    setLinkReqInput((prev) => ({ ...prev, [vcId]: val }));
-  };
-  const getStepAction = (vcId: string) => newStepAction[vcId] || '';
-  const setStepAction = (vcId: string, val: string) => setNewStepAction((p) => ({ ...p, [vcId]: val }));
-  const getStepExpected = (vcId: string) => newStepExpected[vcId] || '';
-  const setStepExpected = (vcId: string, val: string) => setNewStepExpected((p) => ({ ...p, [vcId]: val }));
-
-  const handleLinkRequirement = async (vcId: string) => {
-    const reqId = getLinkInput(vcId).trim();
-    if (!projectId || !reqId) return;
-    const vc = verificationCases.find((v) => v.id === vcId);
-    if (!vc) return;
-    if (vc.verified_requirements.includes(reqId)) {
-      setLinkInput(vcId, '');
-      return;
-    }
-    await api.updateVerificationCase(projectId, vcId, {
-      verified_requirements: [...vc.verified_requirements, reqId],
-    });
-    try {
-      const req = await api.getRequirement(projectId, reqId);
-      const vcs = [...(req.verification_cases || []), vcId];
-      await api.updateRequirement(projectId, reqId, { verification_cases: vcs });
-    } catch (err) {
-      // requirement may not exist — VC link still saved above
-      addToast('error', err instanceof Error ? err.message : 'Failed to update requirement back-link');
-    }
-    setLinkInput(vcId, '');
-    load();
-  };
-
-  const handleUnlinkRequirement = async (vcId: string, reqId: string) => {
-    if (!projectId) return;
-    const vc = verificationCases.find((v) => v.id === vcId);
-    if (!vc) return;
-    await api.updateVerificationCase(projectId, vcId, {
-      verified_requirements: vc.verified_requirements.filter((r) => r !== reqId),
-    });
-    try {
-      const req = await api.getRequirement(projectId, reqId);
-      const vcs = (req.verification_cases || []).filter((v: string) => v !== vcId);
-      await api.updateRequirement(projectId, reqId, { verification_cases: vcs });
-    } catch (err) {
-      // requirement may not exist
-      addToast('error', err instanceof Error ? err.message : 'Failed to update requirement back-link');
-    }
-    load();
-  };
-
-  const handleAddStep = async (vcId: string, action: string, expected: string) => {
-    if (!projectId || !action.trim()) return;
-    const vc = verificationCases.find((v) => v.id === vcId);
-    if (!vc) return;
-    const steps = [...(vc.steps || []), { action: action.trim(), expected_result: expected.trim(), actual_result: null }];
-    await api.updateVerificationCase(projectId, vcId, { steps } as any);
-    load();
-  };
-
-  const handleUpdateStepResult = async (vcId: string, stepIdx: number, actual: string) => {
-    if (!projectId) return;
-    const vc = verificationCases.find((v) => v.id === vcId);
-    if (!vc) return;
-    const steps = [...(vc.steps || [])];
-    if (stepIdx < steps.length) {
-      steps[stepIdx] = { ...steps[stepIdx], actual_result: actual };
-    }
-    await saveVc(vcId, { steps });
-  };
-
-  /**
-   * Patch a verification case and reload, surfacing a refusal.
-   *
-   * Four handlers here previously called `updateVerificationCase` with no
-   * try/catch at all, so a rejected save — a permission failure, a validation
-   * error — vanished as an unhandled rejection and `load()` never ran. The
-   * field kept showing the typed value until something else forced a refetch,
-   * which reads as "saved" and is the most misleading possible outcome for a
-   * test result.
-   */
-  const saveVc = async (vcId: string, patch: Record<string, unknown>) => {
-    if (!projectId) return;
-    try {
-      await api.updateVerificationCase(projectId, vcId, patch as any);
-    } catch (err) {
-      addToast('error', err instanceof Error ? err.message : 'Save failed');
-    }
-    load();
-  };
-
-  const getMeasurement = (vcId: string) => newMeasurement[vcId] || { parameter: '', value: '', unit: '' };
-  const setMeasurement = (vcId: string, patch: Partial<{ parameter: string; value: string; unit: string }>) =>
-    setNewMeasurement((prev) => ({ ...prev, [vcId]: { ...getMeasurement(vcId), ...patch } }));
-
-  const handleAddMeasurement = async (vcId: string) => {
-    const draft = getMeasurement(vcId);
-    if (!projectId || !draft.parameter.trim() || draft.value.trim() === '') return;
-    const vc = verificationCases.find((v) => v.id === vcId);
-    if (!vc) return;
-    await saveVc(vcId, {
-      measurements: [...(vc.measurements || []), {
-        parameter: draft.parameter.trim(), value: Number(draft.value), unit: draft.unit.trim(),
-      }],
-    });
-    setNewMeasurement((prev) => ({ ...prev, [vcId]: { parameter: '', value: '', unit: '' } }));
-  };
-
-  const handleRemoveMeasurement = async (vcId: string, idx: number) => {
-    if (!projectId) return;
-    const vc = verificationCases.find((v) => v.id === vcId);
-    if (!vc) return;
-    await saveVc(vcId, {
-      measurements: (vc.measurements || []).filter((_, i) => i !== idx),
-    });
-  };
-
-  const handleUpdateProcedure = async (vcId: string, procedure: string) => {
-    await saveVc(vcId, { test_procedure: procedure });
-  };
-
-  const handleRunTest = async (vcId: string) => {
-    if (!projectId) return;
-    setRunningVcs(p => new Set(p).add(vcId));
-    setRunFeedback(p => ({ ...p, [vcId]: undefined as any }));
-    try {
-      const vc = verificationCases.find((v) => v.id === vcId);
-      if (!vc) return;
-      const stepResults: Record<string, string> = {};
-      (vc.steps || []).forEach((_s, i) => {
-        stepResults[String(i)] = '';
-      });
-      await api.runVerification(projectId, vcId, {
-        status: vc.status === 'pending' ? 'in_progress' : vc.status,
-        notes: '',
-        step_results: stepResults,
-      });
-      setRunFeedback(p => ({ ...p, [vcId]: { type: 'success', message: 'Test completed' } }));
-      await load();
-    } catch (err) {
-      setRunFeedback(p => ({ ...p, [vcId]: { type: 'error', message: err instanceof Error ? err.message : 'Test failed' } }));
-      addToast('error', err instanceof Error ? err.message : 'Test failed');
-    } finally {
-      setRunningVcs(p => { const n = new Set(p); n.delete(vcId); return n; });
-      setTimeout(() => setRunFeedback(p => {
-        const next = { ...p };
-        delete next[vcId];
-        return next;
-      }), 4000);
-    }
-  };
-
   const handleImportTestResults = async () => {
     if (!projectId || !importFile) return;
     setImporting(true);
@@ -366,13 +150,10 @@ export default function VerificationPage() {
     }
   };
 
-  // Arriving from a link elsewhere (?focus=VC-001): open that case and scroll
-  // to it, so the reference lands on the thing it pointed at.
-  const focusId = useFocusedEntity(
-    verificationCases.length > 0,
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    useCallback((id: string) => setExpanded((prev) => new Set(prev).add(id)), []),
-  );
+  // Arriving from an older link (?focus=VC-001): ring and scroll to the row,
+  // so the reference lands on the thing it pointed at even though the case
+  // now lives on its own detail page.
+  const focusId = useFocusedEntity(verificationCases.length > 0);
 
   const { runBulkUpdate } = useBulkActions({
     clearSelection: () => setSelectedVcs(new Set()),
@@ -440,17 +221,11 @@ export default function VerificationPage() {
           </div>
           <select className="select w-32 h-9 text-xs" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
             <option value="">All statuses</option>
-            <option value="pending">Pending</option>
-            <option value="in_progress">In Progress</option>
-            <option value="passed">Passed</option>
-            <option value="failed">Failed</option>
+            {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
           </select>
           <select className="select w-36 h-9 text-xs" value={filterMethod} onChange={(e) => setFilterMethod(e.target.value)}>
             <option value="">All methods</option>
-            <option value="test">Test</option>
-            <option value="analysis">Analysis</option>
-            <option value="demonstration">Demonstration</option>
-            <option value="inspection">Inspection</option>
+            {METHOD_OPTIONS.map((m) => <option key={m} value={m}>{m[0].toUpperCase() + m.slice(1)}</option>)}
           </select>
         </div>
       </div>
@@ -462,10 +237,7 @@ export default function VerificationPage() {
           onClear={() => setSelectedVcs(new Set())}
         >
           <select className="select text-xs py-1 w-28" value={bulkStatus} onChange={(e) => setBulkStatus(e.target.value)}>
-            <option value="pending">Pending</option>
-            <option value="in_progress">In Progress</option>
-            <option value="passed">Passed</option>
-            <option value="failed">Failed</option>
+            {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
           </select>
           <button
             onClick={() => handleBulkStatus(bulkStatus)}
@@ -500,10 +272,7 @@ export default function VerificationPage() {
               <div>
                 <label className="label">Method
                   <select className="select" value={newVC.method} onChange={(e) => setNewVC({ ...newVC, method: e.target.value })}>
-                    <option value="test">Test</option>
-                    <option value="analysis">Analysis</option>
-                    <option value="demonstration">Demonstration</option>
-                    <option value="inspection">Inspection</option>
+                    {METHOD_OPTIONS.map((m) => <option key={m} value={m}>{m[0].toUpperCase() + m.slice(1)}</option>)}
                   </select>
                 </label>
               </div>
@@ -526,404 +295,85 @@ export default function VerificationPage() {
           )}
         </EmptyState>
       ) : (
-        <div className="space-y-3">
-          {filteredVCs.map((vc, i) => {
-            const StatusIcon = statusIcons[vc.status] || Clock;
-            const isExpanded = expanded.has(vc.id);
-            const linkedCount = vc.verified_requirements.length;
-            // Backlinks: things that point at this case from their own side —
-            // requirements citing it beyond the list above, and components
-            // that name it as their proof of function.
-            const refReqs = requirements.filter(
-              (r) => (r.verification_cases || []).includes(vc.id) && !vc.verified_requirements.includes(r.id),
-            );
-            const refComps = components.filter((c) => (c.verification_cases || []).includes(vc.id));
-            return (
-              <motion.div
-                key={vc.id}
-                id={`entity-${vc.id}`}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.03 }}
-                className={`card hover:shadow-md transition-shadow group ${
-                  focusId === vc.id ? 'ring-2 ring-primary/50' : ''
-                }`}
-              >
-                <div className="flex items-center gap-3 p-4">
-                  {editable && (
-                    <input
-                      type="checkbox"
-                      checked={selectedVcs.has(vc.id)}
-                      onChange={(e) => {
-                        e.stopPropagation();
-                        setSelectedVcs(p => { const n = new Set(p); if (e.target.checked) n.add(vc.id); else n.delete(vc.id); return n; });
-                      }}
-                      aria-label={`Select ${vc.id}`}
-                      className="w-4 h-4 rounded-md border-muted-foreground/30 shrink-0"
-                    />
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => toggleExpand(vc.id)}
-                    aria-expanded={isExpanded}
-                    className="flex flex-1 min-w-0 items-center gap-3 text-left cursor-pointer"
-                  >
-                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${statusIconColors[vc.status] || 'bg-muted text-muted-foreground'}`}>
-                      <StatusIcon size={18} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-xs text-muted-foreground">{vc.id}</span>
-                        <h3 className="font-medium text-card-foreground">{vc.name || 'Untitled'}</h3>
-                        <span className={`badge border ${statusBadges[vc.status] || ''}`}>
-                          {vc.status}
-                        </span>
+        <div className="card overflow-x-auto">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="border-b bg-muted/30">
+                {editable && <th className="px-3 py-2.5 w-0" aria-label="Select" />}
+                <th className="px-4 py-2.5 w-28 text-3xs font-semibold uppercase tracking-wider text-muted-foreground">ID</th>
+                <th className="px-4 py-2.5 min-w-[14rem] text-3xs font-semibold uppercase tracking-wider text-muted-foreground">Name</th>
+                <th className="px-4 py-2.5 w-28 text-3xs font-semibold uppercase tracking-wider text-muted-foreground">Method</th>
+                <th className="px-4 py-2.5 w-28 text-3xs font-semibold uppercase tracking-wider text-muted-foreground">Status</th>
+                <th className="px-4 py-2.5 text-3xs font-semibold uppercase tracking-wider text-muted-foreground">Result</th>
+                <th className="px-4 py-2.5 w-24 text-3xs font-semibold uppercase tracking-wider text-muted-foreground">Links</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {filteredVCs.map((vc) => {
+                const linkedCount = vc.verified_requirements.length;
+                return (
+                  <tr key={vc.id} id={`entity-${vc.id}`}
+                    onClick={() => navigate(`/project/${projectId}/verification/${encodeURIComponent(vc.id)}`)}
+                    className={`group hover:bg-accent/30 transition-colors cursor-pointer ${focusId === vc.id ? 'ring-2 ring-primary/50' : ''}`}>
+                    {editable && (
+                      <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={selectedVcs.has(vc.id)}
+                          onChange={(e) => {
+                            setSelectedVcs(p => { const n = new Set(p); if (e.target.checked) n.add(vc.id); else n.delete(vc.id); return n; });
+                          }}
+                          aria-label={`Select ${vc.id}`}
+                          className="w-4 h-4 rounded-md border-muted-foreground/30 shrink-0"
+                        />
+                      </td>
+                    )}
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-mono text-xs text-card-foreground">{vc.id}</span>
                         <CopyLinkButton kind="verification" id={vc.id} className="opacity-0 group-hover:opacity-100" />
                       </div>
-                      {vc.description && (
-                        <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2">
-                          <AutoLinkText text={vc.description} kinds={entityKinds} />
-                        </p>
+                    </td>
+                    <td className="px-4 py-2.5 text-xs text-card-foreground">
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); navigate(`/project/${projectId}/verification/${encodeURIComponent(vc.id)}`); }}
+                        className="line-clamp-1 text-card-foreground hover:underline text-left"
+                        title={vc.name || undefined}
+                      >
+                        {vc.name || <span className="text-muted-foreground/40 italic">—</span>}
+                      </button>
+                    </td>
+                    <td className="px-4 py-2.5 text-xs text-card-foreground">{vc.method || '—'}</td>
+                    <td className="px-4 py-2.5">
+                      <span className={`badge border ${statusBadges[vc.status] || ''}`}>{vc.status}</span>
+                    </td>
+                    <td className="px-4 py-2.5 text-xs text-muted-foreground">
+                      <span className="line-clamp-1" title={vc.result || undefined}>{vc.result || '—'}</span>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <span className="inline-flex items-center gap-1 text-2xs tabular-nums text-muted-foreground" title={`${linkedCount} linked requirement(s)`}>
+                        <LinkIcon size={12} /> {linkedCount > 0 ? linkedCount : '—'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5 w-0" onClick={(e) => e.stopPropagation()}>
+                      {editable && (
+                        <button
+                          onClick={() => handleDuplicate(vc)}
+                          className="p-1.5 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-[color,background-color,opacity]"
+                          title="Duplicate verification case"
+                        >
+                          <Copy size={14} />
+                        </button>
                       )}
-                      <div className="flex gap-3 mt-2 text-xs text-muted-foreground">
-                        <span>Method: <strong className="text-foreground">{vc.method}</strong></span>
-                        <span>{linkedCount} linked requirement{linkedCount !== 1 ? 's' : ''}</span>
-                      </div>
-                    </div>
-                  </button>
-                  <div className="flex items-center gap-1">
-                    <select
-                      className="select text-xs py-1 w-28"
-                      value={vc.status}
-                      onChange={(e) => handleStatusChange(vc.id, e.target.value)}
-                      disabled={!editable}
-                    >
-                      <option value="pending">Pending</option>
-                      <option value="in_progress">In Progress</option>
-                      <option value="passed">Passed</option>
-                      <option value="failed">Failed</option>
-                    </select>
-                    {editable && (
-                    <button
-                      onClick={() => handleDuplicate(vc)}
-                      className="p-1.5 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-[color,background-color,opacity]"
-                      title="Duplicate verification case"
-                    >
-                      <Copy size={14} />
-                    </button>
-                    )}
-                    {editable && (
-                    <button
-                      onClick={() => handleDelete(vc.id)}
-                      className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-[color,background-color,opacity]"
-                      title="Delete"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => toggleExpand(vc.id)}
-                    aria-expanded={isExpanded}
-                    aria-label={isExpanded ? 'Collapse' : 'Expand'}
-                    className="shrink-0 p-0.5 -m-0.5 rounded-md"
-                  >
-                    <ChevronDown
-                      size={15}
-                      className={`text-muted-foreground transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
-                    />
-                  </button>
-                </div>
-
-                <AnimatePresence initial={false}>
-                  {isExpanded && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.15 }}
-                      className="overflow-hidden"
-                    >
-                      <div className="px-4 pb-4 border-t pt-3 space-y-3">
-                        {/* Linked Requirements */}
-                        {editable && (
-                        <div className="flex gap-2">
-                          <AutocompleteInput
-                            className="input flex-1 text-xs font-mono"
-                            placeholder="Add requirement ID..."
-                            value={getLinkInput(vc.id)}
-                            onChange={(v) => setLinkInput(vc.id, v)}
-                            suggestions={reqSuggestions.filter(
-                              (s) => !vc.verified_requirements.includes(s.id)
-                            )}
-                          />
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleLinkRequirement(vc.id); }}
-                            className="btn-secondary shrink-0"
-                            disabled={!getLinkInput(vc.id).trim()}
-                          >
-                            <LinkIcon size={13} /> Link
-                          </button>
-                        </div>
-                        )}
-                        {linkedCount === 0 ? (
-                          <p className="text-xs text-muted-foreground py-1">No requirements linked.</p>
-                        ) : (
-                          <div className="space-y-1">
-                            {vc.verified_requirements.map((reqId) => (
-                              <div key={reqId} className="flex items-center gap-2 text-xs py-1 px-2 rounded-md hover:bg-accent group/link">
-                                <EntityLink
-                                  kind="requirement"
-                                  id={reqId}
-                                  name={requirements.find((r) => r.id === reqId)?.name}
-                                  className="flex-1 min-w-0 text-foreground hover:text-cs-blue"
-                                />
-                                {editable && (
-                                <button onClick={(e) => { e.stopPropagation(); handleUnlinkRequirement(vc.id, reqId); }} className="p-0.5 rounded-md text-muted-foreground hover:text-destructive opacity-0 group-hover/link:opacity-100 transition-[color,opacity]" title="Unlink requirement">
-                                  <X size={11} />
-                                </button>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-
-                        {/* Referenced by: incoming links, so every relation
-                            involving this case is traversable in both
-                            directions. */}
-                        {(refReqs.length > 0 || refComps.length > 0) && (
-                        <div className="border-t pt-3">
-                          <h4 className="text-2xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                            Referenced By
-                          </h4>
-                          <div className="flex flex-wrap gap-1.5">
-                            {refReqs.map((r) => (
-                              <span key={r.id} className="inline-flex items-center px-2 py-1 rounded-md bg-muted text-xs">
-                                <EntityLink kind="requirement" id={r.id} name={r.name} className="max-w-[220px] hover:text-primary" />
-                              </span>
-                            ))}
-                            {refComps.map((c) => (
-                              <span key={c.id} className="inline-flex items-center px-2 py-1 rounded-md bg-muted text-xs">
-                                <EntityLink kind="component" id={c.id} name={c.name} subtype={c.type} className="max-w-[220px] hover:text-primary" />
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                        )}
-
-                        {/* Measurements: recorded evidence, substituted into
-                            the owning requirement's constraints to compute
-                            its measured verdict. */}
-                        {((vc.measurements || []).length > 0 || editable) && (
-                        <div className="border-t pt-3">
-                          <h4 className="text-2xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                            <FlaskConical size={12} /> Measurements
-                          </h4>
-                          {(vc.measurements || []).map((m, mi) => (
-                            <div key={mi} className="flex items-center gap-2 text-xs py-1 px-2 rounded-md hover:bg-accent group/meas">
-                              <EntityLink
-                                kind="requirement"
-                                id={m.parameter.split('.')[0]}
-                                className="shrink-0 hover:text-primary"
-                              />
-                              <span className="font-mono text-muted-foreground flex-1 truncate">.{m.parameter.split('.').slice(1).join('.')}</span>
-                              <span className="font-mono text-foreground">{m.value}</span>
-                              <span className="text-muted-foreground w-10 truncate">{m.unit}</span>
-                              {editable && (
-                              <button onClick={(e) => { e.stopPropagation(); handleRemoveMeasurement(vc.id, mi); }} className="p-0.5 rounded-md text-muted-foreground hover:text-destructive opacity-0 group-hover/meas:opacity-100 transition-[color,opacity]">
-                                <X size={11} />
-                              </button>
-                              )}
-                            </div>
-                          ))}
-                          {editable && (
-                          <div className="flex gap-1.5 mt-1">
-                            {(() => {
-                              const suggestions = requirements
-                                .filter((r) => vc.verified_requirements.includes(r.id))
-                                .flatMap((r) => (r.parameters || []).map((p) => ({
-                                  id: `${r.id}.${p.name}`, label: p.unit || '', unit: p.unit || ''
-                                })));
-                              return <>
-                                <AutocompleteInput
-                                  className="input flex-1 text-2xs font-mono"
-                                  placeholder="REQID.parameter"
-                                  value={getMeasurement(vc.id).parameter}
-                                  onChange={(v) => {
-                                    const match = suggestions.find((s) => s.id === v);
-                                    setMeasurement(vc.id, { parameter: v, unit: match?.unit || '' });
-                                  }}
-                                  suggestions={suggestions}
-                                />
-                                <input className="input w-24 text-2xs font-mono" placeholder="value"
-                                  value={getMeasurement(vc.id).value}
-                                  onChange={(e) => setMeasurement(vc.id, { value: e.target.value })} />
-                                <input className="input w-16 text-2xs" placeholder="unit"
-                                  value={getMeasurement(vc.id).unit}
-                                  onChange={(e) => setMeasurement(vc.id, { unit: e.target.value })} />
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); handleAddMeasurement(vc.id); }}
-                                  className="btn-secondary shrink-0"
-                                  disabled={!getMeasurement(vc.id).parameter.trim() || getMeasurement(vc.id).value.trim() === ''}
-                                >
-                                  <Plus size={12} />
-                                </button>
-                              </>;
-                            })()}
-                          </div>
-                          )}
-                        </div>
-                        )}
-
-                        {/* Test Procedure */}
-                        <div className="border-t pt-3">
-                          <h4 className="text-2xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                            <ClipboardList size={12} /> Test Procedure
-                          </h4>
-                          {editable ? (
-                            <MentionTextarea
-                              className="input min-h-[60px] text-xs resize-y"
-                              placeholder="Describe the test procedure..."
-                              value={vc.test_procedure || ''}
-                              onChange={(v) => handleUpdateProcedure(vc.id, v)}
-                            />
-                          ) : (
-                            <p className="text-xs text-muted-foreground">{vc.test_procedure || 'No procedure defined.'}</p>
-                          )}
-                        </div>
-
-                        {/* Test Steps */}
-                        <div>
-                          <h4 className="text-2xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                            <ListChecks size={12} /> Test Steps
-                          </h4>
-                          {(vc.steps || []).length === 0 && !editable && (
-                            <p className="text-xs text-muted-foreground">No steps defined.</p>
-                          )}
-                          {(vc.steps || []).map((step, si) => (
-                            <div key={si} className="mb-2 pl-3 border-l-2 border-muted">
-                              <div className="flex items-start gap-2 text-xs">
-                                <span className="font-mono text-3xs text-muted-foreground mt-0.5 shrink-0">#{si + 1}</span>
-                                <div className="flex-1 min-w-0 space-y-1">
-                                  <div><span className="text-3xs text-muted-foreground">Action:</span> <span className="text-foreground">{step.action}</span></div>
-                                  <div><span className="text-3xs text-muted-foreground">Expected:</span> <span className="text-foreground">{step.expected_result}</span></div>
-                                  <div className="flex items-center gap-1">
-                                    <span className="text-3xs text-muted-foreground shrink-0">Actual:</span>
-                                    {editable ? (
-                                      <input
-                                        className="bg-transparent text-xs flex-1 border-b border-dashed border-muted-foreground/30 outline-none focus:border-primary/50 py-px"
-                                        placeholder="(enter actual result)"
-                                        value={step.actual_result || ''}
-                                        onBlur={(e) => handleUpdateStepResult(vc.id, si, e.target.value)}
-                                        onChange={(e) => {
-                                          e.stopPropagation();
-                                          const vcUpdated = { ...vc, steps: [...(vc.steps || [])] };
-                                          vcUpdated.steps[si] = { ...vcUpdated.steps[si], actual_result: e.target.value };
-                                        }}
-                                      />
-                                    ) : (
-                                      <span className="text-foreground text-xs">{step.actual_result || '—'}</span>
-                                    )}
-                                </div>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                          {editable && (
-                          <div className="flex gap-1.5 mt-2">
-                            <input
-                              className="input flex-1 text-2xs"
-                              placeholder="Step action..."
-                              value={getStepAction(vc.id)}
-                              onChange={(e) => setStepAction(vc.id, e.target.value)}
-                            />
-                            <input
-                              className="input flex-1 text-2xs"
-                              placeholder="Expected result..."
-                              value={getStepExpected(vc.id)}
-                              onChange={(e) => setStepExpected(vc.id, e.target.value)}
-                            />
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleAddStep(vc.id, getStepAction(vc.id), getStepExpected(vc.id));
-                                setStepAction(vc.id, '');
-                                setStepExpected(vc.id, '');
-                              }}
-                              className="btn-secondary shrink-0"
-                              disabled={!getStepAction(vc.id).trim()}
-                            >
-                              <Plus size={12} />
-                            </button>
-                          </div>
-                          )}
-                        </div>
-
-                        {/* Run Test */}
-                        {editable && (
-                        <div className="border-t pt-3">
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleRunTest(vc.id); }}
-                            disabled={runningVcs.has(vc.id)}
-                            className="btn-primary w-full justify-center text-xs disabled:opacity-60"
-                          >
-                            {runningVcs.has(vc.id) ? (
-                              <Loader size={13} className="animate-spin" />
-                            ) : (
-                              <Play size={13} />
-                            )} Run Test
-                          </button>
-                          {runFeedback[vc.id] && (
-                            <p className={`text-xs mt-1.5 ${
-                              runFeedback[vc.id].type === 'success'
-                                ? 'text-cs-green'
-                                : 'text-cs-red'
-                            }`}>
-                              {runFeedback[vc.id].type === 'success' ? (
-                                <CheckCircle2 size={12} className="inline mr-1" />
-                              ) : (
-                                <XCircle size={12} className="inline mr-1" />
-                              )}
-                              {runFeedback[vc.id].message}
-                            </p>
-                          )}
-                        </div>
-                        )}
-
-                        {/* Execution History */}
-                        {(vc.execution_history || []).length > 0 && (
-                        <div className="border-t pt-3">
-                          <h4 className="text-2xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                            Execution History
-                          </h4>
-                          <div className="space-y-1.5">
-                            {(vc.execution_history || []).map((run, ri) => (
-                              <div key={ri} className="flex items-center gap-2 text-3xs py-1 px-2 rounded-md bg-muted/30">
-                                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                                  run.status === 'passed' ? 'bg-cs-green' : run.status === 'failed' ? 'bg-cs-red' : 'bg-cs-amber'
-                                }`} />
-                                <span className="font-mono text-muted-foreground">{new Date(run.timestamp).toLocaleString()}</span>
-                                <span className="text-foreground font-medium capitalize">{run.status}</span>
-                                {run.executed_by && <span className="text-muted-foreground">by {run.executed_by}</span>}
-                                {run.notes && <span className="text-muted-foreground">— {run.notes}</span>}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                        )}
-                        <div className="border-t pt-3">
-                          <h4 className="text-2xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Comments</h4>
-                          <CommentThread entityKind="verification_cases" entityId={vc.id} />
-                        </div>
-                        <div className="border-t pt-3">
-                          <h4 className="text-2xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Change History</h4>
-                          <HistoryPanel itemId={vc.id} />
-                        </div>
-                      </div>
-                    </motion.div>
-                  )}
-      </AnimatePresence>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* CI Test Result Import */}
       <AnimatePresence>
@@ -1032,11 +482,6 @@ export default function VerificationPage() {
           </motion.div>
         )}
       </AnimatePresence>
-              </motion.div>
-            );
-          })}
-        </div>
-      )}
     </div>
   );
 }

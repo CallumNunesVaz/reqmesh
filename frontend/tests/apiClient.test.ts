@@ -229,6 +229,15 @@ describe('components', () => {
   });
 });
 
+describe('verification cases', () => {
+  it('fetches a single case from its own endpoint', async () => {
+    const f = stubFetch({ json: async () => ({ id: 'VCAF0001', name: 'Structural Static Test' }) });
+    const result = await api.getVerificationCase('demo', 'VCAF0001');
+    expect(callOf(f).url).toBe('/api/projects/demo/verification/VCAF0001');
+    expect(result).toEqual({ id: 'VCAF0001', name: 'Structural Static Test' });
+  });
+});
+
 describe('importProject', () => {
   it('posts multipart form data without forcing a content type', async () => {
     const f = stubFetch();

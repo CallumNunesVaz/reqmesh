@@ -1319,6 +1319,8 @@ export const api = {
   // Verification Cases
   listVerificationCases: async (projectId: string) =>
     (await request<Paged<VerificationCase>>(`/projects/${projectId}/verification`)).items,
+  getVerificationCase: (projectId: string, vcId: string) =>
+    request<VerificationCase>(`/projects/${projectId}/verification/${vcId}`),
   createVerificationCase: (projectId: string, data: VerificationCaseCreate) =>
     request<VerificationCase>(`/projects/${projectId}/verification`, { method: 'POST', body: data }),
   updateVerificationCase: (projectId: string, vcId: string, data: VerificationCaseUpdate) =>

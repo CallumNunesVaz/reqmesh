@@ -71,11 +71,10 @@ test('a failed requirement update raises an error toast', async ({ app, server }
 test('a 409 delete guard surfaces the referrer count in the toast', async ({ app, server }) => {
   await signIn(app);
 
-  // Verification cases have IDs starting with "VC" — intercept DELETE on
-  // the verification-cases endpoint and return a 409 that mimics the
-  // server's delete-guard response.
+  // Verification cases live under the /verification endpoint — intercept
+  // DELETE and return a 409 that mimics the server's delete-guard response.
   await app.route(
-    (url) => url.toString().includes(`/api/projects/${P}/verification-cases/`),
+    (url) => url.toString().includes(`/api/projects/${P}/verification/`),
     async (route) => {
       const req = route.request();
       if (req.method() === 'DELETE') {
@@ -94,19 +93,14 @@ test('a 409 delete guard surfaces the referrer count in the toast', async ({ app
   await app.waitForSelector('main', { timeout: 20_000 });
   await setEditMode(app);
 
-  // Verification case IDs start with "VC" (e.g. VCAF0001).  Wait for at
-  // least one to render, then find its card by the id text.
-  await expect(app.locator('.card').filter({ hasText: /VC/ }).first()).toBeVisible({ timeout: 15_000 });
-
-  const vcCard = app.locator('.card').filter({ hasText: /VC/ }).first();
-  // Hover the card to expose the delete button (opacity-0 until group-hover).
-  await vcCard.hover();
-
-  const deleteBtn = vcCard.locator('[title="Delete"]');
-  await deleteBtn.click();
+  // The row navigates to the detail page, which is where delete now lives.
+  await app.locator('#entity-VCAF0001').click();
+  await app.waitForSelector('main', { timeout: 20_000 });
+  await app.locator('[title="Delete"]').waitFor({ timeout: 10_000 });
+  await app.locator('[title="Delete"]').click();
 
   // The themed confirmation dialog appears — click Delete to confirm.
-  // Restrict to the dialog so we don't match every row's Delete button.
+  // Restrict to the dialog so we don't match the page's own Delete button.
   const dialog = app.getByRole('dialog');
   await dialog.getByRole('button', { name: 'Delete' }).click();
 
