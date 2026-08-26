@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import type { ReactNode } from 'react';
+import type { KeyboardEvent, ReactNode } from 'react';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 
 /**
@@ -24,27 +24,58 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 /** One beat. `step={3}` is a 0.15s delay. */
 const BEAT_SECONDS = 0.05;
 
+/** Content past this point is usually below the fold, where a delay is a cost
+ *  with no benefit. */
+const MAX_STEP = 6;
+
 export interface RevealProps {
-  /** Position in the stagger. Capped at 6 — content that far down the page is
-   *  usually below the fold, where a delay is a cost with no benefit. */
-  step?: 0 | 1 | 2 | 3 | 4 | 5 | 6;
+  /** Position in the stagger. Takes a plain number rather than a literal union
+   *  so a list can pass its loop index — the adoption sweep found several
+   *  `delay: i * 0.05` call sites that a union type could not express — and
+   *  clamps here so no caller has to remember the cap. */
+  step?: number;
+  /** Passed through: the entity-focus system scrolls to rows by `entity-<id>`,
+   *  so a row that animates in still has to be addressable. */
+  id?: string;
+  /** When given, the element becomes a real button for keyboard users too.
+   *  The card grids that pass this (project cards, overview stat tiles) were
+   *  clickable divs with no keyboard path at all — `motion.div` hid that from
+   *  the linter, a plain div does not. */
+  onClick?: () => void;
   className?: string;
   children: ReactNode;
 }
 
-export default function Reveal({ step = 0, className, children }: RevealProps) {
+export default function Reveal({ step = 0, id, onClick, className, children }: RevealProps) {
   const reduced = useReducedMotion();
 
+  const beats = Math.min(Math.max(Math.round(step), 0), MAX_STEP);
+
+  // Enter and Space are what a button responds to; without these the card is
+  // mouse-only.
+  const interactive = onClick
+    ? {
+      onClick,
+      role: 'button',
+      tabIndex: 0,
+      onKeyDown: (e: KeyboardEvent) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); }
+      },
+    }
+    : {};
+
   if (reduced) {
-    return <div className={className}>{children}</div>;
+    return <div id={id} className={className} {...interactive}>{children}</div>;
   }
 
   return (
     <motion.div
+      id={id}
+      {...interactive}
       className={className}
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: step * BEAT_SECONDS }}
+      transition={{ delay: beats * BEAT_SECONDS }}
     >
       {children}
     </motion.div>

@@ -236,11 +236,9 @@ export default function SystemStatesPage() {
   };
 
   const renderRow = (s: SystemStateDef) => (
-    <motion.div
+    <Reveal
       key={s.name}
       id={`entity-${s.name}`}
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
       className={`card p-4 ${selectedId === s.name ? 'ring-2 ring-primary/50' : ''}`}
     >
       <div className="flex items-start justify-between gap-3">
@@ -286,7 +284,7 @@ export default function SystemStatesPage() {
           </div>
         )}
       </div>
-    </motion.div>
+    </Reveal>
   );
 
   const inSequence = states.filter((s) => s.order > 0).sort((a, b) => a.order - b.order);

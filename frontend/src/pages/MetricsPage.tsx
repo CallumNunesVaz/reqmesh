@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import Reveal from '../components/Reveal';
 import { AlertTriangle, Search, TrendingUp, Shield, GitBranch, FileWarning, Sparkles, Sigma, Flame, ShieldCheck, Table } from 'lucide-react';
 import { api, type MetricsData, type GapItem, type QualityItem, type EvaluationData, type PughMatrix, type RiskBingo } from '../api/client';
 import { EntityLink } from '../components/entities';
@@ -78,11 +79,11 @@ export default function MetricsPage() {
         ].map((card, i) => {
           const Icon = card.icon;
           return (
-            <motion.div key={card.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} className="card p-4">
+            <Reveal key={card.label} step={i} className="card p-4">
               <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${card.color} mb-3`}><Icon size={18} /></div>
               <div className="text-2xl font-bold text-card-foreground">{card.value}</div>
               <div className="text-xs text-muted-foreground mt-0.5">{card.label}</div>
-            </motion.div>
+            </Reveal>
           );
         })}
       </div>

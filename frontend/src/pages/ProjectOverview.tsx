@@ -182,11 +182,9 @@ export default function ProjectOverview() {
         {statCards.map((card, i) => {
           const Icon = card.icon;
           return (
-            <motion.div
+            <Reveal
               key={card.label}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 + i * 0.05 }}
+              step={2 + i}
               className="card p-4 hover:shadow-md transition-shadow cursor-pointer"
               onClick={() => navigate(card.to)}
             >
@@ -195,7 +193,7 @@ export default function ProjectOverview() {
               </div>
               <div className="text-2xl font-bold text-card-foreground">{card.value}</div>
               <div className="text-xs text-muted-foreground mt-0.5">{card.label}</div>
-            </motion.div>
+            </Reveal>
           );
         })}
       </div>

@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useId } from 'react';
 import { usePersistedState, setCodec } from '../hooks/usePersistedState';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import Reveal from '../components/Reveal';
 import { Plus, Trash2, Edit3, Check, X, Snowflake, GitBranch, Clock, Layers, ArrowRight, ChevronDown, ChevronUp, ChevronRight, Loader, Eye, EyeOff, Calendar, GripVertical } from 'lucide-react';
 import { api, type BaselineInfo, type BaselineDiff } from '../api/client';
 import { EntityLink } from '../components/entities';
@@ -283,11 +284,9 @@ export default function BaselinesPage() {
   };
 
   const renderRow = (b: BaselineInfo) => (
-    <motion.div
+    <Reveal
       key={b.name}
       id={`entity-${b.name}`}
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
       className={`card p-4 ${selectedId === b.name ? 'ring-2 ring-primary/50' : ''}`}
     >
       {/* Row header */}
@@ -482,7 +481,7 @@ export default function BaselinesPage() {
           </AnimatePresence>
         </div>
       )}
-    </motion.div>
+    </Reveal>
   );
 
   const inSequence = baselines.filter((b) => b.order > 0).sort((a, b) => a.order - b.order);

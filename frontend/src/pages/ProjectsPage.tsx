@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import Reveal from '../components/Reveal';
 import { FolderOpen, Plus, Trash2, WifiOff, LogIn } from 'lucide-react';
 import { api } from '../api/client';
 import { useStore } from '../store';
@@ -139,11 +140,9 @@ export default function ProjectsPage() {
       ) : (
         <div className="grid grid-cols-1 @2xl:grid-cols-2 @4xl:grid-cols-3 gap-4">
           {projects.map((project, i) => (
-            <motion.div
+            <Reveal
               key={project.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.05 }}
+              step={i}
               className="card p-5 hover:shadow-md transition-shadow cursor-pointer group"
               onClick={() => navigate(`/project/${project.id}`)}
             >
@@ -170,13 +169,11 @@ export default function ProjectsPage() {
                 </button>
                 )}
               </div>
-            </motion.div>
+            </Reveal>
           ))}
           {canCreate && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: projects.length * 0.05 }}
+            <Reveal
+              step={projects.length}
               className="card p-5 border-dashed border-2 border-muted-foreground/25 hover:border-primary/40 hover:shadow-md transition-[border-color,box-shadow] cursor-pointer group flex items-center justify-center min-h-[140px]"
               onClick={() => setShowCreate(true)}
             >
@@ -186,7 +183,7 @@ export default function ProjectsPage() {
                 </div>
                 <p className="text-sm text-muted-foreground mt-2 group-hover:text-primary font-medium">New Project</p>
               </div>
-            </motion.div>
+            </Reveal>
           )}
         </div>
       )}
