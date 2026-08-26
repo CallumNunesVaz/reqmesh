@@ -129,7 +129,7 @@ test('long before/after values are clipped and recoverable via title', async ({ 
   expect(beforeMetrics.sw).toBeGreaterThan(beforeMetrics.cw);
   expect(beforeMetrics.title).toBe(longBefore);
 
-  const after = app.locator('span.text-emerald-400', { hasText: longAfter });
+  const after = app.locator('span.text-cs-green', { hasText: longAfter });
   await expect(after).toBeVisible({ timeout: 15_000 });
   const afterMetrics = await after.evaluate((el) => ({
     sw: el.scrollWidth,
