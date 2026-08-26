@@ -1,10 +1,11 @@
 import { useEffect, useState, useCallback, useRef, useId } from 'react';
 import {
   SlidersHorizontal, ShieldCheck, Save, Loader, Lock, Send, CheckCircle2,
-  AlertTriangle,   Palette, ToggleLeft, Mail, KeyRound, Gauge, ArrowUpCircle, Users, FileText, Plus, X, Upload,
+  AlertTriangle,   Palette, ToggleLeft, Mail, KeyRound, Gauge, ArrowUpCircle, Users, FileText, Plus, X, Upload, Rows3,
 } from 'lucide-react';
 import { api, type AppSetting } from '../api/client';
 import { useAuthStore } from '../store/auth';
+import { useDensity } from '../components/DensityProvider';
 
 const CATEGORY_META: Record<string, { label: string; icon: typeof Palette; hint: string }> = {
   branding: { label: 'Branding', icon: Palette, hint: 'How this instance identifies itself.' },
@@ -21,6 +22,7 @@ const CATEGORY_ORDER = ['branding', 'features', 'teams', 'reporting', 'email', '
 export default function SettingsPage() {
   const user = useAuthStore((s) => s.user);
   const isAdmin = user?.role === 'admin';
+  const { density, setDensity } = useDensity();
 
   const [settings, setSettings] = useState<AppSetting[]>([]);
   const [draft, setDraft] = useState<Record<string, string | number | boolean | string[]>>({});
@@ -105,6 +107,33 @@ export default function SettingsPage() {
           <AlertTriangle size={16} className="text-destructive shrink-0" /> {error}
         </div>
       )}
+
+      {/* Appearance — per-user, browser-local preferences. The density toggle
+          lives here rather than as a new header button (see 173-density). */}
+      <section className="card p-5">
+        <h2 className="font-medium mb-1 flex items-center gap-2"><Rows3 size={16} className="text-primary" /> List density</h2>
+        <p className="text-xs text-muted-foreground mb-3">
+          Row height on lists and tables. Comfortable is the default; compact fits more rows on screen when you are scanning rather than reading.
+        </p>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setDensity('comfortable')}
+            aria-pressed={density === 'comfortable'}
+            className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${density === 'comfortable' ? 'bg-primary text-primary-foreground border-primary' : 'bg-secondary text-secondary-foreground border-border hover:bg-secondary/80'}`}
+          >
+            Comfortable
+          </button>
+          <button
+            type="button"
+            onClick={() => setDensity('compact')}
+            aria-pressed={density === 'compact'}
+            className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${density === 'compact' ? 'bg-primary text-primary-foreground border-primary' : 'bg-secondary text-secondary-foreground border-border hover:bg-secondary/80'}`}
+          >
+            Compact
+          </button>
+        </div>
+      </section>
 
       {byCategory.map(({ cat, items }) => {
         const meta = CATEGORY_META[cat] ?? { label: cat, icon: SlidersHorizontal, hint: '' };

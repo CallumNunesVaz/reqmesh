@@ -314,7 +314,7 @@ export default function VerificationPage() {
                 return (
                   <tr key={vc.id} id={`entity-${vc.id}`}
                     onClick={() => navigate(`/project/${projectId}/verification/${encodeURIComponent(vc.id)}`)}
-                    className={`group hover:bg-accent/30 transition-colors cursor-pointer ${focusId === vc.id ? 'ring-2 ring-primary/50' : ''}`}>
+                    className={`group rt-row hover:bg-accent/30 transition-colors cursor-pointer ${focusId === vc.id ? 'ring-2 ring-primary/50' : ''}`}>
                     {editable && (
                       <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
                         <input

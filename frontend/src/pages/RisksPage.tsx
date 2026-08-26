@@ -411,7 +411,7 @@ export default function RisksPage() {
                 return (
                   <tr key={r.id} id={`entity-${r.id}`}
                     onClick={() => navigate(`/project/${projectId}/risks/${encodeURIComponent(r.id)}`)}
-                    className={`group hover:bg-accent/30 transition-colors cursor-pointer ${focusId === r.id ? 'ring-2 ring-primary/50' : ''}`}>
+                    className={`group rt-row hover:bg-accent/30 transition-colors cursor-pointer ${focusId === r.id ? 'ring-2 ring-primary/50' : ''}`}>
                     {canBulk && (
                       <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
                         {selectedIds.has(r.id) ? (

@@ -490,7 +490,7 @@ export default function ChangeRequestsPage() {
           const rl = redlines[cr.id];
           return (
           <motion.div key={cr.id} id={`entity-${cr.id}`} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.03 }}
-            className={`card p-4 hover:shadow-md transition-shadow group ${focusId === cr.id ? 'ring-2 ring-primary/50' : ''}`}>
+            className={`card rt-row p-4 hover:shadow-md transition-shadow group ${focusId === cr.id ? 'ring-2 ring-primary/50' : ''}`}>
             <div className="flex items-center gap-3">
               {canBulk && (
                 <span className="shrink-0">

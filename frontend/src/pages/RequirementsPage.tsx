@@ -585,7 +585,7 @@ export default function RequirementsPage() {
                     navigate(`/project/${projectId}/requirements/${req.id}`);
                   }
                 }}
-                className={`group flex items-center gap-2 pr-3 py-[7px] cursor-pointer transition-colors hover:bg-accent/40 ${dimByFilter ? 'opacity-45' : ''} ${draggingIds.includes(req.id) ? 'opacity-40' : ''}`}
+                className={`group rt-row flex items-center gap-2 pr-3 py-[7px] cursor-pointer transition-colors hover:bg-accent/40 ${dimByFilter ? 'opacity-45' : ''} ${draggingIds.includes(req.id) ? 'opacity-40' : ''}`}
               >
                 {/* Left cell. The tree indent lives *here*, not on the row, so
                     that every column to the right of the name starts at the
