@@ -20,6 +20,7 @@ import { useToasts } from '../components/Toast';
 import { useBulkActions } from '../hooks/useBulkActions';
 import BulkActionBar from '../components/BulkActionBar';
 import LoadingSplash from '../components/LoadingSplash';
+import EmptyState from '../components/EmptyState';
 
 const statusBadges: Record<string, string> = {
   pending: 'border-cs-amber/30 bg-cs-amber/10 text-cs-amber',
@@ -514,17 +515,16 @@ export default function VerificationPage() {
       </AnimatePresence>
 
       {filteredVCs.length === 0 ? (
-        <div className="card p-12 text-center">
-          <CheckCircle2 size={48} className="mx-auto text-muted-foreground/40 mb-4" />
-          <p className="text-card-foreground font-medium">
-            {filtering ? 'No verification cases match your filters.' : 'No verification cases yet'}
-          </p>
-          {filtering ? (
+        <EmptyState
+          icon={CheckCircle2}
+          title={filtering ? 'No verification cases match your filters.' : 'No verification cases yet'}
+          hint={filtering ? undefined : 'Create verification cases to track requirement testing.'}
+          action={!filtering && editable ? { label: 'New Verification Case', onClick: openCreate } : undefined}
+        >
+          {filtering && (
             <button className="text-xs text-primary hover:underline mt-2" onClick={() => { setSearch(''); setFilterStatus(''); setFilterMethod(''); }}>Clear filters</button>
-          ) : (
-            <p className="text-sm text-muted-foreground mt-1">Create verification cases to track requirement testing.</p>
           )}
-        </div>
+        </EmptyState>
       ) : (
         <div className="space-y-3">
           {filteredVCs.map((vc, i) => {

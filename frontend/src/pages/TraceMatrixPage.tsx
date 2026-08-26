@@ -12,6 +12,7 @@ import { useStore } from '../store';
 import AutocompleteInput from '../components/AutocompleteInput';
 import { EntityLink, entityPath, SECTION_TITLES, type EntityKind } from '../components/entities';
 import LoadingSplash from '../components/LoadingSplash';
+import EmptyState from '../components/EmptyState';
 
 // Cell tint per link type. Falls back to a neutral chip for any type not
 // listed here (importers emit types like `verifies`/`traces` too).
@@ -294,17 +295,11 @@ export default function TraceMatrixPage() {
       )}
 
       {links.length === 0 ? (
-        <div className="card p-12 text-center mt-6">
-          <GitBranch size={48} className="mx-auto text-muted-foreground/40 mb-4" />
-          <p className="text-card-foreground font-medium">No trace links yet</p>
-          <p className="text-sm text-muted-foreground mt-1">Add links to connect requirements and verification cases.</p>
-        </div>
+        <EmptyState className="mt-6" icon={GitBranch} title="No trace links yet" hint="Add links to connect requirements and verification cases." />
       ) : filteredLinks.length === 0 ? (
-        <div className="card p-12 text-center mt-6">
-          <GitBranch size={48} className="mx-auto text-muted-foreground/40 mb-4" />
-          <p className="text-card-foreground font-medium">No trace links match your filters.</p>
+        <EmptyState className="mt-6" icon={GitBranch} title="No trace links match your filters.">
           <button className="text-xs text-primary hover:underline mt-2" onClick={() => { setSearch(''); setFilterLinkType(''); }}>Clear filters</button>
-        </div>
+        </EmptyState>
       ) : viewMode === 'list' ? (
         <div className="card mt-6 overflow-x-auto">
           <table className="w-full text-sm">

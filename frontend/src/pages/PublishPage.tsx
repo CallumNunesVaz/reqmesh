@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { FileDown, FileText, FileCode, File, Download, Loader, AlertTriangle } from 'lucide-react';
 import { api } from '../api/client';
+import EmptyState from '../components/EmptyState';
 
 const formats = [
   { id: 'html', label: 'HTML Report', icon: FileCode, desc: 'Rich colorized web report with tables, charts, and hierarchy', ext: '.html' },
@@ -283,19 +284,17 @@ export default function PublishPage() {
         </div>
 
         <div className="@4xl:col-span-2">
-          <div className="card p-12 text-center">
-            <FileDown size={48} className="mx-auto text-muted-foreground/40 mb-4" />
-            <p className="text-card-foreground font-medium">Select format and sections, then download</p>
-            <p className="text-sm text-muted-foreground mt-1">
-              {selectedFormat === 'html' ? 'HTML opens in a new browser tab' :
+          <EmptyState
+            icon={FileDown}
+            title="Select format and sections, then download"
+            hint={selectedFormat === 'html' ? 'HTML opens in a new browser tab' :
                selectedFormat === 'pdf' ? 'PDF downloads as a print-ready document' :
                selectedFormat === 'md' ? 'Markdown downloads as plain text' :
                selectedFormat === 'latex' ? 'LaTeX source downloads for compilation' :
                selectedFormat === 'reqif' ? 'ReqIF downloads as XML for DOORS/Polarion import' :
                selectedFormat === 'sysml' ? 'SysML v2 downloads for MBSE tools' :
                'Downloads as a file for external tools'}
-            </p>
-          </div>
+          />
         </div>
       </div>
     </div>

@@ -14,6 +14,7 @@ import { useRangeSelection } from '../hooks/useRangeSelection';
 import { useBulkActions } from '../hooks/useBulkActions';
 import BulkActionBar from '../components/BulkActionBar';
 import LoadingSplash from '../components/LoadingSplash';
+import EmptyState from '../components/EmptyState';
 import { subtreeIds, riskInGroup, flattenTree, type TreeOption } from '../lib/riskGroups';
 import { compareRisks, type RiskSortKey, type SortDir } from '../lib/riskSort';
 
@@ -379,17 +380,16 @@ export default function RisksPage() {
         )}
       </AnimatePresence>
       {filteredRisks.length === 0 ? (
-        <div className="card p-12 text-center">
-          <AlertTriangle size={48} className="mx-auto text-muted-foreground/40 mb-4" />
-          <p className="text-card-foreground font-medium">
-            {filtering ? 'No risks match your filters.' : 'No risks yet'}
-          </p>
-          {filtering ? (
+        <EmptyState
+          icon={AlertTriangle}
+          title={filtering ? 'No risks match your filters.' : 'No risks yet'}
+          hint={filtering ? undefined : 'Identify and track project risks with severity and likelihood.'}
+          action={!filtering && editable ? { label: 'New Risk', onClick: openCreate } : undefined}
+        >
+          {filtering && (
             <button className="text-xs text-primary hover:underline mt-2" onClick={() => { setSearch(''); setFilterStatus(''); setFilterSeverity(''); setFilterLikelihood(''); setFilterComponentGroup(''); setFilterRequirementGroup(''); }}>Clear filters</button>
-          ) : (
-            <p className="text-sm text-muted-foreground mt-1">Identify and track project risks with severity and likelihood.</p>
           )}
-        </div>
+        </EmptyState>
       ) : (
         <div className="card overflow-x-auto">
           <table className="w-full text-left">
