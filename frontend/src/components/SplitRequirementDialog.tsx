@@ -133,7 +133,7 @@ export default function SplitRequirementDialog({ open, onClose, projectId, sourc
             </div>
 
             {error && (
-              <div className="mx-4 mb-2 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm flex items-start gap-2 shrink-0">
+              <div className="mx-4 mb-2 px-3 py-2 rounded-lg bg-cs-red/10 border border-cs-red/20 text-cs-red text-sm flex items-start gap-2 shrink-0">
                 <AlertTriangle size={14} className="mt-0.5 shrink-0" />
                 <span>{error}</span>
               </div>

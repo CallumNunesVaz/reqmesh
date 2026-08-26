@@ -24,7 +24,7 @@ export default function WhatIfBar(): JSX.Element | null {
 
   return (
     <div className="sticky bottom-3 z-30 mx-3 flex items-center gap-2 rounded-lg border bg-card/95 backdrop-blur px-3 py-2 shadow-lg">
-      <FlaskConical size={13} className="text-blue-400 shrink-0" />
+      <FlaskConical size={13} className="text-cs-blue shrink-0" />
       <span className="text-[11px] text-muted-foreground truncate">
         {pending ? <span className="inline-flex items-center gap-1"><Loader2 size={11} className="animate-spin" /> Computing…</span> : summary}
       </span>

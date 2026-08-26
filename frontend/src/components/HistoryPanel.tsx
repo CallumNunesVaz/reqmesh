@@ -140,9 +140,9 @@ export function HistoryPanel({ itemId, defaultOpen = false, onRestored }: {
                     return (
                       <div key={field} className="flex items-baseline gap-1 min-w-0">
                         <span className="font-mono text-muted-foreground shrink-0">{field}: </span>
-                        <span className="line-through text-red-400 truncate min-w-0" title={before}>{before}</span>
+                        <span className="line-through text-cs-red truncate min-w-0" title={before}>{before}</span>
                         <span className="text-muted-foreground shrink-0">→</span>
-                        <span className="text-emerald-400 truncate min-w-0" title={after}>{after}</span>
+                        <span className="text-cs-green truncate min-w-0" title={after}>{after}</span>
                       </div>
                     );
                   })}

@@ -55,9 +55,9 @@ function KeyTable({ children }: { children: ReactNode }) {
 }
 function Callout({ variant, children }: { variant: 'info' | 'warning' | 'tip'; children: ReactNode }) {
   const meta = {
-    info:    { icon: Info,          cls: 'border-blue-500/20 bg-blue-500/[0.04]', iconCls: 'text-blue-400' },
-    warning: { icon: AlertTriangle, cls: 'border-amber-500/20 bg-amber-500/[0.04]', iconCls: 'text-amber-400' },
-    tip:     { icon: Lightbulb,     cls: 'border-emerald-500/20 bg-emerald-500/[0.04]', iconCls: 'text-emerald-400' },
+    info:    { icon: Info,          cls: 'border-cs-blue/20 bg-cs-blue/[0.04]', iconCls: 'text-cs-blue' },
+    warning: { icon: AlertTriangle, cls: 'border-cs-amber/20 bg-cs-amber/[0.04]', iconCls: 'text-cs-amber' },
+    tip:     { icon: Lightbulb,     cls: 'border-cs-green/20 bg-cs-green/[0.04]', iconCls: 'text-cs-green' },
   }[variant];
   const Icon = meta.icon;
   return (
@@ -86,8 +86,8 @@ const DOCS: DocSection[] = [
         <H3>ISO 15288 Alignment</H3>
         <P>reqmesh follows <strong className="text-card-foreground">ISO/IEC 15288:2023</strong>. The matrix below shows the current support level for each of the ~30 technical and management processes.</P>
         <div className="flex items-center gap-4 mb-3 text-[10px]">
-          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-emerald-500/30 border border-emerald-500/40" /> Full</span>
-          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-amber-500/30 border border-amber-500/40" /> Partial</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-cs-green/30 border border-cs-green/40" /> Full</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-cs-amber/30 border border-cs-amber/40" /> Partial</span>
           <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-muted border border-border" /> Not addressed</span>
         </div>
         <table className="w-full text-left mb-4">
@@ -131,7 +131,7 @@ const DOCS: DocSection[] = [
               <tr key={`${ck}-${i}`} className="hover:bg-accent/30">
                 <td className="px-3 py-1.5 text-[10px] text-muted-foreground">{group}</td>
                 <td className="px-3 py-1.5 text-[10px]"><span className="font-mono text-muted-foreground">{clause}</span> <span className="text-card-foreground">{process}</span></td>
-                <td className="px-3 py-1.5" aria-label={`Coverage level ${level}`}><span className={`inline-block w-3 h-3 rounded-sm border ${level === 2 ? 'bg-emerald-500/30 border-emerald-500/40' : level === 1 ? 'bg-amber-500/30 border-amber-500/40' : 'bg-muted border-border'}`} /></td>
+                <td className="px-3 py-1.5" aria-label={`Coverage level ${level}`}><span className={`inline-block w-3 h-3 rounded-sm border ${level === 2 ? 'bg-cs-green/30 border-cs-green/40' : level === 1 ? 'bg-cs-amber/30 border-cs-amber/40' : 'bg-muted border-border'}`} /></td>
                 <td className="px-3 py-1.5 text-[10px] text-card-foreground/60">{notes}</td>
               </tr>
             );
@@ -305,12 +305,12 @@ const DOCS: DocSection[] = [
         <H3>Hierarchy</H3>
         <P>Components form a tree:</P>
         <UL>
-          <LI><span className="text-blue-400 font-medium">system</span> — the whole product</LI>
-          <LI><span className="text-purple-400 font-medium">subsystem</span> — a major functional grouping</LI>
-          <LI><span className="text-orange-400 font-medium">assembly</span> — a group of parts</LI>
-          <LI><span className="text-green-400 font-medium">part</span> — the smallest replaceable unit</LI>
-          <LI><span className="text-teal-400 font-medium">software</span> — a software module</LI>
-          <LI><span className="text-pink-400 font-medium">interface</span> — a connection point</LI>
+          <LI><span className="text-cs-blue font-medium">system</span> — the whole product</LI>
+          <LI><span className="text-cs-purple font-medium">subsystem</span> — a major functional grouping</LI>
+          <LI><span className="text-cs-orange font-medium">assembly</span> — a group of parts</LI>
+          <LI><span className="text-cs-green font-medium">part</span> — the smallest replaceable unit</LI>
+          <LI><span className="text-cs-teal font-medium">software</span> — a software module</LI>
+          <LI><span className="text-cs-pink font-medium">interface</span> — a connection point</LI>
         </UL>
         <P>Each component has a <strong className="text-card-foreground">quantity</strong> — parts with quantity &gt; 1 are multiplied in budget rollups.</P>
 
@@ -353,10 +353,10 @@ const DOCS: DocSection[] = [
         <H3>Verdicts & Margins</H3>
         <P>Every constraint evaluates to one of:</P>
         <div className="flex flex-wrap gap-2 mb-3 text-xs">
-          <span className="badge bg-emerald-500/10 text-emerald-400 border-emerald-500/30">pass</span>
-          <span className="badge bg-red-500/10 text-red-400 border-red-500/30">fail</span>
-          <span className="badge bg-amber-500/10 text-amber-400 border-amber-500/30">unknown</span>
-          <span className="badge bg-red-500/10 text-red-400 border-red-500/30">error</span>
+          <span className="badge bg-cs-green/10 text-cs-green border-cs-green/30">pass</span>
+          <span className="badge bg-cs-red/10 text-cs-red border-cs-red/30">fail</span>
+          <span className="badge bg-cs-amber/10 text-cs-amber border-cs-amber/30">unknown</span>
+          <span className="badge bg-cs-red/10 text-cs-red border-cs-red/30">error</span>
           <span className="badge bg-muted text-muted-foreground">not applicable</span>
         </div>
         <P>Single-comparison constraints report a <strong className="text-card-foreground">margin</strong>: how far you are from the boundary (e.g. <InlineCode>+3.0 (+0.26%)</InlineCode>).</P>
@@ -451,8 +451,8 @@ const DOCS: DocSection[] = [
         <OL>
           <LI>Each requirement has a <strong className="text-card-foreground">reviewed</strong> field — a SHA-256 hash of its normative content</LI>
           <LI>When you click <strong className="text-card-foreground">Review</strong>, the current fingerprint is stored</LI>
-          <LI>If any normative field changes, the fingerprint no longer matches and the requirement is flagged as <strong className="text-amber-400">unreviewed</strong></LI>
-          <LI>Each relation stores the target's fingerprint at review time. If the target changes, the link becomes <strong className="text-amber-400">suspect</strong></LI>
+          <LI>If any normative field changes, the fingerprint no longer matches and the requirement is flagged as <strong className="text-cs-amber">unreviewed</strong></LI>
+          <LI>Each relation stores the target's fingerprint at review time. If the target changes, the link becomes <strong className="text-cs-amber">suspect</strong></LI>
         </OL>
 
         <Callout variant="warning">Changing the description, type, priority, source, or rationale triggers re-review. Changing <InlineCode>allocated_to</InlineCode> or <InlineCode>baselines</InlineCode> does not.</Callout>
@@ -551,17 +551,17 @@ const DOCS: DocSection[] = [
             <tr className="hover:bg-accent/30">
               <td className="px-3 py-1.5 text-xs font-medium text-card-foreground">Weak words</td>
               <td className="px-3 py-1.5 text-xs text-card-foreground/70">"should", "may", "appropriate", "user-friendly"</td>
-              <td className="px-3 py-1.5 text-xs"><span className="badge bg-amber-500/10 text-amber-400">warning</span></td>
+              <td className="px-3 py-1.5 text-xs"><span className="badge bg-cs-amber/10 text-cs-amber">warning</span></td>
             </tr>
             <tr className="hover:bg-accent/30">
               <td className="px-3 py-1.5 text-xs font-medium text-card-foreground">Vague quantifiers</td>
               <td className="px-3 py-1.5 text-xs text-card-foreground/70">"several", "minimal", "a lot of"</td>
-              <td className="px-3 py-1.5 text-xs"><span className="badge bg-amber-500/10 text-amber-400">warning</span></td>
+              <td className="px-3 py-1.5 text-xs"><span className="badge bg-cs-amber/10 text-cs-amber">warning</span></td>
             </tr>
             <tr className="hover:bg-accent/30">
               <td className="px-3 py-1.5 text-xs font-medium text-card-foreground">Placeholders</td>
               <td className="px-3 py-1.5 text-xs text-card-foreground/70">"TODO", "TBD", "FIXME"</td>
-              <td className="px-3 py-1.5 text-xs"><span className="badge bg-red-500/10 text-red-400">error</span></td>
+              <td className="px-3 py-1.5 text-xs"><span className="badge bg-cs-red/10 text-cs-red">error</span></td>
             </tr>
             <tr className="hover:bg-accent/30">
               <td className="px-3 py-1.5 text-xs font-medium text-card-foreground">Non-atomic</td>
@@ -571,12 +571,12 @@ const DOCS: DocSection[] = [
             <tr className="hover:bg-accent/30">
               <td className="px-3 py-1.5 text-xs font-medium text-card-foreground">Word count</td>
               <td className="px-3 py-1.5 text-xs text-card-foreground/70">Too short (&lt; 5) or too long (&gt; 200)</td>
-              <td className="px-3 py-1.5 text-xs"><span className="badge bg-amber-500/10 text-amber-400">warning</span></td>
+              <td className="px-3 py-1.5 text-xs"><span className="badge bg-cs-amber/10 text-cs-amber">warning</span></td>
             </tr>
             <tr className="hover:bg-accent/30">
               <td className="px-3 py-1.5 text-xs font-medium text-card-foreground">Untestable</td>
               <td className="px-3 py-1.5 text-xs text-card-foreground/70">Test-verified with no measurable criteria</td>
-              <td className="px-3 py-1.5 text-xs"><span className="badge bg-amber-500/10 text-amber-400">warning</span></td>
+              <td className="px-3 py-1.5 text-xs"><span className="badge bg-cs-amber/10 text-cs-amber">warning</span></td>
             </tr>
             <tr className="hover:bg-accent/30">
               <td className="px-3 py-1.5 text-xs font-medium text-card-foreground">Passive voice</td>

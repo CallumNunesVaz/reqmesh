@@ -31,12 +31,12 @@ import { useSelectedReq } from './Layout';
 import { SECTION_TITLES } from './entities';
 
 const statusDots: Record<string, string> = {
-  proposed: 'bg-blue-400',
-  approved: 'bg-green-400',
-  implemented: 'bg-purple-400',
-  verified: 'bg-emerald-400',
-  rejected: 'bg-red-400',
-  deprecated: 'bg-zinc-400',
+  proposed: 'bg-cs-blue',
+  approved: 'bg-cs-green',
+  implemented: 'bg-cs-purple',
+  verified: 'bg-cs-green',
+  rejected: 'bg-cs-red',
+  deprecated: 'bg-cs-grey',
 };
 
 function TreeNode({
@@ -98,7 +98,7 @@ function TreeNode({
           }}
           className="flex items-center gap-1.5 flex-1 min-w-0 text-left"
         >
-          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusDots[node.status] || 'bg-zinc-400'}`} />
+          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusDots[node.status] || 'bg-cs-grey'}`} />
           <span className="font-mono shrink-0 text-[10px] opacity-50">{node.id}</span>
           <span className="truncate flex-1 text-left pl-1">{node.name || 'Untitled'}</span>
         </button>
@@ -163,18 +163,18 @@ interface PanelItem {
 }
 
 const COMPONENT_DOTS: Record<string, string> = {
-  system: 'bg-blue-400', subsystem: 'bg-purple-400', assembly: 'bg-orange-400',
-  part: 'bg-green-400', software: 'bg-teal-400', interface: 'bg-pink-400',
+  system: 'bg-cs-blue', subsystem: 'bg-cs-purple', assembly: 'bg-cs-orange',
+  part: 'bg-cs-green', software: 'bg-cs-teal', interface: 'bg-cs-pink',
 };
 const VC_DOTS: Record<string, string> = {
-  passed: 'bg-green-400', failed: 'bg-red-400', in_progress: 'bg-blue-400', pending: 'bg-zinc-400',
+  passed: 'bg-cs-green', failed: 'bg-cs-red', in_progress: 'bg-cs-blue', pending: 'bg-cs-grey',
 };
 const CHANGE_DOTS: Record<string, string> = {
-  submitted: 'bg-blue-400', in_review: 'bg-amber-400', approved: 'bg-green-400',
-  rejected: 'bg-red-400', implemented: 'bg-purple-400',
+  submitted: 'bg-cs-blue', in_review: 'bg-cs-amber', approved: 'bg-cs-green',
+  rejected: 'bg-cs-red', implemented: 'bg-cs-purple',
 };
 const RISK_DOTS: Record<string, string> = {
-  critical: 'bg-red-400', high: 'bg-orange-400', medium: 'bg-amber-400', low: 'bg-zinc-400',
+  critical: 'bg-cs-red', high: 'bg-cs-orange', medium: 'bg-cs-amber', low: 'bg-cs-grey',
 };
 
 function filterPanel(items: PanelItem[], q: string): PanelItem[] {
@@ -328,7 +328,7 @@ export default function RequirementNav({ width = 300, collapsed, onToggleCollaps
         const byId = new Map(specs.map((s) => [s.id, s]));
         const childIds = new Set(specs.flatMap((s) => s.children));
         const build = (s: (typeof specs)[number]): PanelItem => ({
-          id: s.id, label: s.name, sub: `${s.requirements.length} requirements`, dot: 'bg-yellow-400',
+          id: s.id, label: s.name, sub: `${s.requirements.length} requirements`, dot: 'bg-cs-yellow',
           to: `${base}/specifications?focus=${encodeURIComponent(s.id)}`,
           children: s.children.map((c) => byId.get(c)).filter((c): c is NonNullable<typeof c> => !!c).map(build),
         });
@@ -341,7 +341,7 @@ export default function RequirementNav({ width = 300, collapsed, onToggleCollaps
           comps.filter((c) => (c.parent && ids.has(c.parent) ? c.parent : null) === parent).map((c) => ({
             id: c.id, label: c.name,
             sub: c.quantity > 1 ? `${c.type} ×${c.quantity}` : c.type,
-            dot: COMPONENT_DOTS[c.type] || 'bg-zinc-400',
+            dot: COMPONENT_DOTS[c.type] || 'bg-cs-grey',
             to: `${base}/components/${encodeURIComponent(c.id)}`,
             children: build(c.id),
           }));
@@ -349,24 +349,24 @@ export default function RequirementNav({ width = 300, collapsed, onToggleCollaps
       }).catch(() => set([]));
     } else if (section === 'verification') {
       api.listVerificationCases(projectId).then((vcs) => set(vcs.map((v) => ({
-        id: v.id, label: v.name, sub: v.method, dot: VC_DOTS[v.status] || 'bg-zinc-400',
+        id: v.id, label: v.name, sub: v.method, dot: VC_DOTS[v.status] || 'bg-cs-grey',
         to: `${base}/verification?focus=${encodeURIComponent(v.id)}`, children: [],
       })))).catch(() => set([]));
     } else if (section === 'traces') {
       api.getTraces(projectId).then((t) => set((t.links || []).flatMap((l, i) => [
-        { id: `${i}-src`, label: `${l.source} → ${l.target}`, sub: l.type, dot: 'bg-blue-400',
+        { id: `${i}-src`, label: `${l.source} → ${l.target}`, sub: l.type, dot: 'bg-cs-blue',
           to: `${base}/requirements/${encodeURIComponent(l.source)}`, children: [], showId: false },
-        { id: `${i}-tgt`, label: `← ${l.target}`, sub: l.type, dot: 'bg-emerald-400',
+        { id: `${i}-tgt`, label: `← ${l.target}`, sub: l.type, dot: 'bg-cs-green',
           to: `${base}/requirements/${encodeURIComponent(l.target)}`, children: [], showId: false },
       ]))).catch(() => set([]));
     } else if (section === 'changes') {
       api.listChangeRequests(projectId).then((crs) => set(crs.map((c) => ({
-        id: c.id, label: c.title, sub: c.status.replace('_', ' '), dot: CHANGE_DOTS[c.status] || 'bg-zinc-400',
+        id: c.id, label: c.title, sub: c.status.replace('_', ' '), dot: CHANGE_DOTS[c.status] || 'bg-cs-grey',
         to: `${base}/change-requests?focus=${encodeURIComponent(c.id)}`, children: [],
       })))).catch(() => set([]));
     } else if (section === 'risks') {
       api.listRisks(projectId).then((risks) => set(risks.map((r) => ({
-        id: r.id, label: r.title, sub: r.severity, dot: RISK_DOTS[r.severity] || 'bg-zinc-400',
+        id: r.id, label: r.title, sub: r.severity, dot: RISK_DOTS[r.severity] || 'bg-cs-grey',
         to: `${base}/risks/${encodeURIComponent(r.id)}`, children: [],
       })))).catch(() => set([]));
     }

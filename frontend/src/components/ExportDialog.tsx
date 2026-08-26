@@ -373,8 +373,8 @@ export default function ExportDialog({ open, onClose, projectId }: ExportDialogP
 
               {/* LaTeX warning */}
               {!latexAvail && format === 'pdf' && (
-                <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs">
-                  <p className="font-medium text-amber-400">LaTeX engine not detected — PDF quality reduced</p>
+                <div className="rounded-lg border border-cs-amber/30 bg-cs-amber/5 p-3 text-xs">
+                  <p className="font-medium text-cs-amber">LaTeX engine not detected — PDF quality reduced</p>
                   <p className="text-muted-foreground mt-0.5">
                     Install <code className="bg-muted px-1 rounded">tectonic</code> (<code>curl -L https://github.com/tectonic-typesetting/tectonic/releases/download/tectonic%400.15.0/tectonic-0.15.0-x86_64-unknown-linux-gnu.tar.gz | tar xz -C ~/.local/bin</code>) for full-quality PDF with coloured badges and table of contents.
                   </p>
@@ -593,10 +593,10 @@ export default function ExportDialog({ open, onClose, projectId }: ExportDialogP
               {error && <p className="text-xs text-destructive">{error}</p>}
 
               {fallbackMessage && (
-                <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs flex items-start gap-2">
-                  <AlertTriangle size={14} className="text-amber-400 shrink-0 mt-0.5" />
+                <div className="rounded-lg border border-cs-amber/30 bg-cs-amber/5 p-3 text-xs flex items-start gap-2">
+                  <AlertTriangle size={14} className="text-cs-amber shrink-0 mt-0.5" />
                   <div>
-                    <p className="font-medium text-amber-400">Render fallback</p>
+                    <p className="font-medium text-cs-amber">Render fallback</p>
                     <p className="text-muted-foreground mt-0.5">{fallbackMessage}</p>
                   </div>
                 </div>

@@ -43,8 +43,8 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
         {state && (
           <>
             <div className="flex items-start gap-3">
-              <div className="w-9 h-9 rounded-full bg-amber-500/10 flex items-center justify-center shrink-0">
-                <AlertTriangle size={18} className="text-amber-400" />
+              <div className="w-9 h-9 rounded-full bg-cs-amber/10 flex items-center justify-center shrink-0">
+                <AlertTriangle size={18} className="text-cs-amber" />
               </div>
               <div className="flex-1 min-w-0">
                 <h3 className="text-sm font-semibold text-foreground">

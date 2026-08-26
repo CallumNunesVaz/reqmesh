@@ -120,7 +120,7 @@ const EntityLinkExtension = Node.create({
     const id = node.attrs.entityId;
     return ['span', {
       ...HTMLAttributes,
-      class: 'text-blue-500 underline cursor-pointer',
+      class: 'text-cs-blue underline cursor-pointer',
     }, `[[${id}]]`];
   },
 

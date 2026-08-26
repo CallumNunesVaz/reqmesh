@@ -22,19 +22,19 @@ import { useSelectedReq, useContextPane } from '../components/Layout';
 import LoadingSplash from '../components/LoadingSplash';
 
 const statusBadges: Record<string, string> = {
-  submitted: 'border-blue-500/30 bg-blue-500/10 text-blue-400',
-  in_review: 'border-amber-500/30 bg-amber-500/10 text-amber-400',
-  approved: 'border-green-500/30 bg-green-500/10 text-green-400',
-  rejected: 'border-red-500/30 bg-red-500/10 text-red-400',
-  implemented: 'border-purple-500/30 bg-purple-500/10 text-purple-400',
-  closed: 'border-zinc-500/30 bg-zinc-500/10 text-zinc-400',
+  submitted: 'border-cs-blue/30 bg-cs-blue/10 text-cs-blue',
+  in_review: 'border-cs-amber/30 bg-cs-amber/10 text-cs-amber',
+  approved: 'border-cs-green/30 bg-cs-green/10 text-cs-green',
+  rejected: 'border-cs-red/30 bg-cs-red/10 text-cs-red',
+  implemented: 'border-cs-purple/30 bg-cs-purple/10 text-cs-purple',
+  closed: 'border-cs-grey/30 bg-cs-grey/10 text-cs-grey',
 };
 
 const urgencyBadges: Record<string, string> = {
-  low: 'border-zinc-500/30 bg-zinc-500/10 text-zinc-400',
-  normal: 'border-blue-500/30 bg-blue-500/10 text-blue-400',
-  high: 'border-amber-500/30 bg-amber-500/10 text-amber-400',
-  emergency: 'border-red-500/30 bg-red-500/10 text-red-400',
+  low: 'border-cs-grey/30 bg-cs-grey/10 text-cs-grey',
+  normal: 'border-cs-blue/30 bg-cs-blue/10 text-cs-blue',
+  high: 'border-cs-amber/30 bg-cs-amber/10 text-cs-amber',
+  emergency: 'border-cs-red/30 bg-cs-red/10 text-cs-red',
 };
 
 interface RequirementNamingRule {
@@ -77,9 +77,9 @@ function DiffField({ field, before, after }: { field: string; before: unknown; a
   return (
     <div className="text-xs py-0.5">
       <span className="font-mono text-muted-foreground">{field}: </span>
-      <span className="line-through text-red-400">{beforeStr}</span>
+      <span className="line-through text-cs-red">{beforeStr}</span>
       <span className="mx-1 text-muted-foreground">→</span>
-      <span className="text-emerald-400">{afterStr}</span>
+      <span className="text-cs-green">{afterStr}</span>
     </div>
   );
 }
@@ -501,7 +501,7 @@ export default function ChangeRequestsPage() {
                   )}
                 </span>
               )}
-              <div className="w-9 h-9 bg-purple-500/10 text-purple-400 rounded-lg flex items-center justify-center"><GitPullRequest size={18} /></div>
+              <div className="w-9 h-9 bg-cs-purple/10 text-cs-purple rounded-lg flex items-center justify-center"><GitPullRequest size={18} /></div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="font-mono text-xs text-muted-foreground">{cr.id}</span>
@@ -542,15 +542,15 @@ export default function ChangeRequestsPage() {
                     {rl.targets.map((t) => {
                       const diffKeys = Object.keys(t.diffs);
                       if (t.stale && diffKeys.length === 0 && !t.creates && rl.targets.length === 1) {
-                        return <span key={t.id} className="text-amber-400">Target {t.id} no longer exists</span>;
+                        return <span key={t.id} className="text-cs-amber">Target {t.id} no longer exists</span>;
                       }
                       return (
                         <div key={t.id} className="mb-1">
                           <span className="font-mono text-muted-foreground">
                             <EntityLink kind="requirement" id={t.id} name={t.name} className="hover:text-primary" />
                           </span>
-                          {t.creates && <span className="ml-1 badge border border-blue-500/30 bg-blue-500/10 text-blue-400">New requirement</span>}
-                          {t.stale && <span className="ml-1 text-amber-400 italic">(stale)</span>}
+                          {t.creates && <span className="ml-1 badge border border-cs-blue/30 bg-cs-blue/10 text-cs-blue">New requirement</span>}
+                          {t.stale && <span className="ml-1 text-cs-amber italic">(stale)</span>}
                           {diffKeys.length > 0 && (
                             <div className="ml-2 mt-0.5 space-y-0">
                               {diffKeys.map((field) => (
@@ -589,7 +589,7 @@ export default function ChangeRequestsPage() {
                     {canMaintain && (
                       <button
                         onClick={() => handleExecute(cr.id, rl)}
-                        className="p-1.5 rounded-md hover:bg-emerald-500/10 text-muted-foreground hover:text-emerald-400 opacity-0 group-hover:opacity-100 transition-all"
+                        className="p-1.5 rounded-md hover:bg-cs-green/10 text-muted-foreground hover:text-cs-green opacity-0 group-hover:opacity-100 transition-all"
                         title="Execute"
                       >
                         <Play size={14} />

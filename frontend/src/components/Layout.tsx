@@ -472,7 +472,7 @@ export default function Layout() {
           {isInProject && (
             <button
               onClick={toggleHelpers}
-              className={`btn-ghost p-2 rounded-lg gap-1.5 text-xs transition-all ${helpersEnabled ? 'bg-violet-500/15 text-violet-400 border border-violet-500/30' : 'text-muted-foreground'}`}
+              className={`btn-ghost p-2 rounded-lg gap-1.5 text-xs transition-all ${helpersEnabled ? 'bg-cs-purple/15 text-cs-purple border border-cs-purple/30' : 'text-muted-foreground'}`}
               title={helpersEnabled ? 'Guided help is on — click to hide' : 'Guided help is off — click to show guidance'}
             >
               <HelpCircle size={15} />
@@ -543,7 +543,7 @@ export default function Layout() {
             <button
               onClick={toggleEdit}
               className={`btn-ghost p-2 rounded-lg gap-1.5 text-xs transition-all ${
-                editMode ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30' : 'text-muted-foreground'
+                editMode ? 'bg-cs-amber/15 text-cs-amber border border-cs-amber/30' : 'text-muted-foreground'
               }`}
               title={editMode ? 'Editing mode ON - click to disable' : 'Click to enable editing'}
             >
@@ -593,7 +593,7 @@ export default function Layout() {
               <span className="text-xs text-muted-foreground hidden sm:inline" title={`${user.username}${user.role ? ` (${user.role})` : ''}`}>
                 <User size={12} className="inline mr-1" />
                 <span className="hidden 2xl:inline">{user.username}</span>
-                {editMode && <span className="ml-1 text-amber-400 text-[10px]">edit</span>}
+                {editMode && <span className="ml-1 text-cs-amber text-[10px]">edit</span>}
               </span>
               <button onClick={signOut} className="btn-ghost p-2 rounded-lg text-muted-foreground hover:text-destructive" title="Sign out">
                 <LogOut size={15} />

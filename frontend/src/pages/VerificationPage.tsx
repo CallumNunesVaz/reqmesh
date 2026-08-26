@@ -22,17 +22,17 @@ import BulkActionBar from '../components/BulkActionBar';
 import LoadingSplash from '../components/LoadingSplash';
 
 const statusBadges: Record<string, string> = {
-  pending: 'border-amber-500/30 bg-amber-500/10 text-amber-400',
-  in_progress: 'border-blue-500/30 bg-blue-500/10 text-blue-400',
-  passed: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400',
-  failed: 'border-red-500/30 bg-red-500/10 text-red-400',
+  pending: 'border-cs-amber/30 bg-cs-amber/10 text-cs-amber',
+  in_progress: 'border-cs-blue/30 bg-cs-blue/10 text-cs-blue',
+  passed: 'border-cs-green/30 bg-cs-green/10 text-cs-green',
+  failed: 'border-cs-red/30 bg-cs-red/10 text-cs-red',
 };
 
 const statusIconColors: Record<string, string> = {
-  pending: 'bg-amber-500/10 text-amber-400',
-  in_progress: 'bg-blue-500/10 text-blue-400',
-  passed: 'bg-emerald-500/10 text-emerald-400',
-  failed: 'bg-red-500/10 text-red-400',
+  pending: 'bg-cs-amber/10 text-cs-amber',
+  in_progress: 'bg-cs-blue/10 text-cs-blue',
+  passed: 'bg-cs-green/10 text-cs-green',
+  failed: 'bg-cs-red/10 text-cs-red',
 };
 
 const statusIcons: Record<string, React.ComponentType<any>> = {
@@ -877,8 +877,8 @@ export default function VerificationPage() {
                           {runFeedback[vc.id] && (
                             <p className={`text-xs mt-1.5 ${
                               runFeedback[vc.id].type === 'success'
-                                ? 'text-emerald-400'
-                                : 'text-red-400'
+                                ? 'text-cs-green'
+                                : 'text-cs-red'
                             }`}>
                               {runFeedback[vc.id].type === 'success' ? (
                                 <CheckCircle2 size={12} className="inline mr-1" />
@@ -901,7 +901,7 @@ export default function VerificationPage() {
                             {(vc.execution_history || []).map((run, ri) => (
                               <div key={ri} className="flex items-center gap-2 text-[10px] py-1 px-2 rounded bg-muted/30">
                                 <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                                  run.status === 'passed' ? 'bg-emerald-500' : run.status === 'failed' ? 'bg-red-500' : 'bg-amber-500'
+                                  run.status === 'passed' ? 'bg-cs-green' : run.status === 'failed' ? 'bg-cs-red' : 'bg-cs-amber'
                                 }`} />
                                 <span className="font-mono text-muted-foreground">{new Date(run.timestamp).toLocaleString()}</span>
                                 <span className="text-foreground font-medium capitalize">{run.status}</span>

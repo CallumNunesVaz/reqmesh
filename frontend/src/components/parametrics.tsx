@@ -23,17 +23,17 @@ export function UnitsDatalist() {
 /** Small amber warning chip for a dimensional-consistency issue. */
 function UnitWarning({ message }: { message: string }) {
   return (
-    <span className="inline-flex items-center gap-1 text-[10px] text-amber-400 shrink-0" title={message}>
+    <span className="inline-flex items-center gap-1 text-[10px] text-cs-amber shrink-0" title={message}>
       <Ruler size={10} /> units
     </span>
   );
 }
 
 export const VERDICT_META: Record<EvalVerdict | ConstraintStatus, { cls: string; icon: typeof CheckCircle2; label: string }> = {
-  pass: { cls: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30', icon: CheckCircle2, label: 'pass' },
-  fail: { cls: 'bg-red-500/10 text-red-400 border-red-500/30', icon: XCircle, label: 'fail' },
-  unknown: { cls: 'bg-amber-500/10 text-amber-400 border-amber-500/30', icon: HelpCircle, label: 'unknown' },
-  error: { cls: 'bg-red-500/10 text-red-400 border-red-500/30', icon: AlertTriangle, label: 'error' },
+  pass: { cls: 'bg-cs-green/10 text-cs-green border-cs-green/30', icon: CheckCircle2, label: 'pass' },
+  fail: { cls: 'bg-cs-red/10 text-cs-red border-cs-red/30', icon: XCircle, label: 'fail' },
+  unknown: { cls: 'bg-cs-amber/10 text-cs-amber border-cs-amber/30', icon: HelpCircle, label: 'unknown' },
+  error: { cls: 'bg-cs-red/10 text-cs-red border-cs-red/30', icon: AlertTriangle, label: 'error' },
   not_applicable: { cls: 'bg-muted text-muted-foreground border-transparent', icon: MinusCircle, label: 'n/a' },
   none: { cls: 'bg-muted text-muted-foreground border-transparent', icon: MinusCircle, label: '—' },
 };
@@ -53,7 +53,7 @@ export function VerdictBadge({ status, prefix }: { status: EvalVerdict | Constra
 export function MarginTag({ margin }: { margin: NonNullable<EvaluatedConstraint['margin']> }) {
   const ok = margin.value >= 0;
   return (
-    <span className={`text-[10px] font-mono ${ok ? 'text-emerald-400' : 'text-red-400'}`}>
+    <span className={`text-[10px] font-mono ${ok ? 'text-cs-green' : 'text-cs-red'}`}>
       margin {margin.value > 0 ? '+' : ''}{margin.value}
       {margin.pct !== undefined ? ` (${margin.pct > 0 ? '+' : ''}${margin.pct}%)` : ''}
     </span>
@@ -431,7 +431,7 @@ export function ParametricsCard({ reqId, parameters, constraints, evaluated, edi
             const origVal = whatIf?.base[ref];
             const whatIfOpenNow = whatIfOpen.has(ref);
             return (
-              <div key={`${p.name}-${i}`} data-param={p.name} className={`flex items-start gap-2 text-xs py-1.5 px-2 rounded hover:bg-accent group ${isOverridden ? 'ring-1 ring-dashed ring-blue-400/50 bg-blue-500/5' : ''}`}>
+              <div key={`${p.name}-${i}`} data-param={p.name} className={`flex items-start gap-2 text-xs py-1.5 px-2 rounded hover:bg-accent group ${isOverridden ? 'ring-1 ring-dashed ring-cs-blue/50 bg-cs-blue/5' : ''}`}>
                 <span className="font-mono font-medium text-foreground w-28 shrink-0 truncate">{p.name}</span>
                 {p.expr || p.calc_def ? (
                   <span className="flex-1 min-w-0 break-words">
@@ -447,7 +447,7 @@ export function ParametricsCard({ reqId, parameters, constraints, evaluated, edi
                       <span className="flex items-center gap-1.5">
                         <span className="font-mono text-muted-foreground line-through">{origVal}</span>
                         <span className="text-[9px] text-muted-foreground">→</span>
-                        <span className="font-mono text-blue-400 font-semibold">{whatIf!.overrides[ref]}</span>
+                        <span className="font-mono text-cs-blue font-semibold">{whatIf!.overrides[ref]}</span>
                       </span>
                     ) : (
                       <span className="font-mono text-foreground">{p.value ?? '—'}</span>
@@ -477,7 +477,7 @@ export function ParametricsCard({ reqId, parameters, constraints, evaluated, edi
                           />
                         )}
                         <button
-                          className={`shrink-0 ${whatIfOpenNow ? 'text-blue-400' : 'text-muted-foreground hover:text-blue-400'} transition-all`}
+                          className={`shrink-0 ${whatIfOpenNow ? 'text-cs-blue' : 'text-muted-foreground hover:text-cs-blue'} transition-all`}
                           title="What-if override"
                           onClick={(e) => {
                             e.stopPropagation();
@@ -506,7 +506,7 @@ export function ParametricsCard({ reqId, parameters, constraints, evaluated, edi
                     {ev.measured_by && <EntityLink kind="verification" id={ev.measured_by} showIcon={false} className="text-cs-purple/80" />}
                   </span>
                 )}
-                {ev?.error && <span className="text-[10px] text-red-400 shrink-0" title={ev.error}>error</span>}
+                {ev?.error && <span className="text-[10px] text-cs-red shrink-0" title={ev.error}>error</span>}
                 {ev?.unit_warning && <UnitWarning message={ev.unit_warning} />}
                 {editable && (
                   <span className="flex items-center gap-0.5">

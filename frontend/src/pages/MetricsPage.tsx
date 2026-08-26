@@ -66,15 +66,15 @@ export default function MetricsPage() {
 
       <div className="grid grid-cols-2 @3xl:grid-cols-4 gap-4 mb-6">
         {[
-          { label: 'Total Requirements', value: metrics.total, icon: FileWarning, color: 'text-blue-400 bg-blue-400/10' },
-          { label: 'Coverage', value: `${coverage.coverage_pct}%`, icon: Shield, color: 'text-emerald-400 bg-emerald-400/10' },
-          { label: 'Conflicts', value: conflicts.count, icon: AlertTriangle, color: conflicts.count > 0 ? 'text-red-400 bg-red-400/10' : 'text-green-400 bg-green-400/10' },
-          { label: 'Gaps', value: gaps.length, icon: Search, color: gaps.length > 0 ? 'text-amber-400 bg-amber-400/10' : 'text-green-400 bg-green-400/10' },
-          { label: 'Unreviewed', value: unreviewedCount, icon: Shield, color: unreviewedCount > 0 ? 'text-amber-400 bg-amber-400/10' : 'text-emerald-400 bg-emerald-400/10' },
+          { label: 'Total Requirements', value: metrics.total, icon: FileWarning, color: 'text-cs-blue bg-cs-blue/10' },
+          { label: 'Coverage', value: `${coverage.coverage_pct}%`, icon: Shield, color: 'text-cs-green bg-cs-green/10' },
+          { label: 'Conflicts', value: conflicts.count, icon: AlertTriangle, color: conflicts.count > 0 ? 'text-cs-red bg-cs-red/10' : 'text-cs-green bg-cs-green/10' },
+          { label: 'Gaps', value: gaps.length, icon: Search, color: gaps.length > 0 ? 'text-cs-amber bg-cs-amber/10' : 'text-cs-green bg-cs-green/10' },
+          { label: 'Unreviewed', value: unreviewedCount, icon: Shield, color: unreviewedCount > 0 ? 'text-cs-amber bg-cs-amber/10' : 'text-cs-green bg-cs-green/10' },
           // The headline risk number is the one that needs action: open risks
           // in the top two bands. Total risks would only grow, and a register
           // that is large but well-mitigated is a healthy one.
-          { label: 'Severe Open Risks', value: risks?.severe_open ?? 0, icon: Flame, color: (risks?.severe_open ?? 0) > 0 ? 'text-red-400 bg-red-400/10' : 'text-emerald-400 bg-emerald-400/10' },
+          { label: 'Severe Open Risks', value: risks?.severe_open ?? 0, icon: Flame, color: (risks?.severe_open ?? 0) > 0 ? 'text-cs-red bg-cs-red/10' : 'text-cs-green bg-cs-green/10' },
         ].map((card, i) => {
           const Icon = card.icon;
           return (
@@ -96,7 +96,7 @@ export default function MetricsPage() {
             {Object.entries(q).map(([key, pct]) => (
               <div key={key}>
                 <div className="flex justify-between text-xs mb-1"><span className="text-muted-foreground capitalize">{key.replace(/_/g, ' ')}</span><span className="text-foreground font-medium">{pct}%</span></div>
-                <div className="w-full bg-muted rounded-full h-2"><motion.div initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 0.5 }} className={`h-full rounded-full ${pct >= 80 ? 'bg-emerald-500' : pct >= 50 ? 'bg-amber-500' : 'bg-red-500'}`} /></div>
+                <div className="w-full bg-muted rounded-full h-2"><motion.div initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 0.5 }} className={`h-full rounded-full ${pct >= 80 ? 'bg-cs-green' : pct >= 50 ? 'bg-cs-amber' : 'bg-cs-red'}`} /></div>
               </div>
             ))}
           </div>
@@ -183,7 +183,7 @@ export default function MetricsPage() {
               )}
 
               {risks.unrated > 0 && (
-                <div className="mt-3 text-xs flex items-start gap-1.5 text-amber-400">
+                <div className="mt-3 text-xs flex items-start gap-1.5 text-cs-amber">
                   <AlertTriangle size={13} className="shrink-0 mt-0.5" />
                   <span>
                     {risks.unrated} {risks.unrated === 1 ? 'risk cannot be rated' : 'risks cannot be rated'} — severity or
@@ -209,7 +209,7 @@ export default function MetricsPage() {
                       initial={{ width: 0 }}
                       animate={{ width: `${row.pct}%` }}
                       transition={{ duration: 0.5 }}
-                      className={`h-full rounded-full ${row.pct >= 80 ? 'bg-emerald-500' : row.pct >= 50 ? 'bg-amber-500' : 'bg-red-500'}`}
+                      className={`h-full rounded-full ${row.pct >= 80 ? 'bg-cs-green' : row.pct >= 50 ? 'bg-cs-amber' : 'bg-cs-red'}`}
                     />
                   </div>
                 </div>
@@ -234,9 +234,9 @@ export default function MetricsPage() {
                       {r.severity} · {r.likelihood.replace(/_/g, ' ')}
                     </span>
                     {r.mitigated ? (
-                      <ShieldCheck size={13} className="text-emerald-400 shrink-0" aria-label="Has a mitigation" />
+                      <ShieldCheck size={13} className="text-cs-green shrink-0" aria-label="Has a mitigation" />
                     ) : (
-                      <span className="badge bg-amber-500/10 text-amber-400 text-[9px] shrink-0">unmitigated</span>
+                      <span className="badge bg-cs-amber/10 text-cs-amber text-[9px] shrink-0">unmitigated</span>
                     )}
                   </div>
                 ))}
@@ -298,7 +298,7 @@ export default function MetricsPage() {
               </table>
             </div>
             {bingo.unrated > 0 && (
-              <div className="shrink-0 flex flex-col items-center justify-center gap-0.5 text-xs text-amber-400 bg-amber-500/5 rounded-lg px-3 py-2">
+              <div className="shrink-0 flex flex-col items-center justify-center gap-0.5 text-xs text-cs-amber bg-cs-amber/5 rounded-lg px-3 py-2">
                 <AlertTriangle size={14} />
                 <span className="font-semibold">{bingo.unrated}</span>
                 <span className="text-[10px] text-muted-foreground">unrated</span>
@@ -331,8 +331,8 @@ export default function MetricsPage() {
             )}
           </div>
           {evaluation.data_issues.length > 0 && (
-            <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5">
-              <div className="flex items-center gap-1.5 text-xs font-medium text-amber-400">
+            <div className="mb-3 rounded-lg border border-cs-amber/30 bg-cs-amber/10 p-2.5">
+              <div className="flex items-center gap-1.5 text-xs font-medium text-cs-amber">
                 <AlertTriangle size={13} />
                 {evaluation.data_issues.length} value{evaluation.data_issues.length === 1 ? '' : 's'} ignored
               </div>
@@ -415,7 +415,7 @@ export default function MetricsPage() {
                       const cell = col.cells[s.name];
                       if (!cell) return <td key={col.id} className="py-1.5 px-2 text-center text-muted-foreground">–</td>;
                       const signChar = cell.sign === 1 ? '+' : cell.sign === -1 ? '−' : cell.sign === 0 ? '0' : '·';
-                      const signColor = cell.sign === 1 ? 'text-emerald-400' : cell.sign === -1 ? 'text-red-400' : 'text-muted-foreground';
+                      const signColor = cell.sign === 1 ? 'text-cs-green' : cell.sign === -1 ? 'text-cs-red' : 'text-muted-foreground';
                       return (
                         <td key={col.id} className={`py-1.5 px-2 text-center tabular-nums ${signColor}`}>
                           <span className="font-semibold">{signChar}</span>
@@ -433,16 +433,16 @@ export default function MetricsPage() {
                   <td className="py-1.5 px-2 text-muted-foreground text-[10px] uppercase tracking-wider">plus / minus</td>
                   {pugh.columns.map((col) => (
                     <td key={col.id} className="py-1.5 px-2 text-center tabular-nums text-[10px]">
-                      <span className="text-emerald-400">{col.plus}</span>
+                      <span className="text-cs-green">{col.plus}</span>
                       <span className="text-muted-foreground"> / </span>
-                      <span className="text-red-400">{col.minus}</span>
+                      <span className="text-cs-red">{col.minus}</span>
                     </td>
                   ))}
                 </tr>
                 <tr>
                   <td className="py-1 px-2 text-muted-foreground text-[10px] uppercase tracking-wider">weighted</td>
                   {pugh.columns.map((col) => (
-                    <td key={col.id} className={`py-1 px-2 text-center tabular-nums text-[11px] font-mono ${col.weighted > 0 ? 'text-emerald-400' : col.weighted < 0 ? 'text-red-400' : 'text-muted-foreground'}`}>
+                    <td key={col.id} className={`py-1 px-2 text-center tabular-nums text-[11px] font-mono ${col.weighted > 0 ? 'text-cs-green' : col.weighted < 0 ? 'text-cs-red' : 'text-muted-foreground'}`}>
                       {col.weighted > 0 ? '+' : ''}{col.weighted.toFixed(2)}
                     </td>
                   ))}
@@ -455,18 +455,18 @@ export default function MetricsPage() {
 
       {quality.length > 0 && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.35 }} className="card p-5 mt-6">
-          <h2 className="font-semibold text-sm text-card-foreground mb-3 flex items-center gap-2"><Sparkles size={16} className="text-violet-400" /> Requirement Quality ({qualityAvg}/100)</h2>
+          <h2 className="font-semibold text-sm text-card-foreground mb-3 flex items-center gap-2"><Sparkles size={16} className="text-cs-purple" /> Requirement Quality ({qualityAvg}/100)</h2>
           <div className="space-y-2">
             {quality.slice(0, 10).map((q) => (
               <div key={q.id} className="flex items-center gap-2 text-xs py-1.5 px-2 rounded hover:bg-accent">
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-[11px] font-bold shrink-0 ${q.score >= 80 ? 'bg-emerald-500/10 text-emerald-400' : q.score >= 50 ? 'bg-amber-500/10 text-amber-400' : 'bg-red-500/10 text-red-400'}`}>{q.score}</div>
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-[11px] font-bold shrink-0 ${q.score >= 80 ? 'bg-cs-green/10 text-cs-green' : q.score >= 50 ? 'bg-cs-amber/10 text-cs-amber' : 'bg-cs-red/10 text-cs-red'}`}>{q.score}</div>
                 <div className="flex-1 min-w-0">
                   <EntityLink kind="requirement" id={q.id} />
                   <div className="text-[10px] text-muted-foreground truncate">{q.name}</div>
                 </div>
                 <div className="flex gap-1 flex-wrap justify-end">
                   {q.findings.slice(0, 3).map((f, fi) => (
-                    <span key={fi} className={`badge text-[9px] ${f.severity === 'error' ? 'bg-red-500/10 text-red-400' : f.severity === 'warning' ? 'bg-amber-500/10 text-amber-400' : 'bg-muted text-muted-foreground'}`} title={f.message}>{f.rule.replace(/_/g, ' ')}</span>
+                    <span key={fi} className={`badge text-[9px] ${f.severity === 'error' ? 'bg-cs-red/10 text-cs-red' : f.severity === 'warning' ? 'bg-cs-amber/10 text-cs-amber' : 'bg-muted text-muted-foreground'}`} title={f.message}>{f.rule.replace(/_/g, ' ')}</span>
                   ))}
                 </div>
               </div>
@@ -477,13 +477,13 @@ export default function MetricsPage() {
 
       {gaps.length > 0 && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }} className="card p-5 mt-6">
-          <h2 className="font-semibold text-sm text-card-foreground mb-3 flex items-center gap-2"><AlertTriangle size={16} className="text-amber-400" /> Gap Analysis ({gaps.length} issues)</h2>
+          <h2 className="font-semibold text-sm text-card-foreground mb-3 flex items-center gap-2"><AlertTriangle size={16} className="text-cs-amber" /> Gap Analysis ({gaps.length} issues)</h2>
           <div className="space-y-1.5">
             {gaps.slice(0, 10).map((g, i) => (
               <div key={i} className="flex items-center gap-2 text-xs py-1 px-2 rounded hover:bg-accent">
                 <EntityLink kind="requirement" id={g.id} />
                 <span className="text-foreground">{g.name || ''}</span>
-                <div className="flex gap-1 ml-auto">{g.issues.map(iss => <span key={iss} className="badge bg-amber-500/10 text-amber-400 text-[10px]">{iss.replace(/_/g, ' ')}</span>)}</div>
+                <div className="flex gap-1 ml-auto">{g.issues.map(iss => <span key={iss} className="badge bg-cs-amber/10 text-cs-amber text-[10px]">{iss.replace(/_/g, ' ')}</span>)}</div>
               </div>
             ))}
           </div>
@@ -492,10 +492,10 @@ export default function MetricsPage() {
 
       {conflicts.count > 0 && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }} className="card p-5 mt-6">
-          <h2 className="font-semibold text-sm text-card-foreground mb-3 flex items-center gap-2"><AlertTriangle size={16} className="text-red-400" /> Conflicts ({conflicts.count})</h2>
+          <h2 className="font-semibold text-sm text-card-foreground mb-3 flex items-center gap-2"><AlertTriangle size={16} className="text-cs-red" /> Conflicts ({conflicts.count})</h2>
           <div className="space-y-1.5">
             {conflicts.conflicts.map((c, i) => (
-              <div key={i} className="text-xs py-1 px-2 rounded bg-red-500/5 text-red-400">
+              <div key={i} className="text-xs py-1 px-2 rounded bg-cs-red/5 text-cs-red">
                 {c.type === 'duplicate_name' ? `Duplicate name "${c.name}": ${(c.ids || []).join(', ')}` : `Conflict: ${c.a} ↔ ${c.b}`}
               </div>
             ))}

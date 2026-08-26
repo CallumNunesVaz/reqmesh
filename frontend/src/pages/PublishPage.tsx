@@ -202,8 +202,8 @@ export default function PublishPage() {
       </div>
 
       {latexAvail === false && selectedFormat === 'pdf' && (
-        <div className="card p-4 mb-6 border-amber-500/30 bg-amber-500/5">
-          <p className="text-sm font-medium text-amber-400">LaTeX engine not detected</p>
+        <div className="card p-4 mb-6 border-cs-amber/30 bg-cs-amber/5">
+          <p className="text-sm font-medium text-cs-amber">LaTeX engine not detected</p>
           <p className="text-xs text-muted-foreground mt-1">
             PDF reports will be rendered from the HTML version (basic formatting, no coloured badges or table of contents).
             Install a LaTeX engine for full-quality PDF output:
@@ -254,10 +254,10 @@ export default function PublishPage() {
 
             <div className="mt-4 pt-4 border-t space-y-3">
               {fallbackMessage && (
-                <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs flex items-start gap-2">
-                  <AlertTriangle size={14} className="text-amber-400 shrink-0 mt-0.5" />
+                <div className="rounded-lg border border-cs-amber/30 bg-cs-amber/5 p-3 text-xs flex items-start gap-2">
+                  <AlertTriangle size={14} className="text-cs-amber shrink-0 mt-0.5" />
                   <div>
-                    <p className="font-medium text-amber-400">Render fallback</p>
+                    <p className="font-medium text-cs-amber">Render fallback</p>
                     <p className="text-muted-foreground mt-0.5">{fallbackMessage}</p>
                   </div>
                 </div>

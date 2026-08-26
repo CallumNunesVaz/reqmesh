@@ -330,7 +330,7 @@ export default function GitPanel({ projectId, isAdmin, canEdit, remoteUrl, onRem
             </button>
           </div>
           {copied === 'fail' && (
-            <p className="text-[10px] text-amber-400 mt-1">
+            <p className="text-[10px] text-cs-amber mt-1">
               Copy blocked — select the key above and copy manually.
             </p>
           )}
@@ -355,7 +355,7 @@ export default function GitPanel({ projectId, isAdmin, canEdit, remoteUrl, onRem
             <button
               onClick={handleDeleteKey}
               disabled={deleting}
-              className="btn-secondary text-[10px] text-red-400 hover:text-red-300"
+              className="btn-secondary text-[10px] text-cs-red"
             >
               {deleting ? 'Deleting…' : <><Trash2 size={11} className="mr-1" /> Delete</>}
             </button>
@@ -400,7 +400,7 @@ export default function GitPanel({ projectId, isAdmin, canEdit, remoteUrl, onRem
   if (error && !status) {
     return (
       <div className="card p-5 mb-6">
-        <div className="flex items-center gap-2 text-red-400 text-sm">
+        <div className="flex items-center gap-2 text-cs-red text-sm">
           <AlertTriangle size={14} />
           {error}
         </div>
@@ -493,13 +493,13 @@ export default function GitPanel({ projectId, isAdmin, canEdit, remoteUrl, onRem
       {/* Status line */}
       <div className="flex items-center gap-2 mb-4 text-sm">
         {status.dirty && (
-          <span className="flex items-center gap-1 text-amber-400 text-xs">
+          <span className="flex items-center gap-1 text-cs-amber text-xs">
             <AlertTriangle size={12} />
             Uncommitted changes
           </span>
         )}
         {!status.dirty && (
-          <span className="flex items-center gap-1 text-green-400/70 text-xs">
+          <span className="flex items-center gap-1 text-cs-green/70 text-xs">
             <CheckCircle size={12} />
             Clean
           </span>
@@ -509,7 +509,7 @@ export default function GitPanel({ projectId, isAdmin, canEdit, remoteUrl, onRem
           {status.branch ? ` on ${status.branch}` : ''}
         </span>
         {status.ahead !== null && status.ahead > 0 && (
-          <span className="text-blue-400 text-xs">
+          <span className="text-cs-blue text-xs">
             · {status.ahead} to push
           </span>
         )}
@@ -527,15 +527,15 @@ export default function GitPanel({ projectId, isAdmin, canEdit, remoteUrl, onRem
 
       {/* Failed last push — the loudest thing on the panel */}
       {failedPush && (
-        <div className="border border-red-500/30 bg-red-500/10 rounded-lg p-3 mb-4">
+        <div className="border border-cs-red/30 bg-cs-red/10 rounded-lg p-3 mb-4">
           <div className="flex items-start gap-2">
-            <XCircle size={16} className="text-red-400 shrink-0 mt-0.5" />
+            <XCircle size={16} className="text-cs-red shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
-              <p className="text-sm text-red-300 font-medium mb-1">
+              <p className="text-sm text-cs-red font-medium mb-1">
                 Last push failed {relativeTime(status.last_push!.at)}
               </p>
               {status.last_push!.error && (
-                <p className="text-xs text-red-400/80 break-all mb-2">
+                <p className="text-xs text-cs-red/80 break-all mb-2">
                   {status.last_push!.error}
                 </p>
               )}
@@ -605,7 +605,7 @@ export default function GitPanel({ projectId, isAdmin, canEdit, remoteUrl, onRem
                 {!showRemoveConfirm ? (
                   <button
                     onClick={() => setShowRemoveConfirm(true)}
-                    className="btn-secondary text-[10px] text-red-400 hover:text-red-300"
+                    className="btn-secondary text-[10px] text-cs-red"
                     title={`Remove remote ${remoteDisplay}`}
                   >
                     <Trash2 size={11} className="mr-1" />
@@ -613,13 +613,13 @@ export default function GitPanel({ projectId, isAdmin, canEdit, remoteUrl, onRem
                   </button>
                 ) : (
                   <span className="flex items-center gap-2 text-xs">
-                    <span className="text-red-400">
+                    <span className="text-cs-red">
                       Remove {remoteDisplay}?
                     </span>
                     <button
                       onClick={handleDeleteRemote}
                       disabled={removing}
-                      className="btn-primary text-[10px] px-2 py-0.5 bg-red-600 hover:bg-red-700"
+                      className="btn-primary text-[10px] px-2 py-0.5 bg-cs-red"
                     >
                       {removing ? 'Removing…' : 'Yes, remove'}
                     </button>
@@ -638,8 +638,8 @@ export default function GitPanel({ projectId, isAdmin, canEdit, remoteUrl, onRem
             {testResult && (
               <div className={`mt-2 px-3 py-2 rounded text-xs ${
                 testResult.ok
-                  ? 'border border-green-500/20 bg-green-500/5 text-green-400'
-                  : 'border border-red-500/20 bg-red-500/5 text-red-400'
+                  ? 'border border-cs-green/20 bg-cs-green/5 text-cs-green'
+                  : 'border border-cs-red/20 bg-cs-red/5 text-cs-red'
               }`}>
                 {testResult.ok ? (
                   <>
