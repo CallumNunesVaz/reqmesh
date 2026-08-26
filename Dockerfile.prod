@@ -85,16 +85,43 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ ./
 COPY --from=frontend-build /app/frontend/dist /app/frontend/dist
 
+# The TeX bundle tectonic compiles against, fetched once and treated the same
+# way as the binary above: a pinned URL plus a recorded SHA-256. tectonic
+# normally downloads these files on demand from a bundle server *during* the
+# compile below, which made the image build depend on a third-party host and
+# fail intermittently (the warmer's retry loop could not help — every attempt
+# hit the same host). Fetching it here, in its own layer, lets the warming
+# compile run with the network switched off and fail only on real content
+# problems.
+#
+# The full bundle is a ~2.9 GB indexed tarball, so fetch_tectonic_bundle.py
+# pulls just the files the two reports need (the same set a network warm would
+# download) and lays them out as the tectonic file cache, keyed to the same
+# default bundle URL tectonic uses at runtime. The digest is the bundle's own
+# SHA256SUM — the value tectonic itself uses to identify a bundle — recorded
+# from the tlextras-2022.0r0.tar bundle that default_bundle_v33 (format version
+# 33) resolves to for tectonic 0.17.0.
+ARG TECTONIC_BUNDLE_URL=https://relay.fullyjustified.net/default_bundle_v33.tar
+ARG TECTONIC_BUNDLE_SHA256=6ffe055852f8faf66c0acbe1a7fb27f87b869a90bad1204f3bf4d9683f597c7c
+RUN TECTONIC_BUNDLE_URL="${TECTONIC_BUNDLE_URL}" \
+    TECTONIC_BUNDLE_SHA256="${TECTONIC_BUNDLE_SHA256}" \
+    python scripts/fetch_tectonic_bundle.py
+
 # Fetch every TeX package a real report needs, now, and fail the build if a
 # report cannot be produced. The script compiles an actual report from the
 # seeded demo project rather than a stand-in document, so the warm cache cannot
 # drift out of step with the preamble the publisher emits.
 #
+# `--network=none` is the proof this whole change is for: the compile must
+# succeed with networking switched off, because every TeX file it needs is now
+# local (fetched in the layer above) and the cache is keyed to the default
+# bundle URL tectonic would otherwise try to reach.
+#
 # The `rm` is not tidiness. Seeding the demo project takes file locks, which
 # creates /tmp/reqmesh-locks owned by root (this stage runs as root). Baked into
 # the image, that directory is unwritable by the `reqmesh` runtime user, and
 # every write fails with EACCES the moment /tmp is not a fresh tmpfs.
-RUN python scripts/warm_tectonic.py && rm -rf /tmp/reqmesh-locks
+RUN --network=none python scripts/warm_tectonic.py && rm -rf /tmp/reqmesh-locks
 
 # GPLv3 §4: a copy of the Licence must travel with every conveyed copy of the
 # Program, and an image pushed to a registry is a conveyed copy. The
