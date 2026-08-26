@@ -51,7 +51,7 @@ run_server() {
   trap cleanup EXIT INT TERM
 
   echo "=================================="
-  echo "  reqmesh v0.3.6  (server)"
+  echo "  reqmesh v0.3.7  (server)"
   echo "=================================="
   echo ""
 
@@ -119,7 +119,7 @@ run_server() {
 # ── Desktop (Electron) version ────────────────────────────────────────────────
 run_desktop() {
   echo "=================================="
-  echo "  reqmesh v0.3.6  (desktop)"
+  echo "  reqmesh v0.3.7  (desktop)"
   echo "=================================="
   echo ""
 
