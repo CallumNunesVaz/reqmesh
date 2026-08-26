@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { Search, Grid3X3, Check, Loader, ArrowUpDown, Download } from 'lucide-react';
 import { api, type AllocationMatrixData, type MatrixAxis } from '../api/client';
 import { EntityLink, type EntityKind } from '../components/entities';
+import EmptyState from '../components/EmptyState';
 import { REQUIREMENT_TYPES, REQUIREMENT_TYPE_META } from '../lib/requirementTypes';
 import { matrixToCsv, type MatrixCsvInput } from '../lib/matrixCsv';
 import { useAuthStore } from '../store/auth';
@@ -278,10 +279,7 @@ export default function AllocationMatrixPage() {
       <div className="flex-1 overflow-auto">
         {data.rows.length === 0 || data.columns.length === 0 ? (
           <div className="flex items-center justify-center h-full">
-            <div className="text-center text-muted-foreground">
-              <Grid3X3 size={32} className="mx-auto mb-2 opacity-40" />
-              <p className="text-sm">No data to display.</p>
-            </div>
+            <EmptyState variant="bare" icon={Grid3X3} title="No data to display." />
           </div>
         ) : (
           <table className="border-collapse text-xs w-full">

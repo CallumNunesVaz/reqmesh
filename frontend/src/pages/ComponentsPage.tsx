@@ -23,6 +23,7 @@ import { DndContext, DragOverlay } from '@dnd-kit/core';
 import { useTreeDrag, TOP_LEVEL_ID } from '../hooks/useTreeDrag';
 import { DropRow, DragGrip, TopLevelDropZone } from '../components/TreeDragRow';
 import LoadingSplash from '../components/LoadingSplash';
+import EmptyState from '../components/EmptyState';
 
 const EMPTY_DRAFT = { id: '', name: '', type: 'assembly', parent: '' };
 
@@ -604,19 +605,16 @@ export default function ComponentsPage() {
       {error && <div className="mb-4 text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">{error}</div>}
 
       {components.length === 0 && !filtering ? (
-        <div className="card p-12 text-center">
-          <Boxes size={48} className="mx-auto text-muted-foreground/40 mb-4" />
-          <p className="text-card-foreground font-medium">No components yet</p>
-          <p className="text-sm text-muted-foreground mt-1">
-            Components describe what the system <i>is</i>, and map onto the requirements they satisfy.
-          </p>
-        </div>
+        <EmptyState
+          icon={Boxes}
+          title="No components yet"
+          hint="Components describe what the system is, and map onto the requirements they satisfy."
+          action={editable ? { label: 'New Component', onClick: () => { setShowCreate((s) => !s); setError(''); } } : undefined}
+        />
       ) : components.length > 0 && filteredCount === 0 ? (
-        <div className="card p-12 text-center">
-          <Boxes size={48} className="mx-auto text-muted-foreground/40 mb-4" />
-          <p className="text-card-foreground font-medium">No components match your filters.</p>
+        <EmptyState icon={Boxes} title="No components match your filters.">
           <button className="text-xs text-primary hover:underline mt-2" onClick={() => { setSearch(''); setFilterType(''); }}>Clear filters</button>
-        </div>
+        </EmptyState>
       ) : (
         <div className="card p-2 flex-1 min-w-[280px]" role="tree" tabIndex={0} ref={treeContainerRef} onKeyDown={handleTreeKeyDown}>
           <DndContext sensors={sensors} collisionDetection={collisionDetection} {...dndHandlers}>

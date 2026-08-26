@@ -20,6 +20,7 @@ import { useConfirm } from '../components/ConfirmDialog';
 import { useBulkActions } from '../hooks/useBulkActions';
 import BulkActionBar from '../components/BulkActionBar';
 import LoadingSplash from '../components/LoadingSplash';
+import EmptyState from '../components/EmptyState';
 
 export default function SpecificationsPage() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -271,17 +272,16 @@ export default function SpecificationsPage() {
       </AnimatePresence>
 
       {filteredSpecs.length === 0 ? (
-        <div className="card p-12 text-center">
-          <FileText size={48} className="mx-auto text-muted-foreground/40 mb-4" />
-          <p className="text-card-foreground font-medium">
-            {filtering ? 'No specifications match your filters.' : 'No specifications yet'}
-          </p>
-          {filtering ? (
+        <EmptyState
+          icon={FileText}
+          title={filtering ? 'No specifications match your filters.' : 'No specifications yet'}
+          hint={filtering ? undefined : 'Create your first specification to organize requirements.'}
+          action={!filtering && editable ? { label: 'New Specification', onClick: openCreate } : undefined}
+        >
+          {filtering && (
             <button className="text-xs text-primary hover:underline mt-2" onClick={() => setSearch('')}>Clear filters</button>
-          ) : (
-            <p className="text-sm text-muted-foreground mt-1">Create your first specification to organize requirements.</p>
           )}
-        </div>
+        </EmptyState>
       ) : (
         <div className="space-y-3">
           {filteredSpecs.map((spec, i) => {

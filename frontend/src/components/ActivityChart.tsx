@@ -10,6 +10,7 @@ import {
 } from 'recharts';
 import { useParams } from 'react-router-dom';
 import { api, type ActivityData, type ActivityBucket, ACTIVITY_KIND_ORDER } from '../api/client';
+import EmptyState from './EmptyState';
 
 const KIND_LABELS: Record<string, string> = {
   verification: 'Verification',
@@ -106,6 +107,8 @@ export default function ActivityChart() {
         <h2 className="font-semibold text-sm text-card-foreground mb-3 flex items-center gap-2">
           Activity
         </h2>
+        {/* A loading placeholder is not an empty state: EmptyState renders its
+            title as prominent card-foreground, which makes "Loading…" shout. */}
         <div className="h-48 flex items-center justify-center text-xs text-muted-foreground">
           Loading…
         </div>
@@ -119,9 +122,7 @@ export default function ActivityChart() {
         <h2 className="font-semibold text-sm text-card-foreground mb-3 flex items-center gap-2">
           Activity
         </h2>
-        <div className="h-32 flex items-center justify-center text-sm text-muted-foreground">
-          No activity in the selected window — try a wider range.
-        </div>
+        <EmptyState variant="bare" title="No activity in the selected window — try a wider range." />
       </div>
     );
   }

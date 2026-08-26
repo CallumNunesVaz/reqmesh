@@ -20,6 +20,7 @@ import { useBulkActions } from '../hooks/useBulkActions';
 import BulkActionBar from '../components/BulkActionBar';
 import { useSelectedReq, useContextPane } from '../components/Layout';
 import LoadingSplash from '../components/LoadingSplash';
+import EmptyState from '../components/EmptyState';
 
 const statusBadges: Record<string, string> = {
   submitted: 'border-cs-blue/30 bg-cs-blue/10 text-cs-blue',
@@ -473,17 +474,16 @@ export default function ChangeRequestsPage() {
       </AnimatePresence>
 
       {filteredCRs.length === 0 ? (
-        <div className="card p-12 text-center">
-          <GitPullRequest size={48} className="mx-auto text-muted-foreground/40 mb-4" />
-          <p className="text-card-foreground font-medium">
-            {filtering ? 'No change requests match your filters.' : 'No change requests yet'}
-          </p>
-          {filtering ? (
+        <EmptyState
+          icon={GitPullRequest}
+          title={filtering ? 'No change requests match your filters.' : 'No change requests yet'}
+          hint={filtering ? undefined : 'Propose and track changes to requirements.'}
+          action={!filtering && editable ? { label: 'New Change Request', onClick: openCreate } : undefined}
+        >
+          {filtering && (
             <button className="text-xs text-primary hover:underline mt-2" onClick={() => { setSearch(''); setFilterStatus(''); }}>Clear filters</button>
-          ) : (
-            <p className="text-sm text-muted-foreground mt-1">Propose and track changes to requirements.</p>
           )}
-        </div>
+        </EmptyState>
       ) : (
       <div className="space-y-3">
         {filteredCRs.map((cr, i) => {

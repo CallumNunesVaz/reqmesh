@@ -7,6 +7,7 @@ import { useAuthStore } from '../store/auth';
 import Modal from '../components/Modal';
 import { useConfirm } from '../components/ConfirmDialog';
 import { useToasts } from '../components/Toast';
+import EmptyState from '../components/EmptyState';
 import { countMessage } from '../lib/feedback';
 
 const ROLE_LABELS: Record<string, string> = { admin: 'Administrator', maintainer: 'Maintainer', contributor: 'Contributor', guest: 'Guest' };
@@ -452,10 +453,7 @@ export default function UsersPage() {
 
           {/* Table */}
           {loadError ? (
-            <div className="card p-12 text-center">
-              <p className="text-foreground font-medium">Couldn't load users</p>
-              <p className="text-sm text-muted-foreground mt-1">{loadError}</p>
-            </div>
+            <EmptyState title="Couldn't load users" hint={loadError} />
           ) : (
             <div className="card overflow-x-auto">
               <table className="w-full text-left">

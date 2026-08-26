@@ -23,6 +23,7 @@ import { useRangeSelection } from '../hooks/useRangeSelection';
 import { useBulkActions } from '../hooks/useBulkActions';
 import BulkActionBar from '../components/BulkActionBar';
 import LoadingSplash from '../components/LoadingSplash';
+import EmptyState from '../components/EmptyState';
 
 /**
  * Architecture decision records.
@@ -314,19 +315,16 @@ export default function DecisionsPage() {
       </AnimatePresence>
 
       {filtered.length === 0 ? (
-        <div className="card p-12 text-center">
-          <Scale size={48} className="mx-auto text-muted-foreground/40 mb-4" />
-          <p className="text-card-foreground font-medium">
-            {filtering ? 'No decisions match your search.' : 'No decisions yet'}
-          </p>
-          {filtering ? (
+        <EmptyState
+          icon={Scale}
+          title={filtering ? 'No decisions match your search.' : 'No decisions yet'}
+          hint={filtering ? undefined : 'Record why the architecture is the way it is, so the reasoning outlives the people who had it.'}
+          action={!filtering && editable ? { label: 'New Decision', onClick: () => { setEditingId(null); setDraft(EMPTY); setShowCreate(!showCreate); } } : undefined}
+        >
+          {filtering && (
             <button className="text-xs text-primary hover:underline mt-2" onClick={() => setSearch('')}>Clear filters</button>
-          ) : (
-            <p className="text-sm text-muted-foreground mt-1">
-              Record why the architecture is the way it is, so the reasoning outlives the people who had it.
-            </p>
           )}
-        </div>
+        </EmptyState>
       ) : (
         <div className="space-y-3">
           {filtered.map((d, i) => {

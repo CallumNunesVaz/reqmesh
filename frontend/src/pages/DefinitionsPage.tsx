@@ -18,6 +18,7 @@ import { useRangeSelection } from '../hooks/useRangeSelection';
 import { useBulkActions } from '../hooks/useBulkActions';
 import BulkActionBar from '../components/BulkActionBar';
 import LoadingSplash from '../components/LoadingSplash';
+import EmptyState from '../components/EmptyState';
 
 /**
  * Reusable SysML v2-style constraint and calc definitions.
@@ -301,19 +302,16 @@ export default function DefinitionsPage() {
       </AnimatePresence>
 
       {filtered.length === 0 ? (
-        <div className="card p-12 text-center">
-          <Sigma size={48} className="mx-auto text-muted-foreground/40 mb-4" />
-          <p className="text-card-foreground font-medium">
-            {filtering ? 'No definitions match your search.' : 'No definitions yet'}
-          </p>
-          {filtering ? (
+        <EmptyState
+          icon={Sigma}
+          title={filtering ? 'No definitions match your search.' : 'No definitions yet'}
+          hint={filtering ? undefined : 'Write a rule once over formal parameters, then bind it on any requirement.'}
+          action={!filtering && editable ? { label: 'New Definition', onClick: () => { setEditingId(null); setDraft(EMPTY); setShowCreate(!showCreate); } } : undefined}
+        >
+          {filtering && (
             <button className="text-xs text-primary hover:underline mt-2" onClick={() => setSearch('')}>Clear filters</button>
-          ) : (
-            <p className="text-sm text-muted-foreground mt-1">
-              Write a rule once over formal parameters, then bind it on any requirement.
-            </p>
           )}
-        </div>
+        </EmptyState>
       ) : (
         <div className="space-y-2">
           {filtered.map((d, i) => {

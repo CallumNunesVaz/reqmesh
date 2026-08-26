@@ -17,6 +17,7 @@ import { useRangeSelection } from '../hooks/useRangeSelection';
 import { useBulkActions } from '../hooks/useBulkActions';
 import BulkActionBar from '../components/BulkActionBar';
 import LoadingSplash from '../components/LoadingSplash';
+import EmptyState from '../components/EmptyState';
 
 /**
  * Scoped what-if analysis cases.
@@ -298,19 +299,16 @@ export default function AnalysisPage() {
       </AnimatePresence>
 
       {filtered.length === 0 ? (
-        <div className="card p-12 text-center">
-          <FlaskConical size={48} className="mx-auto text-muted-foreground/40 mb-4" />
-          <p className="text-card-foreground font-medium">
-            {filtering ? 'No analysis cases match your search.' : 'No analysis cases yet'}
-          </p>
-          {filtering ? (
+        <EmptyState
+          icon={FlaskConical}
+          title={filtering ? 'No analysis cases match your search.' : 'No analysis cases yet'}
+          hint={filtering ? undefined : 'Define a scoped set of hypothetical parameter values, then evaluate it against the live solver.'}
+          action={!filtering && editable ? { label: 'New Analysis Case', onClick: () => { setEditingId(null); setDraft(EMPTY); setShowCreate(!showCreate); } } : undefined}
+        >
+          {filtering && (
             <button className="text-xs text-primary hover:underline mt-2" onClick={() => setSearch('')}>Clear filters</button>
-          ) : (
-            <p className="text-sm text-muted-foreground mt-1">
-              Define a scoped set of hypothetical parameter values, then evaluate it against the live solver.
-            </p>
           )}
-        </div>
+        </EmptyState>
       ) : (
         <div className="space-y-3">
           {filtered.map((c, i) => {

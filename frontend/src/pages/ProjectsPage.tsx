@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { FolderOpen, Plus, Trash2, WifiOff, RotateCw, LogIn } from 'lucide-react';
+import { FolderOpen, Plus, Trash2, WifiOff, LogIn } from 'lucide-react';
 import { api } from '../api/client';
 import { useStore } from '../store';
 import { useAuthStore } from '../store/auth';
 import { useToasts } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmDialog';
+import EmptyState from '../components/EmptyState';
 
 export default function ProjectsPage() {
   const navigate = useNavigate();
@@ -121,39 +122,20 @@ export default function ProjectsPage() {
       )}
 
       {needsAuth ? (
-        <div className="card p-12 text-center">
-          <LogIn size={32} className="mx-auto mb-4 text-muted-foreground" />
-          <p className="text-foreground font-medium">Sign in to see your projects</p>
-          <p className="text-sm text-muted-foreground mt-1">
-            This instance requires an account. Use the sign-in button in the header.
-          </p>
-        </div>
+        <EmptyState icon={LogIn} title="Sign in to see your projects" hint="This instance requires an account. Use the sign-in button in the header." />
       ) : loadError ? (
-        <div className="card p-12 text-center">
-          <WifiOff size={32} className="mx-auto mb-4 text-destructive" />
-          <p className="text-foreground font-medium">Can't reach the backend</p>
-          <p className="text-sm text-muted-foreground mt-1">
-            Is the API running on port 8000? ({loadError})
-          </p>
-          <button onClick={loadProjects} className="btn-secondary mt-4 inline-flex items-center gap-2">
-            <RotateCw size={14} />
-            Retry
-          </button>
-        </div>
+        <EmptyState
+          icon={WifiOff}
+          title="Can't reach the backend"
+          hint={`Is the API running on port 8000? (${loadError})`}
+          action={{ label: 'Retry', onClick: loadProjects }}
+        />
       ) : projects.length === 0 ? (
-        <div className="card p-12 text-center">
-          <img src="/reqmesh-logo.svg" alt="reqmesh" className="w-48 mx-auto mb-6 opacity-80" />
-          <p className="text-foreground font-medium">No projects yet</p>
-          <p className="text-sm text-muted-foreground mt-1">
-            {canCreate ? 'Create your first project to start managing requirements.' : 'Ask an administrator to create one.'}
-          </p>
-          {canCreate && (
-            <button onClick={() => setShowCreate(true)} className="btn-primary mt-4 inline-flex items-center gap-2">
-              <Plus size={16} />
-              New Project
-            </button>
-          )}
-        </div>
+        <EmptyState
+          title="No projects yet"
+          hint={canCreate ? 'Create your first project to start managing requirements.' : 'Ask an administrator to create one.'}
+          action={canCreate ? { label: 'New Project', onClick: () => setShowCreate(true) } : undefined}
+        />
       ) : (
         <div className="grid grid-cols-1 @2xl:grid-cols-2 @4xl:grid-cols-3 gap-4">
           {projects.map((project, i) => (
