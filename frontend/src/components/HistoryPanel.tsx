@@ -92,7 +92,7 @@ export function HistoryPanel({ itemId, defaultOpen = false, onRestored }: {
           onClick={() => setOpen(false)}
           aria-expanded
           aria-label="Collapse change history"
-          className="shrink-0 p-0.5 -m-0.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground"
+          className="shrink-0 p-0.5 -m-0.5 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground"
         >
           <ChevronDown size={14} className="rotate-180" />
         </button>
@@ -116,7 +116,7 @@ export function HistoryPanel({ itemId, defaultOpen = false, onRestored }: {
           const ts = new Date(entry.timestamp).toLocaleString();
           const fieldNames = Object.keys(entry.changes);
           return (
-            <div key={entry.id} className="text-xs py-1 px-2 rounded bg-muted/30">
+            <div key={entry.id} className="text-xs py-1 px-2 rounded-md bg-muted/30">
               <div className="flex items-center gap-2 text-muted-foreground">
                 <span className="font-medium text-foreground capitalize">{entry.action}</span>
                 <span>{ts}</span>

@@ -155,7 +155,7 @@ export default function SplitRequirementDialog({ open, onClose, projectId, sourc
                           count of what is ticked, so it can't go stale the way
                           a "1 of 3" written into the data would once a child is
                           deleted or the parent is split again. */}
-                      <span className="block text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
+                      <span className="block text-3xs uppercase tracking-wider text-muted-foreground mb-1">
                         {ordinalOf(row.id) ? `Child ${ordinalOf(row.id)} of ${selectedCount}` : 'Not included'}
                       </span>
                       <input

@@ -259,7 +259,7 @@ export default function ProjectOverview() {
               </div>
             ))}
           </div>
-          <div className="mt-4 pt-3 border-t text-[10px] text-muted-foreground">
+          <div className="mt-4 pt-3 border-t text-3xs text-muted-foreground">
             {stats.totalRequirements > 0
               ? `${stats.withTraces} of ${stats.totalRequirements} requirements have trace links`
               : 'No requirements yet'}

@@ -162,12 +162,12 @@ export default function AllocationMatrixPage() {
           </div>
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1.5 bg-muted rounded-lg px-2.5 py-1.5 text-xs">
-              <span className="text-cs-green font-semibold">{data.allocated}</span>
+              <span className="text-cs-green font-semibold tabular-nums">{data.allocated}</span>
               <span className="text-muted-foreground">allocated</span>
               <span className="text-muted-foreground">/</span>
-              <span className="text-cs-red font-semibold">{data.unallocated}</span>
+              <span className="text-cs-red font-semibold tabular-nums">{data.unallocated}</span>
               <span className="text-muted-foreground">unallocated</span>
-              <span className="text-muted-foreground ml-1">({data.allocation_pct}%)</span>
+              <span className="text-muted-foreground ml-1 tabular-nums">({data.allocation_pct}%)</span>
             </div>
             <button
               onClick={() => setTranspose((v) => !v)}
@@ -220,7 +220,7 @@ export default function AllocationMatrixPage() {
                 onChange={() => setRows('requirements')}
                 className="peer sr-only"
               />
-              <span className={`px-2 py-0.5 rounded transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-primary/50 ${
+              <span className={`px-2 py-0.5 rounded-md transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-primary/50 ${
                 rows === 'requirements'
                   ? 'bg-primary/10 text-primary font-medium'
                   : 'text-muted-foreground hover:text-foreground hover:bg-muted'
@@ -236,7 +236,7 @@ export default function AllocationMatrixPage() {
                 onChange={() => setRows('components')}
                 className="peer sr-only"
               />
-              <span className={`px-2 py-0.5 rounded transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-primary/50 ${
+              <span className={`px-2 py-0.5 rounded-md transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-primary/50 ${
                 rows === 'components'
                   ? 'bg-primary/10 text-primary font-medium'
                   : 'text-muted-foreground hover:text-foreground hover:bg-muted'
@@ -271,7 +271,7 @@ export default function AllocationMatrixPage() {
         </div>
 
         {error && (
-          <div className="mt-2 p-2 rounded bg-destructive/10 text-destructive text-xs border border-destructive/20">{error}</div>
+          <div className="mt-2 p-2 rounded-md bg-destructive/10 text-destructive text-xs border border-destructive/20">{error}</div>
         )}
       </div>
 
@@ -311,11 +311,11 @@ export default function AllocationMatrixPage() {
                         style={{ minWidth: 32 }}
                       >
                         <div className="flex flex-col items-start">
-                          <span className={`text-[10px] font-semibold text-muted-foreground ${orphan ? 'italic' : ''}`}>
+                          <span className={`text-3xs font-semibold text-muted-foreground ${orphan ? 'italic' : ''}`}>
                             {col.name}
                           </span>
                           {dueDate && (
-                            <span className="text-[9px] text-muted-foreground">{dueDate}</span>
+                            <span className="text-4xs text-muted-foreground">{dueDate}</span>
                           )}
                         </div>
                       </th>
@@ -331,7 +331,7 @@ export default function AllocationMatrixPage() {
                         kind={transpose ? rowKind : colKind as EntityKind}
                         id={transpose ? (col.row_id || col.req_id) : col.id}
                         subtype={transpose ? undefined : col.kind}
-                        className="text-[10px]"
+                        className="text-3xs"
                       />
                     </th>
                   );
@@ -345,8 +345,8 @@ export default function AllocationMatrixPage() {
                     <div className="flex flex-col">
                       {transpose && axis === 'baselines' ? (
                         <>
-                          <span className="font-mono text-[10px] font-semibold text-muted-foreground">{row.name}</span>
-                          <span className="text-[10px] text-muted-foreground truncate max-w-[130px]">
+                          <span className="font-mono text-3xs font-semibold text-muted-foreground">{row.name}</span>
+                          <span className="text-3xs text-muted-foreground truncate max-w-[130px]">
                             {row.kind}
                           </span>
                         </>
@@ -358,7 +358,7 @@ export default function AllocationMatrixPage() {
                             subtype={transpose ? row.kind : (data.row_kind === 'components' ? row.row_type : undefined)}
                             className="font-mono"
                           />
-                          <span className="text-[10px] text-muted-foreground truncate max-w-[130px]">
+                          <span className="text-3xs text-muted-foreground truncate max-w-[130px]">
                             {transpose ? row.name : (row.row_name || row.req_name)}
                           </span>
                         </>

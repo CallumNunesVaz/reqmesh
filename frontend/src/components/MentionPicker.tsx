@@ -131,7 +131,7 @@ export default function MentionPicker({
               }`}
             >
               <Sigma size={13} className="shrink-0 text-cs-teal" />
-              <span className="font-mono text-[11px] shrink-0">{result.name}</span>
+              <span className="font-mono text-2xs shrink-0">{result.name}</span>
               <span className="text-xs text-muted-foreground truncate">
                 {result.value != null ? paramDisplay(result.value, result.unit) : result.unit || ''}
               </span>
@@ -158,7 +158,7 @@ export default function MentionPicker({
             }`}
           >
             <Icon size={13} className={`shrink-0 ${meta.cls}`} />
-            <span className="font-mono text-[11px] shrink-0">{entity.id}</span>
+            <span className="font-mono text-2xs shrink-0">{entity.id}</span>
             <span className="text-xs text-muted-foreground truncate">{entity.name}</span>
           </div>
         );

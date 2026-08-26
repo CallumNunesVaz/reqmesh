@@ -250,7 +250,7 @@ export default function DecisionsPage() {
               <X size={14} />
             </button>
           ) : (
-            <kbd className="absolute right-3 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded border bg-muted text-[10px] font-mono text-muted-foreground pointer-events-none">/</kbd>
+            <kbd className="absolute right-3 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded-md border bg-muted text-3xs font-mono text-muted-foreground pointer-events-none">/</kbd>
           )}
         </div>
       </div>
@@ -407,7 +407,7 @@ export default function DecisionsPage() {
                     onClick={() => toggleExpand(d.id)}
                     aria-expanded={isExpanded}
                     aria-label={isExpanded ? 'Collapse' : 'Expand'}
-                    className="shrink-0 p-0.5 -m-0.5 rounded"
+                    className="shrink-0 p-0.5 -m-0.5 rounded-md"
                   >
                     <ChevronDown
                       size={15}
@@ -433,7 +433,7 @@ export default function DecisionsPage() {
                           ['consequences', 'Consequences'],
                         ] as const).map(([field, label]) => (
                           <div key={field}>
-                            <h4 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">{label}</h4>
+                            <h4 className="text-2xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">{label}</h4>
                             {d[field] ? (
                               <p className="text-sm text-card-foreground whitespace-pre-wrap">
                                 <AutoLinkText text={d[field]} kinds={entityKinds} />
@@ -464,11 +464,11 @@ export default function DecisionsPage() {
                         />
 
                         <div className="pt-3 border-t border-border">
-                          <h4 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Comments</h4>
+                          <h4 className="text-2xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Comments</h4>
                           <CommentThread entityKind="decisions" entityId={d.id} />
                         </div>
                         <div className="pt-3 border-t border-border">
-                          <h4 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Change History</h4>
+                          <h4 className="text-2xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Change History</h4>
                           <HistoryPanel itemId={d.id} />
                         </div>
                       </div>

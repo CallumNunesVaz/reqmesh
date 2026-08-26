@@ -73,7 +73,7 @@ function EntityLinkNodeView({ node }: ReactNodeViewProps) {
         data-entity-id={id}
         contentEditable={false}
         title={kind ? `${ENTITY_META[kind].label} ${id}` : `Unknown entity ${id}`}
-        className={`inline-flex items-center gap-1 align-baseline rounded px-1 py-px mx-px
+        className={`inline-flex items-center gap-1 align-baseline rounded-md px-1 py-px mx-px
           font-mono text-[0.9em] cursor-pointer border
           ${kind ? 'bg-accent/60 border-border' : 'bg-cs-orange/10 border-cs-orange/40'}`}
       >
@@ -352,7 +352,7 @@ export default function RichTextEditor({ content, onChange, onBlur, disabled = f
       type="button"
       onClick={onClick}
       aria-label={label}
-      className={`p-1.5 rounded transition-colors ${
+      className={`p-1.5 rounded-md transition-colors ${
         active
           ? 'bg-primary text-primary-foreground'
           : 'text-muted-foreground hover:text-foreground hover:bg-accent'
@@ -419,7 +419,7 @@ export default function RichTextEditor({ content, onChange, onBlur, disabled = f
         />
       )}
       {!disabled && (
-        <div className="px-3 py-1 border-t text-[10px] text-muted-foreground/50 flex justify-end">
+        <div className="px-3 py-1 border-t text-3xs text-muted-foreground/50 flex justify-end">
           {editor.storage.characterCount.words()} words · {editor.storage.characterCount.characters()} chars
           <span className="ml-auto">Type <kbd className="font-mono">@</kbd> to link an entity</span>
         </div>

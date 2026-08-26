@@ -51,13 +51,13 @@ export default function PresenceBar({ users, self }: PresenceBarProps) {
         {shown.map((u) => (
           <div
             key={u.username}
-            className={`w-6 h-6 rounded-full ${colorFor(u.username)} text-white text-[9px] font-semibold flex items-center justify-center ring-2 ring-card`}
+            className={`w-6 h-6 rounded-full ${colorFor(u.username)} text-white text-4xs font-semibold flex items-center justify-center ring-2 ring-card`}
           >
             {initials(u.username)}
           </div>
         ))}
         {overflow > 0 && (
-          <div className="w-6 h-6 rounded-full bg-muted text-muted-foreground text-[9px] font-semibold flex items-center justify-center ring-2 ring-card">
+          <div className="w-6 h-6 rounded-full bg-muted text-muted-foreground text-4xs font-semibold flex items-center justify-center ring-2 ring-card">
             +{overflow}
           </div>
         )}
@@ -65,15 +65,15 @@ export default function PresenceBar({ users, self }: PresenceBarProps) {
 
       {hovered && (
         <div className="absolute top-8 right-0 z-50 bg-card border rounded-lg shadow-xl py-1.5 min-w-[160px]">
-          <div className="px-3 py-1 text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+          <div className="px-3 py-1 text-3xs font-medium text-muted-foreground uppercase tracking-wide">
             Online now
           </div>
           {unique.map((u) => (
             <div key={u.username} className="flex items-center gap-2 px-3 py-1 text-xs">
               <span className={`w-2 h-2 rounded-full ${colorFor(u.username)}`} />
               <span className="text-foreground truncate">{u.username}</span>
-              {u.username === self && <span className="text-[9px] text-muted-foreground">(you)</span>}
-              <span className="ml-auto text-[9px] text-muted-foreground">{u.role}</span>
+              {u.username === self && <span className="text-4xs text-muted-foreground">(you)</span>}
+              <span className="ml-auto text-4xs text-muted-foreground">{u.role}</span>
             </div>
           ))}
         </div>

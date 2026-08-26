@@ -197,7 +197,7 @@ export default function AutocompleteInput({
                   : 'text-popover-foreground hover:bg-accent'
               }`}
             >
-              <span className="font-mono text-[10px] opacity-50 shrink-0">{s.id}</span>
+              <span className="font-mono text-3xs opacity-50 shrink-0">{s.id}</span>
               <span className="whitespace-nowrap">{s.label}</span>
             </div>
           ))}

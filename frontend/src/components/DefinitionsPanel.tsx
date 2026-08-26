@@ -61,7 +61,7 @@ export function DefinitionsManager({ projectId, editable }: { projectId: string;
       {defs.length > 0 && (
         <div className="space-y-1 mb-3">
           {defs.map((d) => (
-            <div key={d.id} className="flex items-center gap-2 text-xs py-1.5 px-2 rounded hover:bg-accent group">
+            <div key={d.id} className="flex items-center gap-2 text-xs py-1.5 px-2 rounded-md hover:bg-accent group">
               <span className={`badge border shrink-0 ${d.type === 'calc' ? 'text-cs-purple border-cs-purple/30' : 'text-cs-teal border-cs-teal/30'}`}>
                 {d.type === 'calc' ? <Sigma size={10} /> : <Boxes size={10} />} {d.type}
               </span>
@@ -104,7 +104,7 @@ export function DefinitionsManager({ projectId, editable }: { projectId: string;
               <Plus size={12} />
             </button>
           </div>
-          {error && <p className="text-[11px] text-destructive mt-1.5">{error}</p>}
+          {error && <p className="text-2xs text-destructive mt-1.5">{error}</p>}
         </>
       )}
     </div>
@@ -184,7 +184,7 @@ export function AnalysisCasesPanel({ projectId, editable }: { projectId: string;
       {cases.length > 0 && (
         <div className="space-y-1 mb-3">
           {cases.map((c) => (
-            <div key={c.id} className="flex items-center gap-2 text-xs py-1.5 px-2 rounded hover:bg-accent group">
+            <div key={c.id} className="flex items-center gap-2 text-xs py-1.5 px-2 rounded-md hover:bg-accent group">
               <span className="font-mono font-medium text-foreground shrink-0">{c.name || c.id}</span>
               <span className="text-muted-foreground truncate">
                 {c.scope.length ? `scope: ${c.scope.join(', ')}` : 'whole project'}
@@ -236,7 +236,7 @@ export function AnalysisCasesPanel({ projectId, editable }: { projectId: string;
               <Plus size={12} />
             </button>
           </div>
-          {error && <p className="text-[11px] text-destructive mt-1.5">{error}</p>}
+          {error && <p className="text-2xs text-destructive mt-1.5">{error}</p>}
         </>
       )}
     </div>

@@ -139,13 +139,13 @@ export default function ActivityChart() {
         </h2>
         <div className="flex items-center gap-1 text-xs">
           <button
-            className={`px-2 py-1 rounded ${bucket === 'day' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+            className={`px-2 py-1 rounded-md ${bucket === 'day' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground'}`}
             onClick={() => setBucket('day')}
           >
             Day
           </button>
           <button
-            className={`px-2 py-1 rounded ${bucket === 'week' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+            className={`px-2 py-1 rounded-md ${bucket === 'week' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground'}`}
             onClick={() => setBucket('week')}
           >
             Week

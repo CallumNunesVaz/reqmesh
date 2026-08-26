@@ -212,7 +212,7 @@ export default function ProjectSettingsPage() {
         <label className="flex items-start gap-2 mb-1">
           <input
             type="checkbox"
-            className="mt-0.5 w-4 h-4 rounded border-muted-foreground/30"
+            className="mt-0.5 w-4 h-4 rounded-md border-muted-foreground/30"
             checked={enforceNaming}
             onChange={(e) => setEnforceNaming(e.target.checked)}
             disabled={!editable}
@@ -229,32 +229,32 @@ export default function ProjectSettingsPage() {
               <h3 className="text-sm font-medium text-card-foreground mb-3">{ENTITY_LABELS[key] || key}</h3>
               <div className="flex items-center gap-2 mb-3">
                 <span className="text-xs text-muted-foreground">Format:</span>
-                <code className="text-xs bg-muted px-2 py-0.5 rounded font-mono">{example(rule)}</code>
-                <span className="text-[10px] text-muted-foreground/50">(preview)</span>
+                <code className="text-xs bg-muted px-2 py-0.5 rounded-md font-mono">{example(rule)}</code>
+                <span className="text-3xs text-muted-foreground/50">(preview)</span>
               </div>
               <div className="grid grid-cols-2 @xl:grid-cols-3 gap-2">
                 <div>
-                  <label className="label text-[10px]">Prefix hint<input className="input text-xs font-mono" value={rule.prefix_hint}
+                  <label className="label text-3xs">Prefix hint<input className="input text-xs font-mono" value={rule.prefix_hint}
                     onChange={(e) => updateRule(key, { prefix_hint: e.target.value })}
                     disabled={!editable} /></label>
                 </div>
                 <div>
-                  <label className="label text-[10px]">Prefix length<input className="input text-xs" type="number" min={1} max={8} value={rule.prefix_length}
+                  <label className="label text-3xs">Prefix length<input className="input text-xs" type="number" min={1} max={8} value={rule.prefix_length}
                     onChange={(e) => updateRule(key, { prefix_length: Number(e.target.value) || 1 })}
                     disabled={!editable} /></label>
                 </div>
                 <div>
-                  <label className="label text-[10px]">Separator<input className="input text-xs font-mono" maxLength={1} value={rule.separator}
+                  <label className="label text-3xs">Separator<input className="input text-xs font-mono" maxLength={1} value={rule.separator}
                     onChange={(e) => updateRule(key, { separator: e.target.value.slice(0, 1) })}
                     disabled={!editable} /></label>
                 </div>
                 <div>
-                  <label className="label text-[10px]">Suffix length<input className="input text-xs" type="number" min={1} max={10} value={rule.suffix_length}
+                  <label className="label text-3xs">Suffix length<input className="input text-xs" type="number" min={1} max={10} value={rule.suffix_length}
                     onChange={(e) => updateRule(key, { suffix_length: Number(e.target.value) || 1 })}
                     disabled={!editable} /></label>
                 </div>
                 <div>
-                  <label className="label text-[10px]">Suffix type<select className="select text-xs" value={rule.suffix_type}
+                  <label className="label text-3xs">Suffix type<select className="select text-xs" value={rule.suffix_type}
                     onChange={(e) => updateRule(key, { suffix_type: e.target.value as any })}
                     disabled={!editable}>
                     <option value="numeric">Numeric (0-9)</option>
@@ -279,7 +279,7 @@ export default function ProjectSettingsPage() {
           {stakeholders.map((sh) => (
             <div key={sh.name} className="flex items-center gap-2">
               <span className="text-sm text-foreground flex-1 min-w-0 truncate">{sh.name}</span>
-              <label className="text-[10px] text-muted-foreground">weight<input
+              <label className="text-3xs text-muted-foreground">weight<input
                 type="number" min={0} step={0.1}
                 className="input w-20 h-8 text-xs"
                 value={sh.weight}
@@ -328,7 +328,7 @@ export default function ProjectSettingsPage() {
             <table className="border-separate border-spacing-1">
               <thead>
                 <tr>
-                  <th className="text-[10px] text-muted-foreground font-normal text-right pr-2 align-bottom">
+                  <th className="text-3xs text-muted-foreground font-normal text-right pr-2 align-bottom">
                     severity &darr; / likelihood &rarr;
                   </th>
                   {riskMatrix.likelihoods.map((l, li) => (
@@ -341,7 +341,7 @@ export default function ProjectSettingsPage() {
                           </button>
                         )}
                         <input
-                          className="input h-7 py-0 text-[10px] w-24 text-center"
+                          className="input h-7 py-0 text-3xs w-24 text-center"
                           value={l} disabled={!editable}
                           onChange={(e) => renameLevel('likelihoods', li, e.target.value)}
                         />
@@ -350,7 +350,7 @@ export default function ProjectSettingsPage() {
                   ))}
                   {editable && (
                     <th className="align-bottom">
-                      <button onClick={() => addLevel('likelihoods')} className="btn-secondary text-[10px] px-1.5 py-1" title="Add a likelihood level">
+                      <button onClick={() => addLevel('likelihoods')} className="btn-secondary text-3xs px-1.5 py-1" title="Add a likelihood level">
                         <Plus size={11} />
                       </button>
                     </th>
@@ -366,7 +366,7 @@ export default function ProjectSettingsPage() {
                     <td className="whitespace-nowrap">
                       <div className="flex items-center gap-1 justify-end">
                         <input
-                          className="input h-7 py-0 text-[10px] w-24 text-right"
+                          className="input h-7 py-0 text-3xs w-24 text-right"
                           value={riskMatrix.severities[si]} disabled={!editable}
                           onChange={(e) => renameLevel('severities', si, e.target.value)}
                         />
@@ -390,7 +390,7 @@ export default function ProjectSettingsPage() {
                             disabled={!editable}
                             onClick={() => setCell(si, li, next.key)}
                             title={editable ? `${band.label} — click for ${next.label}` : band.label}
-                            className="w-24 h-9 rounded text-[10px] font-medium text-black/80 disabled:cursor-default"
+                            className="w-24 h-9 rounded-md text-3xs font-medium text-black/80 disabled:cursor-default"
                             style={{ backgroundColor: band.color }}
                           >
                             {band.label}
@@ -404,7 +404,7 @@ export default function ProjectSettingsPage() {
                 {editable && (
                   <tr>
                     <td className="text-right">
-                      <button onClick={() => addLevel('severities')} className="btn-secondary text-[10px] px-1.5 py-1" title="Add a severity level">
+                      <button onClick={() => addLevel('severities')} className="btn-secondary text-3xs px-1.5 py-1" title="Add a severity level">
                         <Plus size={11} />
                       </button>
                     </td>
@@ -419,13 +419,13 @@ export default function ProjectSettingsPage() {
               <div key={b.key} className="flex items-center gap-1.5">
                 <input
                   type="color" value={b.color} disabled={!editable}
-                  className="w-6 h-6 rounded border-0 bg-transparent p-0 cursor-pointer disabled:cursor-default"
+                  className="w-6 h-6 rounded-md border-0 bg-transparent p-0 cursor-pointer disabled:cursor-default"
                   onChange={(e) => setRiskMatrix((m) => (m ? {
                     ...m, bands: m.bands.map((x, j) => (j === bi ? { ...x, color: e.target.value } : x)),
                   } : m))}
                 />
                 <input
-                  className="input h-7 py-0 text-[10px] w-24" value={b.label} disabled={!editable}
+                  className="input h-7 py-0 text-3xs w-24" value={b.label} disabled={!editable}
                   onChange={(e) => setRiskMatrix((m) => (m ? {
                     ...m, bands: m.bands.map((x, j) => (j === bi ? { ...x, label: e.target.value } : x)),
                   } : m))}
@@ -439,7 +439,7 @@ export default function ProjectSettingsPage() {
       {/* Git Integration */}
       <Reveal step={3} className="card p-5 mb-6">
         <h2 className="font-semibold text-sm text-card-foreground mb-1">Git Integration</h2>
-        <p className="text-xs text-muted-foreground mb-4">Configure how this project syncs with a git remote. These settings are stored in <code className="bg-muted px-1 rounded">_meta.yaml</code> and apply to this project only.</p>
+        <p className="text-xs text-muted-foreground mb-4">Configure how this project syncs with a git remote. These settings are stored in <code className="bg-muted px-1 rounded-md">_meta.yaml</code> and apply to this project only.</p>
 
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
@@ -447,13 +447,13 @@ export default function ProjectSettingsPage() {
               <label className="label">Author Name<input className="input text-sm font-mono" value={gitUserName}
                 onChange={(e) => setGitUserName(e.target.value)} disabled={!editable}
                 placeholder="Acme Systems Engineering" /></label>
-              <div className="text-[10px] text-muted-foreground mt-0.5">Git commit author name</div>
+              <div className="text-3xs text-muted-foreground mt-0.5">Git commit author name</div>
             </div>
             <div>
               <label className="label">Author Email<input className="input text-sm font-mono" value={gitUserEmail}
                 onChange={(e) => setGitUserEmail(e.target.value)} disabled={!editable}
                 placeholder="systems@acme-aero.com" /></label>
-              <div className="text-[10px] text-muted-foreground mt-0.5">Git commit author email</div>
+              <div className="text-3xs text-muted-foreground mt-0.5">Git commit author email</div>
             </div>
           </div>
 
@@ -461,13 +461,13 @@ export default function ProjectSettingsPage() {
             <label className="label">Remote URL<input className="input text-sm font-mono" value={gitRemoteUrl}
               onChange={(e) => setGitRemoteUrl(e.target.value)} disabled={!editable}
               placeholder="git@github.com:org/project-data.git" /></label>
-            <div className="text-[10px] text-muted-foreground mt-0.5">Git remote to push commits to (SSH or HTTPS). Leave blank for no remote.</div>
+            <div className="text-3xs text-muted-foreground mt-0.5">Git remote to push commits to (SSH or HTTPS). Leave blank for no remote.</div>
           </div>
 
           {/* Commit Schedule */}
           <div className="border-t border-border/60 pt-4 mt-4">
             <label className="label mb-2" htmlFor={commitScheduleId}>Commit Schedule</label>
-            <p className="text-[10px] text-muted-foreground mb-3">
+            <p className="text-3xs text-muted-foreground mb-3">
               Choose when git commits are created. Auto-commit must be enabled above.
             </p>
             <select id={commitScheduleId} className="select mb-3" value={gitCommitSchedule}
@@ -485,7 +485,7 @@ export default function ProjectSettingsPage() {
                   onChange={(e) => setGitCommitIntervalHours(Number(e.target.value) || 0)}
                   disabled={!editable || !gitAutocommit}
                   placeholder="24" /></label>
-                <div className="text-[10px] text-muted-foreground mt-0.5">
+                <div className="text-3xs text-muted-foreground mt-0.5">
                   {gitCommitIntervalHours >= 24
                     ? `≈ every ${(gitCommitIntervalHours / 24).toFixed(1)} days`
                     : gitCommitIntervalHours >= 1
@@ -504,7 +504,7 @@ export default function ProjectSettingsPage() {
                   onChange={(e) => setGitCommitChangesThreshold(Number(e.target.value) || 0)}
                   disabled={!editable || !gitAutocommit}
                   placeholder="50" /></label>
-                <div className="text-[10px] text-muted-foreground mt-0.5">
+                <div className="text-3xs text-muted-foreground mt-0.5">
                   {gitCommitChangesThreshold > 0
                     ? `A commit will be created after ${gitCommitChangesThreshold} changes.`
                     : 'Enter a value to enable change-count commits'}
@@ -516,12 +516,12 @@ export default function ProjectSettingsPage() {
           <div className="flex items-center gap-6">
             <label className="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" checked={gitAutocommit} onChange={(e) => setGitAutocommit(e.target.checked)} disabled={!editable}
-                className="w-4 h-4 rounded border-muted-foreground/30" />
+                className="w-4 h-4 rounded-md border-muted-foreground/30" />
               <span className="label">Enable auto-commit</span>
             </label>
             <label className="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" checked={gitPushOnCommit} onChange={(e) => setGitPushOnCommit(e.target.checked)} disabled={!editable}
-                className="w-4 h-4 rounded border-muted-foreground/30" />
+                className="w-4 h-4 rounded-md border-muted-foreground/30" />
               <span className="label">Push on every commit</span>
             </label>
           </div>
@@ -529,7 +529,7 @@ export default function ProjectSettingsPage() {
           <div>
             <label className="label">Push Interval (minutes)<input className="input text-sm w-32" type="number" min={0} max={1440} value={gitPushInterval}
               onChange={(e) => setGitPushInterval(Number(e.target.value) || 0)} disabled={!editable || gitPushOnCommit} /></label>
-            <div className="text-[10px] text-muted-foreground mt-0.5">
+            <div className="text-3xs text-muted-foreground mt-0.5">
               {gitPushOnCommit ? 'Push on commit is enabled — interval is ignored.' : gitPushInterval > 0 ? `Push every ${gitPushInterval} minutes. 0 = manual only.` : 'Pushes are manual only. Use the CLI `push_to_remote` or set an interval.'}
             </div>
           </div>
@@ -558,7 +558,7 @@ export default function ProjectSettingsPage() {
         <button onClick={save} className={`btn-primary ${dirty ? 'ring-2 ring-cs-amber/50' : ''}`} disabled={!editable || saving}>
           <Save size={14} /> {saving ? 'Saving…' : dirty ? 'Save Changes *' : 'Save'}
         </button>
-        {dirty && <span className="text-[10px] text-cs-amber">Unsaved changes</span>}
+        {dirty && <span className="text-3xs text-cs-amber">Unsaved changes</span>}
       </div>
     </div>
   );

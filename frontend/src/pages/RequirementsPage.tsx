@@ -453,7 +453,7 @@ export default function RequirementsPage() {
                 <X size={14} />
               </button>
             ) : (
-              <kbd className="absolute right-3 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded border bg-muted text-[10px] font-mono text-muted-foreground pointer-events-none">/</kbd>
+              <kbd className="absolute right-3 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded-md border bg-muted text-3xs font-mono text-muted-foreground pointer-events-none">/</kbd>
             )}
           </div>
           <select className="select w-32 h-9 text-xs" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
@@ -549,7 +549,7 @@ export default function RequirementsPage() {
                     <Square size={13} className="text-muted-foreground/40" />
                   )}
                 </span>
-                <span className="text-[11px] text-muted-foreground">Select all</span>
+                <span className="text-2xs text-muted-foreground">Select all</span>
               </button>
             )}
             <DndContext
@@ -616,7 +616,7 @@ export default function RequirementsPage() {
                 {childCount > 0 ? (
                   <button
                     onClick={(e) => { e.stopPropagation(); toggleCollapse(req.id); }}
-                    className="p-0.5 rounded hover:bg-secondary text-muted-foreground shrink-0"
+                    className="p-0.5 rounded-md hover:bg-secondary text-muted-foreground shrink-0"
                     title={isCollapsed ? 'Expand' : 'Collapse'}
                   >
                     {isCollapsed && !filtering ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
@@ -627,20 +627,20 @@ export default function RequirementsPage() {
 
                 <TypeIcon size={13} className={`shrink-0 ${typeCls}`} />
 
-                <span className="font-mono text-[11px] text-muted-foreground shrink-0 w-auto @md:w-[4.8rem]">{req.id}</span>
+                <span className="font-mono text-2xs text-muted-foreground shrink-0 w-auto @md:w-[4.8rem]">{req.id}</span>
 
                 {/* flex-1 + min-w-0 (not shrink-0): the name takes whatever the
                     indent leaves, so it compresses and truncates on a narrow
                     pane instead of pushing the row past the edge. */}
                 <span
-                  className={`text-[13px] truncate min-w-0 flex-1 ${childCount > 0 ? 'font-semibold' : 'font-medium'} text-foreground`}
+                  className={`text-sm truncate min-w-0 flex-1 ${childCount > 0 ? 'font-semibold' : 'font-medium'} text-foreground`}
                   title={req.name || 'Untitled'}
                 >
                   {req.name || 'Untitled'}
                 </span>
 
                 {childCount > 0 && isCollapsed && !filtering && (
-                  <span className="shrink-0 text-[10px] text-muted-foreground bg-secondary rounded-full px-1.5 py-px">{childCount}</span>
+                  <span className="shrink-0 text-3xs text-muted-foreground bg-secondary rounded-full px-1.5 py-px">{childCount}</span>
                 )}
                 </div>
 
@@ -661,12 +661,12 @@ export default function RequirementsPage() {
                 <span className="flex items-center gap-2 shrink-0">
                   <span className="hidden @sm:flex w-[4.2rem] shrink-0 justify-start">
                     {priorityChips[req.priority] && (
-                      <span className={`badge border text-[10px] px-1.5 py-px ${priorityChips[req.priority]}`}>{req.priority}</span>
+                      <span className={`badge border text-3xs px-1.5 py-px ${priorityChips[req.priority]}`}>{req.priority}</span>
                     )}
                   </span>
                   <span className="flex items-center gap-1.5 w-auto @md:w-[5.6rem]" title={req.status}>
                     <span className={`w-1.5 h-1.5 rounded-full ${status.dot}`} />
-                    <span className="text-[11px] text-muted-foreground capitalize hidden @md:inline">{req.status}</span>
+                    <span className="text-2xs text-muted-foreground capitalize hidden @md:inline">{req.status}</span>
                   </span>
                   <span className="w-1.5 shrink-0">
                     {req.verification_status === 'passed' && <span className="block w-1.5 h-1.5 rounded-full bg-cs-green" title="Verification passed" />}
@@ -675,7 +675,7 @@ export default function RequirementsPage() {
                   <span className="w-2.5 shrink-0 text-center">
                     {verdicts.has(req.id) && (
                       <span
-                        className={`text-[10px] font-semibold leading-none ${
+                        className={`text-3xs font-semibold leading-none ${
                           verdicts.get(req.id) === 'pass' ? 'text-cs-teal'
                             : verdicts.get(req.id) === 'unknown' ? 'text-cs-yellow'
                             : 'text-cs-red'
@@ -690,14 +690,14 @@ export default function RequirementsPage() {
                     <>
                       <button
                         onClick={(e) => { e.stopPropagation(); setCreateIntent({ mode: 'child', parent: req.id }); }}
-                        className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="p-1 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
                         title="Add child requirement"
                       >
                         <Plus size={13} />
                       </button>
                       <button
                         onClick={(e) => { e.stopPropagation(); setCreateIntent({ mode: 'duplicate', source: req }); }}
-                        className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="p-1 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
                         title="Duplicate requirement"
                       >
                         <Copy size={13} />
@@ -705,7 +705,7 @@ export default function RequirementsPage() {
                       {(
                         <button
                           onClick={(e) => { e.stopPropagation(); setMovingIds([req.id]); }}
-                          className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="p-1 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
                           title="Move to parent"
                         >
                           <ChevronRight size={13} />
@@ -713,7 +713,7 @@ export default function RequirementsPage() {
                       )}
                       <button
                         onClick={(e) => { e.stopPropagation(); handleDelete(req.id); }}
-                        className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="p-1 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
                         title="Delete"
                       >
                         <Trash2 size={13} />
@@ -727,7 +727,7 @@ export default function RequirementsPage() {
           })}
             <DragOverlay dropAnimation={null}>
               {draggingIds.length > 0 && (
-                <div className="px-2 py-1 rounded-md bg-card border shadow-lg text-[11px] font-mono text-foreground">
+                <div className="px-2 py-1 rounded-md bg-card border shadow-lg text-2xs font-mono text-foreground">
                   {draggingIds.length === 1 ? draggingIds[0] : `${draggingIds.length} requirements`}
                 </div>
               )}
@@ -1015,7 +1015,7 @@ function BulkEditModal({
                 <div>
                   <div className="label">System States</div>
                   {projectSystemStates.length === 0 ? (
-                    <p className="text-[11px] text-muted-foreground mt-1">
+                    <p className="text-2xs text-muted-foreground mt-1">
                       No system states defined on this project.
                     </p>
                   ) : (
@@ -1046,21 +1046,21 @@ function BulkEditModal({
                         <button
                           type="button"
                           onClick={() => setForm({ ...form, system_states: null })}
-                          className="text-[10px] text-muted-foreground hover:text-foreground underline ml-1"
+                          className="text-3xs text-muted-foreground hover:text-foreground underline ml-1"
                         >
                           clear selection
                         </button>
                       )}
                     </div>
                   )}
-                  <div className="text-[10px] text-muted-foreground mt-0.5">
+                  <div className="text-3xs text-muted-foreground mt-0.5">
                     Click a state to toggle it. When any state is set, the new set replaces all existing states.
                   </div>
                 </div>
                 <div>
                   <div className="label">Coverage Needs</div>
                   {coverageNeeds.length === 0 ? (
-                    <p className="text-[11px] text-muted-foreground mt-1">No artifact types available.</p>
+                    <p className="text-2xs text-muted-foreground mt-1">No artifact types available.</p>
                   ) : (
                     <div className="space-y-1 mt-1">
                       {coverageNeeds.map((o) => {
@@ -1069,7 +1069,7 @@ function BulkEditModal({
                           <label key={o.value} className="flex items-start gap-2 text-xs cursor-pointer group">
                             <input
                               type="checkbox"
-                              className="w-3.5 h-3.5 mt-0.5 rounded border-muted-foreground/30 shrink-0"
+                              className="w-3.5 h-3.5 mt-0.5 rounded-md border-muted-foreground/30 shrink-0"
                               checked={checked}
                               onChange={(e) => {
                                 const current = form.needs ?? [];
@@ -1081,8 +1081,8 @@ function BulkEditModal({
                             />
                             <span className="sr-only">coverage need</span>
                             <span className="min-w-0">
-                              <span className="font-mono text-[11px] text-foreground">{o.value}</span>
-                              <span className="text-[10px] text-muted-foreground block">{o.label}</span>
+                              <span className="font-mono text-2xs text-foreground">{o.value}</span>
+                              <span className="text-3xs text-muted-foreground block">{o.label}</span>
                             </span>
                           </label>
                         );
@@ -1093,12 +1093,12 @@ function BulkEditModal({
                     <button
                       type="button"
                       onClick={() => setForm({ ...form, needs: null })}
-                      className="text-[10px] text-muted-foreground hover:text-foreground underline mt-1"
+                      className="text-3xs text-muted-foreground hover:text-foreground underline mt-1"
                     >
                       clear selection
                     </button>
                   )}
-                  <div className="text-[10px] text-muted-foreground mt-0.5">
+                  <div className="text-3xs text-muted-foreground mt-0.5">
                     Artifacts that must exist to cover the selected requirements
                   </div>
                 </div>
@@ -1108,7 +1108,7 @@ function BulkEditModal({
               <div>
                 <div className="label">Stakeholder Priorities</div>
                 {projectStakeholders.length === 0 ? (
-                  <p className="text-[11px] text-muted-foreground">
+                  <p className="text-2xs text-muted-foreground">
                     No stakeholders defined.{' '}
                     <Link to={`/project/${projectId}/settings`} className="text-primary hover:underline">
                       Add them in project settings
@@ -1142,7 +1142,7 @@ function BulkEditModal({
                     })}
                   </div>
                 )}
-                <div className="text-[10px] text-muted-foreground mt-0.5">
+                <div className="text-3xs text-muted-foreground mt-0.5">
                   Score each stakeholder 0–5. Only stakeholders you set are changed.
                 </div>
               </div>
@@ -1158,7 +1158,7 @@ function BulkEditModal({
                   disabled={false}
                   placeholder="Write a requirement description…"
                 />
-                <div className="text-[10px] text-muted-foreground mt-0.5">Overwrites the description on every selected requirement</div>
+                <div className="text-3xs text-muted-foreground mt-0.5">Overwrites the description on every selected requirement</div>
               </div>
 
               {/* Booleans */}
@@ -1208,13 +1208,13 @@ function BulkEditModal({
                       <button
                         type="button"
                         onClick={() => setForm({ ...form, baselines: null })}
-                        className="text-[10px] text-muted-foreground hover:text-foreground underline ml-1"
+                        className="text-3xs text-muted-foreground hover:text-foreground underline ml-1"
                       >
                         clear selection
                       </button>
                     )}
                   </div>
-                  <div className="text-[10px] text-muted-foreground mt-0.5">
+                  <div className="text-3xs text-muted-foreground mt-0.5">
                     Click a baseline to toggle it. When any baseline is set, the new set replaces all existing baselines.
                   </div>
                 </div>
@@ -1224,7 +1224,7 @@ function BulkEditModal({
             </div>
 
             <div className="flex justify-between items-center mt-6 pt-4 border-t border-border/50">
-              <span className="text-[11px] text-muted-foreground">{fieldCount > 0 ? `${fieldCount} field(s) will be updated` : 'No fields selected'}</span>
+              <span className="text-2xs text-muted-foreground">{fieldCount > 0 ? `${fieldCount} field(s) will be updated` : 'No fields selected'}</span>
               <div className="flex gap-2">
                 <button type="button" onClick={onClose} className="btn-secondary">Cancel</button>
                 <button

@@ -239,7 +239,7 @@ export default function ComponentDetailPage() {
         </button>
         <div className="flex-1 min-w-0">
           {ancestors.length > 0 && (
-            <nav className="flex items-center gap-1 text-[11px] text-muted-foreground mb-0.5 flex-wrap">
+            <nav className="flex items-center gap-1 text-2xs text-muted-foreground mb-0.5 flex-wrap">
               {ancestors.map((a) => (
                 <span key={a.id} className="inline-flex items-center gap-1">
                   <EntityLink kind="component" id={a.id} showIcon={false} className="hover:text-primary" />
@@ -437,7 +437,7 @@ export default function ComponentDetailPage() {
             ) : (
               <div className="space-y-1">
                 {allComponents.filter((c) => c.parent === componentId).map((c) => (
-                  <div key={c.id} className="flex items-center gap-2 text-xs py-1 px-2 rounded hover:bg-accent">
+                  <div key={c.id} className="flex items-center gap-2 text-xs py-1 px-2 rounded-md hover:bg-accent">
                     <EntityLink kind="component" id={c.id} name={c.name} subtype={c.type} className="hover:text-primary" />
                     <span className="text-muted-foreground">{c.type}{c.quantity > 1 ? ` ×${c.quantity}` : ''}</span>
                   </div>
@@ -452,14 +452,14 @@ export default function ComponentDetailPage() {
           {backlinks && backlinks.total > 0 && (
             <Reveal step={2} className="card p-5">
               <h2 className="font-semibold text-sm text-card-foreground mb-1">Referenced By</h2>
-              <p className="text-[11px] text-muted-foreground mb-3">
+              <p className="text-2xs text-muted-foreground mb-3">
                 {backlinks.total} record{backlinks.total === 1 ? '' : 's'} refer to this component.
                 Deleting it will ask before breaking them.
               </p>
               <div className="space-y-2.5">
                 {backlinks.groups.map((g) => (
                   <div key={g.collection}>
-                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
+                    <div className="text-3xs uppercase tracking-wider text-muted-foreground mb-1">
                       {g.label}{g.items.length === 1 ? '' : 's'}
                     </div>
                     <div className="flex flex-wrap gap-1.5">

@@ -44,7 +44,7 @@ test('creating a child from a tree row sets the correct parent', async ({ app, s
   await app.waitForSelector('main');
   await setEditMode(app);
 
-  const rowParent = await app.locator('span.font-mono.text-\\[11px\\]').first().textContent();
+  const rowParent = await app.locator('span.font-mono.text-2xs').first().textContent();
   expect(rowParent).toBeTruthy();
 
   await app.locator('[title="Add child requirement"]').first().click();
@@ -68,7 +68,7 @@ test('duplicate from tree row copies name, type and priority', async ({ app, ser
   await app.waitForSelector('main');
   await setEditMode(app);
 
-  const source = await app.locator('span.font-mono.text-\\[11px\\]').first().textContent();
+  const source = await app.locator('span.font-mono.text-2xs').first().textContent();
   expect(source).toBeTruthy();
 
   await app.locator('[title="Duplicate requirement"]').first().click();

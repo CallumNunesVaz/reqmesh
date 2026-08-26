@@ -409,7 +409,7 @@ export default function ComponentsPage() {
           {hasKids ? (
             <button
               onClick={(e) => { e.stopPropagation(); toggle(node.id); }}
-              className="p-0.5 rounded hover:bg-accent text-muted-foreground shrink-0"
+              className="p-0.5 rounded-md hover:bg-accent text-muted-foreground shrink-0"
               title={isCollapsed ? 'Expand' : 'Collapse'}
             >
               <ChevronRight size={14} className={`transition-transform ${isCollapsed ? '' : 'rotate-90'}`} />
@@ -430,7 +430,7 @@ export default function ComponentsPage() {
           >
             {qtyLabel}
           </span>
-          <span className="w-[5.5rem] shrink-0 text-right text-[10px] text-muted-foreground">
+          <span className="w-[5.5rem] shrink-0 text-right text-3xs text-muted-foreground">
             {node.satisfies.length > 0 ? `satisfies ${node.satisfies.length}` : ''}
           </span>
           {/* The trailing controls sit in a shrink-0 cluster so they hold a
@@ -584,7 +584,7 @@ export default function ComponentsPage() {
                 <X size={14} />
               </button>
             ) : (
-              <kbd className="absolute right-3 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded border bg-muted text-[10px] font-mono text-muted-foreground pointer-events-none">/</kbd>
+              <kbd className="absolute right-3 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded-md border bg-muted text-3xs font-mono text-muted-foreground pointer-events-none">/</kbd>
             )}
           </div>
           <select className="select w-36 h-9 text-xs" value={filterType} onChange={(e) => setFilterType(e.target.value)}>
@@ -622,7 +622,7 @@ export default function ComponentsPage() {
             {tree.map((node) => renderNode(node, 0))}
             <DragOverlay dropAnimation={null}>
               {draggingIds.length > 0 && (
-                <div className="px-2 py-1 rounded-md bg-card border shadow-lg text-[11px] font-mono text-foreground">
+                <div className="px-2 py-1 rounded-md bg-card border shadow-lg text-2xs font-mono text-foreground">
                   {draggingIds.length === 1 ? draggingIds[0] : `${draggingIds.length} components`}
                 </div>
               )}

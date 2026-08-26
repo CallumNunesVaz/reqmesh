@@ -300,7 +300,7 @@ export default function BaselinesPage() {
             )}
             <h3 className="font-semibold text-card-foreground font-mono">{b.name}</h3>
             {b.frozen && (
-              <span className="badge bg-cs-green/10 text-cs-green text-[10px] gap-1">
+              <span className="badge bg-cs-green/10 text-cs-green text-3xs gap-1">
                 <Snowflake size={10} /> Frozen
               </span>
             )}
@@ -726,7 +726,7 @@ export default function BaselinesPage() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <EntityLink kind="requirement" id={c.id} className="font-mono text-xs" />
-                          <span className={`text-[10px] font-medium uppercase tracking-wider ${
+                          <span className={`text-3xs font-medium uppercase tracking-wider ${
                             c.type === 'added' ? 'text-cs-green' :
                             c.type === 'removed' ? 'text-cs-red' : 'text-cs-orange'
                           }`}>

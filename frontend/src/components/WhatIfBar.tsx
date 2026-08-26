@@ -25,7 +25,7 @@ export default function WhatIfBar(): JSX.Element | null {
   return (
     <div className="sticky bottom-3 z-30 mx-3 flex items-center gap-2 rounded-lg border bg-card/95 backdrop-blur px-3 py-2 shadow-lg">
       <FlaskConical size={13} className="text-cs-blue shrink-0" />
-      <span className="text-[11px] text-muted-foreground truncate">
+      <span className="text-2xs text-muted-foreground truncate">
         {pending ? <span className="inline-flex items-center gap-1"><Loader2 size={11} className="animate-spin" /> Computing…</span> : summary}
       </span>
       <div className="flex-1" />
@@ -33,7 +33,7 @@ export default function WhatIfBar(): JSX.Element | null {
         <button
           onClick={() => apply(projectId!)}
           disabled={pending || overrideCount === 0}
-          className="btn-primary flex items-center gap-1 text-[11px] px-2 py-1 disabled:opacity-40 shrink-0"
+          className="btn-primary flex items-center gap-1 text-2xs px-2 py-1 disabled:opacity-40 shrink-0"
         >
           <Check size={11} /> Confirm
         </button>
@@ -41,7 +41,7 @@ export default function WhatIfBar(): JSX.Element | null {
       <button
         onClick={() => clear()}
         disabled={pending}
-        className="btn-secondary flex items-center gap-1 text-[11px] px-2 py-1 shrink-0"
+        className="btn-secondary flex items-center gap-1 text-2xs px-2 py-1 shrink-0"
         title="Restore original values"
       >
         <RotateCcw size={11} />

@@ -40,7 +40,7 @@ export function DragGrip({ id, label }: { id: string; label: string }) {
       onClick={(e) => e.stopPropagation()}
       title={`Drag to move ${label}`}
       aria-label={`Drag to move ${label}`}
-      className="p-1 rounded text-muted-foreground/50 hover:text-foreground cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity"
+      className="p-1 rounded-md text-muted-foreground/50 hover:text-foreground cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity"
     >
       <GripVertical size={13} />
     </button>
@@ -55,7 +55,7 @@ export function TopLevelDropZone({ active, isOver }: { active: boolean; isOver: 
   return (
     <div
       ref={setNodeRef}
-      className={`mb-2 px-3 py-2 text-[11px] text-center rounded-lg border-2 border-dashed transition-colors ${
+      className={`mb-2 px-3 py-2 text-2xs text-center rounded-lg border-2 border-dashed transition-colors ${
         isOver ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground'
       }`}
     >

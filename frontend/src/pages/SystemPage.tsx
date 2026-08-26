@@ -294,7 +294,7 @@ export default function SystemPage() {
       <section className="card p-5">
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-medium flex items-center gap-2"><Server size={16} /> System Dependencies</h2>
-          <button onClick={() => api.listDependencies().then(setDeps).catch(() => {})} className="btn-ghost p-1.5 rounded text-muted-foreground hover:text-foreground" title="Refresh">
+          <button onClick={() => api.listDependencies().then(setDeps).catch(() => {})} className="btn-ghost p-1.5 rounded-md text-muted-foreground hover:text-foreground" title="Refresh">
             <RefreshCw size={14} />
           </button>
         </div>
@@ -307,9 +307,9 @@ export default function SystemPage() {
             const cats = [...new Set(deps.map(d => d.category))];
             return cats.map(cat => (
               <div key={cat}>
-                <h3 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 px-1">{cat}</h3>
+                <h3 className="text-3xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 px-1">{cat}</h3>
                 {deps.filter(d => d.category === cat).map(dep => (
-                  <div key={dep.id} className="flex items-center gap-3 py-1.5 px-2 rounded text-sm hover:bg-accent/40 group">
+                  <div key={dep.id} className="flex items-center gap-3 py-1.5 px-2 rounded-md text-sm hover:bg-accent/40 group">
                     <span className={`w-2 h-2 rounded-full shrink-0 ${
                       dep.status === 'ok' ? 'bg-cs-green' :
                       dep.status === 'missing' ? 'bg-cs-red' :
@@ -317,7 +317,7 @@ export default function SystemPage() {
                       'bg-cs-grey'
                     }`} />
                     <span className="flex-1 font-medium text-foreground text-xs">{dep.label}</span>
-                    <span className={`text-[10px] truncate max-w-[180px] ${
+                    <span className={`text-3xs truncate max-w-[180px] ${
                       dep.status === 'ok' ? 'text-muted-foreground' :
                       dep.status === 'missing' || dep.status === 'error' ? 'text-destructive' :
                       'text-muted-foreground'
@@ -328,7 +328,7 @@ export default function SystemPage() {
                       <button
                         onClick={() => handleTestDep(dep.id)}
                         disabled={testingDep === dep.id}
-                        className="shrink-0 btn-ghost p-1 rounded text-xs text-muted-foreground hover:text-foreground disabled:opacity-50 opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="shrink-0 btn-ghost p-1 rounded-md text-xs text-muted-foreground hover:text-foreground disabled:opacity-50 opacity-0 group-hover:opacity-100 transition-opacity"
                         title={`Run end-to-end test for ${dep.label}`}
                       >
                         {testingDep === dep.id ? (
@@ -341,7 +341,7 @@ export default function SystemPage() {
                     {dep.install_guide && dep.status !== 'ok' && (
                       <button
                         onClick={() => setInstallDep({ id: dep.id, label: dep.label, guide: dep.install_guide })}
-                        className="shrink-0 btn-ghost p-1 rounded text-xs text-muted-foreground hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="shrink-0 btn-ghost p-1 rounded-md text-xs text-muted-foreground hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity"
                         title={`Install instructions for ${dep.label}`}
                       >
                         <DownloadCloud size={12} />
@@ -481,7 +481,7 @@ export default function SystemPage() {
                   <a className="text-xs text-primary hover:underline inline-flex items-center gap-1 mt-1" href={check.html_url} target="_blank" rel="noreferrer">Release notes <ExternalLink size={11} /></a>
                 )}
                 {check?.notes && (
-                  <pre className="mt-3 max-h-48 overflow-auto whitespace-pre-wrap text-xs bg-muted/40 rounded p-3 border">{check.notes}</pre>
+                  <pre className="mt-3 max-h-48 overflow-auto whitespace-pre-wrap text-xs bg-muted/40 rounded-md p-3 border">{check.notes}</pre>
                 )}
 
                 {info?.self_update_supported ? (
@@ -602,7 +602,7 @@ export default function SystemPage() {
             </h3>
             <p className="text-xs text-muted-foreground mt-0.5">Run these commands on the server to install this dependency.</p>
           </div>
-          <button onClick={() => setInstallDep(null)} className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-accent">
+          <button onClick={() => setInstallDep(null)} className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent">
             <X size={15} />
           </button>
         </div>
@@ -618,7 +618,7 @@ export default function SystemPage() {
                 setTimeout(() => setCopiedId(null), 2000);
               }
             }}
-            className="absolute top-2 right-2 p-1.5 rounded bg-card border text-muted-foreground hover:text-foreground transition-colors"
+            className="absolute top-2 right-2 p-1.5 rounded-md bg-card border text-muted-foreground hover:text-foreground transition-colors"
             title="Copy to clipboard"
           >
             {installDep && copiedId === installDep.id ? <CheckCircle2 size={14} className="text-cs-green" /> : <Copy size={14} />}
@@ -654,7 +654,7 @@ function GuidedInstructions({ info, check }: { info: SystemInfo | null; check: U
       <p className="text-sm flex items-center gap-2 text-muted-foreground">
         <Terminal size={14} /> One-click update isn't available in this deployment. Update manually:
       </p>
-      <pre className="mt-2 text-xs bg-muted/40 rounded p-3 border overflow-auto whitespace-pre">{cmd}</pre>
+      <pre className="mt-2 text-xs bg-muted/40 rounded-md p-3 border overflow-auto whitespace-pre">{cmd}</pre>
       <p className="text-xs text-muted-foreground mt-2">
         {docker
           ? 'To enable one-click updates, run with the self-update profile: docker compose --profile self-update up -d.'

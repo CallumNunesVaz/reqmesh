@@ -182,11 +182,11 @@ export default function ReparentDialog({
                       type="checkbox"
                       checked={rePrefix}
                       onChange={(e) => setRePrefix(e.target.checked)}
-                      className="rounded border-border mt-0.5"
+                      className="rounded-md border-border mt-0.5"
                     />
                     <span>
                       Renumber ids to match the destination prefix
-                      <span className="block text-[10px] opacity-80">
+                      <span className="block text-3xs opacity-80">
                         Off by default: renaming rewrites relation targets across the whole
                         project and cannot be undone.
                       </span>

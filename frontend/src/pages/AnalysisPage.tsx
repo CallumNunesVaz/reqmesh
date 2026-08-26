@@ -237,7 +237,7 @@ export default function AnalysisPage() {
               <X size={14} />
             </button>
           ) : (
-            <kbd className="absolute right-3 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded border bg-muted text-[10px] font-mono text-muted-foreground pointer-events-none">/</kbd>
+            <kbd className="absolute right-3 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded-md border bg-muted text-3xs font-mono text-muted-foreground pointer-events-none">/</kbd>
           )}
         </div>
       </div>
@@ -275,7 +275,7 @@ export default function AnalysisPage() {
                   onChange={(e) => setDraft({ ...draft, overrides: e.target.value })}
                 />
               </label>
-              <p className="text-[11px] text-muted-foreground mt-1">
+              <p className="text-2xs text-muted-foreground mt-1">
                 Hypothetical parameter values, keyed <code className="font-mono">ENTITY.param</code>.
               </p>
             </div>
@@ -386,7 +386,7 @@ export default function AnalysisPage() {
                     onClick={() => toggleExpand(c.id)}
                     aria-expanded={isExpanded}
                     aria-label={isExpanded ? 'Collapse' : 'Expand'}
-                    className="shrink-0 p-0.5 -m-0.5 rounded"
+                    className="shrink-0 p-0.5 -m-0.5 rounded-md"
                   >
                     <ChevronDown
                       size={15}
@@ -408,7 +408,7 @@ export default function AnalysisPage() {
                         {c.doc && <p className="text-sm text-muted-foreground">{c.doc}</p>}
 
                         <div>
-                          <h4 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Overrides</h4>
+                          <h4 className="text-2xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Overrides</h4>
                           {overrideCount === 0 ? (
                             <p className="text-xs text-muted-foreground italic">None — the case evaluates the model as stored.</p>
                           ) : (

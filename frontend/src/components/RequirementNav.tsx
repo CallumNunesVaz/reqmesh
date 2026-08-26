@@ -83,7 +83,7 @@ function TreeNode({
             type="button"
             onClick={() => setExpanded(!expanded)}
             aria-expanded={expanded}
-            className="p-0.5 rounded hover:bg-sidebar-accent shrink-0 text-muted-foreground"
+            className="p-0.5 rounded-md hover:bg-sidebar-accent shrink-0 text-muted-foreground"
           >
             {expanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
           </button>
@@ -99,7 +99,7 @@ function TreeNode({
           className="flex items-center gap-1.5 flex-1 min-w-0 text-left"
         >
           <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusDots[node.status] || 'bg-cs-grey'}`} />
-          <span className="font-mono shrink-0 text-[10px] opacity-50">{node.id}</span>
+          <span className="font-mono shrink-0 text-3xs opacity-50">{node.id}</span>
           <span className="truncate flex-1 text-left pl-1">{node.name || 'Untitled'}</span>
         </button>
       </div>
@@ -212,7 +212,7 @@ function PanelNode({ item, depth, navigate, focusId }: {
             type="button"
             onClick={() => setExpanded(!expanded)}
             aria-expanded={expanded}
-            className="p-0.5 rounded hover:bg-sidebar-accent shrink-0 text-muted-foreground"
+            className="p-0.5 rounded-md hover:bg-sidebar-accent shrink-0 text-muted-foreground"
           >
             {expanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
           </button>
@@ -225,9 +225,9 @@ function PanelNode({ item, depth, navigate, focusId }: {
           className="flex items-center gap-1.5 flex-1 min-w-0 text-left"
         >
           <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${item.dot}`} />
-          {item.showId !== false && <span className="font-mono shrink-0 text-[10px] opacity-50">{item.id}</span>}
+          {item.showId !== false && <span className="font-mono shrink-0 text-3xs opacity-50">{item.id}</span>}
           <span className="truncate flex-1 text-left pl-1">{item.label}</span>
-          {item.sub && <span className="shrink-0 text-[9px] text-muted-foreground opacity-70">{item.sub}</span>}
+          {item.sub && <span className="shrink-0 text-4xs text-muted-foreground opacity-70">{item.sub}</span>}
         </button>
       </div>
       {expanded && hasChildren && (
@@ -493,8 +493,8 @@ export default function RequirementNav({ width = 300, collapsed, onToggleCollaps
 
       <div className="flex-1 overflow-y-auto p-2">
         <div className="flex items-center justify-between px-2 pt-1 pb-2">
-          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{PANEL_TITLES[section]}</span>
-          <span className="text-[10px] text-muted-foreground">
+          <span className="text-3xs font-semibold text-muted-foreground uppercase tracking-wider">{PANEL_TITLES[section]}</span>
+          <span className="text-3xs text-muted-foreground">
             {section === 'requirements' ? countNodes(filtered) : countPanel(filteredPanel)}
           </span>
         </div>

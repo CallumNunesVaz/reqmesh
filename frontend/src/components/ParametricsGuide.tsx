@@ -122,7 +122,7 @@ export default function ParametricsGuide() {
         {open && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
             <div className="mt-3 space-y-1.5 border-t border-cs-purple/10 pt-3">
-              <p className="text-[10px] text-muted-foreground/70 leading-relaxed mb-3">
+              <p className="text-3xs text-muted-foreground/70 leading-relaxed mb-3">
                 You don't need to know SysML v2. This page explains the parametrics engine in plain terms.
               </p>
 
@@ -133,10 +133,10 @@ export default function ParametricsGuide() {
                   <div key={section.id}>
                     <button
                       onClick={() => setExpandedSection(isExpanded ? null : section.id)}
-                      className="flex items-center gap-1.5 w-full text-left py-1 hover:bg-cs-purple/5 rounded px-1 transition-colors"
+                      className="flex items-center gap-1.5 w-full text-left py-1 hover:bg-cs-purple/5 rounded-md px-1 transition-colors"
                     >
                       <SecIcon size={12} className="text-cs-purple/70 shrink-0" />
-                      <span className="text-[11px] font-medium text-foreground/80">{section.title}</span>
+                      <span className="text-2xs font-medium text-foreground/80">{section.title}</span>
                       <span className="flex-1" />
                       {isExpanded ? <ChevronDown size={11} className="text-muted-foreground" /> : <ChevronRight size={11} className="text-muted-foreground" />}
                     </button>
@@ -147,8 +147,8 @@ export default function ParametricsGuide() {
                           <div className="space-y-1.5 ml-5 pl-3 border-l border-cs-purple/10 mb-1 mt-0.5">
                             {section.questions.map((item, qi) => (
                               <div key={qi}>
-                                <p className="text-[10px] font-medium text-foreground/70">{item.q}</p>
-                                <p className="text-[10px] text-muted-foreground/60 leading-relaxed">{item.a}</p>
+                                <p className="text-3xs font-medium text-foreground/70">{item.q}</p>
+                                <p className="text-3xs text-muted-foreground/60 leading-relaxed">{item.a}</p>
                               </div>
                             ))}
                           </div>

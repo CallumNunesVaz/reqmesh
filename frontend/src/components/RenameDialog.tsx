@@ -154,7 +154,7 @@ export default function RenameDialog({
             onChange={(e) => { setValue(e.target.value); setError(''); }}
             onKeyDown={(e) => { if (e.key === 'Enter') submit(); if (e.key === 'Escape') onClose(); }}
           />
-          <p className="text-[10px] text-muted-foreground mt-1">
+          <p className="text-3xs text-muted-foreground mt-1">
             Currently <span className="font-mono">{currentId}</span>
           </p>
 

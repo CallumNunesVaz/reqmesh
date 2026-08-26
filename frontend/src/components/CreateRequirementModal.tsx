@@ -153,7 +153,7 @@ export default function CreateRequirementModal({
               <div className="grid grid-cols-[8rem_1fr] gap-3">
                 <div>
                   <label className="label">ID <input className="input font-mono" value={form.id} onChange={(e) => setForm({ ...form, id: e.target.value })} /></label>
-                  {idExample && <span className="text-[10px] text-muted-foreground">e.g. {idExample}</span>}
+                  {idExample && <span className="text-3xs text-muted-foreground">e.g. {idExample}</span>}
                 </div>
                 <div>
                   {/* The name is the primary field of a create dialog the user just

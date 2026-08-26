@@ -232,7 +232,7 @@ export default function SpecificationsPage() {
                 <X size={14} />
               </button>
             ) : (
-              <kbd className="absolute right-3 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded border bg-muted text-[10px] font-mono text-muted-foreground pointer-events-none">/</kbd>
+              <kbd className="absolute right-3 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded-md border bg-muted text-3xs font-mono text-muted-foreground pointer-events-none">/</kbd>
             )}
           </div>
         </div>
@@ -252,7 +252,7 @@ export default function SpecificationsPage() {
                 <label className="label">ID
                   <input className="input font-mono" placeholder="SRS-001" value={newSpec.id} onChange={(e) => setNewSpec({ ...newSpec, id: e.target.value })} disabled={!!editingId} />
                 </label>
-                {!editingId && idExample && <span className="text-[10px] text-muted-foreground">e.g. {idExample}</span>}
+                {!editingId && idExample && <span className="text-3xs text-muted-foreground">e.g. {idExample}</span>}
               </div>
               <div className="flex-1">
                 <label className="label">Name
@@ -379,7 +379,7 @@ export default function SpecificationsPage() {
                   onClick={() => toggleExpand(spec.id)}
                   aria-expanded={isExpanded}
                   aria-label={isExpanded ? 'Collapse' : 'Expand'}
-                  className="shrink-0 p-0.5 -m-0.5 rounded"
+                  className="shrink-0 p-0.5 -m-0.5 rounded-md"
                 >
                   <ChevronDown
                     size={15}
@@ -399,7 +399,7 @@ export default function SpecificationsPage() {
                   >
                     <div className="px-4 pb-4 border-t pt-3 space-y-3">
                       <div>
-                        <h4 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Requirements</h4>
+                        <h4 className="text-2xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Requirements</h4>
                         {spec.requirements.length === 0 ? (
                           <p className="text-xs text-muted-foreground">None assigned.</p>
                         ) : (
@@ -425,7 +425,7 @@ export default function SpecificationsPage() {
                       </div>
                       {spec.children.length > 0 && (
                         <div>
-                          <h4 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Sub-specifications</h4>
+                          <h4 className="text-2xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Sub-specifications</h4>
                           <div className="flex flex-wrap gap-1.5">
                             {spec.children.map((cid) => (
                               <span key={cid} className="inline-flex items-center px-2 py-1 rounded-md bg-muted text-xs">
@@ -436,11 +436,11 @@ export default function SpecificationsPage() {
                         </div>
                       )}
                       <div className="pt-3 border-t border-border">
-                        <h4 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Comments</h4>
+                        <h4 className="text-2xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Comments</h4>
                         <CommentThread entityKind="specifications" entityId={spec.id} />
                       </div>
                       <div className="pt-3 border-t border-border">
-                        <h4 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Change History</h4>
+                        <h4 className="text-2xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Change History</h4>
                         <HistoryPanel itemId={spec.id} />
                       </div>
                     </div>

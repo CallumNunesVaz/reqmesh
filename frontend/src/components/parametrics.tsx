@@ -23,7 +23,7 @@ export function UnitsDatalist() {
 /** Small amber warning chip for a dimensional-consistency issue. */
 function UnitWarning({ message }: { message: string }) {
   return (
-    <span className="inline-flex items-center gap-1 text-[10px] text-cs-amber shrink-0" title={message}>
+    <span className="inline-flex items-center gap-1 text-3xs text-cs-amber shrink-0" title={message}>
       <Ruler size={10} /> units
     </span>
   );
@@ -53,7 +53,7 @@ export function VerdictBadge({ status, prefix }: { status: EvalVerdict | Constra
 export function MarginTag({ margin }: { margin: NonNullable<EvaluatedConstraint['margin']> }) {
   const ok = margin.value >= 0;
   return (
-    <span className={`text-[10px] font-mono ${ok ? 'text-cs-green' : 'text-cs-red'}`}>
+    <span className={`text-3xs tabular-nums font-mono ${ok ? 'text-cs-green' : 'text-cs-red'}`}>
       margin {margin.value > 0 ? '+' : ''}{margin.value}
       {margin.pct !== undefined ? ` (${margin.pct > 0 ? '+' : ''}${margin.pct}%)` : ''}
     </span>
@@ -208,7 +208,7 @@ function ExpressionField({ value, onChange, onSubmit, placeholder, className, re
                 i === highlight ? 'bg-primary/10 text-primary' : 'text-popover-foreground hover:bg-accent'
               }`}
             >
-              <span className="font-mono text-[10px] opacity-60 shrink-0">{r.ref}</span>
+              <span className="font-mono text-3xs opacity-60 shrink-0">{r.ref}</span>
               <span className="truncate">{r.label}</span>
             </div>
           ))}
@@ -245,7 +245,7 @@ function ParameterEditRow({ original, refs, onSave, onCancel }: {
   };
 
   return (
-    <div data-param-edit={original.name} className="flex items-center gap-2 text-xs py-1.5 px-2 rounded bg-accent/40 ring-1 ring-primary/20">
+    <div data-param-edit={original.name} className="flex items-center gap-2 text-xs py-1.5 px-2 rounded-md bg-accent/40 ring-1 ring-primary/20">
       <input
         id={nameId}
         className="input w-28 text-xs font-mono shrink-0"
@@ -401,7 +401,7 @@ export function ParametricsCard({ reqId, parameters, constraints, evaluated, edi
           <button
             onClick={() => whatIf.evaluate()}
             disabled={Object.keys(whatIf.overrides).length === 0}
-            className="ml-auto inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded border bg-primary/10 text-primary border-primary/30 hover:bg-primary/20 disabled:opacity-30 disabled:cursor-not-allowed transition-colors shrink-0"
+            className="ml-auto inline-flex items-center gap-1 text-3xs px-2 py-1 rounded-md border bg-primary/10 text-primary border-primary/30 hover:bg-primary/20 disabled:opacity-30 disabled:cursor-not-allowed transition-colors shrink-0"
             title="Evaluate overrides"
           >
             <Play size={10} /> Evaluate
@@ -431,13 +431,13 @@ export function ParametricsCard({ reqId, parameters, constraints, evaluated, edi
             const origVal = whatIf?.base[ref];
             const whatIfOpenNow = whatIfOpen.has(ref);
             return (
-              <div key={`${p.name}-${i}`} data-param={p.name} className={`flex items-start gap-2 text-xs py-1.5 px-2 rounded hover:bg-accent group ${isOverridden ? 'ring-1 ring-dashed ring-cs-blue/50 bg-cs-blue/5' : ''}`}>
+              <div key={`${p.name}-${i}`} data-param={p.name} className={`flex items-start gap-2 text-xs py-1.5 px-2 rounded-md hover:bg-accent group ${isOverridden ? 'ring-1 ring-dashed ring-cs-blue/50 bg-cs-blue/5' : ''}`}>
                 <span className="font-mono font-medium text-foreground w-28 shrink-0 truncate">{p.name}</span>
                 {p.expr || p.calc_def ? (
                   <span className="flex-1 min-w-0 break-words">
                     <span className="font-mono text-muted-foreground">{'= '}</span>
                     <Expr expr={p.expr || p.calc_def || ''} className="font-mono" />
-                    <span className="font-mono text-cs-teal ml-2">
+                    <span className="font-mono text-cs-teal ml-2 tabular-nums">
                       {ev?.value != null ? `→ ${ev.value}` : ev?.detail ? `(${ev.detail})` : ''}
                     </span>
                   </span>
@@ -446,11 +446,11 @@ export function ParametricsCard({ reqId, parameters, constraints, evaluated, edi
                     {isOverridden ? (
                       <span className="flex items-center gap-1.5">
                         <span className="font-mono text-muted-foreground line-through">{origVal}</span>
-                        <span className="text-[9px] text-muted-foreground">→</span>
+                        <span className="text-4xs text-muted-foreground">→</span>
                         <span className="font-mono text-cs-blue font-semibold">{whatIf!.overrides[ref]}</span>
                       </span>
                     ) : (
-                      <span className="font-mono text-foreground">{p.value ?? '—'}</span>
+                      <span className="font-mono text-foreground tabular-nums">{p.value ?? '—'}</span>
                     )}
                     {whatIf && isLiteral && (
                       <span className="inline-flex items-center gap-1 ml-1.5">
@@ -501,12 +501,12 @@ export function ParametricsCard({ reqId, parameters, constraints, evaluated, edi
                 )}
                 <span className="text-muted-foreground shrink-0 w-12 truncate">{p.unit}</span>
                 {ev?.measured !== undefined && (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-mono text-cs-purple shrink-0" title={`Measured by ${ev.measured_by}`}>
+                  <span className="inline-flex items-center gap-1 text-3xs font-mono text-cs-purple shrink-0" title={`Measured by ${ev.measured_by}`}>
                     <FlaskConical size={10} /> {ev.measured}
                     {ev.measured_by && <EntityLink kind="verification" id={ev.measured_by} showIcon={false} className="text-cs-purple/80" />}
                   </span>
                 )}
-                {ev?.error && <span className="text-[10px] text-cs-red shrink-0" title={ev.error}>error</span>}
+                {ev?.error && <span className="text-3xs text-cs-red shrink-0" title={ev.error}>error</span>}
                 {ev?.unit_warning && <UnitWarning message={ev.unit_warning} />}
                 {editable && (
                   <span className="flex items-center gap-0.5">
@@ -558,7 +558,7 @@ export function ParametricsCard({ reqId, parameters, constraints, evaluated, edi
 
       {/* Constraints */}
       {(constraints.length > 0 || editable) && (
-        <h3 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Constraints</h3>
+        <h3 className="text-2xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Constraints</h3>
       )}
       {constraints.length > 0 && (
         <div className="space-y-1 mb-3">
@@ -566,7 +566,7 @@ export function ParametricsCard({ reqId, parameters, constraints, evaluated, edi
             const ev = evaluated?.constraints?.[i];
             const mev = evaluated?.measured_constraints?.[i];
             return (
-              <div key={i} className="flex items-start gap-2 text-xs py-1.5 px-2 rounded hover:bg-accent group">
+              <div key={i} className="flex items-start gap-2 text-xs py-1.5 px-2 rounded-md hover:bg-accent group">
                 <div className="flex-1 min-w-0 break-words">
                   <Expr expr={c.expr ?? ''} className="font-mono" />
                   {c.assume && <span className="font-mono text-muted-foreground ml-2">{'when '}<Expr expr={c.assume} /></span>}
@@ -623,8 +623,8 @@ export function ParametricsCard({ reqId, parameters, constraints, evaluated, edi
 
       {/* Add a constraint from a reusable definition, binding its formals. */}
       {editable && constraintDefs.length > 0 && (
-        <div className="mt-2 p-2 rounded border border-dashed border-border/70 bg-accent/20">
-          <div className="flex items-center gap-1.5 mb-1.5 text-[11px] text-muted-foreground">
+        <div className="mt-2 p-2 rounded-md border border-dashed border-border/70 bg-accent/20">
+          <div className="flex items-center gap-1.5 mb-1.5 text-2xs text-muted-foreground">
             <Boxes size={12} className="text-cs-teal" /> Use a definition
             <select
               className="select text-xs py-0.5 ml-1"
@@ -641,7 +641,7 @@ export function ParametricsCard({ reqId, parameters, constraints, evaluated, edi
             <div className="flex flex-wrap items-end gap-1">
               {selectedDef.parameters.map((f) => (
                 <div key={f} className="flex flex-col">
-                  <label className="text-[9px] font-mono text-muted-foreground px-1">{f}</label>
+                  <label className="text-4xs font-mono text-muted-foreground px-1">{f}</label>
                   <input
                     className="input w-32 text-xs font-mono"
                     placeholder="ID.param"
@@ -660,7 +660,7 @@ export function ParametricsCard({ reqId, parameters, constraints, evaluated, edi
       )}
 
       {editable && (
-        <p className="text-[10px] text-muted-foreground mt-3">
+        <p className="text-3xs text-muted-foreground mt-3">
           Reference own parameters by name, others as <code className="font-mono">ID.param</code>;{' '}
           <code className="font-mono">rollup('COMP', 'param')</code> sums over the component tree ×quantity.
         </p>
@@ -705,7 +705,7 @@ export function ParameterEditor({ parameters, editable, onChange, id = '', refer
   return (
     <div>
       <label className="label flex items-center gap-1" htmlFor={paramNameId}><Sigma size={11} className="text-cs-teal" /> Parameters</label>
-      <p className="text-[11px] text-muted-foreground -mt-1 mb-1.5">Quantities budget rollups can sum</p>
+      <p className="text-2xs text-muted-foreground -mt-1 mb-1.5">Quantities budget rollups can sum</p>
       {parameters.length > 0 && (
         <div className="space-y-1 mb-2">
           {parameters.map((p, i) => {
@@ -721,9 +721,9 @@ export function ParameterEditor({ parameters, editable, onChange, id = '', refer
               );
             }
             return (
-              <div key={`${p.name}-${i}`} className="flex items-center gap-2 text-xs py-1 px-2 rounded hover:bg-accent group">
+              <div key={`${p.name}-${i}`} className="flex items-center gap-2 text-xs py-1 px-2 rounded-md hover:bg-accent group">
                 <span className="font-mono font-medium text-foreground flex-1 truncate">{p.name}</span>
-                <span className="font-mono">{p.expr ? `= ${p.expr}` : p.value ?? '—'}</span>
+                <span className="font-mono tabular-nums">{p.expr ? `= ${p.expr}` : p.value ?? '—'}</span>
                 <span className="text-muted-foreground w-10 truncate">{p.unit}</span>
                 {editable && (
                   <span className="flex items-center gap-0.5">

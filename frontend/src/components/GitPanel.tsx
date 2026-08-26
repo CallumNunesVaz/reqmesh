@@ -310,13 +310,13 @@ export default function GitPanel({ projectId, isAdmin, canEdit, remoteUrl, onRem
           </p>
 
           <div className="relative">
-            <code className="block w-full text-[11px] font-mono bg-primary/5 border border-border/60 rounded p-2 pr-16 break-all">
+            <code className="block w-full text-2xs font-mono bg-primary/5 border border-border/60 rounded-md p-2 pr-16 break-all">
               {keyInfo.public_key}
             </code>
             <button
               onClick={handleCopyKey}
               disabled={copied === 'ok'}
-              className="btn-secondary text-[10px] absolute right-1 top-1"
+              className="btn-secondary text-3xs absolute right-1 top-1"
               title="Copy public key"
             >
               {copied === 'ok' ? (
@@ -327,12 +327,12 @@ export default function GitPanel({ projectId, isAdmin, canEdit, remoteUrl, onRem
             </button>
           </div>
           {copied === 'fail' && (
-            <p className="text-[10px] text-cs-amber mt-1">
+            <p className="text-3xs text-cs-amber mt-1">
               Copy blocked — select the key above and copy manually.
             </p>
           )}
 
-          <div className="flex flex-wrap gap-x-6 gap-y-1 mt-2 text-[11px] text-muted-foreground">
+          <div className="flex flex-wrap gap-x-6 gap-y-1 mt-2 text-2xs text-muted-foreground">
             <span>Fingerprint: <code className="font-mono text-card-foreground">{keyInfo.fingerprint}</code></span>
             <span>Created: {new Date(keyInfo.created).toLocaleString()}</span>
           </div>
@@ -341,7 +341,7 @@ export default function GitPanel({ projectId, isAdmin, canEdit, remoteUrl, onRem
             <button
               onClick={handleRotateKey}
               disabled={rotating}
-              className="btn-secondary text-[10px]"
+              className="btn-secondary text-3xs"
             >
               {rotating ? (
                 <><RotateCw size={11} className="animate-spin mr-1" /> Rotating…</>
@@ -352,7 +352,7 @@ export default function GitPanel({ projectId, isAdmin, canEdit, remoteUrl, onRem
             <button
               onClick={handleDeleteKey}
               disabled={deleting}
-              className="btn-secondary text-[10px] text-cs-red"
+              className="btn-secondary text-3xs text-cs-red"
             >
               {deleting ? 'Deleting…' : <><Trash2 size={11} className="mr-1" /> Delete</>}
             </button>
@@ -474,7 +474,7 @@ export default function GitPanel({ projectId, isAdmin, canEdit, remoteUrl, onRem
         <h2 className="font-semibold text-sm text-card-foreground">Version Control</h2>
         <button
           onClick={() => { fetchStatus(); fetchHistory(); }}
-          className="btn-secondary text-[10px] ml-auto"
+          className="btn-secondary text-3xs ml-auto"
           title="Refresh"
         >
           <RotateCw size={11} />
@@ -584,7 +584,7 @@ export default function GitPanel({ projectId, isAdmin, canEdit, remoteUrl, onRem
                 <button
                   onClick={handleTestRemote}
                   disabled={testing || !remoteUrl.trim()}
-                  className="btn-secondary text-[10px]"
+                  className="btn-secondary text-3xs"
                 >
                   {testing ? (
                     <><RotateCw size={11} className="animate-spin mr-1" /> Testing…</>
@@ -596,7 +596,7 @@ export default function GitPanel({ projectId, isAdmin, canEdit, remoteUrl, onRem
                 {!showRemoveConfirm ? (
                   <button
                     onClick={() => setShowRemoveConfirm(true)}
-                    className="btn-secondary text-[10px] text-cs-red"
+                    className="btn-secondary text-3xs text-cs-red"
                     title={`Remove remote ${remoteDisplay}`}
                   >
                     <Trash2 size={11} className="mr-1" />
@@ -610,13 +610,13 @@ export default function GitPanel({ projectId, isAdmin, canEdit, remoteUrl, onRem
                     <button
                       onClick={handleDeleteRemote}
                       disabled={removing}
-                      className="btn-primary text-[10px] px-2 py-0.5 bg-cs-red"
+                      className="btn-primary text-3xs px-2 py-0.5 bg-cs-red"
                     >
                       {removing ? 'Removing…' : 'Yes, remove'}
                     </button>
                     <button
                       onClick={() => setShowRemoveConfirm(false)}
-                      className="btn-secondary text-[10px] px-2 py-0.5"
+                      className="btn-secondary text-3xs px-2 py-0.5"
                     >
                       Cancel
                     </button>
@@ -627,7 +627,7 @@ export default function GitPanel({ projectId, isAdmin, canEdit, remoteUrl, onRem
 
             {/* Test result */}
             {testResult && (
-              <div className={`mt-2 px-3 py-2 rounded text-xs ${
+              <div className={`mt-2 px-3 py-2 rounded-md text-xs ${
                 testResult.ok
                   ? 'border border-cs-green/20 bg-cs-green/5 text-cs-green'
                   : 'border border-cs-red/20 bg-cs-red/5 text-cs-red'
@@ -669,7 +669,7 @@ export default function GitPanel({ projectId, isAdmin, canEdit, remoteUrl, onRem
           <button
             onClick={handleToggleHook}
             disabled={togglingHook}
-            className="btn-secondary text-[10px]"
+            className="btn-secondary text-3xs"
           >
             {togglingHook ? (
               <><RotateCw size={11} className="animate-spin mr-1" /> Working…</>
@@ -690,7 +690,7 @@ export default function GitPanel({ projectId, isAdmin, canEdit, remoteUrl, onRem
           </h3>
           <button
             onClick={fetchHistory}
-            className="btn-secondary text-[10px]"
+            className="btn-secondary text-3xs"
             disabled={loadingHistory}
           >
             <RotateCw size={11} className={loadingHistory ? 'animate-spin' : ''} />
@@ -711,22 +711,22 @@ export default function GitPanel({ projectId, isAdmin, canEdit, remoteUrl, onRem
             {commits.map((commit) => (
               <div
                 key={commit.hash}
-                className="flex items-start gap-3 py-2.5 px-2 rounded hover:bg-accent/40 group transition-colors"
+                className="flex items-start gap-3 py-2.5 px-2 rounded-md hover:bg-accent/40 group transition-colors"
               >
                 <div className="shrink-0 mt-0.5">
                   <div className="w-2 h-2 rounded-full bg-primary/40" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-0.5">
-                    <code className="text-[11px] font-mono text-primary bg-primary/5 px-1.5 py-0.5 rounded">
+                    <code className="text-2xs font-mono text-primary bg-primary/5 px-1.5 py-0.5 rounded-md">
                       {commit.hash.slice(0, 8)}
                     </code>
-                    <span className="text-[11px] text-muted-foreground">
+                    <span className="text-2xs text-muted-foreground">
                       {relativeTime(commit.date)}
                     </span>
                   </div>
                   <p className="text-xs text-foreground truncate">{commit.message}</p>
-                  <div className="flex items-center gap-3 mt-1 text-[10px] text-muted-foreground/70">
+                  <div className="flex items-center gap-3 mt-1 text-3xs text-muted-foreground/70">
                     <span className="flex items-center gap-1">
                       <User size={10} />
                       {commit.author}
@@ -741,7 +741,7 @@ export default function GitPanel({ projectId, isAdmin, canEdit, remoteUrl, onRem
                   <button
                     onClick={() => handleRestore(commit.hash)}
                     disabled={restoring === commit.hash}
-                    className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity btn-secondary text-[10px] px-2 py-1 mt-0.5"
+                    className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity btn-secondary text-3xs px-2 py-1 mt-0.5"
                     title="Restore project to this commit"
                   >
                     {restoring === commit.hash ? (
