@@ -13,7 +13,9 @@ httpx==0.28.1
 # specs/openapi/_hypothesis.py:1209, and 0.50.0 dropped the method that 0.49.2
 # has. Same reasoning as the starlette pin in requirements.txt: pin the
 # transitive dependency whose break we have actually been bitten by.
-jsonschema-rs==0.49.2
+# Stay on the 0.49.x line: 0.51.0 is current upstream but the method is still
+# gone, so patch releases within 0.49 are the only safe move here.
+jsonschema-rs==0.49.9
 # hypothesis is the engine underneath, pinned so a property-based suite's
 # behaviour does not move under us. It was NOT the cause of the failure above —
 # the first fix attempt pinned it and the suite failed identically.
@@ -24,4 +26,4 @@ schemathesis==4.24.3
 # Installed here as well as in CI so the gate can be reproduced locally —
 # it going unnoticed is why it stayed broken.
 bandit[toml,sarif]==1.9.4
-ruff==0.14.9
+ruff==0.16.4
