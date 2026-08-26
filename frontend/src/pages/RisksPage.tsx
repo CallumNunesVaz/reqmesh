@@ -384,7 +384,7 @@ export default function RisksPage() {
           icon={AlertTriangle}
           title={filtering ? 'No risks match your filters.' : 'No risks yet'}
           hint={filtering ? undefined : 'Identify and track project risks with severity and likelihood.'}
-          action={!filtering && editable ? { label: 'New Risk', onClick: openCreate } : undefined}
+          action={!filtering && editable ? { label: 'Create the first risk', onClick: openCreate } : undefined}
         >
           {filtering && (
             <button className="text-xs text-primary hover:underline mt-2" onClick={() => { setSearch(''); setFilterStatus(''); setFilterSeverity(''); setFilterLikelihood(''); setFilterComponentGroup(''); setFilterRequirementGroup(''); }}>Clear filters</button>

@@ -306,7 +306,7 @@ export default function DefinitionsPage() {
           icon={Sigma}
           title={filtering ? 'No definitions match your search.' : 'No definitions yet'}
           hint={filtering ? undefined : 'Write a rule once over formal parameters, then bind it on any requirement.'}
-          action={!filtering && editable ? { label: 'New Definition', onClick: () => { setEditingId(null); setDraft(EMPTY); setShowCreate(!showCreate); } } : undefined}
+          action={!filtering && editable ? { label: 'Create the first definition', onClick: () => { setEditingId(null); setDraft(EMPTY); setShowCreate(!showCreate); } } : undefined}
         >
           {filtering && (
             <button className="text-xs text-primary hover:underline mt-2" onClick={() => setSearch('')}>Clear filters</button>

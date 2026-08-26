@@ -276,7 +276,7 @@ export default function SpecificationsPage() {
           icon={FileText}
           title={filtering ? 'No specifications match your filters.' : 'No specifications yet'}
           hint={filtering ? undefined : 'Create your first specification to organize requirements.'}
-          action={!filtering && editable ? { label: 'New Specification', onClick: openCreate } : undefined}
+          action={!filtering && editable ? { label: 'Create the first specification', onClick: openCreate } : undefined}
         >
           {filtering && (
             <button className="text-xs text-primary hover:underline mt-2" onClick={() => setSearch('')}>Clear filters</button>

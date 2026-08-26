@@ -135,7 +135,7 @@ export default function ProjectsPage() {
         <EmptyState
           title="No projects yet"
           hint={canCreate ? 'Create your first project to start managing requirements.' : 'Ask an administrator to create one.'}
-          action={canCreate ? { label: 'New Project', onClick: () => setShowCreate(true) } : undefined}
+          action={canCreate ? { label: 'Create your first project', onClick: () => setShowCreate(true) } : undefined}
         />
       ) : (
         <div className="grid grid-cols-1 @2xl:grid-cols-2 @4xl:grid-cols-3 gap-4">

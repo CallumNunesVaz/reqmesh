@@ -288,7 +288,7 @@ export default function VerificationPage() {
           icon={CheckCircle2}
           title={filtering ? 'No verification cases match your filters.' : 'No verification cases yet'}
           hint={filtering ? undefined : 'Create verification cases to track requirement testing.'}
-          action={!filtering && editable ? { label: 'New Verification Case', onClick: openCreate } : undefined}
+          action={!filtering && editable ? { label: 'Create the first verification case', onClick: openCreate } : undefined}
         >
           {filtering && (
             <button className="text-xs text-primary hover:underline mt-2" onClick={() => { setSearch(''); setFilterStatus(''); setFilterMethod(''); }}>Clear filters</button>

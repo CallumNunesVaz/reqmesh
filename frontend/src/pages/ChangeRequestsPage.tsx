@@ -478,7 +478,7 @@ export default function ChangeRequestsPage() {
           icon={GitPullRequest}
           title={filtering ? 'No change requests match your filters.' : 'No change requests yet'}
           hint={filtering ? undefined : 'Propose and track changes to requirements.'}
-          action={!filtering && editable ? { label: 'New Change Request', onClick: openCreate } : undefined}
+          action={!filtering && editable ? { label: 'Create the first change request', onClick: openCreate } : undefined}
         >
           {filtering && (
             <button className="text-xs text-primary hover:underline mt-2" onClick={() => { setSearch(''); setFilterStatus(''); }}>Clear filters</button>

@@ -319,7 +319,7 @@ export default function DecisionsPage() {
           icon={Scale}
           title={filtering ? 'No decisions match your search.' : 'No decisions yet'}
           hint={filtering ? undefined : 'Record why the architecture is the way it is, so the reasoning outlives the people who had it.'}
-          action={!filtering && editable ? { label: 'New Decision', onClick: () => { setEditingId(null); setDraft(EMPTY); setShowCreate(!showCreate); } } : undefined}
+          action={!filtering && editable ? { label: 'Create the first decision', onClick: () => { setEditingId(null); setDraft(EMPTY); setShowCreate(!showCreate); } } : undefined}
         >
           {filtering && (
             <button className="text-xs text-primary hover:underline mt-2" onClick={() => setSearch('')}>Clear filters</button>

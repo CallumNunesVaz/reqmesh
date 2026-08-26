@@ -609,7 +609,7 @@ export default function ComponentsPage() {
           icon={Boxes}
           title="No components yet"
           hint="Components describe what the system is, and map onto the requirements they satisfy."
-          action={editable ? { label: 'New Component', onClick: () => { setShowCreate((s) => !s); setError(''); } } : undefined}
+          action={editable ? { label: 'Create the first component', onClick: () => { setShowCreate((s) => !s); setError(''); } } : undefined}
         />
       ) : components.length > 0 && filteredCount === 0 ? (
         <EmptyState icon={Boxes} title="No components match your filters.">

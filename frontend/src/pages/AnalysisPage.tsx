@@ -303,7 +303,7 @@ export default function AnalysisPage() {
           icon={FlaskConical}
           title={filtering ? 'No analysis cases match your search.' : 'No analysis cases yet'}
           hint={filtering ? undefined : 'Define a scoped set of hypothetical parameter values, then evaluate it against the live solver.'}
-          action={!filtering && editable ? { label: 'New Analysis Case', onClick: () => { setEditingId(null); setDraft(EMPTY); setShowCreate(!showCreate); } } : undefined}
+          action={!filtering && editable ? { label: 'Create the first analysis case', onClick: () => { setEditingId(null); setDraft(EMPTY); setShowCreate(!showCreate); } } : undefined}
         >
           {filtering && (
             <button className="text-xs text-primary hover:underline mt-2" onClick={() => setSearch('')}>Clear filters</button>
