@@ -74,7 +74,9 @@ RUN curl --proto '=https' --tlsv1.2 -fsSL -o /tmp/tectonic.tar.gz \
 #   * the image is not self-contained, despite shipping the engine.
 #
 # Baking the cache in makes rendering a property of the image rather than of
-# the network at first use. Cost is ~20MB.
+# the network at first use. Cost is ~52MB of cache (it was ~20MB when the
+# packages were fetched lazily; pre-fetching the recorded working set trades
+# that extra ~30MB for a build that does not depend on a remote host).
 ENV TECTONIC_CACHE_DIR=/opt/tectonic-cache
 
 WORKDIR /app
