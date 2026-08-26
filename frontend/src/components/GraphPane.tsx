@@ -78,6 +78,8 @@ const BASE_NODE_H = 118;
 const MIN_EDGE_GAP = 8;  // vertical px between adjacent edge terminals — ELK's
                           // practical minimum with markers is wider than the
                           // spacing option suggests, so set this generously.
+const EDGE_PAD = 52;  // ample top+bottom clearance so edge terminals stay
+                       // well inside the rounded-rect boundary at every zoom
 
 const edgeMarkers: Record<string, { markerEnd: MarkerType; strokeDasharray: string; strokeWidth: number }> = {
   refines: { markerEnd: MarkerType.ArrowClosed, strokeDasharray: 'none', strokeWidth: 1.4 },
@@ -209,6 +211,46 @@ interface ElkResult {
   heights: Map<string, number>;
 }
 
+// ── L5 content height ─────────────────────────────────────────────────────
+// `layoutNodeHeight` reserves a footprint that also covers the tallest the node
+// can draw — its level-5 ("Full detail") height — so a content-heavy node's
+// neighbours are never laid on top of it. Every constant is the height
+// BlockNode actually renders at L5, measured by driving the app and reading the
+// markup (row classes, text sizes, paddings); the element-by-element derivation
+// lives in .agents/notes/167-build-notes.md. Values are rounded up so the
+// reservation is never smaller than the drawn row.
+const HEADER_H = 30;              // header bar: py-1.5 (12) + tallest row (expand buttons; measured 29.9)
+const NAME_ROW_H = 28.5;          // name row: py-1.5 (12) + 12px text × leading-snug 1.375 (16.5)
+const DESC_H = 46;                // description window: fixed --desc-h
+const COMPARTMENT_CHROME = 27;    // values/constraints block chrome: py-1.5 (12) + 7.5px label (11.25) + top border (measured 26.25)
+const PARAM_ROW_H = 14.625;       // 9px mono × leading-relaxed 1.625
+const PARAM_MORE_ROW_H = 10;      // "+N more" 8px row
+const CONSTRAINT_ROW_H = 14;      // 8.5px mono × leading-relaxed 1.625 (measured 13.83)
+const FOOTER_H = 22;              // footer: py-1 (8) + 11px PriorityIcon (measured 21.75)
+const MAX_PARAM_ROWS = 8;         // L5 renders d.params.slice(0, 8)
+
+export function layoutNodeHeight(opts: {
+  maxFan: number;
+  paramCount: number;
+  constraintCount: number;
+  hasDescription: boolean;
+}): number {
+  const fanHeight = Math.round(opts.maxFan * MIN_EDGE_GAP + EDGE_PAD);
+
+  const shownParams = Math.min(opts.paramCount, MAX_PARAM_ROWS);
+  let content = HEADER_H + NAME_ROW_H + FOOTER_H;
+  if (opts.hasDescription) content += DESC_H;
+  if (opts.paramCount > 0) {
+    content += COMPARTMENT_CHROME + shownParams * PARAM_ROW_H;
+    if (opts.paramCount > MAX_PARAM_ROWS) content += PARAM_MORE_ROW_H;
+  }
+  if (opts.constraintCount > 0) {
+    content += COMPARTMENT_CHROME + opts.constraintCount * CONSTRAINT_ROW_H;
+  }
+
+  return Math.max(BASE_NODE_H, fanHeight, Math.ceil(content));
+}
+
 // Layered (Sugiyama) layout via ELK, the algorithm behind Eclipse/SysML
 // editors. Unlike the old dagre pass — which ranked on the composition tree
 // alone — this feeds BOTH composition and relation edges, so ELK's global
@@ -246,14 +288,15 @@ async function elkLayout(
     fanIn.set(e.targets[0], (fanIn.get(e.targets[0]) || 0) + 1);
     fanOut.set(e.sources[0], (fanOut.get(e.sources[0]) || 0) + 1);
   }
-  const edgePad = 52; // ample top+bottom clearance so edge terminals stay
-                        // well inside the rounded-rect boundary at every zoom
-  const getNodeHeight = (nid: string) => {
-    const maxFan = Math.max(fanIn.get(nid) || 0, fanOut.get(nid) || 0);
-    return Math.max(
-      BASE_NODE_H,
-      Math.round(maxFan * MIN_EDGE_GAP + edgePad),
-    );
+  const getNodeHeight = (n: Node) => {
+    const nd = n.data as any;
+    const maxFan = Math.max(fanIn.get(n.id) || 0, fanOut.get(n.id) || 0);
+    return layoutNodeHeight({
+      maxFan,
+      paramCount: nd?.params?.length ?? 0,
+      constraintCount: nd?.constraints?.length ?? 0,
+      hasDescription: !!nd?.desc,
+    });
   };
 
   // Un-inflated (visual) height per node, captured while building the layout
@@ -278,7 +321,7 @@ async function elkLayout(
     },
     children: nodes.map((n) => {
       const nd = n.data as any;
-      const h = getNodeHeight(n.id);
+      const h = getNodeHeight(n);
       visualHeight.set(n.id, h);
       // A collapsed group draws a card stack peeking past its bottom-right
       // corner. Inflate its *layout* box by that overhang (right + bottom) so
