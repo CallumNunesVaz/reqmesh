@@ -282,7 +282,7 @@ export default function RiskDetailPage() {
             )}
             <div className="space-y-3">
               <label className="label">Severity
-                <select className="input" value={risk.severity || ''}
+                <select className="select" value={risk.severity || ''}
                   onChange={(e) => save({ severity: e.target.value })} disabled={!editable}>
                   {!((matrix?.severities ?? []).includes(risk.severity)) && risk.severity && (
                     <option value={risk.severity}>{risk.severity}</option>
@@ -291,7 +291,7 @@ export default function RiskDetailPage() {
                 </select>
               </label>
               <label className="label">Likelihood
-                <select className="input" value={rating?.likelihood ?? risk.likelihood ?? ''}
+                <select className="select" value={rating?.likelihood ?? risk.likelihood ?? ''}
                   onChange={(e) => save({ likelihood: e.target.value })} disabled={!editable}>
                   {!((matrix?.likelihoods ?? []).includes(rating?.likelihood ?? risk.likelihood ?? '')) && (rating?.likelihood ?? risk.likelihood) && (
                     <option value={rating?.likelihood ?? risk.likelihood}>{rating?.likelihood ?? risk.likelihood}</option>
@@ -300,7 +300,7 @@ export default function RiskDetailPage() {
                 </select>
               </label>
               <label className="label">Detection
-                <select className="input" value={risk.detection || ''}
+                <select className="select" value={risk.detection || ''}
                   onChange={(e) => save({ detection: e.target.value })} disabled={!editable}>
                   {!risk.detection && <option value="">not assessed</option>}
                   {risk.detection && !((matrix?.detections ?? []).includes(risk.detection)) && (
@@ -310,7 +310,7 @@ export default function RiskDetailPage() {
                 </select>
               </label>
               <label className="label">Status
-                <select className="input" value={risk.status || ''}
+                <select className="select" value={risk.status || ''}
                   onChange={(e) => save({ status: e.target.value })} disabled={!editable}>
                   {!RISK_STATUSES.includes(risk.status as any) && risk.status && (
                     <option value={risk.status}>{risk.status}</option>

@@ -254,7 +254,7 @@ export default function ProjectSettingsPage() {
                     disabled={!editable} /></label>
                 </div>
                 <div>
-                  <label className="label text-[10px]">Suffix type<select className="input text-xs" value={rule.suffix_type}
+                  <label className="label text-[10px]">Suffix type<select className="select text-xs" value={rule.suffix_type}
                     onChange={(e) => updateRule(key, { suffix_type: e.target.value as any })}
                     disabled={!editable}>
                     <option value="numeric">Numeric (0-9)</option>

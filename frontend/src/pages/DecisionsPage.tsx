@@ -275,7 +275,7 @@ export default function DecisionsPage() {
                   onChange={(e) => setDraft({ ...draft, title: e.target.value })} /></label>
               </div>
               <div className="w-40">
-                <label className="label">Status <select className="input" value={draft.status}
+                <label className="label">Status <select className="select" value={draft.status}
                   onChange={(e) => setDraft({ ...draft, status: e.target.value })}>
                   {statusOptions.map((s) => <option key={s} value={s}>{s}</option>)}
                 </select></label>

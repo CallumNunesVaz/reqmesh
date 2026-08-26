@@ -338,7 +338,7 @@ export default function ComponentDetailPage() {
             <div className="space-y-3">
               <div>
                 <label className="label">Type
-                  <select className="input" value={form.type} onChange={(e) => { setForm({ ...form, type: e.target.value }); save({ type: e.target.value }); }} disabled={!editable}>
+                  <select className="select" value={form.type} onChange={(e) => { setForm({ ...form, type: e.target.value }); save({ type: e.target.value }); }} disabled={!editable}>
                     {COMPONENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
                   </select>
                 </label>
@@ -346,7 +346,7 @@ export default function ComponentDetailPage() {
               <div>
                 <label className="label">Parent component
                   <select
-                    className={`input ${parentIsUnresolved ? 'border-destructive text-destructive' : ''}`}
+                    className={`select ${parentIsUnresolved ? 'border-destructive text-destructive' : ''}`}
                     value={form.parent}
                     onChange={(e) => { setForm({ ...form, parent: e.target.value }); save({ parent: e.target.value || null }); }}
                     disabled={!editable}

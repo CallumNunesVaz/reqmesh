@@ -627,7 +627,7 @@ export function ParametricsCard({ reqId, parameters, constraints, evaluated, edi
           <div className="flex items-center gap-1.5 mb-1.5 text-[11px] text-muted-foreground">
             <Boxes size={12} className="text-cs-teal" /> Use a definition
             <select
-              className="input text-xs py-0.5 ml-1"
+              className="select text-xs py-0.5 ml-1"
               value={defDraft.id}
               onChange={(e) => setDefDraft({ id: e.target.value, bindings: {} })}
             >
