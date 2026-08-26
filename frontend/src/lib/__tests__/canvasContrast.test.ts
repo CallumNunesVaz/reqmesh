@@ -176,3 +176,30 @@ describe('canvas surface ramp — recess below the page background', () => {
     }
   });
 });
+
+describe('app surface ramp — cards must read as raised off the page', () => {
+  // The same defect the canvas ramp fixed existed on every other screen: a card
+  // sat 1.059:1 above the page in dark and 1.045:1 in light, which is below the
+  // threshold where an edge reads as depth rather than as a rendering artefact.
+  // On a dark ground elevation is carried by surface lightness, not by shadow,
+  // so these floors are the only thing keeping cards from flattening again.
+  it('raises --card above --background in both themes', () => {
+    expectContrast('dark: --card vs --background', token(dark, 'card'), token(dark, 'background'), 1.12);
+    expectContrast('light: --card vs --background', token(light, 'card'), token(light, 'background'), 1.10);
+  });
+
+  it('raises --popover above --card, so layered surfaces stay distinguishable', () => {
+    // Light deliberately leaves both white — a popover there is separated by its
+    // shadow and border, which do read on a light ground.
+    expectContrast('dark: --popover vs --card', token(dark, 'popover'), token(dark, 'card'), 1.05);
+  });
+
+  it('keeps the sidebar recessed below the page in both themes', () => {
+    for (const [label, theme] of [['dark', dark], ['light', light]] as const) {
+      expect(
+        luminance(token(theme, 'sidebar')),
+        `${label}: --sidebar should be darker than --background`,
+      ).toBeLessThan(luminance(token(theme, 'background')));
+    }
+  });
+});

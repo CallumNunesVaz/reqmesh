@@ -19,11 +19,11 @@
        properties below only reach what our own CSS paints; this is the one
        declaration the browser itself reads. */
     color-scheme: dark;
-    --background: 215 25% 12%;
+    --background: 215 25% 10%;
     --foreground: 210 20% 92%;
-    --card: 215 25% 14%;
+    --card: 215 25% 15%;
     --card-foreground: 210 20% 92%;
-    --popover: 215 25% 16%;
+    --popover: 215 25% 18%;
     --popover-foreground: 210 20% 92%;
     --primary: 207 90% 64%;
     --primary-foreground: 215 25% 10%;
@@ -37,7 +37,7 @@
     --destructive-foreground: 0 0% 100%;
     --border: 215 20% 22%;
     --ring: 207 90% 64%;
-    --sidebar: 215 25% 10%;
+    --sidebar: 215 25% 8%;
     --sidebar-foreground: 210 15% 80%;
     --sidebar-accent: 215 20% 18%;
 
@@ -50,6 +50,7 @@
     --cs-teal: 179 100% 31%;
     --cs-purple: 260 100% 78%;
     --cs-pink: 300 60% 64%;
+    --cs-amber: 43 96% 56%;
     --cs-grey: 195 6% 62%;
 
     /* Canvas surface ramp. The canvas is deliberately recessed *below*
@@ -85,7 +86,7 @@
   /* Cloudscape Light Mode */
   .light {
     color-scheme: light;   /* see .dark — keeps native UI in step with the theme */
-    --background: 210 20% 98%;
+    --background: 210 20% 95%;
     --foreground: 215 25% 16%;
     --card: 0 0% 100%;
     --card-foreground: 215 25% 16%;
@@ -93,9 +94,9 @@
     --popover-foreground: 215 25% 16%;
     --primary: 207 90% 54%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 210 15% 94%;
+    --secondary: 210 15% 90%;
     --secondary-foreground: 215 25% 16%;
-    --muted: 210 15% 94%;
+    --muted: 210 15% 90%;
     --muted-foreground: 215 16% 42%;
     --accent: 207 80% 94%;
     --accent-foreground: 215 25% 16%;
@@ -103,9 +104,9 @@
     --destructive-foreground: 0 0% 100%;
     --border: 210 14% 83%;
     --ring: 207 90% 54%;
-    --sidebar: 210 20% 97%;
+    --sidebar: 210 20% 93%;
     --sidebar-foreground: 215 25% 16%;
-    --sidebar-accent: 210 15% 92%;
+    --sidebar-accent: 210 15% 88%;
 
     --cs-red: 0 84% 55%;
     --cs-orange: 28 100% 50%;
@@ -115,6 +116,7 @@
     --cs-teal: 179 100% 28%;
     --cs-purple: 260 80% 58%;
     --cs-pink: 300 60% 54%;
+    --cs-amber: 38 92% 45%;
     --cs-grey: 195 6% 55%;
 
     /* See .dark — light mode recesses the canvas off white instead, so the

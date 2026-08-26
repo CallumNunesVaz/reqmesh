@@ -63,6 +63,7 @@ export default {
           teal: 'hsl(var(--cs-teal) / <alpha-value>)',
           purple: 'hsl(var(--cs-purple) / <alpha-value>)',
           pink: 'hsl(var(--cs-pink) / <alpha-value>)',
+          amber: 'hsl(var(--cs-amber) / <alpha-value>)',
           grey: 'hsl(var(--cs-grey) / <alpha-value>)',
         },
         graph: {
