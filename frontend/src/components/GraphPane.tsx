@@ -2074,9 +2074,10 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
     <div
       ref={graphBoxRef}
       className={`w-full h-full bg-graph-canvas relative @container${perfMode ? ' rt-perf' : ''}${hasSelection ? ' rt-dimming' : ''}`}
-      // Subtle centre glow for depth so node blooms read against some atmosphere.
-      // ReactFlow is transparent, so this backdrop shows through behind the nodes.
-      style={{ background: 'radial-gradient(ellipse at 50% 38%, hsl(var(--foreground) / 0.035), transparent 62%), hsl(var(--graph-canvas))' }}
+      // Flat ground. ReactFlow is transparent, so this backdrop shows through
+      // behind the nodes; it used to carry a centre radial gradient for
+      // "atmosphere", which mostly read as an uneven background.
+      style={{ background: 'hsl(var(--graph-canvas))' }}
     >
     {/* The remount key lives on this inner wrapper, NOT the outer div: the
         splash must survive the swap so the old diagram fades straight into
