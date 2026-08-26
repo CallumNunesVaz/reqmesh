@@ -315,7 +315,7 @@ Changing the remote stays admin-only — it decides where the entire project
 history is shipped. Credentials embedded in a remote URL are redacted
 everywhere they could surface, including push error messages.
 
-![Git integration in project settings: remote configuration and repository lifecycle](docs/screenshots/git-panel.png)
+![Git integration in project settings: commit author, remote URL and the auto-commit schedule](docs/screenshots/git-panel.png)
 
 ## Interchange
 
@@ -463,7 +463,7 @@ than swamping the chart. The window defaults to the last 90 days and is capped
 at 365; entries are skipped by filename before being parsed, so the cost tracks
 the window rather than the project's whole history.
 
-![Coverage, quality, gaps and the activity-over-time chart](docs/screenshots/metrics.png)
+![Project metrics: coverage, gaps, quality scores, traceability and the risk profile](docs/screenshots/metrics.png)
 
 ## Allocation Matrix
 
