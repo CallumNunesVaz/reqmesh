@@ -606,7 +606,7 @@ export default function VerificationPage() {
                     {editable && (
                     <button
                       onClick={() => handleDuplicate(vc)}
-                      className="p-1.5 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-all"
+                      className="p-1.5 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-[color,background-color,opacity]"
                       title="Duplicate verification case"
                     >
                       <Copy size={14} />
@@ -615,7 +615,7 @@ export default function VerificationPage() {
                     {editable && (
                     <button
                       onClick={() => handleDelete(vc.id)}
-                      className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                      className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-[color,background-color,opacity]"
                       title="Delete"
                     >
                       <Trash2 size={14} />
@@ -680,7 +680,7 @@ export default function VerificationPage() {
                                   className="flex-1 min-w-0 text-foreground hover:text-cs-blue"
                                 />
                                 {editable && (
-                                <button onClick={(e) => { e.stopPropagation(); handleUnlinkRequirement(vc.id, reqId); }} className="p-0.5 rounded text-muted-foreground hover:text-destructive opacity-0 group-hover/link:opacity-100 transition-all" title="Unlink requirement">
+                                <button onClick={(e) => { e.stopPropagation(); handleUnlinkRequirement(vc.id, reqId); }} className="p-0.5 rounded text-muted-foreground hover:text-destructive opacity-0 group-hover/link:opacity-100 transition-[color,opacity]" title="Unlink requirement">
                                   <X size={11} />
                                 </button>
                                 )}
@@ -731,7 +731,7 @@ export default function VerificationPage() {
                               <span className="font-mono text-foreground">{m.value}</span>
                               <span className="text-muted-foreground w-10 truncate">{m.unit}</span>
                               {editable && (
-                              <button onClick={(e) => { e.stopPropagation(); handleRemoveMeasurement(vc.id, mi); }} className="p-0.5 rounded text-muted-foreground hover:text-destructive opacity-0 group-hover/meas:opacity-100 transition-all">
+                              <button onClick={(e) => { e.stopPropagation(); handleRemoveMeasurement(vc.id, mi); }} className="p-0.5 rounded text-muted-foreground hover:text-destructive opacity-0 group-hover/meas:opacity-100 transition-[color,opacity]">
                                 <X size={11} />
                               </button>
                               )}

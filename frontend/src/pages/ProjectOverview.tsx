@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { BarChart3, ClipboardList, FileText, CheckCircle2, AlertTriangle, Zap, Boxes, Settings } from 'lucide-react';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LabelList } from 'recharts';
 import LoadingSplash from '../components/LoadingSplash';
+import Reveal from '../components/Reveal';
 import { api, type Requirement, type VerificationCase } from '../api/client';
 import { useAuthStore } from '../store/auth';
 import { formatReqType, reqTypeColor } from '../lib/requirementTypes';
@@ -164,7 +165,7 @@ export default function ProjectOverview() {
 
   return (
     <div className="max-w-6xl mx-auto p-4 @3xl:p-8">
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex items-center justify-between">
+      <Reveal className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">{project?.name || projectId}</h1>
           <p className="text-sm text-muted-foreground font-mono mt-1">{project?.path || ''}</p>
@@ -174,7 +175,7 @@ export default function ProjectOverview() {
             <Settings size={15} /> Settings
           </button>
         )}
-      </motion.div>
+      </Reveal>
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 @2xl:grid-cols-3 @4xl:grid-cols-5 gap-4 mt-6">
@@ -202,7 +203,7 @@ export default function ProjectOverview() {
       {/* Row 1: Status + Quality */}
       <div className="grid grid-cols-1 @3xl:grid-cols-2 gap-6 mt-6">
         {/* Requirement Status */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="card p-5">
+        <Reveal step={6} className="card p-5">
           <h2 className="font-semibold text-sm text-card-foreground mb-4 flex items-center gap-2">
             <ClipboardList size={16} />
             Requirement Status
@@ -233,10 +234,10 @@ export default function ProjectOverview() {
               );
             })}
           </div>
-        </motion.div>
+        </Reveal>
 
         {/* Quality Completeness */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="card p-5">
+        <Reveal step={6} className="card p-5">
           <h2 className="font-semibold text-sm text-card-foreground mb-3 flex items-center gap-2">
             <BarChart3 size={16} />
             Quality Completeness
@@ -265,13 +266,13 @@ export default function ProjectOverview() {
               ? `${stats.withTraces} of ${stats.totalRequirements} requirements have trace links`
               : 'No requirements yet'}
           </div>
-        </motion.div>
+        </Reveal>
       </div>
 
       {/* Row 2: Priority + Type (charts) */}
       <div className="grid grid-cols-1 @3xl:grid-cols-2 gap-6 mt-6">
         {/* Priority Distribution */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }} className="card p-5">
+        <Reveal step={6} className="card p-5">
           <h2 className="font-semibold text-sm text-card-foreground mb-3 flex items-center gap-2">
             <AlertTriangle size={16} />
             Priority Distribution
@@ -293,10 +294,10 @@ export default function ProjectOverview() {
               </BarChart>
             </ResponsiveContainer>
           )}
-        </motion.div>
+        </Reveal>
 
         {/* Type Distribution */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.55 }} className="card p-5">
+        <Reveal step={6} className="card p-5">
           <h2 className="font-semibold text-sm text-card-foreground mb-3 flex items-center gap-2">
             <Zap size={16} />
             Requirement Types
@@ -340,13 +341,13 @@ export default function ProjectOverview() {
               </div>
             </div>
           )}
-        </motion.div>
+        </Reveal>
       </div>
 
       {/* Row 3: Verification Method + Verification Progress */}
       <div className="grid grid-cols-1 @3xl:grid-cols-2 gap-6 mt-6">
         {/* Verification Method */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }} className="card p-5">
+        <Reveal step={6} className="card p-5">
           <h2 className="font-semibold text-sm text-card-foreground mb-3 flex items-center gap-2">
             <CheckCircle2 size={16} />
             Verification Method
@@ -365,10 +366,10 @@ export default function ProjectOverview() {
               </BarChart>
             </ResponsiveContainer>
           )}
-        </motion.div>
+        </Reveal>
 
         {/* Verification Progress */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.65 }} className="card p-5">
+        <Reveal step={6} className="card p-5">
           <h2 className="font-semibold text-sm text-card-foreground mb-4 flex items-center gap-2">
             <BarChart3 size={16} />
             Verification Progress
@@ -409,7 +410,7 @@ export default function ProjectOverview() {
               </div>
             </div>
           </div>
-        </motion.div>
+        </Reveal>
       </div>
     </div>
   );

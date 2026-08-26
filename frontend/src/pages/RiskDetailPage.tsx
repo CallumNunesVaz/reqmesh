@@ -1,6 +1,5 @@
 import { useEffect, useState, useId } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
 import { Trash2, ArrowLeft, AlertTriangle, X } from 'lucide-react';
 import { api, RISK_STATUSES, type Risk, type Requirement, type Component, type RiskMatrix } from '../api/client';
 import type { RiskUpdate } from '../api/generated/writeModels';
@@ -11,6 +10,7 @@ import { useAuthStore } from '../store/auth';
 import { useStore } from '../store';
 import { useKeyboardShortcuts } from '../components/useKeyboardShortcuts';
 import LoadingSplash from '../components/LoadingSplash';
+import Reveal from '../components/Reveal';
 import { LinkEditor } from '../components/LinkEditor';
 import RichTextEditor from '../components/RichTextEditor';
 import { HistoryPanel } from '../components/HistoryPanel';
@@ -162,7 +162,7 @@ export default function RiskDetailPage() {
       <div className="grid grid-cols-1 @4xl:grid-cols-3 gap-6">
         {/* Main content area */}
         <div className="@4xl:col-span-2 space-y-6">
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="card p-5">
+          <Reveal className="card p-5">
             <label className="label" htmlFor={failureModeId}>Failure Mode</label>
             {editable ? (
               <RichTextEditor
@@ -205,9 +205,9 @@ export default function RiskDetailPage() {
                 {risk.cause ? <AutoLinkHtml html={risk.cause} kinds={entityKinds} /> : <span className="text-muted-foreground text-sm italic">No cause</span>}
               </div>
             )}
-          </motion.div>
+          </Reveal>
 
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="card p-5">
+          <Reveal step={2} className="card p-5">
             <label className="label">Mitigation
               <textarea
                 className="input min-h-[64px]"
@@ -228,9 +228,9 @@ export default function RiskDetailPage() {
                 placeholder="What the risk costs if it happens…"
               />
             </label>
-          </motion.div>
+          </Reveal>
 
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="card p-5">
+          <Reveal step={3} className="card p-5">
             <LinkEditor label="Threatens" hint="Requirements this risk endangers" kind="requirement"
               linked={risk.linked_requirements || []} options={requirements} editable={editable}
               onAdd={(id) => setList('linked_requirements', [...(risk.linked_requirements || []), id])}
@@ -257,20 +257,20 @@ export default function RiskDetailPage() {
                 onRemove={(id) => setList('mitigating_components', (risk.mitigating_components || []).filter((x) => x !== id))}
                 nameOf={(id) => nameOf(id, components)} />
             </div>
-          </motion.div>
+          </Reveal>
 
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }} className="card p-5">
+          <Reveal step={4} className="card p-5">
             <CommentThread entityKind="risks" entityId={riskId!} />
-          </motion.div>
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="card p-5">
+          </Reveal>
+          <Reveal step={4} className="card p-5">
             <h2 className="font-semibold text-sm text-card-foreground mb-3">Change History</h2>
             <HistoryPanel itemId={riskId!} defaultOpen />
-          </motion.div>
+          </Reveal>
         </div>
 
         {/* Properties sidebar */}
         <div className="space-y-6">
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="card p-5">
+          <Reveal step={1} className="card p-5">
             <h2 className="font-semibold text-sm text-card-foreground mb-3">Rating</h2>
             <div className="flex items-center gap-2 mb-4">
               <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: rating?.color || 'hsl(var(--muted-foreground))' }} />
@@ -319,7 +319,7 @@ export default function RiskDetailPage() {
                 </select>
               </label>
             </div>
-          </motion.div>
+          </Reveal>
 
           <div className="text-xs text-muted-foreground space-y-1">
             <div>Created: {new Date(risk.created).toLocaleString()}</div>

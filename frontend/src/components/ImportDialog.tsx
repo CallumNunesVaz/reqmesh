@@ -122,7 +122,7 @@ export default function ImportDialog({ open, onClose, projectId }: ImportDialogP
                 <div className="grid grid-cols-2 gap-2 mt-1">
                   <button
                     onClick={() => chooseSource('file')}
-                    className={`p-2.5 rounded-lg border text-xs font-medium transition-all ${
+                    className={`p-2.5 rounded-lg border text-xs font-medium transition-colors ${
                       source === 'file' ? 'border-primary bg-primary/5 text-primary' : 'border bg-card text-muted-foreground hover:border-ring/30'
                     }`}
                   >
@@ -130,7 +130,7 @@ export default function ImportDialog({ open, onClose, projectId }: ImportDialogP
                   </button>
                   <button
                     onClick={() => chooseSource('paste')}
-                    className={`p-2.5 rounded-lg border text-xs font-medium transition-all ${
+                    className={`p-2.5 rounded-lg border text-xs font-medium transition-colors ${
                       source === 'paste' ? 'border-primary bg-primary/5 text-primary' : 'border bg-card text-muted-foreground hover:border-ring/30'
                     }`}
                   >
@@ -151,7 +151,7 @@ export default function ImportDialog({ open, onClose, projectId }: ImportDialogP
                         onClick={() => { if (!disabled) chooseFormat(f.id); }}
                         title={disabled ? 'Pasted text only supports csv and tsv' : f.desc}
                         disabled={disabled}
-                        className={`p-2.5 rounded-lg border text-xs transition-all ${
+                        className={`p-2.5 rounded-lg border text-xs transition-colors ${
                           disabled ? 'bg-muted/50 text-muted-foreground/40 cursor-not-allowed border-border/50' :
                           active ? 'border-primary bg-primary/5 text-primary' : 'border bg-card text-muted-foreground hover:border-ring/30'
                         }`}
@@ -168,7 +168,7 @@ export default function ImportDialog({ open, onClose, projectId }: ImportDialogP
                 <div className="grid grid-cols-2 gap-2 mt-1">
                   <button
                     onClick={() => chooseMode('merge')}
-                    className={`p-2.5 rounded-lg border text-xs text-left transition-all ${
+                    className={`p-2.5 rounded-lg border text-xs text-left transition-colors ${
                       mode === 'merge' ? 'border-primary bg-primary/5 text-primary' : 'border bg-card text-muted-foreground hover:border-ring/30'
                     }`}
                   >
@@ -177,7 +177,7 @@ export default function ImportDialog({ open, onClose, projectId }: ImportDialogP
                   </button>
                   <button
                     onClick={() => chooseMode('replace')}
-                    className={`p-2.5 rounded-lg border text-xs text-left transition-all ${
+                    className={`p-2.5 rounded-lg border text-xs text-left transition-colors ${
                       mode === 'replace' ? 'border-cs-red bg-cs-red/5 text-cs-red' : 'border bg-card text-muted-foreground hover:border-ring/30'
                     }`}
                   >

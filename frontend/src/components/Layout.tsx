@@ -472,7 +472,7 @@ export default function Layout() {
           {isInProject && (
             <button
               onClick={toggleHelpers}
-              className={`btn-ghost p-2 rounded-lg gap-1.5 text-xs transition-all ${helpersEnabled ? 'bg-cs-purple/15 text-cs-purple border border-cs-purple/30' : 'text-muted-foreground'}`}
+              className={`btn-ghost p-2 rounded-lg gap-1.5 text-xs transition-colors ${helpersEnabled ? 'bg-cs-purple/15 text-cs-purple border border-cs-purple/30' : 'text-muted-foreground'}`}
               title={helpersEnabled ? 'Guided help is on — click to hide' : 'Guided help is off — click to show guidance'}
             >
               <HelpCircle size={15} />
@@ -542,7 +542,7 @@ export default function Layout() {
           {canToggleEdit && (
             <button
               onClick={toggleEdit}
-              className={`btn-ghost p-2 rounded-lg gap-1.5 text-xs transition-all ${
+              className={`btn-ghost p-2 rounded-lg gap-1.5 text-xs transition-colors ${
                 editMode ? 'bg-cs-amber/15 text-cs-amber border border-cs-amber/30' : 'text-muted-foreground'
               }`}
               title={editMode ? 'Editing mode ON - click to disable' : 'Click to enable editing'}

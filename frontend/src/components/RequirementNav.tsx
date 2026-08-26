@@ -71,7 +71,7 @@ function TreeNode({
   return (
     <div id={`nav-${node.id}`}>
       <div
-        className={`flex items-center gap-1.5 w-full pr-2 py-1 text-xs rounded-md transition-all ${
+        className={`flex items-center gap-1.5 w-full pr-2 py-1 text-xs rounded-md transition-colors ${
           isSelected
             ? 'bg-primary/10 text-primary'
             : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent'
@@ -202,7 +202,7 @@ function PanelNode({ item, depth, navigate, focusId }: {
   return (
     <div>
       <div
-        className={`flex items-center gap-1.5 w-full pr-2 py-1 text-xs rounded-md transition-all ${
+        className={`flex items-center gap-1.5 w-full pr-2 py-1 text-xs rounded-md transition-colors ${
           isSelected ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent'
         }`}
         style={{ paddingLeft: `${8 + depth * 14}px` }}
@@ -417,7 +417,7 @@ export default function RequirementNav({ width = 300, collapsed, onToggleCollaps
                 <button
                   key={item.to}
                   onClick={() => navigate(item.to)}
-                  className={`p-1.5 rounded-md transition-all ${active ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent'}`}
+                  className={`p-1.5 rounded-md transition-colors ${active ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent'}`}
                   title={item.label}
                 >
                   <Icon size={16} />
@@ -459,7 +459,7 @@ export default function RequirementNav({ width = 300, collapsed, onToggleCollaps
                 <button
                   key={item.to}
                   onClick={() => navigate(item.to)}
-                  className={`flex items-center gap-2 w-full px-3 py-1.5 text-xs font-medium rounded-lg transition-all mb-0.5 ${
+                  className={`flex items-center gap-2 w-full px-3 py-1.5 text-xs font-medium rounded-lg transition-[color,background-color,box-shadow] mb-0.5 ${
                     active
                       ? 'bg-primary text-primary-foreground shadow-sm'
                       : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent'

@@ -41,6 +41,7 @@ import { requirementsSatisfiedByComponent } from '../lib/crossHighlight';
 import { computeVisibleNodeIds } from '../lib/visibleNodes';
 import { dimEdges, type EdgeDimEntry } from '../lib/dimmedEdges';
 import { applySelectionToNodes } from '../lib/selectionRestyle';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 // ── Filter-option colours ─────────────────────────────────────────────────
 // Match the colour language used elsewhere: statuses reuse the canvas node
@@ -531,6 +532,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
   const navigate = useNavigate();
   const { theme } = useTheme();
   const whatIf = useWhatIf();
+  const reducedMotion = useReducedMotion();
   const [reqs, setReqs] = useState<Requirement[]>([]);
   const [traces, setTraces] = useState<TraceLink[]>([]);
   const [components, setComponents] = useState<Component[]>([]);
@@ -1424,7 +1426,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
           if (x + m.width * vp.zoom > 0 && x < paneW
             && y + m.height * vp.zoom > 0 && y < paneH) union.add(n.id);
         }
-        const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const reduced = reducedMotion;
         rfRef.current?.fitView({
           nodes: [...union].map((id) => ({ id })),
           padding: 0.25,
@@ -2148,14 +2150,14 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
           <div className="relative">
             <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-graph-muted" />
             <input
-              className="pl-7 pr-2.5 py-1.5 w-32 @lg:w-44 rounded-lg bg-graph-panel border border-graph-border text-xs text-graph-text placeholder:text-graph-muted outline-none focus:ring-1 focus:ring-ring/20 transition-all shadow-sm"
+              className="pl-7 pr-2.5 py-1.5 w-32 @lg:w-44 rounded-lg bg-graph-panel border border-graph-border text-xs text-graph-text placeholder:text-graph-muted outline-none focus:ring-1 focus:ring-ring/20 transition-shadow shadow-sm"
               placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)}
             />
           </div>
           <div className="relative">
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className={`relative p-1.5 rounded-lg border shadow-sm transition-all ${
+              className={`relative p-1.5 rounded-lg border shadow-sm transition-colors ${
                 showFilters || hasActiveFilters
                   ? 'bg-accent text-foreground border-graph-border'
                   : 'bg-graph-panel border-graph-border text-graph-text hover:bg-graph-control-hover'
@@ -2265,7 +2267,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
           <div className="relative">
             <button
               onClick={() => setShowSettings(!showSettings)}
-              className={`p-1.5 rounded-lg border shadow-sm transition-all ${
+              className={`p-1.5 rounded-lg border shadow-sm transition-colors ${
                 showSettings || Object.keys(graphSettings).length > 0
                   ? 'bg-accent text-foreground border-graph-border'
                   : 'bg-graph-panel border-graph-border text-graph-text hover:bg-graph-control-hover'
@@ -2403,7 +2405,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
               neighbours, not just the radial paths from the focused node. */}
           <button
             onClick={toggleAllLinks}
-            className={`hidden @md:block p-1.5 rounded-lg border shadow-sm transition-all ${
+            className={`hidden @md:block p-1.5 rounded-lg border shadow-sm transition-colors ${
               showAllLinks
                 ? 'bg-primary text-primary-foreground border-graph-border'
                 : 'bg-graph-panel border-graph-border text-graph-text hover:bg-graph-control-hover'
@@ -2420,7 +2422,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
               instead of silently disappearing. */}
           <button
             onClick={toggleHoistEdges}
-            className={`hidden @md:block p-1.5 rounded-lg border shadow-sm transition-all ${
+            className={`hidden @md:block p-1.5 rounded-lg border shadow-sm transition-colors ${
               hoistEdgesEnabled
                 ? 'bg-primary text-primary-foreground border-graph-border'
                 : 'bg-graph-panel border-graph-border text-graph-text hover:bg-graph-control-hover'
@@ -2597,7 +2599,7 @@ function FilterField({ label, options, value, onChange, format, colorOf }: {
     <div>
       <div className="text-[9px] text-graph-muted mb-1">{label}</div>
       <select
-        className="w-full appearance-none pl-2 pr-6 py-1.5 rounded-lg bg-graph-panel border border-graph-border text-[11px] text-graph-text outline-none focus:ring-1 focus:ring-ring/20 transition-all cursor-pointer hover:bg-graph-control-hover"
+        className="w-full appearance-none pl-2 pr-6 py-1.5 rounded-lg bg-graph-panel border border-graph-border text-[11px] text-graph-text outline-none focus:ring-1 focus:ring-ring/20 transition-[background-color,box-shadow] cursor-pointer hover:bg-graph-control-hover"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         style={{

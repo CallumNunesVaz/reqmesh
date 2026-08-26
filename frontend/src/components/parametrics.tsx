@@ -1,5 +1,4 @@
 import { useEffect, useState, useId, useMemo, useRef } from 'react';
-import { motion } from 'framer-motion';
 import { Plus, X, Sigma, CheckCircle2, XCircle, HelpCircle, AlertTriangle, MinusCircle, FlaskConical, Ruler, Boxes, ArrowUp, ArrowDown, Beaker, Play, Pencil, Check, Lock } from 'lucide-react';
 import type {
   Parameter, Constraint, Definition,
@@ -13,6 +12,7 @@ import {
   type ParamOwner, type ParamReference,
 } from '../lib/parametrics';
 import { tokenizeExpr, type ExprTokenKind } from '../lib/exprTokens';
+import Reveal from './Reveal';
 
 /** Shared <datalist> of known units for parameter-unit autocomplete. */
 const UNITS_LIST_ID = 'rm-known-units';
@@ -388,7 +388,7 @@ export function ParametricsCard({ reqId, parameters, constraints, evaluated, edi
   if (!editable && parameters.length === 0 && constraints.length === 0) return null;
 
   return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} className="card p-5">
+    <Reveal step={2} className="card p-5">
       <div className="flex items-center gap-2 mb-3">
         <h2 className="font-semibold text-sm text-card-foreground flex items-center gap-1.5">
           <Sigma size={14} className="text-cs-teal" /> Parameters &amp; Constraints
@@ -477,7 +477,7 @@ export function ParametricsCard({ reqId, parameters, constraints, evaluated, edi
                           />
                         )}
                         <button
-                          className={`shrink-0 ${whatIfOpenNow ? 'text-cs-blue' : 'text-muted-foreground hover:text-cs-blue'} transition-all`}
+                          className={`shrink-0 ${whatIfOpenNow ? 'text-cs-blue' : 'text-muted-foreground hover:text-cs-blue'} transition-colors`}
                           title="What-if override"
                           onClick={(e) => {
                             e.stopPropagation();
@@ -515,11 +515,11 @@ export function ParametricsCard({ reqId, parameters, constraints, evaluated, edi
                         <Lock size={12} />
                       </span>
                     ) : (
-                      <button onClick={() => setEditingIdx(i)} className="text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-all" title="Edit parameter">
+                      <button onClick={() => setEditingIdx(i)} className="text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-[color,opacity]" title="Edit parameter">
                         <Pencil size={12} />
                       </button>
                     )}
-                    <button onClick={() => removeParameter(i)} className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all" title="Remove parameter">
+                    <button onClick={() => removeParameter(i)} className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-[color,opacity]" title="Remove parameter">
                       <X size={12} />
                     </button>
                   </span>
@@ -579,14 +579,14 @@ export function ParametricsCard({ reqId, parameters, constraints, evaluated, edi
                 {editable && (
                   <span className="flex items-center gap-0.5">
                     <button onClick={() => moveConstraintUp(i)} disabled={i === 0}
-                      className="text-muted-foreground hover:text-foreground disabled:opacity-25 opacity-0 group-hover:opacity-100 transition-all">
+                      className="text-muted-foreground hover:text-foreground disabled:opacity-25 opacity-0 group-hover:opacity-100 transition-[color,opacity]">
                       <ArrowUp size={10} />
                     </button>
                     <button onClick={() => moveConstraintDown(i)} disabled={i >= constraints.length - 1}
-                      className="text-muted-foreground hover:text-foreground disabled:opacity-25 opacity-0 group-hover:opacity-100 transition-all">
+                      className="text-muted-foreground hover:text-foreground disabled:opacity-25 opacity-0 group-hover:opacity-100 transition-[color,opacity]">
                       <ArrowDown size={10} />
                     </button>
-                    <button onClick={() => removeConstraint(i)} className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all ml-1">
+                    <button onClick={() => removeConstraint(i)} className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-[color,opacity] ml-1">
                       <X size={12} />
                     </button>
                   </span>
@@ -665,7 +665,7 @@ export function ParametricsCard({ reqId, parameters, constraints, evaluated, edi
           <code className="font-mono">rollup('COMP', 'param')</code> sums over the component tree ×quantity.
         </p>
       )}
-    </motion.div>
+    </Reveal>
   );
 }
 
@@ -733,12 +733,12 @@ export function ParameterEditor({ parameters, editable, onChange, id = '', refer
                       </span>
                     ) : (
                       <button onClick={() => setEditingIdx(i)}
-                        className="text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-all" title="Edit parameter">
+                        className="text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-[color,opacity]" title="Edit parameter">
                         <Pencil size={11} />
                       </button>
                     )}
                     <button onClick={() => onChange(parameters.filter((_, idx) => idx !== i))}
-                      className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all">
+                      className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-[color,opacity]">
                       <X size={11} />
                     </button>
                   </span>

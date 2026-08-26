@@ -367,14 +367,14 @@ export default function AnalysisPage() {
                     <>
                       <button
                         onClick={() => openEdit(c)}
-                        className="p-1.5 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-all"
+                        className="p-1.5 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-[color,background-color,opacity]"
                         title="Edit"
                       >
                         <Edit3 size={14} />
                       </button>
                       <button
                         onClick={() => handleDelete(c.id)}
-                        className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                        className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-[color,background-color,opacity]"
                         title="Delete"
                       >
                         <Trash2 size={14} />

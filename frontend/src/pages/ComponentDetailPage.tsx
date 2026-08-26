@@ -1,6 +1,5 @@
 import { useEffect, useState, useMemo, useId } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
 import { Trash2, ArrowLeft, Save, X, ChevronRight, AlertTriangle, Tag } from 'lucide-react';
 import { api, baselineNames, COMPONENT_TYPES, type Component, type Requirement, type VerificationCase, type Backlinks } from '../api/client';
 import { CopyLinkButton, EntityLink, COMPONENT_TYPE_META, type EntityKind } from '../components/entities';
@@ -12,6 +11,7 @@ import { useAuthStore } from '../store/auth';
 import { useStore } from '../store';
 import { useKeyboardShortcuts } from '../components/useKeyboardShortcuts';
 import LoadingSplash from '../components/LoadingSplash';
+import Reveal from '../components/Reveal';
 import { LinkEditor } from '../components/LinkEditor';
 import { HelpTip } from '../components/HelpTip';
 import RichTextEditor from '../components/RichTextEditor';
@@ -267,7 +267,7 @@ export default function ComponentDetailPage() {
       <div className="grid grid-cols-1 @4xl:grid-cols-3 gap-6">
         {/* Main content area */}
         <div className="@4xl:col-span-2 space-y-6">
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="card p-5">
+          <Reveal className="card p-5">
             <label className="label">Name
               <input
                 className="input text-lg font-medium"
@@ -295,21 +295,21 @@ export default function ComponentDetailPage() {
                 {component.description ? <AutoLinkHtml html={component.description} kinds={entityKinds} /> : <span className="text-muted-foreground text-sm italic">No description</span>}
               </div>
             )}
-          </motion.div>
+          </Reveal>
 
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="card p-5">
+          <Reveal step={2} className="card p-5">
             <LinkEditor label="Satisfies requirements" hint="What this component exists to deliver" kind="requirement"
               linked={component.satisfies || []} options={requirements} editable={editable}
               onAdd={(id) => link('satisfies', id)} onRemove={(id) => unlink('satisfies', id)}
               nameOf={(id) => nameOf(id, requirements)} />
-          </motion.div>
+          </Reveal>
 
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="card p-5">
+          <Reveal step={3} className="card p-5">
             <LinkEditor label="Verification cases" hint="How this component is verified" kind="verification"
               linked={component.verification_cases || []} options={cases} editable={editable}
               onAdd={(id) => link('verification_cases', id)} onRemove={(id) => unlink('verification_cases', id)}
               nameOf={(id) => nameOf(id, cases)} />
-          </motion.div>
+          </Reveal>
 
           <ParametricsGuide />
           <ParameterEditor
@@ -322,18 +322,18 @@ export default function ComponentDetailPage() {
               ...allComponents.map((c) => ({ id: c.id, parameters: c.parameters || [] })),
             ]}
           />
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.19 }} className="card p-5">
+          <Reveal step={4} className="card p-5">
             <CommentThread entityKind="components" entityId={componentId!} />
-          </motion.div>
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="card p-5">
+          </Reveal>
+          <Reveal step={4} className="card p-5">
             <h2 className="font-semibold text-sm text-card-foreground mb-3">Change History</h2>
             <HistoryPanel itemId={componentId!} defaultOpen />
-          </motion.div>
+          </Reveal>
         </div>
 
         {/* Properties sidebar */}
         <div className="space-y-6">
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="card p-5">
+          <Reveal step={1} className="card p-5">
             <h2 className="font-semibold text-sm text-card-foreground mb-3">Properties</h2>
             <div className="space-y-3">
               <div>
@@ -414,7 +414,7 @@ export default function ComponentDetailPage() {
                           save({ baselines: next });
                         }}
                         disabled={!editable}
-                        className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
+                        className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
                           active
                             ? 'bg-primary/15 text-primary border-primary/30'
                             : 'bg-muted text-muted-foreground border-transparent hover:border-primary/20'
@@ -427,10 +427,10 @@ export default function ComponentDetailPage() {
                 </div>
               </div>
             </div>
-          </motion.div>
+          </Reveal>
 
           {/* Backlinks — children */}
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="card p-5">
+          <Reveal step={2} className="card p-5">
             <h2 className="font-semibold text-sm text-card-foreground mb-3">Children</h2>
             {allComponents.filter((c) => c.parent === componentId).length === 0 ? (
               <p className="text-xs text-muted-foreground">No children</p>
@@ -444,13 +444,13 @@ export default function ComponentDetailPage() {
                 ))}
               </div>
             )}
-          </motion.div>
+          </Reveal>
 
           {/* Backlinks — everything that points at this component, computed
               server-side from the link registry. Read-only: each link is owned
               by the record holding it, so editing lives on that record's page. */}
           {backlinks && backlinks.total > 0 && (
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="card p-5">
+            <Reveal step={2} className="card p-5">
               <h2 className="font-semibold text-sm text-card-foreground mb-1">Referenced By</h2>
               <p className="text-[11px] text-muted-foreground mb-3">
                 {backlinks.total} record{backlinks.total === 1 ? '' : 's'} refer to this component.
@@ -481,7 +481,7 @@ export default function ComponentDetailPage() {
                   </div>
                 ))}
               </div>
-            </motion.div>
+            </Reveal>
           )}
 
           {editable && (
