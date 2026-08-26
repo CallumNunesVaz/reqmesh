@@ -821,7 +821,7 @@ export default function RequirementDetailPage() {
           </button>
           <div className="flex-1 min-w-0">
             {ancestors.length > 0 && (
-              <nav className="flex items-center gap-1 text-[11px] text-muted-foreground mb-0.5 flex-wrap">
+              <nav className="flex items-center gap-1 text-2xs text-muted-foreground mb-0.5 flex-wrap">
                 {ancestors.map((a) => (
                   <span key={a.id} className="inline-flex items-center gap-1">
                     <EntityLink kind="requirement" id={a.id} showIcon={false} className="hover:text-primary" />
@@ -846,7 +846,7 @@ export default function RequirementDetailPage() {
               <CopyLinkButton kind="requirement" id={req.id} />
             </div>
             {unreviewedIds.has(req.id) && (
-              <span className="badge bg-cs-amber/10 text-cs-amber text-[10px] px-2 py-0.5">Needs re-review</span>
+              <span className="badge bg-cs-amber/10 text-cs-amber text-3xs px-2 py-0.5">Needs re-review</span>
             )}
           </div>
         </div>
@@ -963,7 +963,7 @@ export default function RequirementDetailPage() {
             <h3 className="text-sm font-semibold text-foreground">Request a Change</h3>
             <button onClick={() => setShowRequestChange(false)} className="text-muted-foreground hover:text-foreground"><X size={14} /></button>
           </div>
-          {crError && <div className="mb-3 text-xs text-destructive bg-destructive/10 rounded px-2 py-1">{crError}</div>}
+          {crError && <div className="mb-3 text-xs text-destructive bg-destructive/10 rounded-md px-2 py-1">{crError}</div>}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
             <div>
               <label className="label">CR Title<input className="input" value={crForm.title} onChange={e => setCrForm({...crForm, title: e.target.value})} /></label>
@@ -977,7 +977,7 @@ export default function RequirementDetailPage() {
               <label className="label">Rationale (why)<input className="input" placeholder="Why this change is needed" value={crForm.rationale} onChange={e => setCrForm({...crForm, rationale: e.target.value})} /></label>
             </div>
           </div>
-          <p className="text-[11px] text-muted-foreground mb-2">Only fields you alter will be proposed. Leave unchanged fields as-is.</p>
+          <p className="text-2xs text-muted-foreground mb-2">Only fields you alter will be proposed. Leave unchanged fields as-is.</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="label">Name<input className="input" value={crForm.name} onChange={e => setCrForm({...crForm, name: e.target.value})} /></label>
@@ -1063,20 +1063,20 @@ export default function RequirementDetailPage() {
             <Reveal step={1} className="card p-5">
               <h2 className="font-semibold text-sm text-card-foreground mb-3 flex items-center gap-2"><Sparkles size={14} className="text-cs-purple" /> Quality</h2>
               <div className="flex items-center gap-3 mb-3">
-                <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-lg font-bold ${qualityScore >= 80 ? 'bg-cs-green/10 text-cs-green' : qualityScore >= 50 ? 'bg-cs-amber/10 text-cs-amber' : 'bg-cs-red/10 text-cs-red'}`}>
+                <div className={`w-12 h-12 rounded-lg flex items-center justify-center text-lg font-bold ${qualityScore >= 80 ? 'bg-cs-green/10 text-cs-green' : qualityScore >= 50 ? 'bg-cs-amber/10 text-cs-amber' : 'bg-cs-red/10 text-cs-red'}`}>
                   {qualityScore}
                 </div>
                 <div className="flex-1">
                   <div className="w-full bg-muted rounded-full h-2">
                     <div className={`h-full rounded-full transition-[width,background-color] duration-500 ${qualityScore >= 80 ? 'bg-cs-green' : qualityScore >= 50 ? 'bg-cs-amber' : 'bg-cs-red'}`} style={{ width: `${qualityScore}%` }} />
                   </div>
-                  <div className="text-[10px] text-muted-foreground mt-1">/100</div>
+                  <div className="text-3xs text-muted-foreground mt-1">/100</div>
                 </div>
               </div>
               {qualityFindings.length > 0 && (
                 <div className="space-y-1">
                   {qualityFindings.slice(0, 5).map((f, i) => (
-                    <div key={i} className={`text-xs px-2 py-1 rounded ${f.severity === 'error' ? 'bg-cs-red/5 text-cs-red' : f.severity === 'warning' ? 'bg-cs-amber/5 text-cs-amber' : 'bg-muted text-muted-foreground'}`}>
+                    <div key={i} className={`text-xs px-2 py-1 rounded-md ${f.severity === 'error' ? 'bg-cs-red/5 text-cs-red' : f.severity === 'warning' ? 'bg-cs-amber/5 text-cs-amber' : 'bg-muted text-muted-foreground'}`}>
                       {f.message}
                     </div>
                   ))}
@@ -1091,10 +1091,10 @@ export default function RequirementDetailPage() {
             {editable && (
             <div className="flex items-end gap-1.5 mb-4">
               <div className="flex-1 bg-muted/40 rounded-lg p-2.5 border">
-                <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                <div className="flex flex-wrap items-center gap-1.5 text-2xs">
                   <span className="font-mono font-semibold text-foreground">{req.id}</span>
                   <ArrowRight size={12} className="text-muted-foreground shrink-0" />
-                  <select className="bg-transparent text-[11px] font-medium text-primary border-b border-dashed border-primary/30 px-0.5 py-px outline-none cursor-pointer" value={newRelType} onChange={(e) => setNewRelType(e.target.value)}>
+                  <select className="bg-transparent text-2xs font-medium text-primary border-b border-dashed border-primary/30 px-0.5 py-px outline-none cursor-pointer" value={newRelType} onChange={(e) => setNewRelType(e.target.value)}>
                     <option value="refines">refines</option>
                     <option value="satisfies">satisfies</option>
                     <option value="verified_by">verified by</option>
@@ -1104,7 +1104,7 @@ export default function RequirementDetailPage() {
                   </select>
                   <ArrowRight size={12} className="text-muted-foreground shrink-0" />
                   <AutocompleteInput
-                    className="bg-transparent flex-1 text-[11px] font-mono outline-none min-w-[110px] placeholder:text-muted-foreground/50"
+                    className="bg-transparent flex-1 text-2xs font-mono outline-none min-w-[110px] placeholder:text-muted-foreground/50"
                     placeholder="target ID..."
                     value={newRelTarget}
                     onChange={setNewRelTarget}
@@ -1126,9 +1126,9 @@ export default function RequirementDetailPage() {
             )}
             {/* Outgoing: THIS → ... */}
             <div className="mb-3">
-              <h3 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+              <h3 className="text-2xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
                 Outgoing
-                <span className="ml-1 font-normal normal-case text-[10px] text-muted-foreground/60">
+                <span className="ml-1 font-normal normal-case text-3xs text-muted-foreground/60">
                   ({req.id} → target)
                 </span>
               </h3>
@@ -1140,27 +1140,27 @@ export default function RequirementDetailPage() {
                     const targetName = allReqs.find((r) => r.id === rel.target)?.name
                       || allVcs.find((v) => v.id === rel.target)?.name;
                     return (
-                      <div key={`out-${i}`} className="flex items-center gap-2 text-xs group py-1.5 px-2 rounded hover:bg-accent">
-                        <span className="font-mono text-[11px] font-semibold text-foreground shrink-0">{req.id}</span>
+                      <div key={`out-${i}`} className="flex items-center gap-2 text-xs group py-1.5 px-2 rounded-md hover:bg-accent">
+                        <span className="font-mono text-2xs font-semibold text-foreground shrink-0">{req.id}</span>
                         <ArrowRight size={11} className="text-muted-foreground shrink-0" />
-                        <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-primary/10 text-primary shrink-0">{rel.type.replace(/_/g, ' ')}</span>
+                        <span className="px-1.5 py-0.5 rounded-md text-3xs font-medium bg-primary/10 text-primary shrink-0">{rel.type.replace(/_/g, ' ')}</span>
                         <ArrowRight size={11} className="text-muted-foreground shrink-0" />
                         <EntityLink
                           kind={kindOf(rel.target)}
                           id={rel.target}
                           name={targetName}
-                          className="text-[11px] text-foreground hover:text-primary flex-1 min-w-0"
+                          className="text-2xs text-foreground hover:text-primary flex-1 min-w-0"
                         />
                         {editable && (
                         <div className="flex items-center gap-0.5">
                           <button
                             onClick={() => flipRelation(i, rel.target, rel.type)}
-                            className="p-1 rounded hover:bg-primary/10 text-muted-foreground hover:text-primary opacity-0 group-hover:opacity-100 transition-[color,background-color,opacity]"
+                            className="p-1 rounded-md hover:bg-primary/10 text-muted-foreground hover:text-primary opacity-0 group-hover:opacity-100 transition-[color,background-color,opacity]"
                             title={`Flip: make ${rel.target} → ${rel.type} → ${req.id}`}
                           >
                             <ArrowLeftRight size={11} />
                           </button>
-                          <button onClick={() => removeRelation(i)} className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-[color,background-color,opacity]">
+                          <button onClick={() => removeRelation(i)} className="p-1 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-[color,background-color,opacity]">
                             <X size={12} />
                           </button>
                         </div>
@@ -1173,9 +1173,9 @@ export default function RequirementDetailPage() {
             </div>
             {/* Incoming: ... → THIS */}
             <div>
-              <h3 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+              <h3 className="text-2xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
                 Incoming
-                <span className="ml-1 font-normal normal-case text-[10px] text-muted-foreground/60">
+                <span className="ml-1 font-normal normal-case text-3xs text-muted-foreground/60">
                   (source → {req.id})
                 </span>
               </h3>
@@ -1184,21 +1184,21 @@ export default function RequirementDetailPage() {
               ) : (
                 <div className="space-y-1">
                   {incomingRelations.map((inc, i) => (
-                    <div key={`in-${i}`} className="flex items-center gap-2 text-xs group py-1.5 px-2 rounded hover:bg-accent/50">
+                    <div key={`in-${i}`} className="flex items-center gap-2 text-xs group py-1.5 px-2 rounded-md hover:bg-accent/50">
                       <EntityLink
                         kind={kindOf(inc.source)}
                         id={inc.source}
                         name={inc.sourceName !== inc.source ? inc.sourceName : undefined}
-                        className="text-[11px] text-foreground hover:text-primary flex-1 min-w-0"
+                        className="text-2xs text-foreground hover:text-primary flex-1 min-w-0"
                       />
                       <ArrowRight size={11} className="text-muted-foreground shrink-0" />
-                      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-cs-green/10 text-cs-green shrink-0">{inc.type.replace(/_/g, ' ')}</span>
+                      <span className="px-1.5 py-0.5 rounded-md text-3xs font-medium bg-cs-green/10 text-cs-green shrink-0">{inc.type.replace(/_/g, ' ')}</span>
                       <ArrowRight size={11} className="text-muted-foreground shrink-0" />
-                      <span className="font-mono text-[11px] font-semibold text-foreground shrink-0">{req.id}</span>
+                      <span className="font-mono text-2xs font-semibold text-foreground shrink-0">{req.id}</span>
                       {editable && (
                         <button
                           onClick={() => flipIncomingRelation(inc.source, inc.type)}
-                          className="p-1 rounded hover:bg-primary/10 text-muted-foreground hover:text-primary opacity-0 group-hover:opacity-100 transition-[color,background-color,opacity]"
+                          className="p-1 rounded-md hover:bg-primary/10 text-muted-foreground hover:text-primary opacity-0 group-hover:opacity-100 transition-[color,background-color,opacity]"
                           title={`Flip: make ${req.id} → ${inc.type} → ${inc.source}`}
                         >
                           <ArrowLeftRight size={11} />
@@ -1296,7 +1296,7 @@ export default function RequirementDetailPage() {
             ) : (
               <div className="space-y-1.5">
                 {req.attributes.map((attr, i) => (
-                  <div key={i} className="flex items-center gap-2 text-xs group py-1 px-2 rounded hover:bg-accent">
+                  <div key={i} className="flex items-center gap-2 text-xs group py-1 px-2 rounded-md hover:bg-accent">
                     <span className="font-medium text-muted-foreground w-24 shrink-0 truncate">{attr.key}</span>
                     <span className="text-foreground flex-1 truncate">{attr.value}</span>
                     {editable && (
@@ -1316,14 +1316,14 @@ export default function RequirementDetailPage() {
           {backlinks && backlinks.total > 0 && (
             <Reveal step={4} className="card p-5">
               <h2 className="font-semibold text-sm text-card-foreground mb-1">Referenced By</h2>
-              <p className="text-[11px] text-muted-foreground mb-3">
+              <p className="text-2xs text-muted-foreground mb-3">
                 {backlinks.total} record{backlinks.total === 1 ? '' : 's'} depend on this requirement.
                 Deleting it will ask before breaking them.
               </p>
               <div className="space-y-2.5">
                 {backlinks.groups.map((g) => (
                   <div key={g.collection}>
-                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
+                    <div className="text-3xs uppercase tracking-wider text-muted-foreground mb-1">
                       {g.label}{g.items.length === 1 ? '' : 's'}
                     </div>
                     <div className="flex flex-wrap gap-1.5">
@@ -1364,7 +1364,7 @@ export default function RequirementDetailPage() {
               <h2 className="font-semibold text-sm text-card-foreground mb-3">Change Requests &amp; Risks</h2>
               <div className="space-y-1.5">
                 {affectingCrs.map((c) => (
-                  <div key={c.id} className="flex items-center gap-2 text-xs py-1 px-2 rounded hover:bg-accent">
+                  <div key={c.id} className="flex items-center gap-2 text-xs py-1 px-2 rounded-md hover:bg-accent">
                     <EntityLink kind="change" id={c.id} name={c.title} className="flex-1 min-w-0 text-foreground hover:text-primary" />
                     <span className="badge bg-muted text-muted-foreground shrink-0">{c.status}</span>
                   </div>
@@ -1404,10 +1404,10 @@ export default function RequirementDetailPage() {
               <h2 className="font-semibold text-sm text-card-foreground mb-3">References</h2>
               <div className="space-y-1.5">
                 {req.references.map((ref, i) => (
-                  <div key={i} className="flex items-center gap-2 text-xs py-1.5 px-2 rounded hover:bg-accent group">
-                    <span className={`badge text-[9px] shrink-0 ${ref.kind === 'impl' ? 'bg-cs-blue/10 text-cs-blue' : ref.kind === 'test' ? 'bg-cs-purple/10 text-cs-purple' : ref.kind === 'doc' ? 'bg-cs-teal/10 text-cs-teal' : 'bg-muted text-muted-foreground'}`}>{ref.kind}</span>
-                    <span className="font-mono text-[11px] text-foreground flex-1 truncate">{ref.path}</span>
-                    {ref.lines && <span className="text-[10px] text-muted-foreground shrink-0">{ref.lines}</span>}
+                  <div key={i} className="flex items-center gap-2 text-xs py-1.5 px-2 rounded-md hover:bg-accent group">
+                    <span className={`badge text-4xs shrink-0 ${ref.kind === 'impl' ? 'bg-cs-blue/10 text-cs-blue' : ref.kind === 'test' ? 'bg-cs-purple/10 text-cs-purple' : ref.kind === 'doc' ? 'bg-cs-teal/10 text-cs-teal' : 'bg-muted text-muted-foreground'}`}>{ref.kind}</span>
+                    <span className="font-mono text-2xs text-foreground flex-1 truncate">{ref.path}</span>
+                    {ref.lines && <span className="text-3xs text-muted-foreground shrink-0">{ref.lines}</span>}
                   </div>
                 ))}
               </div>
@@ -1497,7 +1497,7 @@ export default function RequirementDetailPage() {
                     </button>
                   ))}
                 </div>
-                <div className="text-[10px] text-muted-foreground mt-0.5">OOSEM: modes this requirement applies to</div>
+                <div className="text-3xs text-muted-foreground mt-0.5">OOSEM: modes this requirement applies to</div>
               </div>
               <div>
                 <label className="label">Status<select className="select" value={req.status} onChange={(e) => save({ status: e.target.value })} disabled={!editable} style={{ color: statusColors[req.status]?.text }}>
@@ -1512,9 +1512,9 @@ export default function RequirementDetailPage() {
               <div>
                 <label className="label flex items-center justify-between">
                   <span>Normative</span>
-                  <input type="checkbox" checked={req.normative !== false} onChange={(e) => save({ normative: e.target.checked })} disabled={!editable} className="w-4 h-4 rounded border-muted-foreground/30" />
+                  <input type="checkbox" checked={req.normative !== false} onChange={(e) => save({ normative: e.target.checked })} disabled={!editable} className="w-4 h-4 rounded-md border-muted-foreground/30" />
                 </label>
-                <div className="text-[10px] text-muted-foreground mt-0.5">Included in coverage analysis</div>
+                <div className="text-3xs text-muted-foreground mt-0.5">Included in coverage analysis</div>
               </div>
               <div>
                 <div className="label">Coverage Needs</div>
@@ -1537,7 +1537,7 @@ export default function RequirementDetailPage() {
                       <label key={value} className="flex items-start gap-2 text-xs cursor-pointer group">
                         <input
                           type="checkbox"
-                          className="w-3.5 h-3.5 mt-0.5 rounded border-muted-foreground/30 shrink-0"
+                          className="w-3.5 h-3.5 mt-0.5 rounded-md border-muted-foreground/30 shrink-0"
                           checked={checked}
                           disabled={!editable}
                           onChange={(e) => {
@@ -1548,22 +1548,22 @@ export default function RequirementDetailPage() {
                           }}
                         />
                         <span className="min-w-0">
-                          <span className="font-mono text-[11px] text-foreground">{value}</span>
+                          <span className="font-mono text-2xs text-foreground">{value}</span>
                           {known
-                            ? <span className="text-[10px] text-muted-foreground block">{known.label}</span>
-                            : <span className="text-[10px] text-cs-amber block">Not a recognised obligation — nothing can satisfy it</span>}
+                            ? <span className="text-3xs text-muted-foreground block">{known.label}</span>
+                            : <span className="text-3xs text-cs-amber block">Not a recognised obligation — nothing can satisfy it</span>}
                         </span>
                       </label>
                     );
                   })}
                 </div>
-                <div className="text-[10px] text-muted-foreground mt-1">Artifacts that must exist to cover this requirement</div>
+                <div className="text-3xs text-muted-foreground mt-1">Artifacts that must exist to cover this requirement</div>
               </div>
               <div>
                 <label className="label flex items-center justify-between">
                   <span>Stakeholder Priorities</span>
                   {reqValue?.value != null && (
-                    <span className="text-[10px] font-normal text-muted-foreground">
+                    <span className="text-3xs font-normal text-muted-foreground">
                       value <span className="font-mono text-foreground">{reqValue.value}</span>
                       {reqValue.rank != null && <> · #{reqValue.rank} of {reqValue.ranked_total}</>}
                     </span>
@@ -1578,7 +1578,7 @@ export default function RequirementDetailPage() {
                     requirements: they are keyed to a defined list rather than to
                     whatever each author happened to type. */}
                 {projectStakeholders.length === 0 ? (
-                  <p className="text-[11px] text-muted-foreground">
+                  <p className="text-2xs text-muted-foreground">
                     No stakeholders defined.{' '}
                     <Link to={`/project/${projectId}/settings`} className="text-primary hover:underline">
                       Add them in project settings
@@ -1592,7 +1592,7 @@ export default function RequirementDetailPage() {
                       return (
                         <div key={s.name} className="flex items-center gap-2">
                           <span className="text-xs text-foreground flex-1 min-w-0 truncate" title={s.name}>{s.name}</span>
-                          <span className="text-[10px] text-muted-foreground shrink-0 w-10 text-right">×{s.weight}</span>
+                          <span className="text-3xs text-muted-foreground shrink-0 w-10 text-right">×{s.weight}</span>
                           <input
                             type="range" min={0} max={5} step={1}
                             className="w-16 h-7 shrink-0 cursor-pointer"
@@ -1606,7 +1606,7 @@ export default function RequirementDetailPage() {
                             }}
                             disabled={!editable}
                           />
-                          <span className="text-[10px] text-muted-foreground w-5 text-right tabular-nums shrink-0">
+                          <span className="text-3xs text-muted-foreground w-5 text-right tabular-nums shrink-0">
                             {score != null && score > 5 ? 5 : (score ?? '–')}
                           </span>
                         </div>
@@ -1620,7 +1620,7 @@ export default function RequirementDetailPage() {
                 {(reqValue?.unknown_stakeholders?.length ?? 0) > 0 && (
                   <div className="mt-1.5 space-y-1">
                     {reqValue!.unknown_stakeholders.map((name) => (
-                      <div key={name} className="flex items-center gap-2 text-[10px] text-cs-amber">
+                      <div key={name} className="flex items-center gap-2 text-3xs text-cs-amber">
                         <span className="flex-1 min-w-0 truncate">{name}: {req.priorities?.[name]} — not a project stakeholder</span>
                         {editable && (
                           <button
@@ -1637,7 +1637,7 @@ export default function RequirementDetailPage() {
                     ))}
                   </div>
                 )}
-                <div className="text-[10px] text-muted-foreground mt-1">
+                <div className="text-3xs text-muted-foreground mt-1">
                   0–5 per stakeholder. Value is the weighted mean of those scored
                   {reqValue && reqValue.stakeholder_count > 0 &&
                     <> ({reqValue.scored_count} of {reqValue.stakeholder_count} scored)</>}.

@@ -143,7 +143,7 @@ function CircularNode({ data }: NodeProps) {
             ? <ChevronRight size={10} className="text-muted-foreground" />
             : <ChevronDown size={10} className="text-muted-foreground" />}
           {nodeData.collapsed && childCount > 0 && (
-            <span className="text-[8px] font-mono text-muted-foreground pr-0.5">{childCount}</span>
+            <span className="text-4xs font-mono text-muted-foreground pr-0.5">{childCount}</span>
           )}
         </button>
       )}
@@ -233,26 +233,26 @@ function CircularNode({ data }: NodeProps) {
             className="bg-popover text-popover-foreground rounded-lg border shadow-lg px-3 py-2.5 min-w-[180px] max-w-[240px]"
             style={{ animation: 'fadeIn 0.12s ease-out' }}
           >
-            <div className="font-mono text-[10px] text-muted-foreground mb-0.5">
+            <div className="font-mono text-3xs text-muted-foreground mb-0.5">
               {nodeData.label}
               {isCascade && <Copy size={9} className="inline ml-1 text-cs-pink" />}
               {childCount > 0 && <span className="ml-1 text-muted-foreground">({childCount} children)</span>}
             </div>
             <div className="font-semibold text-sm leading-tight mb-1.5">{nodeData.name || 'Untitled'}</div>
             <div className="flex items-center gap-1.5">
-              <span className="px-1.5 py-0.5 rounded text-[10px] font-medium capitalize"
+              <span className="px-1.5 py-0.5 rounded-md text-3xs font-medium capitalize"
                 style={{ backgroundColor: glow(fill, 0.125), color: fill }}>
                 {nodeData.status}
               </span>
-              <span className="px-1.5 py-0.5 rounded text-[10px] font-medium capitalize bg-muted text-muted-foreground">
+              <span className="px-1.5 py-0.5 rounded-md text-3xs font-medium capitalize bg-muted text-muted-foreground">
                 {nodeData.priority}
               </span>
-              <span className="px-1.5 py-0.5 rounded text-[10px] font-medium capitalize bg-muted text-muted-foreground">
+              <span className="px-1.5 py-0.5 rounded-md text-3xs font-medium capitalize bg-muted text-muted-foreground">
                 {nodeData.type?.replace('_', ' ') || ''}
               </span>
             </div>
             {isCascade && (
-              <div className="mt-1.5 pt-1.5 border-t text-[10px] text-cs-pink font-medium">
+              <div className="mt-1.5 pt-1.5 border-t text-3xs text-cs-pink font-medium">
                 Cascaded from {nodeData.cascadeFrom}
               </div>
             )}

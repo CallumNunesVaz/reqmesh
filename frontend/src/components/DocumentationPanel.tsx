@@ -26,7 +26,7 @@ function OL({ children }: { children: ReactNode }) {
   return <ol className="text-sm text-card-foreground/80 space-y-1 mb-3 pl-4 list-decimal">{children}</ol>;
 }
 function InlineCode({ children }: { children: ReactNode }) {
-  return <code className="text-primary bg-primary/10 px-1.5 py-0.5 rounded text-[12px] font-mono">{children}</code>;
+  return <code className="text-primary bg-primary/10 px-1.5 py-0.5 rounded-md text-xs font-mono">{children}</code>;
 }
 function Code({ children }: { children: ReactNode }) {
   return (
@@ -36,12 +36,12 @@ function Code({ children }: { children: ReactNode }) {
   );
 }
 function Kbd({ children }: { children: string }) {
-  return <kbd className="inline-flex items-center border rounded px-1.5 py-px text-[11px] font-mono bg-muted text-muted-foreground">{children}</kbd>;
+  return <kbd className="inline-flex items-center border rounded-md px-1.5 py-px text-2xs font-mono bg-muted text-muted-foreground">{children}</kbd>;
 }
 function KeyRow({ keys, action }: { keys: ReactNode; action: string }) {
   return (
     <tr className="hover:bg-accent/30">
-      <td className="px-3 py-1.5 text-right font-mono text-[11px] text-foreground">{keys}</td>
+      <td className="px-3 py-1.5 text-right font-mono text-2xs text-foreground">{keys}</td>
       <td className="px-3 py-1.5 text-sm text-card-foreground/80">{action}</td>
     </tr>
   );
@@ -85,10 +85,10 @@ const DOCS: DocSection[] = [
 
         <H3>ISO 15288 Alignment</H3>
         <P>reqmesh follows <strong className="text-card-foreground">ISO/IEC 15288:2023</strong>. The matrix below shows the current support level for each of the ~30 technical and management processes.</P>
-        <div className="flex items-center gap-4 mb-3 text-[10px]">
-          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-cs-green/30 border border-cs-green/40" /> Full</span>
-          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-cs-amber/30 border border-cs-amber/40" /> Partial</span>
-          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-muted border border-border" /> Not addressed</span>
+        <div className="flex items-center gap-4 mb-3 text-3xs">
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-md bg-cs-green/30 border border-cs-green/40" /> Full</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-md bg-cs-amber/30 border border-cs-amber/40" /> Partial</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-md bg-muted border border-border" /> Not addressed</span>
         </div>
         <table className="w-full text-left mb-4">
           <thead>
@@ -129,10 +129,10 @@ const DOCS: DocSection[] = [
             const ck = String(clause).replace(/\./g, '-');
             return (
               <tr key={`${ck}-${i}`} className="hover:bg-accent/30">
-                <td className="px-3 py-1.5 text-[10px] text-muted-foreground">{group}</td>
-                <td className="px-3 py-1.5 text-[10px]"><span className="font-mono text-muted-foreground">{clause}</span> <span className="text-card-foreground">{process}</span></td>
-                <td className="px-3 py-1.5" aria-label={`Coverage level ${level}`}><span className={`inline-block w-3 h-3 rounded-sm border ${level === 2 ? 'bg-cs-green/30 border-cs-green/40' : level === 1 ? 'bg-cs-amber/30 border-cs-amber/40' : 'bg-muted border-border'}`} /></td>
-                <td className="px-3 py-1.5 text-[10px] text-card-foreground/60">{notes}</td>
+                <td className="px-3 py-1.5 text-3xs text-muted-foreground">{group}</td>
+                <td className="px-3 py-1.5 text-3xs"><span className="font-mono text-muted-foreground">{clause}</span> <span className="text-card-foreground">{process}</span></td>
+                <td className="px-3 py-1.5" aria-label={`Coverage level ${level}`}><span className={`inline-block w-3 h-3 rounded-md border ${level === 2 ? 'bg-cs-green/30 border-cs-green/40' : level === 1 ? 'bg-cs-amber/30 border-cs-amber/40' : 'bg-muted border-border'}`} /></td>
+                <td className="px-3 py-1.5 text-3xs text-card-foreground/60">{notes}</td>
               </tr>
             );
           })}</tbody></table>
@@ -940,7 +940,7 @@ export default function DocumentationPanel({ open, onClose }: { open: boolean; o
         <div className="flex items-center gap-2">
           <BookOpen size={16} className="text-primary" />
           <h2 className="text-sm font-semibold text-card-foreground">Documentation</h2>
-          <span className="text-[10px] text-muted-foreground/50">— press F1 to open</span>
+          <span className="text-3xs text-muted-foreground/50">— press F1 to open</span>
         </div>
               <div className="flex items-center gap-2 flex-1 max-w-xs ml-4">
                 <div className="relative flex-1">

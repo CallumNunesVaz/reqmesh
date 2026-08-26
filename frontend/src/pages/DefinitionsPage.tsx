@@ -216,7 +216,7 @@ export default function DefinitionsPage() {
               <X size={14} />
             </button>
           ) : (
-            <kbd className="absolute right-3 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded border bg-muted text-[10px] font-mono text-muted-foreground pointer-events-none">/</kbd>
+            <kbd className="absolute right-3 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded-md border bg-muted text-3xs font-mono text-muted-foreground pointer-events-none">/</kbd>
           )}
         </div>
       </div>
@@ -267,7 +267,7 @@ export default function DefinitionsPage() {
                 <input className="input font-mono text-sm" placeholder="actual, limit" value={draft.parameters}
                   onChange={(e) => setDraft({ ...draft, parameters: e.target.value })} />
               </label>
-              <p className="text-[11px] text-muted-foreground mt-1">
+              <p className="text-2xs text-muted-foreground mt-1">
                 Comma-separated names the expression binds.
               </p>
             </div>
@@ -394,7 +394,7 @@ export default function DefinitionsPage() {
                   onClick={() => toggleExpand(d.id)}
                   aria-expanded={isExpanded}
                   aria-label={isExpanded ? 'Collapse' : 'Expand'}
-                  className="shrink-0 p-0.5 -m-0.5 rounded"
+                  className="shrink-0 p-0.5 -m-0.5 rounded-md"
                 >
                   <ChevronDown
                     size={15}
@@ -414,11 +414,11 @@ export default function DefinitionsPage() {
                   >
                     <div className="px-4 pb-4 border-t pt-3 space-y-3">
                       <div>
-                        <h4 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Comments</h4>
+                        <h4 className="text-2xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Comments</h4>
                         <CommentThread entityKind="definitions" entityId={d.id} />
                       </div>
                       <div className="pt-3 border-t border-border">
-                        <h4 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Change History</h4>
+                        <h4 className="text-2xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Change History</h4>
                         <HistoryPanel itemId={d.id} />
                       </div>
                     </div>

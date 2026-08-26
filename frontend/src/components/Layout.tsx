@@ -65,7 +65,7 @@ function VersionBadge() {
   if (!version) return null;
   return (
     <span
-      className="hidden 2xl:inline text-[10px] font-mono text-muted-foreground/70 border rounded px-1 py-px"
+      className="hidden 2xl:inline text-3xs font-mono text-muted-foreground/70 border rounded-md px-1 py-px"
       title="reqmesh version"
     >
       v{version}
@@ -454,7 +454,7 @@ export default function Layout() {
               title="Jump to anything (Ctrl+K)" aria-label="Open command palette"
             >
               <Search size={15} />
-              <kbd className="hidden 2xl:inline text-[9px] border rounded px-1 py-px">Ctrl K</kbd>
+              <kbd className="hidden 2xl:inline text-4xs border rounded-md px-1 py-px">Ctrl K</kbd>
             </button>
           )}
 
@@ -465,7 +465,7 @@ export default function Layout() {
               title="Documentation (F1)"
             >
               <BookOpen size={15} />
-              <span className="hidden 2xl:inline text-[10px]">Docs</span>
+              <span className="hidden 2xl:inline text-3xs">Docs</span>
             </button>
           )}
 
@@ -476,7 +476,7 @@ export default function Layout() {
               title={helpersEnabled ? 'Guided help is on — click to hide' : 'Guided help is off — click to show guidance'}
             >
               <HelpCircle size={15} />
-              <span className="hidden 2xl:inline text-[10px]">{helpersEnabled ? 'GUIDED ON' : 'GUIDED OFF'}</span>
+              <span className="hidden 2xl:inline text-3xs">{helpersEnabled ? 'GUIDED ON' : 'GUIDED OFF'}</span>
             </button>
           )}
 
@@ -548,7 +548,7 @@ export default function Layout() {
               title={editMode ? 'Editing mode ON - click to disable' : 'Click to enable editing'}
             >
               {editMode ? <Pencil size={15} /> : <Eye size={15} />}
-              <span className="hidden sm:inline text-[10px]">{editMode ? 'EDITING' : 'VIEWING'}</span>
+              <span className="hidden sm:inline text-3xs">{editMode ? 'EDITING' : 'VIEWING'}</span>
             </button>
           )}
 
@@ -593,7 +593,7 @@ export default function Layout() {
               <span className="text-xs text-muted-foreground hidden sm:inline" title={`${user.username}${user.role ? ` (${user.role})` : ''}`}>
                 <User size={12} className="inline mr-1" />
                 <span className="hidden 2xl:inline">{user.username}</span>
-                {editMode && <span className="ml-1 text-cs-amber text-[10px]">edit</span>}
+                {editMode && <span className="ml-1 text-cs-amber text-3xs">edit</span>}
               </span>
               <button onClick={signOut} className="btn-ghost p-2 rounded-lg text-muted-foreground hover:text-destructive" title="Sign out">
                 <LogOut size={15} />

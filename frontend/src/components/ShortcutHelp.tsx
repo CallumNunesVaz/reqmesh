@@ -70,13 +70,13 @@ export default function ShortcutHelp({ open, onClose }: { open: boolean; onClose
             <div className="p-5 space-y-5">
               {SHORTCUTS.map((group) => (
                 <div key={group.section}>
-                  <h3 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">{group.section}</h3>
+                  <h3 className="text-2xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">{group.section}</h3>
                   {group.pages && (
-                    <p className="text-[10px] text-muted-foreground/60 mb-2 -mt-1 font-mono">{group.pages.join(' · ')}</p>
+                    <p className="text-3xs text-muted-foreground/60 mb-2 -mt-1 font-mono">{group.pages.join(' · ')}</p>
                   )}
                   <div className="space-y-1">
                     {group.items.map((item) => (
-                      <div key={item.keys} className="flex items-center justify-between text-xs py-1 px-2 rounded hover:bg-accent/50">
+                      <div key={item.keys} className="flex items-center justify-between text-xs py-1 px-2 rounded-md hover:bg-accent/50">
                         <span className="text-card-foreground">{item.description}</span>
                         <span className="text-muted-foreground/70 font-mono bg-muted rounded-md px-1.5 py-0.5">{item.keys}</span>
                       </div>
@@ -85,7 +85,7 @@ export default function ShortcutHelp({ open, onClose }: { open: boolean; onClose
                 </div>
               ))}
             </div>
-            <div className="px-5 py-3 border-t text-[10px] text-muted-foreground/50">
+            <div className="px-5 py-3 border-t text-3xs text-muted-foreground/50">
               Tip: shortcuts don't fire when you're typing in a text field (except save).
             </div>
     </Modal>

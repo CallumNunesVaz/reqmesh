@@ -133,7 +133,7 @@ export function CommentThread({ entityKind, entityId }: {
                   {relative}
                 </span>
                 {c.resolved && (
-                  <span className="badge bg-cs-green/10 text-cs-green text-[9px]">
+                  <span className="badge bg-cs-green/10 text-cs-green text-4xs">
                     Resolved
                   </span>
                 )}
@@ -146,7 +146,7 @@ export function CommentThread({ entityKind, entityId }: {
               <div className="flex items-center gap-0.5 shrink-0">
                 <button
                   onClick={() => toggleResolved(c)}
-                  className={`p-1 rounded hover:bg-accent transition-colors ${
+                  className={`p-1 rounded-md hover:bg-accent transition-colors ${
                     c.resolved
                       ? 'text-cs-green'
                       : 'text-muted-foreground hover:text-cs-green'
@@ -157,7 +157,7 @@ export function CommentThread({ entityKind, entityId }: {
                 </button>
                 <button
                   onClick={() => remove(c)}
-                  className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                  className="p-1 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
                   title="Delete comment"
                 >
                   <X size={12} />

@@ -204,13 +204,13 @@ export default function CommandPalette({ projectId }: { projectId: string }) {
           onChange={(e) => { setQuery(e.target.value); setCursor(0); }}
           onKeyDown={onInputKey}
         />
-        <kbd className="text-[10px] text-muted-foreground border rounded px-1.5 py-0.5 shrink-0">esc</kbd>
+        <kbd className="text-3xs text-muted-foreground border rounded-md px-1.5 py-0.5 shrink-0">esc</kbd>
       </div>
 
             <div ref={listRef} className="max-h-[50vh] overflow-y-auto p-1.5">
               {recentEntities.length > 0 && !query.trim() && (
                 <>
-                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1">Recent</p>
+                  <p className="text-3xs font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1">Recent</p>
                   {recentEntities.map((e) => {
                     const meta = ENTITY_META[e.kind];
                     const Icon = meta.icon;
@@ -220,7 +220,7 @@ export default function CommandPalette({ projectId }: { projectId: string }) {
                         <Icon size={14} className={`${meta.cls} shrink-0`} />
                         <span className="font-mono text-xs text-muted-foreground shrink-0">{highlightMatch(e.id, query)}</span>
                         <span className="text-sm text-card-foreground truncate">{highlightMatch(e.name || 'Untitled', query)}</span>
-                        <span className="ml-auto text-[10px] text-muted-foreground">{meta.label}</span>
+                        <span className="ml-auto text-3xs text-muted-foreground">{meta.label}</span>
                       </button>
                     );
                   })}
@@ -240,7 +240,7 @@ export default function CommandPalette({ projectId }: { projectId: string }) {
                   >
                     <Plus size={14} className="text-muted-foreground shrink-0" />
                     <span className="text-sm text-card-foreground">New requirement</span>
-                    <span className="ml-auto text-[10px] text-muted-foreground shrink-0">Action</span>
+                    <span className="ml-auto text-3xs text-muted-foreground shrink-0">Action</span>
                   </button>
                   <div className="border-t my-1 mx-1" />
                 </>
@@ -271,9 +271,9 @@ export default function CommandPalette({ projectId }: { projectId: string }) {
                         <span className="font-mono text-xs text-muted-foreground shrink-0">{highlightMatch(sr.id, query)}</span>
                         <span className="text-sm text-card-foreground truncate">{highlightMatch(sr.name || sr.id, query)}</span>
                         {sr.snippet && (
-                          <span className="text-[11px] text-muted-foreground/60 truncate hidden sm:inline max-w-[200px]">{sr.snippet}</span>
+                          <span className="text-2xs text-muted-foreground/60 truncate hidden sm:inline max-w-[200px]">{sr.snippet}</span>
                         )}
-                        <span className="ml-auto text-[10px] text-muted-foreground shrink-0 hidden sm:inline">{sr.kind_label}</span>
+                        <span className="ml-auto text-3xs text-muted-foreground shrink-0 hidden sm:inline">{sr.kind_label}</span>
                       </button>
                     );
                   }
@@ -294,7 +294,7 @@ export default function CommandPalette({ projectId }: { projectId: string }) {
                       <Icon size={14} className={`${meta.cls} shrink-0`} />
                       <span className="font-mono text-xs text-muted-foreground shrink-0">{highlightMatch(entity.id, query)}</span>
                       <span className="text-sm text-card-foreground truncate">{highlightMatch(entity.name || 'Untitled', query)}</span>
-                      <span className="ml-auto text-[10px] text-muted-foreground shrink-0 hidden sm:inline">{meta.label}</span>
+                      <span className="ml-auto text-3xs text-muted-foreground shrink-0 hidden sm:inline">{meta.label}</span>
                     </button>
                   );
                 })
@@ -315,15 +315,15 @@ export default function CommandPalette({ projectId }: { projectId: string }) {
                     <span className="text-sm text-card-foreground truncate">
                       See all results for &lsquo;{trimmed}&rsquo;
                     </span>
-                    <span className="ml-auto text-[10px] text-muted-foreground shrink-0">Search page</span>
+                    <span className="ml-auto text-3xs text-muted-foreground shrink-0">Search page</span>
                   </button>
                 </>
               )}
             </div>
 
-            <div className="flex items-center gap-3 px-3 py-2 border-t text-[10px] text-muted-foreground">
-              <span><kbd className="border rounded px-1">↑</kbd> <kbd className="border rounded px-1">↓</kbd> navigate</span>
-              <span><kbd className="border rounded px-1">↵</kbd> open</span>
+            <div className="flex items-center gap-3 px-3 py-2 border-t text-3xs text-muted-foreground">
+              <span><kbd className="border rounded-md px-1">↑</kbd> <kbd className="border rounded-md px-1">↓</kbd> navigate</span>
+              <span><kbd className="border rounded-md px-1">↵</kbd> open</span>
               <span className="ml-auto">{entities.length} entities indexed</span>
             </div>
     </Modal>

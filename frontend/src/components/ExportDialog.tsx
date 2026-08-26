@@ -295,7 +295,7 @@ export default function ExportDialog({ open, onClose, projectId }: ExportDialogP
                 <div className="flex items-center gap-2 mb-2">
                   <FileDown size={14} className="text-muted-foreground" />
                   <span className="label">Reports</span>
-                  <span className="text-[10px] text-muted-foreground">— formatted documents with section selection</span>
+                  <span className="text-3xs text-muted-foreground">— formatted documents with section selection</span>
                 </div>
                 <div className="grid grid-cols-4 gap-2">
                   {reportFormats.map((fmt) => {
@@ -322,7 +322,7 @@ export default function ExportDialog({ open, onClose, projectId }: ExportDialogP
                 <div className="flex items-center gap-2 mb-2">
                   <FileSpreadsheet size={14} className="text-muted-foreground" />
                   <span className="label">Data Exports</span>
-                  <span className="text-[10px] text-muted-foreground">— tabular data for spreadsheets and analysis tools</span>
+                  <span className="text-3xs text-muted-foreground">— tabular data for spreadsheets and analysis tools</span>
                 </div>
                 <div className="grid grid-cols-3 gap-2">
                   {dataFormats.map((fmt) => {
@@ -349,7 +349,7 @@ export default function ExportDialog({ open, onClose, projectId }: ExportDialogP
                 <div className="flex items-center gap-2 mb-2">
                   <FileType size={14} className="text-muted-foreground" />
                   <span className="label">Interchange Formats</span>
-                  <span className="text-[10px] text-muted-foreground">— industry standards for tool-to-tool exchange</span>
+                  <span className="text-3xs text-muted-foreground">— industry standards for tool-to-tool exchange</span>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   {interchangeFormats.map((fmt) => {
@@ -376,7 +376,7 @@ export default function ExportDialog({ open, onClose, projectId }: ExportDialogP
                 <div className="rounded-lg border border-cs-amber/30 bg-cs-amber/5 p-3 text-xs">
                   <p className="font-medium text-cs-amber">LaTeX engine not detected — PDF quality reduced</p>
                   <p className="text-muted-foreground mt-0.5">
-                    Install <code className="bg-muted px-1 rounded">tectonic</code> (<code>curl -L https://github.com/tectonic-typesetting/tectonic/releases/download/tectonic%400.15.0/tectonic-0.15.0-x86_64-unknown-linux-gnu.tar.gz | tar xz -C ~/.local/bin</code>) for full-quality PDF with coloured badges and table of contents.
+                    Install <code className="bg-muted px-1 rounded-md">tectonic</code> (<code>curl -L https://github.com/tectonic-typesetting/tectonic/releases/download/tectonic%400.15.0/tectonic-0.15.0-x86_64-unknown-linux-gnu.tar.gz | tar xz -C ~/.local/bin</code>) for full-quality PDF with coloured badges and table of contents.
                   </p>
                 </div>
               )}
@@ -388,8 +388,8 @@ export default function ExportDialog({ open, onClose, projectId }: ExportDialogP
                     <div className="flex items-center justify-between mb-1">
                       <span className="label">Sections</span>
                       <div className="flex gap-2">
-                        <button onClick={selectAllSections} className="text-[10px] text-muted-foreground hover:text-foreground">All</button>
-                        <button onClick={selectNoneSections} className="text-[10px] text-muted-foreground hover:text-foreground">None</button>
+                        <button onClick={selectAllSections} className="text-3xs text-muted-foreground hover:text-foreground">All</button>
+                        <button onClick={selectNoneSections} className="text-3xs text-muted-foreground hover:text-foreground">None</button>
                       </div>
                     </div>
                     <div className="space-y-0.5 max-h-64 overflow-y-auto">
@@ -404,7 +404,7 @@ export default function ExportDialog({ open, onClose, projectId }: ExportDialogP
                             type="checkbox"
                             checked={sections.includes(sec.id)}
                             onChange={() => toggleSection(sec.id)}
-                            className="rounded"
+                            className="rounded-md"
                           />
                           {sec.label}
                         </label>
@@ -424,7 +424,7 @@ export default function ExportDialog({ open, onClose, projectId }: ExportDialogP
                           type="checkbox"
                           checked={changelogOn}
                           onChange={() => setChangelogOn(v => !v)}
-                          className="rounded"
+                          className="rounded-md"
                         />
                         <History size={12} className="shrink-0" />
                         <span className="font-medium">Changelog (diff report)</span>
@@ -432,13 +432,13 @@ export default function ExportDialog({ open, onClose, projectId }: ExportDialogP
 
                       {changelogOn && (
                       <div className="mt-2 space-y-2">
-                        <p className="text-[10px] text-muted-foreground leading-relaxed">
+                        <p className="text-3xs text-muted-foreground leading-relaxed">
                           Lists every recorded change between these dates. Deselect the other
                           sections above for a changes-only review document.
                         </p>
                         <div className="flex flex-wrap gap-2">
                           <div className="flex-1 min-w-[120px]">
-                            <label className="block text-[10px] text-muted-foreground mb-0.5">From
+                            <label className="block text-3xs text-muted-foreground mb-0.5">From
                               <input
                                 type="date"
                                 className="input text-xs h-8"
@@ -449,7 +449,7 @@ export default function ExportDialog({ open, onClose, projectId }: ExportDialogP
                             </label>
                           </div>
                           <div className="flex-1 min-w-[120px]">
-                            <label className="block text-[10px] text-muted-foreground mb-0.5">To
+                            <label className="block text-3xs text-muted-foreground mb-0.5">To
                               <input
                                 type="date"
                                 className="input text-xs h-8"
@@ -461,7 +461,7 @@ export default function ExportDialog({ open, onClose, projectId }: ExportDialogP
                           </div>
                         </div>
                         {datesInvalid && (
-                          <p className="text-[10px] text-destructive">
+                          <p className="text-3xs text-destructive">
                             The start date must not be after the end date.
                           </p>
                         )}
@@ -484,8 +484,8 @@ export default function ExportDialog({ open, onClose, projectId }: ExportDialogP
                   <div className="flex items-center justify-between mb-1">
                     <span className="label">Subsystems</span>
                     <div className="flex gap-2">
-                      <button onClick={handleSelectAllGroups} className="text-[10px] text-muted-foreground hover:text-foreground">All</button>
-                      <button onClick={handleSelectNoneGroups} className="text-[10px] text-muted-foreground hover:text-foreground">None</button>
+                      <button onClick={handleSelectAllGroups} className="text-3xs text-muted-foreground hover:text-foreground">All</button>
+                      <button onClick={handleSelectNoneGroups} className="text-3xs text-muted-foreground hover:text-foreground">None</button>
                     </div>
                   </div>
                   <div className="space-y-0.5 max-h-48 overflow-y-auto">
@@ -503,15 +503,15 @@ export default function ExportDialog({ open, onClose, projectId }: ExportDialogP
                             type="checkbox"
                             checked={selectedGroups.has(group.id)}
                             onChange={() => toggleGroup(group.id)}
-                            className="rounded"
+                            className="rounded-md"
                           />
-                          <span className="font-mono text-[10px] opacity-60 w-20 shrink-0 truncate">{group.id}</span>
+                          <span className="font-mono text-3xs opacity-60 w-20 shrink-0 truncate">{group.id}</span>
                           <span className="truncate">{group.name || group.id}</span>
                         </label>
                       ))
                     )}
                   </div>
-                  <p className="text-[10px] text-muted-foreground mt-1">
+                  <p className="text-3xs text-muted-foreground mt-1">
                     {selectedCount} of {totalCount} requirements selected
                   </p>
                 </div>
@@ -521,8 +521,8 @@ export default function ExportDialog({ open, onClose, projectId }: ExportDialogP
                   <div className="flex items-center justify-between mb-1">
                     <span className="label">Components</span>
                     <div className="flex gap-2">
-                      <button onClick={handleSelectAllComponents} title="Select all components" className="text-[10px] text-muted-foreground hover:text-foreground">All</button>
-                      <button onClick={handleSelectNoneComponents} title="Select no components" className="text-[10px] text-muted-foreground hover:text-foreground">None</button>
+                      <button onClick={handleSelectAllComponents} title="Select all components" className="text-3xs text-muted-foreground hover:text-foreground">All</button>
+                      <button onClick={handleSelectNoneComponents} title="Select no components" className="text-3xs text-muted-foreground hover:text-foreground">None</button>
                     </div>
                   </div>
                   <div className="space-y-0.5 max-h-48 overflow-y-auto">
@@ -540,15 +540,15 @@ export default function ExportDialog({ open, onClose, projectId }: ExportDialogP
                             type="checkbox"
                             checked={selectedComponents.has(comp.id)}
                             onChange={() => toggleComponent(comp.id)}
-                            className="rounded"
+                            className="rounded-md"
                           />
-                          <span className="font-mono text-[10px] opacity-60 w-20 shrink-0 truncate">{comp.id}</span>
+                          <span className="font-mono text-3xs opacity-60 w-20 shrink-0 truncate">{comp.id}</span>
                           <span className="truncate">{comp.name || comp.id}</span>
                         </label>
                       ))
                     )}
                   </div>
-                  <p className="text-[10px] text-muted-foreground mt-1">
+                  <p className="text-3xs text-muted-foreground mt-1">
                     {selectedComponents.size} of {components.length} components selected
                   </p>
                 </div>
@@ -558,8 +558,8 @@ export default function ExportDialog({ open, onClose, projectId }: ExportDialogP
                   <div className="flex items-center justify-between mb-1">
                     <span className="label">Baselines</span>
                     <div className="flex gap-2">
-                      <button onClick={handleSelectAllBaselines} title="Select all baselines" className="text-[10px] text-muted-foreground hover:text-foreground">All</button>
-                      <button onClick={handleSelectNoneBaselines} title="Select no baselines" className="text-[10px] text-muted-foreground hover:text-foreground">None</button>
+                      <button onClick={handleSelectAllBaselines} title="Select all baselines" className="text-3xs text-muted-foreground hover:text-foreground">All</button>
+                      <button onClick={handleSelectNoneBaselines} title="Select no baselines" className="text-3xs text-muted-foreground hover:text-foreground">None</button>
                     </div>
                   </div>
                   <div className="space-y-0.5 max-h-48 overflow-y-auto">
@@ -577,14 +577,14 @@ export default function ExportDialog({ open, onClose, projectId }: ExportDialogP
                             type="checkbox"
                             checked={selectedBaselines.has(name)}
                             onChange={() => toggleBaseline(name)}
-                            className="rounded"
+                            className="rounded-md"
                           />
-                          <span className="font-mono text-[10px] opacity-60 w-20 shrink-0 truncate">{name}</span>
+                          <span className="font-mono text-3xs opacity-60 w-20 shrink-0 truncate">{name}</span>
                         </label>
                       ))
                     )}
                   </div>
-                  <p className="text-[10px] text-muted-foreground mt-1">
+                  <p className="text-3xs text-muted-foreground mt-1">
                     {selectedBaselines.size} of {baselines.length} baselines selected
                   </p>
                 </div>

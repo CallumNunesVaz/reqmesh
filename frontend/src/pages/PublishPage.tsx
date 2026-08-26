@@ -210,7 +210,7 @@ export default function PublishPage() {
             PDF reports will be rendered from the HTML version (basic formatting, no coloured badges or table of contents).
             Install a LaTeX engine for full-quality PDF output:
           </p>
-          <code className="block mt-2 text-xs bg-muted rounded px-3 py-2">
+          <code className="block mt-2 text-xs bg-muted rounded-md px-3 py-2">
             # Option 1 — single binary (recommended)<br />
             curl -L https://github.com/tectonic-typesetting/tectonic/releases/download/tectonic%400.15.0/tectonic-0.15.0-x86_64-unknown-linux-gnu.tar.gz | tar xz -C ~/.local/bin<br />
             <br />
@@ -229,8 +229,8 @@ export default function PublishPage() {
               </h2>
               {reportFormatIds.has(selectedFormat) && (
                 <div className="flex gap-2">
-                  <button onClick={selectAllSections} className="text-[10px] text-muted-foreground hover:text-foreground">All</button>
-                  <button onClick={selectNoneSections} className="text-[10px] text-muted-foreground hover:text-foreground">None</button>
+                  <button onClick={selectAllSections} className="text-3xs text-muted-foreground hover:text-foreground">All</button>
+                  <button onClick={selectNoneSections} className="text-3xs text-muted-foreground hover:text-foreground">None</button>
                 </div>
               )}
             </div>
@@ -242,7 +242,7 @@ export default function PublishPage() {
                       type="checkbox"
                       checked={sections.includes(sec.id)}
                       onChange={() => toggleSection(sec.id)}
-                      className="rounded"
+                      className="rounded-md"
                     />
                     {sec.label}
                   </label>

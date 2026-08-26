@@ -278,7 +278,7 @@ export default function RiskDetailPage() {
               <span className="text-sm font-semibold text-card-foreground">{bandLabel}</span>
             </div>
             {rating?.unrated_reason && (
-              <p className="text-[11px] text-muted-foreground -mt-2 mb-4">{rating.unrated_reason}</p>
+              <p className="text-2xs text-muted-foreground -mt-2 mb-4">{rating.unrated_reason}</p>
             )}
             <div className="space-y-3">
               <label className="label">Severity

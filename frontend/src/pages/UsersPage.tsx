@@ -43,10 +43,10 @@ const ROLE_BADGE: Record<string, string> = {
 
 /** Compact account-status badge (disabled / locked / invited / active). */
 function StatusBadge({ u }: { u: ManagedUser }) {
-  if (u.disabled) return <span className="badge border text-[10px] bg-cs-red/15 text-cs-red border-cs-red/30 gap-1"><Ban size={9} /> Disabled</span>;
-  if (u.locked) return <span className="badge border text-[10px] bg-cs-amber/15 text-cs-amber border-cs-amber/30 gap-1"><Lock size={9} /> Locked</span>;
-  if (u.invited) return <span className="badge border text-[10px] bg-cs-blue/15 text-cs-blue border-cs-blue/30 gap-1"><UserPlus size={9} /> Invited</span>;
-  return <span className="badge border text-[10px] bg-cs-green/10 text-cs-green border-cs-green/30">Active</span>;
+  if (u.disabled) return <span className="badge border text-3xs bg-cs-red/15 text-cs-red border-cs-red/30 gap-1"><Ban size={9} /> Disabled</span>;
+  if (u.locked) return <span className="badge border text-3xs bg-cs-amber/15 text-cs-amber border-cs-amber/30 gap-1"><Lock size={9} /> Locked</span>;
+  if (u.invited) return <span className="badge border text-3xs bg-cs-blue/15 text-cs-blue border-cs-blue/30 gap-1"><UserPlus size={9} /> Invited</span>;
+  return <span className="badge border text-3xs bg-cs-green/10 text-cs-green border-cs-green/30">Active</span>;
 }
 
 export default function UsersPage() {
@@ -297,7 +297,7 @@ export default function UsersPage() {
   const fmtLast = (d: string) => d ? new Date(d).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'never';
 
   const SortHead = ({ col, label }: { col: typeof sortBy; label: string }) => (
-    <button onClick={() => toggleSort(col)} className={`text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground flex items-center gap-0.5 ${sortBy === col ? 'text-foreground' : ''}`}>
+    <button onClick={() => toggleSort(col)} className={`text-3xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground flex items-center gap-0.5 ${sortBy === col ? 'text-foreground' : ''}`}>
       {label}{sortBy === col ? (sortAsc ? ' ↑' : ' ↓') : ''}
     </button>
   );
@@ -343,13 +343,13 @@ export default function UsersPage() {
           {editingSelf ? (
             <form onSubmit={saveProfile} className="flex flex-wrap items-end gap-3">
               <div>
-                <label className="label text-[10px]">Full name<input className="input text-sm" value={selfForm.full_name} onChange={(e) => setSelfForm({ ...selfForm, full_name: e.target.value })} placeholder="Your name" /></label>
+                <label className="label text-3xs">Full name<input className="input text-sm" value={selfForm.full_name} onChange={(e) => setSelfForm({ ...selfForm, full_name: e.target.value })} placeholder="Your name" /></label>
               </div>
               <div>
-                <label className="label text-[10px]">Email<input className="input text-sm" value={selfForm.email} onChange={(e) => setSelfForm({ ...selfForm, email: e.target.value })} placeholder="you@example.com" /></label>
+                <label className="label text-3xs">Email<input className="input text-sm" value={selfForm.email} onChange={(e) => setSelfForm({ ...selfForm, email: e.target.value })} placeholder="you@example.com" /></label>
               </div>
               <div>
-                <label className="label text-[10px]">New password (optional)<input className="input text-sm" type="password" value={selfForm.password} onChange={(e) => setSelfForm({ ...selfForm, password: e.target.value })} placeholder="Leave blank to keep" /></label>
+                <label className="label text-3xs">New password (optional)<input className="input text-sm" type="password" value={selfForm.password} onChange={(e) => setSelfForm({ ...selfForm, password: e.target.value })} placeholder="Leave blank to keep" /></label>
               </div>
               <button type="submit" className="btn-primary" disabled={savingSelf}>
                 {savingSelf ? <><Loader size={14} className="animate-spin" /> Saving</> : <><Check size={14} /> Save</>}
@@ -361,7 +361,7 @@ export default function UsersPage() {
               <div><span className="text-muted-foreground">Username</span><div className="font-mono text-card-foreground">{username}</div></div>
               <div><span className="text-muted-foreground">Name</span><div className="text-card-foreground">{selfForm.full_name || <span className="italic text-muted-foreground/50">not set</span>}</div></div>
               <div><span className="text-muted-foreground">Email</span><div className="text-card-foreground">{selfForm.email || <span className="italic text-muted-foreground/50">not set</span>}</div></div>
-              <div><span className="text-muted-foreground">Role</span><div><span className={`badge border text-[10px] ${ROLE_BADGE[currentUser?.role || 'guest']}`}>{ROLE_LABELS[currentUser?.role || 'guest']}</span></div></div>
+              <div><span className="text-muted-foreground">Role</span><div><span className={`badge border text-3xs ${ROLE_BADGE[currentUser?.role || 'guest']}`}>{ROLE_LABELS[currentUser?.role || 'guest']}</span></div></div>
             </div>
           )}
         </div>
@@ -383,19 +383,19 @@ export default function UsersPage() {
                 className="card p-4 mb-6 flex items-end gap-3 flex-wrap"
               >
                 <div className="min-w-[140px]">
-                  <label className="label text-[10px]">Username *<input className="input text-sm" placeholder="jdoe" value={newUsername} onChange={(e) => setNewUsername(e.target.value)} /></label>
+                  <label className="label text-3xs">Username *<input className="input text-sm" placeholder="jdoe" value={newUsername} onChange={(e) => setNewUsername(e.target.value)} /></label>
                 </div>
                 <div className="min-w-[140px]">
-                  <label className="label text-[10px]">Full name<input className="input text-sm" placeholder="Jane Doe" value={newFullName} onChange={(e) => setNewFullName(e.target.value)} /></label>
+                  <label className="label text-3xs">Full name<input className="input text-sm" placeholder="Jane Doe" value={newFullName} onChange={(e) => setNewFullName(e.target.value)} /></label>
                 </div>
                 <div className="min-w-[180px]">
-                  <label className="label text-[10px]">Email<input className="input text-sm" placeholder="jane@example.com" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} /></label>
+                  <label className="label text-3xs">Email<input className="input text-sm" placeholder="jane@example.com" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} /></label>
                 </div>
                 <div className="min-w-[140px]">
-                  <label className="label text-[10px]">Password *<input className="input text-sm" type="password" placeholder="min 12 chars" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} /></label>
+                  <label className="label text-3xs">Password *<input className="input text-sm" type="password" placeholder="min 12 chars" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} /></label>
                 </div>
                 <div className="min-w-[130px]">
-                  <label className="label text-[10px]">Role<select className="select text-sm" value={newRole} onChange={(e) => setNewRole(e.target.value)}>
+                  <label className="label text-3xs">Role<select className="select text-sm" value={newRole} onChange={(e) => setNewRole(e.target.value)}>
                     <RoleOptions />
                   </select></label>
                 </div>
@@ -429,7 +429,7 @@ export default function UsersPage() {
                 <option value="invited">Invited</option>
               </select>
             </div>
-            <span className="text-[10px] text-muted-foreground">{filtered.length} of {users.length} users</span>
+            <span className="text-3xs text-muted-foreground">{filtered.length} of {users.length} users</span>
           </div>
 
           {/* Bulk action bar */}
@@ -460,13 +460,13 @@ export default function UsersPage() {
                 <thead>
                   <tr className="border-b bg-muted/30">
                     <th className="px-3 py-2.5 w-0">
-                      <input type="checkbox" checked={allSelected} onChange={toggleSelectAll} className="w-3.5 h-3.5 rounded border-muted-foreground/30" aria-label="Select all" />
+                      <input type="checkbox" checked={allSelected} onChange={toggleSelectAll} className="w-3.5 h-3.5 rounded-md border-muted-foreground/30" aria-label="Select all" />
                     </th>
                     <th className="px-4 py-2.5"><SortHead col="username" label="Username" /></th>
                     <th className="px-4 py-2.5"><SortHead col="full_name" label="Name" /></th>
-                    <th className="px-4 py-2.5 hidden @3xl:table-cell"><span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Email</span></th>
+                    <th className="px-4 py-2.5 hidden @3xl:table-cell"><span className="text-3xs font-semibold uppercase tracking-wider text-muted-foreground">Email</span></th>
                     <th className="px-4 py-2.5"><SortHead col="role" label="Role" /></th>
-                    <th className="px-4 py-2.5"><span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Status</span></th>
+                    <th className="px-4 py-2.5"><span className="text-3xs font-semibold uppercase tracking-wider text-muted-foreground">Status</span></th>
                     <th className="px-4 py-2.5 hidden @4xl:table-cell"><SortHead col="last_active" label="Last active" /></th>
                     <th className="px-4 py-2.5 hidden @4xl:table-cell"><SortHead col="joined" label="Joined" /></th>
                     <th className="px-4 py-2.5 w-0" aria-label="Actions" />
@@ -479,7 +479,7 @@ export default function UsersPage() {
                     return (
                       <tr key={u.username} className={`hover:bg-accent/30 transition-colors ${isSelf ? 'bg-primary/[0.02]' : ''} ${u.disabled ? 'opacity-60' : ''}`}>
                         <td className="px-3 py-2.5">
-                          <input type="checkbox" checked={selected.has(u.username)} onChange={() => toggleSelect(u.username)} className="w-3.5 h-3.5 rounded border-muted-foreground/30" aria-label={`Select ${u.username}`} />
+                          <input type="checkbox" checked={selected.has(u.username)} onChange={() => toggleSelect(u.username)} className="w-3.5 h-3.5 rounded-md border-muted-foreground/30" aria-label={`Select ${u.username}`} />
                         </td>
                         <td className="px-4 py-2.5">
                           <div className="flex items-center gap-2">
@@ -488,7 +488,7 @@ export default function UsersPage() {
                             </div>
                             <div>
                               <span className="font-mono text-xs text-card-foreground font-medium">{u.username}</span>
-                              {isSelf && <span className="text-[9px] text-muted-foreground ml-1">(you)</span>}
+                              {isSelf && <span className="text-4xs text-muted-foreground ml-1">(you)</span>}
                             </div>
                           </div>
                         </td>
@@ -501,11 +501,11 @@ export default function UsersPage() {
                           {isEditing ? (
                             <input className="input text-xs !py-1 w-full" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} />
                           ) : (u.email || <span className="text-muted-foreground/40 italic">—</span>)}
-                          {u.email_verified && u.email && <span className="text-[9px] text-cs-green ml-1">✓</span>}
+                          {u.email_verified && u.email && <span className="text-4xs text-cs-green ml-1">✓</span>}
                         </td>
                         <td className="px-4 py-2.5">
                           <select
-                            className="select !w-auto !py-1 text-[11px]"
+                            className="select !w-auto !py-1 text-2xs"
                             value={u.role}
                             onChange={(e) => handleRoleChange(u.username, e.target.value)}
                             disabled={isSelf && u.role === 'admin'}
@@ -514,10 +514,10 @@ export default function UsersPage() {
                           </select>
                         </td>
                         <td className="px-4 py-2.5"><StatusBadge u={u} /></td>
-                        <td className="px-4 py-2.5 text-[11px] text-muted-foreground hidden @4xl:table-cell">
+                        <td className="px-4 py-2.5 text-2xs tabular-nums text-muted-foreground hidden @4xl:table-cell">
                           {u.last_active ? <span className="flex items-center gap-1"><Clock size={10} />{fmtLast(u.last_active)}</span> : <span className="text-muted-foreground/40 italic">—</span>}
                         </td>
-                        <td className="px-4 py-2.5 text-[11px] text-muted-foreground hidden @4xl:table-cell">{fmtDate(u.joined)}</td>
+                        <td className="px-4 py-2.5 text-2xs tabular-nums text-muted-foreground hidden @4xl:table-cell">{fmtDate(u.joined)}</td>
                         <td className="px-4 py-2.5">
                           <div className="flex items-center gap-1">
                             {isEditing ? (
@@ -604,7 +604,7 @@ export default function UsersPage() {
                 <input readOnly className="input text-xs font-mono flex-1" value={inviteLink} onFocus={(e) => e.target.select()} />
                 <button type="button" onClick={async () => { if (!await copyText(inviteLink)) setInviteCopyFailed(true); }} className="btn-secondary shrink-0 p-2" title="Copy"><Copy size={13} /></button>
                 {inviteCopyFailed && (
-                  <span className="text-[10px] text-cs-amber shrink-0">Copy blocked — select the link above</span>
+                  <span className="text-3xs text-cs-amber shrink-0">Copy blocked — select the link above</span>
                 )}
               </div>
               <button type="button" onClick={() => { setShowInvite(false); setInviteLink(null); }} className="btn-primary w-full justify-center">Done</button>
@@ -614,10 +614,10 @@ export default function UsersPage() {
               {/* The username is the primary field of the invite dialog the user
                   just opened; Modal otherwise lands focus on the close button. */}
               {/* oxlint-disable-next-line jsx-a11y/no-autofocus */}
-              <div><label className="label text-[10px]">Username *<input className="input text-sm" value={invite.username} onChange={(e) => setInvite({ ...invite, username: e.target.value })} placeholder="jdoe" autoFocus /></label></div>
-              <div><label className="label text-[10px]">Email<input className="input text-sm" value={invite.email} onChange={(e) => setInvite({ ...invite, email: e.target.value })} placeholder="jane@example.com" /></label></div>
-              <div><label className="label text-[10px]">Full name<input className="input text-sm" value={invite.full_name} onChange={(e) => setInvite({ ...invite, full_name: e.target.value })} placeholder="Jane Doe" /></label></div>
-              <div><label className="label text-[10px]">Role<select className="select text-sm" value={invite.role} onChange={(e) => setInvite({ ...invite, role: e.target.value })}>
+              <div><label className="label text-3xs">Username *<input className="input text-sm" value={invite.username} onChange={(e) => setInvite({ ...invite, username: e.target.value })} placeholder="jdoe" autoFocus /></label></div>
+              <div><label className="label text-3xs">Email<input className="input text-sm" value={invite.email} onChange={(e) => setInvite({ ...invite, email: e.target.value })} placeholder="jane@example.com" /></label></div>
+              <div><label className="label text-3xs">Full name<input className="input text-sm" value={invite.full_name} onChange={(e) => setInvite({ ...invite, full_name: e.target.value })} placeholder="Jane Doe" /></label></div>
+              <div><label className="label text-3xs">Role<select className="select text-sm" value={invite.role} onChange={(e) => setInvite({ ...invite, role: e.target.value })}>
                   <RoleOptions />
                 </select></label>
               </div>
@@ -633,13 +633,13 @@ export default function UsersPage() {
       <Modal open={importText !== null} onClose={() => setImportText(null)} panelClassName="w-full max-w-lg p-6">
         <button type="button" onClick={() => setImportText(null)} className="absolute right-4 top-4 text-muted-foreground hover:text-foreground"><X size={18} /></button>
         <h2 className="text-lg font-bold text-foreground mb-1 flex items-center gap-2"><Upload size={18} /> Import users (CSV)</h2>
-        <p className="text-xs text-muted-foreground mb-3">Columns: <code className="bg-muted px-1 rounded">username,full_name,email,role</code>. Each new user is invited to set a password.</p>
+        <p className="text-xs text-muted-foreground mb-3">Columns: <code className="bg-muted px-1 rounded-md">username,full_name,email,role</code>. Each new user is invited to set a password.</p>
         {importResult ? (
           <div className="space-y-2 text-xs">
             <p className="text-cs-green">Created {importResult.created.length}: {importResult.created.join(', ') || '—'}</p>
             {importResult.skipped.length > 0 && <p className="text-cs-amber">Skipped: {importResult.skipped.join(', ')}</p>}
             {importResult.invites.length > 0 && (
-              <div className="max-h-40 overflow-auto border rounded p-2 bg-muted/30 font-mono">
+              <div className="max-h-40 overflow-auto border rounded-md p-2 bg-muted/30 font-mono">
                 {importResult.invites.map((iv) => <div key={iv.username} className="truncate">{iv.username}: {iv.invite_link}</div>)}
               </div>
             )}

@@ -413,7 +413,7 @@ export default function ChangeRequestsPage() {
                 <X size={14} />
               </button>
             ) : (
-              <kbd className="absolute right-3 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded border bg-muted text-[10px] font-mono text-muted-foreground pointer-events-none">/</kbd>
+              <kbd className="absolute right-3 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded-md border bg-muted text-3xs font-mono text-muted-foreground pointer-events-none">/</kbd>
             )}
           </div>
           <select className="select w-36 h-9 text-xs" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
@@ -434,7 +434,7 @@ export default function ChangeRequestsPage() {
           <motion.form initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
             onSubmit={handleCreate} className="card p-4 mb-4 overflow-hidden">
             <div className="flex items-end gap-3">
-              <div className="w-32"><label className="label">ID <input className="input font-mono" placeholder="CR-001" value={form.id} onChange={e => setForm({...form, id: e.target.value})} /></label>{idExample && <span className="text-[10px] text-muted-foreground">e.g. {idExample}</span>}</div>
+              <div className="w-32"><label className="label">ID <input className="input font-mono" placeholder="CR-001" value={form.id} onChange={e => setForm({...form, id: e.target.value})} /></label>{idExample && <span className="text-3xs text-muted-foreground">e.g. {idExample}</span>}</div>
               <div className="flex-1"><label className="label">Title <input className="input" placeholder="Change request title" value={form.title} onChange={e => setForm({...form, title: e.target.value})} /></label></div>
               <div className="w-28">
                 <label className="label">Urgency <select className="select" value={form.urgency} onChange={e => setForm({...form, urgency: e.target.value})}>
@@ -452,7 +452,7 @@ export default function ChangeRequestsPage() {
             </div>
             <div className="mt-3 pt-3 border-t border-border">
               <div className="flex items-center justify-between mb-2">
-                <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Proposed new requirements</div>
+                <div className="text-3xs font-semibold text-muted-foreground uppercase tracking-wider">Proposed new requirements</div>
                 <button type="button" onClick={addProposal} className="btn-secondary text-xs py-1 px-2"><Plus size={13} /> Add</button>
               </div>
               {proposals.map((p, i) => (
@@ -511,15 +511,15 @@ export default function ChangeRequestsPage() {
                   <CopyLinkButton kind="change" id={cr.id} className="opacity-0 group-hover:opacity-100" />
                 </div>
                 {cr.description && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1"><AutoLinkText text={cr.description} kinds={entityKinds} /></p>}
-                <div className="flex flex-wrap items-center gap-2 mt-1 text-[10px] text-muted-foreground">
+                <div className="flex flex-wrap items-center gap-2 mt-1 text-3xs text-muted-foreground">
                   {cr.submitted_by && <span>by <span className="font-medium text-foreground">{cr.submitted_by}</span></span>}
                   {cr.rationale && <span className="italic">— {cr.rationale}</span>}
                 </div>
                 {cr.affected_requirements.length > 0 && (
                   <div className="flex flex-wrap items-center gap-1.5 mt-2">
-                    <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Affects</span>
+                    <span className="text-3xs uppercase tracking-wider text-muted-foreground">Affects</span>
                     {cr.affected_requirements.map((rid) => (
-                      <span key={rid} className="inline-flex items-center px-1.5 py-0.5 rounded bg-muted text-xs">
+                      <span key={rid} className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-muted text-xs">
                         <EntityLink kind="requirement" id={rid} className="hover:text-primary" />
                       </span>
                     ))}
@@ -564,11 +564,11 @@ export default function ChangeRequestsPage() {
                   </div>
                 )}
                 <div className="mt-3 pt-3 border-t border-border">
-                  <h4 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Comments</h4>
+                  <h4 className="text-3xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Comments</h4>
                   <CommentThread entityKind="change_requests" entityId={cr.id} />
                 </div>
                 <div className="mt-3 pt-3 border-t border-border">
-                  <h4 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Change History</h4>
+                  <h4 className="text-3xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Change History</h4>
                   <HistoryPanel itemId={cr.id} />
                 </div>
               </div>

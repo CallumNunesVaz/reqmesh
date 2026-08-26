@@ -52,7 +52,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
                 </h3>
                 <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{state.message}</p>
               </div>
-              <button onClick={() => close(false)} className="shrink-0 p-1 rounded text-muted-foreground hover:text-foreground hover:bg-accent">
+              <button onClick={() => close(false)} className="shrink-0 p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent">
                 <X size={14} />
               </button>
             </div>

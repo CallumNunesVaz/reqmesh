@@ -73,7 +73,7 @@ function GroupPicker({ label, value, onChange, options, placeholder }: {
             <button
               type="button"
               onClick={() => { onChange(''); setOpen(false); setQuery(''); }}
-              className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-accent text-muted-foreground"
+              className="w-full text-left px-2 py-1.5 text-xs rounded-md hover:bg-accent text-muted-foreground"
             >
               All {placeholder}
             </button>
@@ -82,9 +82,9 @@ function GroupPicker({ label, value, onChange, options, placeholder }: {
                 key={o.id}
                 type="button"
                 onClick={() => { onChange(o.id); setOpen(false); setQuery(''); }}
-                className={`w-full text-left px-2 py-1.5 text-xs rounded hover:bg-accent flex items-center gap-2 ${o.id === value ? 'bg-primary/10 text-primary' : ''}`}
+                className={`w-full text-left px-2 py-1.5 text-xs rounded-md hover:bg-accent flex items-center gap-2 ${o.id === value ? 'bg-primary/10 text-primary' : ''}`}
               >
-                <span className="font-mono text-[10px] text-muted-foreground shrink-0" style={{ paddingLeft: o.depth * 14 }}>{o.id}</span>
+                <span className="font-mono text-3xs text-muted-foreground shrink-0" style={{ paddingLeft: o.depth * 14 }}>{o.id}</span>
                 <span className="truncate">{o.name}</span>
               </button>
             ))}
@@ -279,7 +279,7 @@ export default function RisksPage() {
   };
 
   const SortHead = ({ col, label }: { col: RiskSortKey; label: string }) => (
-    <button onClick={() => toggleSort(col)} className={`text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground flex items-center gap-0.5 ${sortKey === col ? 'text-foreground' : ''}`}>
+    <button onClick={() => toggleSort(col)} className={`text-3xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground flex items-center gap-0.5 ${sortKey === col ? 'text-foreground' : ''}`}>
       {label}{sortKey === col ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
     </button>
   );
@@ -309,7 +309,7 @@ export default function RisksPage() {
                 <X size={14} />
               </button>
             ) : (
-              <kbd className="absolute right-3 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded border bg-muted text-[10px] font-mono text-muted-foreground pointer-events-none">/</kbd>
+              <kbd className="absolute right-3 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded-md border bg-muted text-3xs font-mono text-muted-foreground pointer-events-none">/</kbd>
             )}
           </div>
           <select className="select w-32 h-9 text-xs" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
@@ -333,7 +333,7 @@ export default function RisksPage() {
           <motion.form initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
             onSubmit={handleCreate} className="card p-4 mb-4 overflow-hidden">
             <div className="flex flex-wrap items-end gap-3">
-              <div className="w-32"><label className="label">ID <input className="input font-mono" placeholder="RSK-001" value={form.id} onChange={e => setForm({...form, id: e.target.value})} disabled={!!editingId} /></label>{!editingId && idExample && <span className="text-[10px] text-muted-foreground">e.g. {idExample}</span>}</div>
+              <div className="w-32"><label className="label">ID <input className="input font-mono" placeholder="RSK-001" value={form.id} onChange={e => setForm({...form, id: e.target.value})} disabled={!!editingId} /></label>{!editingId && idExample && <span className="text-3xs text-muted-foreground">e.g. {idExample}</span>}</div>
               <div className="flex-1 min-w-[12rem]"><label className="label">Title <input className="input" placeholder="Risk title" value={form.title} onChange={e => setForm({...form, title: e.target.value})} /></label></div>
               <div className="w-36"><label className="label">Severity <select className="select" value={form.severity} onChange={e => setForm({...form, severity: e.target.value})}>
                 {(matrix?.severities ?? []).map((sv) => <option key={sv} value={sv}>{formatLevel(sv)}</option>)}
@@ -433,7 +433,7 @@ export default function RisksPage() {
                     <td className="px-4 py-2.5 text-xs text-card-foreground">{r.severity ? formatLevel(r.severity) : '—'}</td>
                     <td className="px-4 py-2.5 text-xs text-card-foreground">{likelihoodOf(r) ? formatLevel(likelihoodOf(r)) : '—'}</td>
                     <td className="px-4 py-2.5">
-                      <span className="inline-flex items-center gap-1.5 text-[11px] font-medium"
+                      <span className="inline-flex items-center gap-1.5 text-2xs font-medium"
                         style={{ color: r.rating?.color || 'hsl(var(--muted-foreground))' }}
                         title={r.rating?.band ? `severity ${formatLevel(r.rating.severity || '')} x likelihood ${formatLevel(r.rating.likelihood || '')}` : (r.rating?.unrated_reason || 'Not rated')}>
                         <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: r.rating?.color || 'hsl(var(--muted-foreground))' }} />
@@ -445,7 +445,7 @@ export default function RisksPage() {
                     </td>
                     <td className="px-4 py-2.5 text-xs text-card-foreground">{r.status || '—'}</td>
                     <td className="px-4 py-2.5">
-                      <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground" title={`${(r.linked_requirements ?? []).length + (r.mitigating_requirements ?? []).length} requirement link(s), ${(r.linked_components ?? []).length + (r.mitigating_components ?? []).length} component link(s)`}>
+                      <span className="inline-flex items-center gap-1 text-2xs tabular-nums text-muted-foreground" title={`${(r.linked_requirements ?? []).length + (r.mitigating_requirements ?? []).length} requirement link(s), ${(r.linked_components ?? []).length + (r.mitigating_components ?? []).length} component link(s)`}>
                         <Link2 size={12} /> {total > 0 ? total : '—'}
                       </span>
                     </td>

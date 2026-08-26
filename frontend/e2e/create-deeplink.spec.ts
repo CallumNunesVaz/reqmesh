@@ -23,7 +23,7 @@ test('?new=1&parent=<id> opens child form with parent selected', async ({ app, s
   await app.waitForSelector('main');
   await setEditMode(app);
 
-  const parentId = await app.locator('span.font-mono.text-\\[11px\\]').first().textContent();
+  const parentId = await app.locator('span.font-mono.text-2xs').first().textContent();
   expect(parentId).toBeTruthy();
 
   await app.goto(`${server.baseURL}/project/${P}/requirements?new=1&parent=${parentId}`);

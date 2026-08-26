@@ -223,8 +223,8 @@ function BlockNode({ data }: NodeProps) {
       <div className="px-3 py-2.5 flex items-center gap-2.5" style={{ minHeight: minNodeH, background: glow(colors.fill, 0.08) }}>
         <span className="w-1.5 self-stretch rounded-full shrink-0" style={{ backgroundColor: colors.fill, opacity: 0.85 }} />
         <div className="min-w-0" style={{ transform: `scale(${textScale})`, transformOrigin: 'left center' }}>
-          <div className="font-mono text-[10px] whitespace-nowrap" style={{ color: colors.text }}>{d.label}</div>
-          <div className="font-medium text-[13px] leading-snug whitespace-nowrap" style={{ color: 'hsl(var(--foreground))' }}>
+          <div className="font-mono text-3xs whitespace-nowrap" style={{ color: colors.text }}>{d.label}</div>
+          <div className="font-medium text-sm leading-snug whitespace-nowrap" style={{ color: 'hsl(var(--foreground))' }}>
             {shortName(20)}
           </div>
         </div>
@@ -244,17 +244,17 @@ function BlockNode({ data }: NodeProps) {
           <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
         </svg>
       )}
-      <span className="text-[9px] font-semibold tracking-wide" style={{ color: colors.text }}>
+      <span className="text-4xs font-semibold tracking-wide" style={{ color: colors.text }}>
         &#171;{(d.type || 'functional').replace(/_/g, ' ')}&#187;
       </span>
-      <span className="font-mono text-[9px] text-muted-foreground">{d.label}</span>
+      <span className="font-mono text-4xs text-muted-foreground">{d.label}</span>
       {d.hasChildren && (
         <div className="ml-auto flex items-center gap-1">
           {/* Button 1 (single chevron): reveal only the direct children that
               are themselves parents (subgroups). Count = subgroup children. */}
           {(d.subgroupCount ?? 0) > 0 && (
             <button
-              className="flex items-center gap-0.5 px-1 py-0.5 rounded hover:bg-white/10 transition-colors"
+              className="flex items-center gap-0.5 px-1 py-0.5 rounded-md hover:bg-white/10 transition-colors"
               onClick={(e) => { e.stopPropagation(); d.onExpandGroups?.(); d.onSelect?.(); }}
               title={d.collapsed
                 ? `Reveal ${d.subgroupCount} subgroup${d.subgroupCount === 1 ? '' : 's'}`
@@ -263,13 +263,13 @@ function BlockNode({ data }: NodeProps) {
               {d.collapsed
                 ? <ChevronRight size={10} className="text-muted-foreground" />
                 : <ChevronDown size={10} className="text-muted-foreground" />}
-              <span className="text-[8.5px] text-muted-foreground">{d.subgroupCount}</span>
+              <span className="text-4xs text-muted-foreground">{d.subgroupCount}</span>
             </button>
           )}
           {/* Button 2 (double chevron): reveal ALL children (every descendant).
               Count = total descendants. */}
           <button
-            className="flex items-center gap-0.5 px-1 py-0.5 rounded hover:bg-white/10 transition-colors"
+            className="flex items-center gap-0.5 px-1 py-0.5 rounded-md hover:bg-white/10 transition-colors"
             onClick={(e) => { e.stopPropagation(); d.onToggleDescendants?.(); d.onSelect?.(); }}
             title={(d.collapsed || d.groupsOnly)
               ? `Reveal all ${d.childCount} descendants`
@@ -278,7 +278,7 @@ function BlockNode({ data }: NodeProps) {
             {(d.collapsed || d.groupsOnly)
               ? <ChevronsDown size={10} className="text-muted-foreground" />
               : <ChevronsUp size={10} className="text-muted-foreground" />}
-            <span className="text-[8.5px] text-muted-foreground">{d.childCount}</span>
+            <span className="text-4xs text-muted-foreground">{d.childCount}</span>
           </button>
         </div>
       )}
@@ -286,28 +286,28 @@ function BlockNode({ data }: NodeProps) {
   );
 
   const nameRow = (
-    <div className="px-2.5 py-1.5 text-[12px] font-medium leading-snug" style={{ color: 'hsl(var(--foreground))' }}>
+    <div className="px-2.5 py-1.5 text-xs font-medium leading-snug" style={{ color: 'hsl(var(--foreground))' }}>
       {d.name || 'Untitled'}
     </div>
   );
 
   const footer = (
     <div className="px-2.5 py-1 border-t flex items-center gap-1.5" style={{ borderColor: 'hsl(var(--graph-node-border) / 0.6)' }}>
-      <span className="px-1.5 rounded text-[8.5px] font-semibold" style={{ backgroundColor: glow(colors.fill, 0.15), color: colors.text }}>
+      <span className="px-1.5 rounded-md text-4xs font-semibold" style={{ backgroundColor: glow(colors.fill, 0.15), color: colors.text }}>
         {d.status}
       </span>
       {d.vcCount > 0 && (
-        <span className="flex items-center gap-0.5 text-[8.5px] text-muted-foreground">
+        <span className="flex items-center gap-0.5 text-4xs text-muted-foreground">
           <FlaskConical size={8} /> {d.vcCount}
         </span>
       )}
       {verdictColor && (
-        <span className="flex items-center gap-0.5 text-[8.5px] font-semibold" style={{ color: verdictColor }} title={`Parametric constraints: ${d.verdict}`}>
+        <span className="flex items-center gap-0.5 text-4xs font-semibold" style={{ color: verdictColor }} title={`Parametric constraints: ${d.verdict}`}>
           <Sigma size={8.5} /> {d.verdict === 'not_applicable' ? 'n/a' : d.verdict}
         </span>
       )}
       {d.previewVerdict && !d.verdict && (
-        <span className="flex items-center gap-0.5 text-[8.5px] font-semibold"
+        <span className="flex items-center gap-0.5 text-4xs font-semibold"
           style={{ color: constraintColors[d.previewVerdict] || constraintColors.unknown }}
           title={`Preview: ${d.previewVerdict}`}>
           <Sigma size={8.5} /> {d.previewVerdict === 'not_applicable' ? 'n/a' : d.previewVerdict}
@@ -342,7 +342,7 @@ function BlockNode({ data }: NodeProps) {
               className="px-2.5 pb-1.5 overflow-hidden"
               style={{ height: 'var(--desc-h)', '--desc-h': '46px' } as React.CSSProperties}
             >
-              <div className="text-[9px] leading-snug text-muted-foreground"
+              <div className="text-4xs leading-snug text-muted-foreground"
                 style={{
                   animation: 'scrollDesc 9s ease-in-out infinite alternate',
                   whiteSpace: 'normal',
@@ -353,24 +353,24 @@ function BlockNode({ data }: NodeProps) {
           )}
           {paramRows.length > 0 && (
             <div className="border-t px-2.5 py-1.5" style={{ borderColor: 'hsl(var(--graph-node-border) / 0.6)' }}>
-              <div className="text-[7.5px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">values</div>
+              <div className="text-4xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">values</div>
               {paramRows.map((p) => (
-                <div key={p.name} className="font-mono text-[9px] leading-relaxed flex items-center gap-1" style={{ color: 'hsl(var(--foreground) / 0.85)' }}>
+                <div key={p.name} className="font-mono text-4xs leading-relaxed flex items-center gap-1" style={{ color: 'hsl(var(--foreground) / 0.85)' }}>
                   {/* Derived values are italic, the SysML convention for computed properties */}
                   <span className="truncate" style={{ fontStyle: p.derived ? 'italic' : 'normal' }}>{p.name} {p.display}</span>
                   {p.measured && <FlaskConical size={8} className="shrink-0 text-cs-teal" />}
                 </div>
               ))}
               {d.params.length > paramRows.length && (
-                <div className="text-[8px] text-muted-foreground">+{d.params.length - paramRows.length} more</div>
+                <div className="text-4xs text-muted-foreground">+{d.params.length - paramRows.length} more</div>
               )}
             </div>
           )}
           {constraintRows.length > 0 && (
             <div className="border-t px-2.5 py-1.5" style={{ borderColor: 'hsl(var(--graph-node-border) / 0.6)' }}>
-              <div className="text-[7.5px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">constraints</div>
+              <div className="text-4xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">constraints</div>
               {constraintRows.map((c, i) => (
-                <div key={i} className="font-mono text-[8.5px] leading-relaxed flex items-center gap-1.5">
+                <div key={i} className="font-mono text-4xs leading-relaxed flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: constraintColors[c.status] || 'hsl(var(--muted-foreground) / 0.4)' }} />
                   <span className="truncate" style={{ color: 'hsl(var(--foreground) / 0.8)' }}>{c.expr}</span>
                 </div>

@@ -173,7 +173,7 @@ export default function ImportDialog({ open, onClose, projectId }: ImportDialogP
                     }`}
                   >
                     <span className="font-medium">Merge</span>
-                    <span className="block opacity-70 text-[10px] mt-0.5">Create new, update matching IDs</span>
+                    <span className="block opacity-70 text-3xs mt-0.5">Create new, update matching IDs</span>
                   </button>
                   <button
                     onClick={() => chooseMode('replace')}
@@ -182,7 +182,7 @@ export default function ImportDialog({ open, onClose, projectId }: ImportDialogP
                     }`}
                   >
                     <span className="font-medium">Replace</span>
-                    <span className="block opacity-70 text-[10px] mt-0.5">Wipe existing first, then import</span>
+                    <span className="block opacity-70 text-3xs mt-0.5">Wipe existing first, then import</span>
                   </button>
                 </div>
               </div>
@@ -216,7 +216,7 @@ export default function ImportDialog({ open, onClose, projectId }: ImportDialogP
                     ) : (
                       <>
                         <span className="text-sm text-muted-foreground">Drop a file here, or click to browse</span>
-                        <span className="text-[10px] text-muted-foreground">.xml (ReqIF) · .sysml (SysML v2) · .csv · .tsv · .xlsx</span>
+                        <span className="text-3xs text-muted-foreground">.xml (ReqIF) · .sysml (SysML v2) · .csv · .tsv · .xlsx</span>
                       </>
                     )}
                   </button>
@@ -240,7 +240,7 @@ export default function ImportDialog({ open, onClose, projectId }: ImportDialogP
                   checked={previewing}
                   disabled={!canPreview}
                   onChange={(e) => { setDryRun(e.target.checked); clearResult(); }}
-                  className="rounded border-border"
+                  className="rounded-md border-border"
                 />
                 Dry run (preview only, no changes)
               </label>

@@ -81,7 +81,7 @@ export default function MetricsPage() {
           return (
             <Reveal key={card.label} step={i} className="card p-4">
               <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${card.color} mb-3`}><Icon size={18} /></div>
-              <div className="text-2xl font-bold text-card-foreground">{card.value}</div>
+              <div className="text-2xl font-bold text-card-foreground tabular-nums">{card.value}</div>
               <div className="text-xs text-muted-foreground mt-0.5">{card.label}</div>
             </Reveal>
           );
@@ -96,7 +96,7 @@ export default function MetricsPage() {
           <div className="space-y-3">
             {Object.entries(q).map(([key, pct]) => (
               <div key={key}>
-                <div className="flex justify-between text-xs mb-1"><span className="text-muted-foreground capitalize">{key.replace(/_/g, ' ')}</span><span className="text-foreground font-medium">{pct}%</span></div>
+                <div className="flex justify-between text-xs mb-1"><span className="text-muted-foreground capitalize">{key.replace(/_/g, ' ')}</span><span className="text-foreground font-medium tabular-nums">{pct}%</span></div>
                 <div className="w-full bg-muted rounded-full h-2"><motion.div initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 0.5 }} className={`h-full rounded-full ${pct >= 80 ? 'bg-cs-green' : pct >= 50 ? 'bg-cs-amber' : 'bg-cs-red'}`} /></div>
               </div>
             ))}
@@ -107,19 +107,19 @@ export default function MetricsPage() {
           <h2 className="font-semibold text-sm text-card-foreground mb-4 flex items-center gap-2"><GitBranch size={16} /> Traceability</h2>
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-muted/50 rounded-lg p-3 text-center">
-              <div className="text-2xl font-bold text-card-foreground">{coverage.shallow_covered}</div>
+              <div className="text-2xl font-bold text-card-foreground tabular-nums">{coverage.shallow_covered}</div>
               <div className="text-xs text-muted-foreground">Shallow Covered</div>
             </div>
             <div className="bg-muted/50 rounded-lg p-3 text-center">
-              <div className="text-2xl font-bold text-card-foreground">{coverage.deep_covered}</div>
+              <div className="text-2xl font-bold text-card-foreground tabular-nums">{coverage.deep_covered}</div>
               <div className="text-xs text-muted-foreground">Deep Covered</div>
             </div>
             <div className="bg-muted/50 rounded-lg p-3 text-center">
-              <div className="text-2xl font-bold text-card-foreground">{metrics.baselines}</div>
+              <div className="text-2xl font-bold text-card-foreground tabular-nums">{metrics.baselines}</div>
               <div className="text-xs text-muted-foreground">Baselines</div>
             </div>
             <div className="bg-muted/50 rounded-lg p-3 text-center">
-              <div className="text-2xl font-bold text-card-foreground">{compliance.standards.length}</div>
+              <div className="text-2xl font-bold text-card-foreground tabular-nums">{compliance.standards.length}</div>
               <div className="text-xs text-muted-foreground">Standards</div>
             </div>
           </div>
@@ -165,11 +165,11 @@ export default function MetricsPage() {
                   <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3">
                     {risks.bands.map((b) => (
                       <span key={b.key} className="inline-flex items-center gap-1.5 text-xs">
-                        <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: b.color }} />
+                        <span className="w-2.5 h-2.5 rounded-md shrink-0" style={{ backgroundColor: b.color }} />
                         <span className="text-muted-foreground">{b.label}</span>
                         <span className="text-foreground font-medium tabular-nums">{risks.open_by_band[b.key] ?? 0}</span>
                         {(risks.by_band[b.key] ?? 0) !== (risks.open_by_band[b.key] ?? 0) && (
-                          <span className="text-muted-foreground text-[10px] tabular-nums">
+                          <span className="text-muted-foreground text-3xs tabular-nums">
                             / {risks.by_band[b.key] ?? 0} total
                           </span>
                         )}
@@ -223,21 +223,21 @@ export default function MetricsPage() {
               <div className="text-xs text-muted-foreground mb-2">Most serious open risks</div>
               <div className="space-y-1.5">
                 {risks.top_open.map((r) => (
-                  <div key={r.id} className="flex items-center gap-2 text-xs py-1.5 px-2 rounded hover:bg-accent">
+                  <div key={r.id} className="flex items-center gap-2 text-xs py-1.5 px-2 rounded-md hover:bg-accent">
                     <span
-                      className="badge text-[10px] shrink-0"
+                      className="badge text-3xs shrink-0"
                       style={{ backgroundColor: `${r.color}1a`, color: r.color }}
                     >
                       {r.label}
                     </span>
                     <EntityLink kind="risk" id={r.id} name={r.title} className="flex-1 min-w-0 hover:text-primary" />
-                    <span className="text-muted-foreground text-[10px] whitespace-nowrap">
+                    <span className="text-muted-foreground text-3xs whitespace-nowrap">
                       {r.severity} · {r.likelihood.replace(/_/g, ' ')}
                     </span>
                     {r.mitigated ? (
                       <ShieldCheck size={13} className="text-cs-green shrink-0" aria-label="Has a mitigation" />
                     ) : (
-                      <span className="badge bg-cs-amber/10 text-cs-amber text-[9px] shrink-0">unmitigated</span>
+                      <span className="badge bg-cs-amber/10 text-cs-amber text-4xs shrink-0">unmitigated</span>
                     )}
                   </div>
                 ))}
@@ -302,7 +302,7 @@ export default function MetricsPage() {
               <div className="shrink-0 flex flex-col items-center justify-center gap-0.5 text-xs text-cs-amber bg-cs-amber/5 rounded-lg px-3 py-2">
                 <AlertTriangle size={14} />
                 <span className="font-semibold">{bingo.unrated}</span>
-                <span className="text-[10px] text-muted-foreground">unrated</span>
+                <span className="text-3xs text-muted-foreground">unrated</span>
               </div>
             )}
           </div>
@@ -339,14 +339,14 @@ export default function MetricsPage() {
               </div>
               <div className="mt-1.5 space-y-0.5">
                 {evaluation.data_issues.slice(0, 5).map((issue, i) => (
-                  <div key={i} className="text-[11px] text-muted-foreground">
+                  <div key={i} className="text-2xs text-muted-foreground">
                     <span className="font-mono">{issue.ref}</span>
                     {issue.source && <span> (from {issue.source})</span>}
                     : <span className="font-mono">{issue.value}</span> is not a number
                   </div>
                 ))}
                 {evaluation.data_issues.length > 5 && (
-                  <div className="text-[11px] text-muted-foreground">
+                  <div className="text-2xs text-muted-foreground">
                     …and {evaluation.data_issues.length - 5} more
                   </div>
                 )}
@@ -359,7 +359,7 @@ export default function MetricsPage() {
               .sort((a, b) => (a.verdict === 'fail' || a.verdict === 'error' ? -1 : 1) - (b.verdict === 'fail' || b.verdict === 'error' ? -1 : 1))
               .slice(0, 10)
               .map((r) => (
-                <div key={r.id} className="flex items-center gap-2 text-xs py-1.5 px-2 rounded hover:bg-accent">
+                <div key={r.id} className="flex items-center gap-2 text-xs py-1.5 px-2 rounded-md hover:bg-accent">
                   <EntityLink kind="requirement" id={r.id} name={r.name} className="flex-1 min-w-0 hover:text-primary" />
                   {r.measured_verdict && <VerdictBadge status={r.measured_verdict} prefix="measured" />}
                   <VerdictBadge status={r.verdict} />
@@ -396,10 +396,10 @@ export default function MetricsPage() {
                 <tr className="border-b border-border">
                   <th className="text-left py-1.5 px-2 text-muted-foreground font-medium w-32">Stakeholder</th>
                   {pugh.columns.map((col) => (
-                    <th key={col.id} className={`py-1.5 px-2 text-center font-mono text-[11px] ${col.id === pugh.datum ? 'text-primary' : 'text-foreground'}`}>
+                    <th key={col.id} className={`py-1.5 px-2 text-center font-mono text-2xs ${col.id === pugh.datum ? 'text-primary' : 'text-foreground'}`}>
                       <div className="truncate max-w-[100px]" title={col.id}>{col.id}</div>
                       {col.id === pugh.datum && (
-                        <span className="badge bg-primary/10 text-primary text-[9px]">datum</span>
+                        <span className="badge bg-primary/10 text-primary text-4xs">datum</span>
                       )}
                     </th>
                   ))}
@@ -431,9 +431,9 @@ export default function MetricsPage() {
               </tbody>
               <tfoot>
                 <tr className="border-t border-border">
-                  <td className="py-1.5 px-2 text-muted-foreground text-[10px] uppercase tracking-wider">plus / minus</td>
+                  <td className="py-1.5 px-2 text-muted-foreground text-3xs uppercase tracking-wider">plus / minus</td>
                   {pugh.columns.map((col) => (
-                    <td key={col.id} className="py-1.5 px-2 text-center tabular-nums text-[10px]">
+                    <td key={col.id} className="py-1.5 px-2 text-center tabular-nums text-3xs">
                       <span className="text-cs-green">{col.plus}</span>
                       <span className="text-muted-foreground"> / </span>
                       <span className="text-cs-red">{col.minus}</span>
@@ -441,9 +441,9 @@ export default function MetricsPage() {
                   ))}
                 </tr>
                 <tr>
-                  <td className="py-1 px-2 text-muted-foreground text-[10px] uppercase tracking-wider">weighted</td>
+                  <td className="py-1 px-2 text-muted-foreground text-3xs uppercase tracking-wider">weighted</td>
                   {pugh.columns.map((col) => (
-                    <td key={col.id} className={`py-1 px-2 text-center tabular-nums text-[11px] font-mono ${col.weighted > 0 ? 'text-cs-green' : col.weighted < 0 ? 'text-cs-red' : 'text-muted-foreground'}`}>
+                    <td key={col.id} className={`py-1 px-2 text-center tabular-nums text-2xs font-mono ${col.weighted > 0 ? 'text-cs-green' : col.weighted < 0 ? 'text-cs-red' : 'text-muted-foreground'}`}>
                       {col.weighted > 0 ? '+' : ''}{col.weighted.toFixed(2)}
                     </td>
                   ))}
@@ -459,15 +459,15 @@ export default function MetricsPage() {
           <h2 className="font-semibold text-sm text-card-foreground mb-3 flex items-center gap-2"><Sparkles size={16} className="text-cs-purple" /> Requirement Quality ({qualityAvg}/100)</h2>
           <div className="space-y-2">
             {quality.slice(0, 10).map((q) => (
-              <div key={q.id} className="flex items-center gap-2 text-xs py-1.5 px-2 rounded hover:bg-accent">
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-[11px] font-bold shrink-0 ${q.score >= 80 ? 'bg-cs-green/10 text-cs-green' : q.score >= 50 ? 'bg-cs-amber/10 text-cs-amber' : 'bg-cs-red/10 text-cs-red'}`}>{q.score}</div>
+              <div key={q.id} className="flex items-center gap-2 text-xs py-1.5 px-2 rounded-md hover:bg-accent">
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-2xs font-bold shrink-0 ${q.score >= 80 ? 'bg-cs-green/10 text-cs-green' : q.score >= 50 ? 'bg-cs-amber/10 text-cs-amber' : 'bg-cs-red/10 text-cs-red'}`}>{q.score}</div>
                 <div className="flex-1 min-w-0">
                   <EntityLink kind="requirement" id={q.id} />
-                  <div className="text-[10px] text-muted-foreground truncate">{q.name}</div>
+                  <div className="text-3xs text-muted-foreground truncate">{q.name}</div>
                 </div>
                 <div className="flex gap-1 flex-wrap justify-end">
                   {q.findings.slice(0, 3).map((f, fi) => (
-                    <span key={fi} className={`badge text-[9px] ${f.severity === 'error' ? 'bg-cs-red/10 text-cs-red' : f.severity === 'warning' ? 'bg-cs-amber/10 text-cs-amber' : 'bg-muted text-muted-foreground'}`} title={f.message}>{f.rule.replace(/_/g, ' ')}</span>
+                    <span key={fi} className={`badge text-4xs ${f.severity === 'error' ? 'bg-cs-red/10 text-cs-red' : f.severity === 'warning' ? 'bg-cs-amber/10 text-cs-amber' : 'bg-muted text-muted-foreground'}`} title={f.message}>{f.rule.replace(/_/g, ' ')}</span>
                   ))}
                 </div>
               </div>
@@ -481,10 +481,10 @@ export default function MetricsPage() {
           <h2 className="font-semibold text-sm text-card-foreground mb-3 flex items-center gap-2"><AlertTriangle size={16} className="text-cs-amber" /> Gap Analysis ({gaps.length} issues)</h2>
           <div className="space-y-1.5">
             {gaps.slice(0, 10).map((g, i) => (
-              <div key={i} className="flex items-center gap-2 text-xs py-1 px-2 rounded hover:bg-accent">
+              <div key={i} className="flex items-center gap-2 text-xs py-1 px-2 rounded-md hover:bg-accent">
                 <EntityLink kind="requirement" id={g.id} />
                 <span className="text-foreground">{g.name || ''}</span>
-                <div className="flex gap-1 ml-auto">{g.issues.map(iss => <span key={iss} className="badge bg-cs-amber/10 text-cs-amber text-[10px]">{iss.replace(/_/g, ' ')}</span>)}</div>
+                <div className="flex gap-1 ml-auto">{g.issues.map(iss => <span key={iss} className="badge bg-cs-amber/10 text-cs-amber text-3xs">{iss.replace(/_/g, ' ')}</span>)}</div>
               </div>
             ))}
           </div>
@@ -496,7 +496,7 @@ export default function MetricsPage() {
           <h2 className="font-semibold text-sm text-card-foreground mb-3 flex items-center gap-2"><AlertTriangle size={16} className="text-cs-red" /> Conflicts ({conflicts.count})</h2>
           <div className="space-y-1.5">
             {conflicts.conflicts.map((c, i) => (
-              <div key={i} className="text-xs py-1 px-2 rounded bg-cs-red/5 text-cs-red">
+              <div key={i} className="text-xs py-1 px-2 rounded-md bg-cs-red/5 text-cs-red">
                 {c.type === 'duplicate_name' ? `Duplicate name "${c.name}": ${(c.ids || []).join(', ')}` : `Conflict: ${c.a} ↔ ${c.b}`}
               </div>
             ))}

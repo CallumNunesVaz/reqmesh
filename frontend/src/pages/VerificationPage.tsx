@@ -435,7 +435,7 @@ export default function VerificationPage() {
                 <X size={14} />
               </button>
             ) : (
-              <kbd className="absolute right-3 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded border bg-muted text-[10px] font-mono text-muted-foreground pointer-events-none">/</kbd>
+              <kbd className="absolute right-3 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded-md border bg-muted text-3xs font-mono text-muted-foreground pointer-events-none">/</kbd>
             )}
           </div>
           <select className="select w-32 h-9 text-xs" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
@@ -490,7 +490,7 @@ export default function VerificationPage() {
                 <label className="label">ID
                   <input className="input font-mono" placeholder="VC-001" value={newVC.id} onChange={(e) => setNewVC({ ...newVC, id: e.target.value })} />
                 </label>
-                {idExample && <span className="text-[10px] text-muted-foreground">e.g. {idExample}</span>}
+                {idExample && <span className="text-3xs text-muted-foreground">e.g. {idExample}</span>}
               </div>
               <div className="flex-1">
                 <label className="label">Name
@@ -559,7 +559,7 @@ export default function VerificationPage() {
                         setSelectedVcs(p => { const n = new Set(p); if (e.target.checked) n.add(vc.id); else n.delete(vc.id); return n; });
                       }}
                       aria-label={`Select ${vc.id}`}
-                      className="w-4 h-4 rounded border-muted-foreground/30 shrink-0"
+                      className="w-4 h-4 rounded-md border-muted-foreground/30 shrink-0"
                     />
                   )}
                   <button
@@ -627,7 +627,7 @@ export default function VerificationPage() {
                     onClick={() => toggleExpand(vc.id)}
                     aria-expanded={isExpanded}
                     aria-label={isExpanded ? 'Collapse' : 'Expand'}
-                    className="shrink-0 p-0.5 -m-0.5 rounded"
+                    className="shrink-0 p-0.5 -m-0.5 rounded-md"
                   >
                     <ChevronDown
                       size={15}
@@ -672,7 +672,7 @@ export default function VerificationPage() {
                         ) : (
                           <div className="space-y-1">
                             {vc.verified_requirements.map((reqId) => (
-                              <div key={reqId} className="flex items-center gap-2 text-xs py-1 px-2 rounded hover:bg-accent group/link">
+                              <div key={reqId} className="flex items-center gap-2 text-xs py-1 px-2 rounded-md hover:bg-accent group/link">
                                 <EntityLink
                                   kind="requirement"
                                   id={reqId}
@@ -680,7 +680,7 @@ export default function VerificationPage() {
                                   className="flex-1 min-w-0 text-foreground hover:text-cs-blue"
                                 />
                                 {editable && (
-                                <button onClick={(e) => { e.stopPropagation(); handleUnlinkRequirement(vc.id, reqId); }} className="p-0.5 rounded text-muted-foreground hover:text-destructive opacity-0 group-hover/link:opacity-100 transition-[color,opacity]" title="Unlink requirement">
+                                <button onClick={(e) => { e.stopPropagation(); handleUnlinkRequirement(vc.id, reqId); }} className="p-0.5 rounded-md text-muted-foreground hover:text-destructive opacity-0 group-hover/link:opacity-100 transition-[color,opacity]" title="Unlink requirement">
                                   <X size={11} />
                                 </button>
                                 )}
@@ -694,7 +694,7 @@ export default function VerificationPage() {
                             directions. */}
                         {(refReqs.length > 0 || refComps.length > 0) && (
                         <div className="border-t pt-3">
-                          <h4 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                          <h4 className="text-2xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
                             Referenced By
                           </h4>
                           <div className="flex flex-wrap gap-1.5">
@@ -717,11 +717,11 @@ export default function VerificationPage() {
                             its measured verdict. */}
                         {((vc.measurements || []).length > 0 || editable) && (
                         <div className="border-t pt-3">
-                          <h4 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                          <h4 className="text-2xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
                             <FlaskConical size={12} /> Measurements
                           </h4>
                           {(vc.measurements || []).map((m, mi) => (
-                            <div key={mi} className="flex items-center gap-2 text-xs py-1 px-2 rounded hover:bg-accent group/meas">
+                            <div key={mi} className="flex items-center gap-2 text-xs py-1 px-2 rounded-md hover:bg-accent group/meas">
                               <EntityLink
                                 kind="requirement"
                                 id={m.parameter.split('.')[0]}
@@ -731,7 +731,7 @@ export default function VerificationPage() {
                               <span className="font-mono text-foreground">{m.value}</span>
                               <span className="text-muted-foreground w-10 truncate">{m.unit}</span>
                               {editable && (
-                              <button onClick={(e) => { e.stopPropagation(); handleRemoveMeasurement(vc.id, mi); }} className="p-0.5 rounded text-muted-foreground hover:text-destructive opacity-0 group-hover/meas:opacity-100 transition-[color,opacity]">
+                              <button onClick={(e) => { e.stopPropagation(); handleRemoveMeasurement(vc.id, mi); }} className="p-0.5 rounded-md text-muted-foreground hover:text-destructive opacity-0 group-hover/meas:opacity-100 transition-[color,opacity]">
                                 <X size={11} />
                               </button>
                               )}
@@ -747,7 +747,7 @@ export default function VerificationPage() {
                                 })));
                               return <>
                                 <AutocompleteInput
-                                  className="input flex-1 text-[11px] font-mono"
+                                  className="input flex-1 text-2xs font-mono"
                                   placeholder="REQID.parameter"
                                   value={getMeasurement(vc.id).parameter}
                                   onChange={(v) => {
@@ -756,10 +756,10 @@ export default function VerificationPage() {
                                   }}
                                   suggestions={suggestions}
                                 />
-                                <input className="input w-24 text-[11px] font-mono" placeholder="value"
+                                <input className="input w-24 text-2xs font-mono" placeholder="value"
                                   value={getMeasurement(vc.id).value}
                                   onChange={(e) => setMeasurement(vc.id, { value: e.target.value })} />
-                                <input className="input w-16 text-[11px]" placeholder="unit"
+                                <input className="input w-16 text-2xs" placeholder="unit"
                                   value={getMeasurement(vc.id).unit}
                                   onChange={(e) => setMeasurement(vc.id, { unit: e.target.value })} />
                                 <button
@@ -778,7 +778,7 @@ export default function VerificationPage() {
 
                         {/* Test Procedure */}
                         <div className="border-t pt-3">
-                          <h4 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                          <h4 className="text-2xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
                             <ClipboardList size={12} /> Test Procedure
                           </h4>
                           {editable ? (
@@ -795,7 +795,7 @@ export default function VerificationPage() {
 
                         {/* Test Steps */}
                         <div>
-                          <h4 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                          <h4 className="text-2xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
                             <ListChecks size={12} /> Test Steps
                           </h4>
                           {(vc.steps || []).length === 0 && !editable && (
@@ -804,12 +804,12 @@ export default function VerificationPage() {
                           {(vc.steps || []).map((step, si) => (
                             <div key={si} className="mb-2 pl-3 border-l-2 border-muted">
                               <div className="flex items-start gap-2 text-xs">
-                                <span className="font-mono text-[10px] text-muted-foreground mt-0.5 shrink-0">#{si + 1}</span>
+                                <span className="font-mono text-3xs text-muted-foreground mt-0.5 shrink-0">#{si + 1}</span>
                                 <div className="flex-1 min-w-0 space-y-1">
-                                  <div><span className="text-[10px] text-muted-foreground">Action:</span> <span className="text-foreground">{step.action}</span></div>
-                                  <div><span className="text-[10px] text-muted-foreground">Expected:</span> <span className="text-foreground">{step.expected_result}</span></div>
+                                  <div><span className="text-3xs text-muted-foreground">Action:</span> <span className="text-foreground">{step.action}</span></div>
+                                  <div><span className="text-3xs text-muted-foreground">Expected:</span> <span className="text-foreground">{step.expected_result}</span></div>
                                   <div className="flex items-center gap-1">
-                                    <span className="text-[10px] text-muted-foreground shrink-0">Actual:</span>
+                                    <span className="text-3xs text-muted-foreground shrink-0">Actual:</span>
                                     {editable ? (
                                       <input
                                         className="bg-transparent text-xs flex-1 border-b border-dashed border-muted-foreground/30 outline-none focus:border-primary/50 py-px"
@@ -833,13 +833,13 @@ export default function VerificationPage() {
                           {editable && (
                           <div className="flex gap-1.5 mt-2">
                             <input
-                              className="input flex-1 text-[11px]"
+                              className="input flex-1 text-2xs"
                               placeholder="Step action..."
                               value={getStepAction(vc.id)}
                               onChange={(e) => setStepAction(vc.id, e.target.value)}
                             />
                             <input
-                              className="input flex-1 text-[11px]"
+                              className="input flex-1 text-2xs"
                               placeholder="Expected result..."
                               value={getStepExpected(vc.id)}
                               onChange={(e) => setStepExpected(vc.id, e.target.value)}
@@ -894,12 +894,12 @@ export default function VerificationPage() {
                         {/* Execution History */}
                         {(vc.execution_history || []).length > 0 && (
                         <div className="border-t pt-3">
-                          <h4 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                          <h4 className="text-2xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
                             Execution History
                           </h4>
                           <div className="space-y-1.5">
                             {(vc.execution_history || []).map((run, ri) => (
-                              <div key={ri} className="flex items-center gap-2 text-[10px] py-1 px-2 rounded bg-muted/30">
+                              <div key={ri} className="flex items-center gap-2 text-3xs py-1 px-2 rounded-md bg-muted/30">
                                 <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
                                   run.status === 'passed' ? 'bg-cs-green' : run.status === 'failed' ? 'bg-cs-red' : 'bg-cs-amber'
                                 }`} />
@@ -913,11 +913,11 @@ export default function VerificationPage() {
                         </div>
                         )}
                         <div className="border-t pt-3">
-                          <h4 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Comments</h4>
+                          <h4 className="text-2xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Comments</h4>
                           <CommentThread entityKind="verification_cases" entityId={vc.id} />
                         </div>
                         <div className="border-t pt-3">
-                          <h4 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Change History</h4>
+                          <h4 className="text-2xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Change History</h4>
                           <HistoryPanel itemId={vc.id} />
                         </div>
                       </div>
@@ -972,11 +972,11 @@ export default function VerificationPage() {
                   <label className="flex items-center gap-2 text-xs">
                     <input type="checkbox" checked={importDryRun}
                       onChange={(e) => setImportDryRun(e.target.checked)}
-                      className="w-4 h-4 rounded" />
+                      className="w-4 h-4 rounded-md" />
                     Dry run (preview only, no changes)
                   </label>
                   {importError && (
-                    <div className="p-2 rounded bg-destructive/10 text-destructive text-xs border border-destructive/20">{importError}</div>
+                    <div className="p-2 rounded-md bg-destructive/10 text-destructive text-xs border border-destructive/20">{importError}</div>
                   )}
                   <button onClick={handleImportTestResults}
                     disabled={!importFile || importing}
@@ -1012,7 +1012,7 @@ export default function VerificationPage() {
                               <td className="px-2 py-1 font-mono truncate max-w-[200px]" title={d.test_name}>{d.test_name}</td>
                               <td className="px-2 py-1 font-mono">{d.vc_id || '—'}</td>
                               <td className="px-2 py-1">
-                                <span className={`text-[10px] font-medium ${d.status === 'imported' ? 'text-cs-green' : d.status === 'unmatched' ? 'text-cs-orange' : d.status === 'dry_run' ? 'text-cs-blue' : 'text-cs-red'}`}>{d.status}</span>
+                                <span className={`text-3xs font-medium ${d.status === 'imported' ? 'text-cs-green' : d.status === 'unmatched' ? 'text-cs-orange' : d.status === 'dry_run' ? 'text-cs-blue' : 'text-cs-red'}`}>{d.status}</span>
                               </td>
                             </tr>
                           ))}

@@ -70,7 +70,7 @@ export function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: (id: nu
       </span>
       <button
         onClick={() => onRemove(toast.id)}
-        className="p-0.5 rounded hover:bg-white/20 transition-colors"
+        className="p-0.5 rounded-md hover:bg-white/20 transition-colors"
         aria-label="Dismiss"
       >
         <X size={14} />

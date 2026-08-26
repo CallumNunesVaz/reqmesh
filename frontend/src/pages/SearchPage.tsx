@@ -184,7 +184,7 @@ export default function SearchPage() {
                         {r.snippet}
                       </span>
                     )}
-                    <span className="ml-auto text-[10px] text-muted-foreground shrink-0 hidden sm:inline">
+                    <span className="ml-auto text-3xs text-muted-foreground shrink-0 hidden sm:inline">
                       {r.kind_label}
                     </span>
                   </div>

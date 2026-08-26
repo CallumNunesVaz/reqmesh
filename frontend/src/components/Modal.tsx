@@ -12,7 +12,7 @@ import BodyPortal from './BodyPortal';
  * backdrop, the centring, escape-to-close, the panel chrome, and the focus
  * trap. Settled values (the most common in the app at the time of extraction):
  *
- *   radius    rounded-xl
+ *   radius    rounded-lg
  *   backdrop  bg-background/80 backdrop-blur-sm
  *   z-index   z-50, or z-[60] with `elevated` — see that prop
  *
@@ -134,7 +134,7 @@ export default function Modal({
               exit={{ opacity: 0, scale: 0.95, y: 8 }}
               transition={{ duration: 0.12 }}
               onClick={(e) => e.stopPropagation()}
-              className={`relative bg-card border rounded-xl shadow-2xl ${panelClassName}`}
+              className={`relative bg-card border rounded-lg shadow-2xl ${panelClassName}`}
             >
               {children}
             </motion.div>

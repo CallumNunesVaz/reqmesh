@@ -111,7 +111,7 @@ function ParamMention({ paramRef, params }: { paramRef: string; params: Map<stri
   return (
     <span
       title={reason}
-      className="inline-flex items-center gap-0.5 align-baseline rounded bg-cs-orange/10 px-1 text-cs-orange"
+      className="inline-flex items-center gap-0.5 align-baseline rounded-md bg-cs-orange/10 px-1 text-cs-orange"
     >
       <AlertTriangle size={11} className="shrink-0" />
       <span className="font-mono text-[0.9em]">{paramRef}</span>

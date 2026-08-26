@@ -253,7 +253,7 @@ export default function SystemStatesPage() {
                 )}
               </span>
             )}
-            <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-muted text-muted-foreground text-[10px] font-mono">
+            <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-muted text-muted-foreground text-3xs font-mono">
               {s.order}
             </span>
             <h3 className="font-semibold text-card-foreground font-mono">{s.name}</h3>
@@ -395,7 +395,7 @@ export default function SystemStatesPage() {
                   {editable && (
                     <button
                       onClick={() => openCreate(name)}
-                      className="p-0.5 rounded hover:bg-cs-orange/20 transition-colors text-cs-orange"
+                      className="p-0.5 rounded-md hover:bg-cs-orange/20 transition-colors text-cs-orange"
                       title={`Define "${name}"`}
                     >
                       <Plus size={12} />

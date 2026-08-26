@@ -10,11 +10,15 @@ export default {
         sans: ['var(--font-sans)', 'Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
         mono: ['var(--font-mono)', 'JetBrains Mono', 'Fira Code', 'monospace'],
       },
+      fontSize: {
+        '2xs': ['11px', '1rem'],
+        '3xs': ['10px', '0.875rem'],
+        '4xs': ['9px', '0.75rem'],
+      },
       borderRadius: {
         DEFAULT: 'var(--radius)',
         lg: 'calc(var(--radius) + 0.25rem)',
         md: 'var(--radius)',
-        sm: 'calc(var(--radius) - 0.125rem)',
       },
       colors: {
         background: 'hsl(var(--background) / <alpha-value>)',

@@ -194,7 +194,7 @@ function HoverPreview({ entity, anchor }: { entity: IndexedEntity | 'missing'; a
   const Icon = meta.icon;
   return createPortal(
     <div style={{ ...style, width: PREVIEW_W }} className="fixed z-[100] pointer-events-none card p-3 shadow-xl">
-      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+      <div className="flex items-center gap-1.5 text-3xs uppercase tracking-wider text-muted-foreground">
         <Icon size={11} className={meta.cls} />
         {meta.label}
         {entity.status && <span className="ml-auto normal-case tracking-normal badge bg-muted text-muted-foreground">{entity.status}</span>}
@@ -281,7 +281,7 @@ export function EntityLink({ kind, id, name, projectId, showIcon = true, classNa
       onMouseEnter={startPreview}
       onMouseLeave={endPreview}
       title={`${displayMeta.label} ${id}${name ? ` — ${name}` : ''}`}
-      className={`inline-flex items-center gap-1 min-w-0 rounded hover:underline underline-offset-2 transition-colors ${className}`}
+      className={`inline-flex items-center gap-1 min-w-0 rounded-md hover:underline underline-offset-2 transition-colors ${className}`}
     >
       {showIcon && <Icon size={12} className={`${displayMeta.cls} shrink-0`} />}
       <span className="font-mono whitespace-nowrap shrink-0">{id}</span>
@@ -337,7 +337,7 @@ export function CopyLinkButton({ kind, id, projectId, className = '' }: CopyLink
       title={copied === 'ok' ? 'Copied!'
            : copied === 'fail' ? 'Could not copy — select the link and copy manually'
            : `Copy link to ${id}`}
-      className={`p-1 rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-colors ${className}`}
+      className={`p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors ${className}`}
     >
       {copied === 'ok' ? <Check size={12} className="text-cs-green" />
        : copied === 'fail' ? <AlertTriangle size={12} className="text-cs-yellow" />

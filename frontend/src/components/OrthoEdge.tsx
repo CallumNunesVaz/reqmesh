@@ -75,7 +75,7 @@ function OrthoEdge({ id, data, style, markerEnd }: EdgeProps) {
             className="nodrag nopan"
           >
             <span
-              className="text-[9px] font-semibold px-1.5 py-px rounded-full bg-graph-panel border border-graph-border shadow-sm"
+              className="text-4xs font-semibold px-1.5 py-px rounded-full bg-graph-panel border border-graph-border shadow-sm"
               style={{ color: edgeColor, whiteSpace: 'nowrap' }}
               title={`${count} relationships`}
             >
@@ -101,7 +101,7 @@ function OrthoEdge({ id, data, style, markerEnd }: EdgeProps) {
             className="nodrag nopan"
           >
             <span
-              className="text-[9px] font-semibold px-1.5 py-px rounded bg-graph-node border border-graph-node-border shadow-sm"
+              className="text-4xs font-semibold px-1.5 py-px rounded-md bg-graph-node border border-graph-node-border shadow-sm"
               style={{ color: edgeColor, whiteSpace: 'nowrap' }}>
               {edgeLabel}
             </span>

@@ -424,7 +424,7 @@ function FloatingEdge({ id, source, target, data, style, markerEnd }: EdgeProps)
             className="nodrag nopan"
           >
             <span
-              className="text-[9px] font-semibold px-1.5 py-px rounded-full bg-graph-panel border border-graph-border shadow-sm"
+              className="text-4xs font-semibold px-1.5 py-px rounded-full bg-graph-panel border border-graph-border shadow-sm"
               style={{ color: edgeColor, whiteSpace: 'nowrap' }}
               title={`${count} relationships`}
             >
@@ -444,7 +444,7 @@ function FloatingEdge({ id, source, target, data, style, markerEnd }: EdgeProps)
             className="nodrag nopan"
           >
             <span
-              className="text-[9px] font-semibold px-1.5 py-px rounded bg-graph-node border border-graph-node-border shadow-sm"
+              className="text-4xs font-semibold px-1.5 py-px rounded-md bg-graph-node border border-graph-node-border shadow-sm"
               style={{ color: edgeColor, whiteSpace: 'nowrap' }}>
               {edgeLabel}
             </span>
@@ -2166,15 +2166,15 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
             >
               <Filter size={13} />
               {activeFilterCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 min-w-[15px] h-[15px] px-1 rounded-full bg-primary text-primary-foreground text-[9px] font-semibold flex items-center justify-center">
+                <span className="absolute -top-1.5 -right-1.5 min-w-[15px] h-[15px] px-1 rounded-full bg-primary text-primary-foreground text-4xs font-semibold flex items-center justify-center">
                   {activeFilterCount}
                 </span>
               )}
             </button>
             {showFilters && (
-              <div className="absolute top-full left-0 mt-1.5 z-50 w-60 max-w-[calc(100cqw-1.5rem)] rounded-xl bg-graph-panel border border-graph-border shadow-2xl p-4">
+              <div className="absolute top-full left-0 mt-1.5 z-50 w-60 max-w-[calc(100cqw-1.5rem)] rounded-lg bg-graph-panel border border-graph-border shadow-2xl p-4">
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-[11px] font-semibold text-graph-text uppercase tracking-wider">Filters</span>
+                  <span className="text-2xs font-semibold text-graph-text uppercase tracking-wider">Filters</span>
                   <button onClick={() => setShowFilters(false)} className="text-graph-muted hover:text-graph-text" aria-label="Close filters" title="Close filters">
                     <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
                   </button>
@@ -2184,20 +2184,20 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
                   <FilterField label="Priority" options={availablePriorities} value={filterPriority} onChange={setFilterPriority} colorOf={priorityOptionColor} />
                   {availableBaselines.length > 0 && (
                     <div>
-                      <div className="text-[9px] text-graph-muted mb-1">Baselines</div>
+                      <div className="text-4xs text-graph-muted mb-1">Baselines</div>
                       <div className="space-y-0.5 max-h-32 overflow-y-auto">
                         {availableBaselines.map((b) => {
                           const checked = !hiddenBaselines.includes(b);
                           return (
-                            <label key={b} className="flex items-center gap-1.5 py-0.5 cursor-pointer hover:bg-graph-control-hover rounded px-1 transition-colors">
+                            <label key={b} className="flex items-center gap-1.5 py-0.5 cursor-pointer hover:bg-graph-control-hover rounded-md px-1 transition-colors">
                               <input
                                 type="checkbox"
                                 checked={checked}
                                 onChange={() => toggleHiddenBaseline(b)}
-                                className="w-3 h-3 rounded border-graph-border accent-graph-text cursor-pointer"
+                                className="w-3 h-3 rounded-md border-graph-border accent-graph-text cursor-pointer"
                               />
-                              <span className="text-[11px] text-graph-text">{b}</span>
-                              <span className="text-[9px] text-graph-muted ml-auto">
+                              <span className="text-2xs text-graph-text">{b}</span>
+                              <span className="text-4xs text-graph-muted ml-auto">
                                 {reqs.filter(r => r.baselines?.includes(b)).length}
                               </span>
                             </label>
@@ -2212,7 +2212,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
                   <FilterField label="Allocated team" options={availableAllocations} value={filterAllocated} onChange={setFilterAllocated} />
                   {availableComponents.length > 0 && (
                     <div>
-                      <div className="text-[9px] text-graph-muted mb-1">Components</div>
+                      <div className="text-4xs text-graph-muted mb-1">Components</div>
                       <div className="space-y-0.5 max-h-32 overflow-y-auto">
                         {availableComponents.map((cid) => {
                           const checked = !effectiveHidden.has(cid);
@@ -2220,16 +2220,16 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
                           const reqCount = components.find(c => c.id === cid)?.satisfies?.length ?? 0;
                           const inherited = effectiveHidden.has(cid) && !hiddenComponents.includes(cid);
                           return (
-                            <label key={cid} className="flex items-center gap-1.5 py-0.5 cursor-pointer hover:bg-graph-control-hover rounded px-1 transition-colors">
+                            <label key={cid} className="flex items-center gap-1.5 py-0.5 cursor-pointer hover:bg-graph-control-hover rounded-md px-1 transition-colors">
                               <input
                                 type="checkbox"
                                 checked={checked}
                                 onChange={() => toggleHiddenComponent(cid)}
-                                className="w-3 h-3 rounded border-graph-border accent-graph-text cursor-pointer disabled:opacity-50 disabled:cursor-default"
+                                className="w-3 h-3 rounded-md border-graph-border accent-graph-text cursor-pointer disabled:opacity-50 disabled:cursor-default"
                                 disabled={inherited}
                               />
-                              <span className="text-[11px] text-graph-text truncate max-w-[140px]">{label}</span>
-                              <span className="text-[9px] text-graph-muted ml-auto shrink-0" title={`Satisfies ${reqCount} requirements`}>{reqCount}</span>
+                              <span className="text-2xs text-graph-text truncate max-w-[140px]">{label}</span>
+                              <span className="text-4xs text-graph-muted ml-auto shrink-0" title={`Satisfies ${reqCount} requirements`}>{reqCount}</span>
                             </label>
                           );
                         })}
@@ -2240,7 +2240,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
                 {hasActiveFilters && (
                   <div className="mt-3 pt-3 border-t border-graph-border">
                     <button onClick={clearFilters}
-                      className="w-full text-[10px] text-graph-muted hover:text-graph-text hover:bg-graph-control-hover rounded py-1 transition-colors">
+                      className="w-full text-3xs text-graph-muted hover:text-graph-text hover:bg-graph-control-hover rounded-md py-1 transition-colors">
                       Clear all filters ({filteredReqs.length}/{reqs.length} visible)
                     </button>
                   </div>
@@ -2277,9 +2277,9 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
               <SlidersHorizontal size={13} />
             </button>
             {showSettings && (
-              <div className="absolute top-full left-0 mt-1.5 z-50 w-64 max-w-[calc(100cqw-1.5rem)] rounded-xl bg-graph-panel border border-graph-border shadow-2xl p-4">
+              <div className="absolute top-full left-0 mt-1.5 z-50 w-64 max-w-[calc(100cqw-1.5rem)] rounded-lg bg-graph-panel border border-graph-border shadow-2xl p-4">
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-[11px] font-semibold text-graph-text uppercase tracking-wider">Layout Settings</span>
+                  <span className="text-2xs font-semibold text-graph-text uppercase tracking-wider">Layout Settings</span>
                   <button onClick={() => setShowSettings(false)} className="text-graph-muted hover:text-graph-text" aria-label="Close layout settings" title="Close layout settings">
                     <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
                   </button>
@@ -2287,11 +2287,11 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
                 <div className="space-y-3">
                   {/* Rank direction */}
                   <div>
-                    <div className="text-[9px] text-graph-muted mb-1.5">Direction</div>
+                    <div className="text-4xs text-graph-muted mb-1.5">Direction</div>
                     <div className="grid grid-cols-4 gap-1">
                       {(['LR','TB','RL','BT'] as const).map(d => (
                         <button key={d} onClick={() => updateGraphSetting('rankdir', d)}
-                          className={`text-[10px] py-1 rounded font-mono border transition-colors ${
+                          className={`text-3xs py-1 rounded-md font-mono border transition-colors ${
                             gs.rankdir === d ? 'bg-primary/20 text-primary border-primary/30' : 'border-graph-border text-graph-text hover:bg-graph-control-hover'
                           }`}>{d}</button>
                       ))}
@@ -2305,7 +2305,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
                     { key: 'margin', label: 'Margin', min: 10, max: 200, val: gs.margin },
                   ].map(({ key, label, min, max, step, val }) => (
                     <div key={key}>
-                      <div className="flex justify-between text-[9px] mb-1">
+                      <div className="flex justify-between text-4xs mb-1">
                         <span className="text-graph-muted">{label}</span>
                         <span className="text-graph-text font-mono">{typeof val === 'number' ? Math.round(val * 10) / 10 : val}</span>
                       </div>
@@ -2320,7 +2320,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
                 </div>
                 <div className="mt-3 pt-3 border-t border-graph-border">
                   <button onClick={resetGraphSettings}
-                    className="w-full text-[10px] text-graph-muted hover:text-graph-text hover:bg-graph-control-hover rounded py-1 transition-colors">
+                    className="w-full text-3xs text-graph-muted hover:text-graph-text hover:bg-graph-control-hover rounded-md py-1 transition-colors">
                     Reset to defaults
                   </button>
                 </div>
@@ -2367,7 +2367,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
               <button
                 key={n}
                 onClick={() => setHopDepthPersist(n)}
-                className={`px-2 py-1.5 text-[11px] font-mono border-l border-graph-border transition-colors ${
+                className={`px-2 py-1.5 text-2xs font-mono border-l border-graph-border transition-colors ${
                   hopDepth === n ? 'bg-primary text-primary-foreground' : 'text-graph-text hover:bg-graph-control-hover'
                 }`}
                 title={`Highlight ${n} hop${n > 1 ? 's' : ''} out`}
@@ -2449,7 +2449,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
                   key={i}
                   onClick={(e) => { if (e.shiftKey || !filled) saveView(i); else restoreView(i); }}
                   onContextMenu={(e) => { e.preventDefault(); if (filled) clearView(i); }}
-                  className={`px-2 py-1.5 text-[11px] font-mono border-l border-graph-border transition-colors ${
+                  className={`px-2 py-1.5 text-2xs font-mono border-l border-graph-border transition-colors ${
                     filled ? 'bg-primary/15 text-primary hover:bg-primary/25' : 'text-graph-muted hover:bg-graph-control-hover'
                   }`}
                   title={filled
@@ -2473,10 +2473,10 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
             with the (wrapping) toolbar, so it only appears on wider panes. */}
         <Panel position="top-right" className="mr-2 mt-2 hidden @2xl:block">
           <div className="rounded-lg bg-graph-panel border border-graph-border px-2.5 py-1.5 shadow-sm opacity-90 hover:opacity-100 transition-opacity">
-            <div className="text-[9px] font-semibold uppercase tracking-wider text-graph-muted mb-1">Relations</div>
+            <div className="text-4xs font-semibold uppercase tracking-wider text-graph-muted mb-1">Relations</div>
             <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
               {Object.entries(edgeColors).map(([type, color]) => (
-                <div key={type} className="flex items-center gap-1.5 text-[10px] text-graph-text">
+                <div key={type} className="flex items-center gap-1.5 text-3xs text-graph-text">
                   <span className="w-2.5 h-0.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
                   <span>{type.replace('_', ' ')}</span>
                 </div>
@@ -2491,7 +2491,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
               the status chip — the top-left toolbar wraps into the top-centre
               slot on narrow panes, so a banner up there would collide. */}
           {derivationActive && (
-            <div className="flex items-center gap-2 rounded-lg bg-primary/15 border border-primary/40 px-2.5 py-1.5 shadow-sm text-[11px] text-foreground max-w-full">
+            <div className="flex items-center gap-2 rounded-lg bg-primary/15 border border-primary/40 px-2.5 py-1.5 shadow-sm text-2xs text-foreground max-w-full">
               <Waypoints size={12} className="text-primary shrink-0" />
               <span className="truncate">
                 Derivation of <span className="font-mono">{derived!.root}</span> —{' '}
@@ -2499,7 +2499,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
               </span>
               <button
                 onClick={() => setDerived(null)}
-                className="shrink-0 rounded px-1 text-graph-muted hover:text-foreground hover:bg-graph-control-hover"
+                className="shrink-0 rounded-md px-1 text-graph-muted hover:text-foreground hover:bg-graph-control-hover"
                 title="Clear derivation trace"
                 aria-label="Clear derivation trace"
               >
@@ -2507,7 +2507,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
               </button>
             </div>
           )}
-          <div className="text-[10px] text-graph-text bg-graph-panel border border-graph-border rounded-lg px-2.5 py-1.5 shadow-sm flex items-center gap-2 whitespace-nowrap overflow-hidden max-w-full">
+          <div className="text-3xs text-graph-text bg-graph-panel border border-graph-border rounded-lg px-2.5 py-1.5 shadow-sm flex items-center gap-2 whitespace-nowrap overflow-hidden max-w-full">
             {layoutMode === 'uml' && (
               <>
                 <ZoomLevelChip />
@@ -2597,9 +2597,9 @@ function FilterField({ label, options, value, onChange, format, colorOf }: {
   const selectedColor = value ? colorOf?.(value) : undefined;
   return (
     <div>
-      <div className="text-[9px] text-graph-muted mb-1">{label}</div>
+      <div className="text-4xs text-graph-muted mb-1">{label}</div>
       <select
-        className="w-full appearance-none pl-2 pr-6 py-1.5 rounded-lg bg-graph-panel border border-graph-border text-[11px] text-graph-text outline-none focus:ring-1 focus:ring-ring/20 transition-[background-color,box-shadow] cursor-pointer hover:bg-graph-control-hover"
+        className="w-full appearance-none pl-2 pr-6 py-1.5 rounded-lg bg-graph-panel border border-graph-border text-2xs text-graph-text outline-none focus:ring-1 focus:ring-ring/20 transition-[background-color,box-shadow] cursor-pointer hover:bg-graph-control-hover"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         style={{

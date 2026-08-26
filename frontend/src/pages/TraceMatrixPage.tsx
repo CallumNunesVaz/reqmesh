@@ -235,7 +235,7 @@ export default function TraceMatrixPage() {
                 <X size={14} />
               </button>
             ) : (
-              <kbd className="absolute right-3 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded border bg-muted text-[10px] font-mono text-muted-foreground pointer-events-none">/</kbd>
+              <kbd className="absolute right-3 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded-md border bg-muted text-3xs font-mono text-muted-foreground pointer-events-none">/</kbd>
             )}
           </div>
           <select className="select w-36 h-9 text-xs" value={filterLinkType} onChange={(e) => setFilterLinkType(e.target.value)}>
@@ -334,7 +334,7 @@ export default function TraceMatrixPage() {
                     {editable && link.stored !== false && (
                     <button
                       onClick={() => removeLink(link)}
-                      className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-[color,background-color,opacity]"
+                      className="p-1 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-[color,background-color,opacity]"
                     >
                       <X size={12} />
                     </button>
@@ -355,13 +355,13 @@ export default function TraceMatrixPage() {
                 surplus goes to the data columns instead of the long ids. */}
             <thead>
               <tr>
-                <th className="sticky top-0 left-0 z-20 bg-card border-b border-r px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider text-left w-[180px] min-w-[100px]">
+                <th className="sticky top-0 left-0 z-20 bg-card border-b border-r px-3 py-2 text-3xs font-semibold text-muted-foreground uppercase tracking-wider text-left w-[180px] min-w-[100px]">
                   Source \ Target
                 </th>
                 {matrixTargets.map((tgt) => (
                   <th
                     key={tgt.id}
-                    className="sticky top-0 z-10 bg-card border-b px-2 py-2 text-[9px] font-mono whitespace-nowrap"
+                    className="sticky top-0 z-10 bg-card border-b px-2 py-2 text-4xs font-mono whitespace-nowrap"
                   >
                     <span className="inline-block" style={{ paddingLeft: axisIndent(tgt.depth) }}>
                       <EntityLink kind={kindOf(tgt.id)} id={tgt.id} name={nameOf(tgt.id)} showIcon={false} className="text-muted-foreground hover:text-primary" />
@@ -375,7 +375,7 @@ export default function TraceMatrixPage() {
                 const srcLinks = filteredLinks.filter((l) => l.source === src.id);
                 return (
                   <tr key={src.id} className="group">
-                    <td className="sticky left-0 z-10 bg-card border-r px-3 py-1.5 text-[10px] font-mono whitespace-nowrap group-hover:bg-accent/40">
+                    <td className="sticky left-0 z-10 bg-card border-r px-3 py-1.5 text-3xs font-mono whitespace-nowrap group-hover:bg-accent/40">
                       <span className="inline-block" style={{ paddingLeft: axisIndent(src.depth) }}>
                         <EntityLink kind={kindOf(src.id)} id={src.id} name={nameOf(src.id)} showIcon={false} className="text-foreground hover:text-primary" />
                       </span>
@@ -390,12 +390,12 @@ export default function TraceMatrixPage() {
                             <Link
                               to={entityPath(kindOf(tgt.id), projectId!, tgt.id) ?? '#'}
                               title={`${src.id} ${link.type} ${tgt.id}`}
-                              className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-medium hover:ring-1 hover:ring-primary/40 transition-shadow ${LINK_TYPE_COLORS[link.type] || 'bg-muted text-muted-foreground'}`}
+                              className={`inline-block px-1.5 py-0.5 rounded-md text-4xs font-medium hover:ring-1 hover:ring-primary/40 transition-shadow ${LINK_TYPE_COLORS[link.type] || 'bg-muted text-muted-foreground'}`}
                             >
                               {link.type}
                             </Link>
                           ) : (
-                            <span className="text-[9px] text-muted-foreground/30">—</span>
+                            <span className="text-4xs text-muted-foreground/30">—</span>
                           )}
                         </td>
                       );

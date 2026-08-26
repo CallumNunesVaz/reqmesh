@@ -16,11 +16,11 @@ function ParamStep({ step }: { step: ImpactStepParam }) {
   return (
     <div className="flex items-center gap-2 text-xs">
       <span className="font-mono font-medium text-foreground">{step.name}</span>
-      <span className="font-mono text-muted-foreground text-[10px]">
+      <span className="font-mono text-muted-foreground text-3xs">
         {step.expr ? `= ${step.expr}` : ''}
       </span>
-      <span className="text-muted-foreground text-[10px]">{step.unit}</span>
-      <span className="flex items-baseline gap-1 font-mono text-[10px] ml-auto">
+      <span className="text-muted-foreground text-3xs">{step.unit}</span>
+      <span className="flex items-baseline gap-1 font-mono text-3xs ml-auto">
         <span className="text-muted-foreground">
           {step.before != null ? step.before : '?'}
         </span>
@@ -39,20 +39,20 @@ function ConstraintStep({ step }: { step: ImpactStepConstraint }) {
   const flipped = beforeStatus !== afterStatus;
   return (
     <div className="flex items-center gap-2 text-xs">
-      <span className="font-mono text-muted-foreground text-[10px] truncate flex-1">{step.expr}</span>
+      <span className="font-mono text-muted-foreground text-3xs truncate flex-1">{step.expr}</span>
       <span className="flex items-center gap-1.5 shrink-0">
         {flipped ? (
           <>
             <VerdictBadge status={beforeStatus} />
-            <span className="text-muted-foreground text-[10px]">&rarr;</span>
+            <span className="text-muted-foreground text-3xs">&rarr;</span>
           </>
         ) : (
-          <span className="text-muted-foreground font-mono text-[10px]">{step.before.margin?.value}</span>
+          <span className="text-muted-foreground font-mono text-3xs">{step.before.margin?.value}</span>
         )}
         <VerdictBadge status={afterStatus} />
         {step.after.margin && !flipped && <MarginTag margin={step.after.margin} />}
         {step.after.margin && flipped && (
-          <span className="text-[10px] font-mono text-cs-red">
+          <span className="text-3xs font-mono text-cs-red">
             {step.after.margin.value > 0 ? '+' : ''}{step.after.margin.value}
             {step.after.margin.pct !== undefined ? ` (${step.after.margin.pct > 0 ? '+' : ''}${step.after.margin.pct}%)` : ''}
           </span>
@@ -162,18 +162,18 @@ export default function WhatIfPanel(): JSX.Element | null {
       <div className="flex items-start justify-between mb-3">
         <div>
           <h2 className="text-sm font-semibold text-card-foreground">Live What-If Preview</h2>
-          <p className="text-[10px] text-muted-foreground mt-0.5">{summary}</p>
+          <p className="text-3xs text-muted-foreground mt-0.5">{summary}</p>
           {rootLines.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-1">
               {rootLines.map((line: string, i: number) => (
-                <span key={i} className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-cs-blue/10 text-cs-blue border border-cs-blue/20">
+                <span key={i} className="text-4xs font-mono px-1.5 py-0.5 rounded-md bg-cs-blue/10 text-cs-blue border border-cs-blue/20">
                   {line}
                 </span>
               ))}
             </div>
           )}
         </div>
-        <button onClick={() => clear()} className="p-1 rounded hover:bg-accent text-muted-foreground" title="Restore original values">
+        <button onClick={() => clear()} className="p-1 rounded-md hover:bg-accent text-muted-foreground" title="Restore original values">
           <X size={14} />
         </button>
       </div>
@@ -200,7 +200,7 @@ export default function WhatIfPanel(): JSX.Element | null {
             <button
               onClick={() => setStepIndex(0)}
               disabled={stepIndex === 0}
-              className="p-1 rounded hover:bg-accent text-muted-foreground disabled:opacity-30"
+              className="p-1 rounded-md hover:bg-accent text-muted-foreground disabled:opacity-30"
               title="First step"
             >
               <SkipBack size={12} />
@@ -208,14 +208,14 @@ export default function WhatIfPanel(): JSX.Element | null {
             <button
               onClick={() => { setStepIndex(Math.max(0, stepIndex - 1)); setPlaying(false); }}
               disabled={stepIndex === 0}
-              className="p-1 rounded hover:bg-accent text-muted-foreground disabled:opacity-30"
+              className="p-1 rounded-md hover:bg-accent text-muted-foreground disabled:opacity-30"
               title="Step back"
             >
               <ChevronLeft size={12} />
             </button>
             <button
               onClick={() => setPlaying(!playing)}
-              className="p-1 rounded hover:bg-accent text-muted-foreground"
+              className="p-1 rounded-md hover:bg-accent text-muted-foreground"
               title={playing ? 'Pause' : 'Play'}
             >
               {playing ? <Pause size={12} /> : <Play size={12} />}
@@ -223,7 +223,7 @@ export default function WhatIfPanel(): JSX.Element | null {
             <button
               onClick={() => { setStepIndex(Math.min(impact.steps.length - 1, stepIndex + 1)); setPlaying(false); }}
               disabled={stepIndex >= impact.steps.length - 1}
-              className="p-1 rounded hover:bg-accent text-muted-foreground disabled:opacity-30"
+              className="p-1 rounded-md hover:bg-accent text-muted-foreground disabled:opacity-30"
               title="Step forward"
             >
               <ChevronRight size={12} />
@@ -231,12 +231,12 @@ export default function WhatIfPanel(): JSX.Element | null {
             <button
               onClick={() => setStepIndex(impact.steps.length - 1)}
               disabled={stepIndex >= impact.steps.length - 1}
-              className="p-1 rounded hover:bg-accent text-muted-foreground disabled:opacity-30"
+              className="p-1 rounded-md hover:bg-accent text-muted-foreground disabled:opacity-30"
               title="Last step"
             >
               <SkipForward size={12} />
             </button>
-            <span className="text-[10px] text-muted-foreground ml-1">
+            <span className="text-3xs text-muted-foreground ml-1">
               Step {stepIndex + 1} / {impact.steps.length}
             </span>
           </div>
@@ -258,7 +258,7 @@ export default function WhatIfPanel(): JSX.Element | null {
               <button
                 type="button"
                 key={i}
-                className={`p-2 w-full text-left rounded border transition-colors cursor-pointer border-l-2 ${verdictBorder} ${verdictBg} ${
+                className={`p-2 w-full text-left rounded-md border transition-colors cursor-pointer border-l-2 ${verdictBorder} ${verdictBg} ${
                   i === stepIndex
                     ? 'border-primary/60 bg-primary/5'
                     : 'border-transparent hover:bg-accent'
@@ -271,19 +271,19 @@ export default function WhatIfPanel(): JSX.Element | null {
                       unreadable to anyone who cannot separate the hues, and
                       this is the answer the whole panel exists to give. */}
                   {v !== 'unknown' && (
-                    <span className={`text-[9px] font-semibold uppercase tracking-wider ${
+                    <span className={`text-4xs font-semibold uppercase tracking-wider ${
                       v === 'pass' ? 'text-cs-green' : 'text-cs-red'}`}>
                       {v === 'pass' ? 'pass' : 'fail'}
                     </span>
                   )}
-                  <span className="text-[9px] uppercase tracking-wider text-muted-foreground font-semibold">
+                  <span className="text-4xs uppercase tracking-wider text-muted-foreground font-semibold">
                     {step.kind === 'param' ? 'Param' : 'Constraint'}
                   </span>
-                  <span className={`text-[9px] font-mono ${rootOwners.has(step.owner) ? 'text-cs-blue' : 'text-muted-foreground'}`}>
+                  <span className={`text-4xs font-mono ${rootOwners.has(step.owner) ? 'text-cs-blue' : 'text-muted-foreground'}`}>
                     {step.owner}
                   </span>
                   {v !== 'unknown' && (
-                    <span className={`text-[9px] font-semibold ml-auto ${v === 'pass' ? 'text-cs-green' : 'text-cs-red'}`}>
+                    <span className={`text-4xs font-semibold ml-auto ${v === 'pass' ? 'text-cs-green' : 'text-cs-red'}`}>
                       {v === 'pass' ? 'pass' : 'fail'}
                     </span>
                   )}

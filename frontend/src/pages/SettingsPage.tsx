@@ -134,7 +134,7 @@ export default function SettingsPage() {
                     {testResult.ok ? <><CheckCircle2 size={12} /> Test email sent.</> : <><AlertTriangle size={12} /> {testResult.error}</>}
                   </p>
                 )}
-                <p className="text-[11px] text-muted-foreground mt-1.5">Save SMTP changes before testing.</p>
+                <p className="text-2xs text-muted-foreground mt-1.5">Save SMTP changes before testing.</p>
               </div>
             )}
           </section>
@@ -169,7 +169,7 @@ function SettingRow({ setting, value, onChange }: {
             {setting.label}
             {locked && <Lock size={11} className="text-muted-foreground" aria-label="Set by environment variable" />}
           </div>
-          {setting.help && <div className="text-[11px] text-muted-foreground">{setting.help}</div>}
+          {setting.help && <div className="text-2xs text-muted-foreground">{setting.help}</div>}
         </div>
         <TeamList teams={teams} onChange={(v) => onChange(v)} locked={locked} />
       </div>
@@ -184,7 +184,7 @@ function SettingRow({ setting, value, onChange }: {
             {setting.label}
             {locked && <Lock size={11} className="text-muted-foreground" aria-label="Set by environment variable" />}
           </div>
-          {setting.help && <div className="text-[11px] text-muted-foreground">{setting.help}</div>}
+          {setting.help && <div className="text-2xs text-muted-foreground">{setting.help}</div>}
         </div>
         <LogoInput value={typeof value === 'string' ? value : ''} onChange={(v) => onChange(v)} locked={locked} />
       </div>
@@ -198,7 +198,7 @@ function SettingRow({ setting, value, onChange }: {
           {setting.label}
           {locked && <Lock size={11} className="text-muted-foreground" aria-label="Set by environment variable" />}
         </div>
-        {setting.help && <div className="text-[11px] text-muted-foreground">{setting.help}</div>}
+        {setting.help && <div className="text-2xs text-muted-foreground">{setting.help}</div>}
       </div>
       <div className="shrink-0 w-56 max-w-full">
         {setting.type === 'bool' ? (
@@ -348,7 +348,7 @@ function LogoInput({ value, onChange, locked }: { value: string; onChange: (v: s
     <div className="shrink-0 w-64 max-w-full space-y-2">
       {value ? (
         <div className="flex items-center gap-2">
-          <img src={value} alt="Logo preview" className="max-h-10 max-w-[7rem] rounded border border-border bg-white/5 object-contain" />
+          <img src={value} alt="Logo preview" className="max-h-10 max-w-[7rem] rounded-md border border-border bg-white/5 object-contain" />
           {!locked && (
             <button onClick={() => { onChange(''); setErr(''); setSwitchUrl(''); }} className="text-muted-foreground hover:text-destructive" title="Remove logo">
               <X size={13} />
@@ -358,7 +358,7 @@ function LogoInput({ value, onChange, locked }: { value: string; onChange: (v: s
       ) : (
         <div className="text-xs text-muted-foreground italic">No logo set</div>
       )}
-      {isData && <div className="text-[11px] text-muted-foreground">Embedded image ({embeddedKb} KB)</div>}
+      {isData && <div className="text-2xs text-muted-foreground">Embedded image ({embeddedKb} KB)</div>}
       {isData ? (
         !locked && (
           <div className="flex gap-1.5">
@@ -397,7 +397,7 @@ function LogoInput({ value, onChange, locked }: { value: string; onChange: (v: s
           </button>
         </>
       )}
-      {err && <div className="text-[11px] text-destructive">{err}</div>}
+      {err && <div className="text-2xs text-destructive">{err}</div>}
     </div>
   );
 }

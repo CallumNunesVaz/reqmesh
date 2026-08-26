@@ -47,7 +47,7 @@ export function LinkEditor({ label, hint, kind, linked, options, editable, onAdd
     // controls get added beside it.
     <div data-link-editor={label || kind}>
       {label && <label className="label">{label}</label>}
-      <p className="text-[11px] text-muted-foreground -mt-1 mb-1.5">{hint}</p>
+      <p className="text-2xs text-muted-foreground -mt-1 mb-1.5">{hint}</p>
       {linked.length === 0 && <p className="text-xs text-muted-foreground italic mb-1.5">None linked</p>}
       <div className="flex flex-wrap gap-1.5 mb-2">
         {linked.map((id) => (
