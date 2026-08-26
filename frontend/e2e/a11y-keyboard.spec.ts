@@ -40,18 +40,17 @@ test('analysis case header expands on Space', async ({ app, server }) => {
   await expect(app.getByText('Explore the empty-weight budget with a heavier avionics fit.')).toBeVisible();
 });
 
-test('verification case header expands on Space', async ({ app, server }) => {
+test('verification row opens its detail page on Space', async ({ app, server }) => {
   await signIn(app);
   await app.goto(`${server.baseURL}/project/${P}/verification`);
   await app.waitForSelector('main');
 
-  const header = app.locator('main').getByRole('button', { name: /Structural Static Test/ }).first();
-  await expect(header).toBeVisible();
-  await header.focus();
+  const row = app.locator('main').getByRole('button', { name: 'Structural Static Test', exact: true });
+  await expect(row).toBeVisible();
+  await row.focus();
   await app.keyboard.press('Space');
 
-  await expect(header).toHaveAttribute('aria-expanded', 'true');
-  await expect(app.getByRole('heading', { name: 'Comments' }).first()).toBeVisible();
+  await expect(app).toHaveURL(/\/verification\/VCAF0001$/);
 });
 
 test('decision header expands on Space', async ({ app, server }) => {

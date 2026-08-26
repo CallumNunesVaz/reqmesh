@@ -46,7 +46,7 @@ export const ENTITY_META: Record<EntityKind, EntityMeta> = {
     icon: CheckCircle2,
     cls: 'text-cs-green',
     label: 'Verification Case',
-    path: (p, id) => `/project/${p}/verification?focus=${encodeURIComponent(id)}`,
+    path: (p, id) => `/project/${p}/verification/${encodeURIComponent(id)}`,
   },
   component: {
     icon: Boxes,
