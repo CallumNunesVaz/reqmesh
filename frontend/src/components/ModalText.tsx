@@ -7,7 +7,7 @@ const MODAL_CLASSES: Record<ModalStrength, { cls: string; title: string }> = {
     title: 'Binding obligation',
   },
   advisory: {
-    cls: 'font-semibold uppercase tracking-wide text-amber-400',
+    cls: 'font-semibold uppercase tracking-wide text-cs-amber',
     title: 'Advisory — not a binding requirement',
   },
 };

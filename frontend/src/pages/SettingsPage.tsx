@@ -130,7 +130,7 @@ export default function SettingsPage() {
                   </button>
                 </div>
                 {testResult && (
-                  <p className={`text-xs mt-1.5 flex items-center gap-1 ${testResult.ok ? 'text-emerald-500' : 'text-destructive'}`}>
+                  <p className={`text-xs mt-1.5 flex items-center gap-1 ${testResult.ok ? 'text-cs-green' : 'text-destructive'}`}>
                     {testResult.ok ? <><CheckCircle2 size={12} /> Test email sent.</> : <><AlertTriangle size={12} /> {testResult.error}</>}
                   </p>
                 )}
@@ -143,7 +143,7 @@ export default function SettingsPage() {
 
       {/* Sticky save bar — pane-anchored (sticks to the inspector's scrollport) */}
       <div className="sticky bottom-0 -mx-6 border-t bg-card/95 backdrop-blur px-6 py-3 flex flex-wrap items-center justify-end gap-3 z-30">
-        {saved && <span className="text-xs text-emerald-500 flex items-center gap-1"><CheckCircle2 size={14} /> Saved</span>}
+        {saved && <span className="text-xs text-cs-green flex items-center gap-1"><CheckCircle2 size={14} /> Saved</span>}
         {dirty && <span className="text-xs text-muted-foreground">{Object.keys(draft).length} unsaved change(s)</span>}
         <button className="btn-primary" onClick={save} disabled={!dirty || saving}>
           {saving ? <Loader size={15} className="animate-spin" /> : <Save size={15} />} Save changes

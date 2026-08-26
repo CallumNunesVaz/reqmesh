@@ -789,15 +789,15 @@ export default function RequirementDetailPage() {
   return (
     <div className="max-w-6xl mx-auto p-8">
       {saveError && (
-        <div className="mb-4 px-4 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm flex items-center gap-2">
+        <div className="mb-4 px-4 py-2 rounded-lg bg-cs-red/10 border border-cs-red/20 text-cs-red text-sm flex items-center gap-2">
           <AlertTriangle size={14} /> {saveError}
-          <button onClick={() => setSaveError('')} className="ml-auto text-red-400/50 hover:text-red-400">
+          <button onClick={() => setSaveError('')} className="ml-auto text-cs-red/50 hover:text-cs-red">
             <X size={14} />
           </button>
         </div>
       )}
       {saveSuccess && (
-        <div className="mb-4 px-4 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm flex items-center gap-2">
+        <div className="mb-4 px-4 py-2 rounded-lg bg-cs-green/10 border border-cs-green/20 text-cs-green text-sm flex items-center gap-2">
           <CheckCircle2 size={14} /> Saved
         </div>
       )}
@@ -845,7 +845,7 @@ export default function RequirementDetailPage() {
               <CopyLinkButton kind="requirement" id={req.id} />
             </div>
             {unreviewedIds.has(req.id) && (
-              <span className="badge bg-amber-500/10 text-amber-400 text-[10px] px-2 py-0.5">Needs re-review</span>
+              <span className="badge bg-cs-amber/10 text-cs-amber text-[10px] px-2 py-0.5">Needs re-review</span>
             )}
           </div>
         </div>
@@ -1060,14 +1060,14 @@ export default function RequirementDetailPage() {
           </motion.div>
           {qualityResult && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="card p-5">
-              <h2 className="font-semibold text-sm text-card-foreground mb-3 flex items-center gap-2"><Sparkles size={14} className="text-violet-400" /> Quality</h2>
+              <h2 className="font-semibold text-sm text-card-foreground mb-3 flex items-center gap-2"><Sparkles size={14} className="text-cs-purple" /> Quality</h2>
               <div className="flex items-center gap-3 mb-3">
-                <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-lg font-bold ${qualityScore >= 80 ? 'bg-emerald-500/10 text-emerald-400' : qualityScore >= 50 ? 'bg-amber-500/10 text-amber-400' : 'bg-red-500/10 text-red-400'}`}>
+                <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-lg font-bold ${qualityScore >= 80 ? 'bg-cs-green/10 text-cs-green' : qualityScore >= 50 ? 'bg-cs-amber/10 text-cs-amber' : 'bg-cs-red/10 text-cs-red'}`}>
                   {qualityScore}
                 </div>
                 <div className="flex-1">
                   <div className="w-full bg-muted rounded-full h-2">
-                    <div className={`h-full rounded-full transition-all duration-500 ${qualityScore >= 80 ? 'bg-emerald-500' : qualityScore >= 50 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${qualityScore}%` }} />
+                    <div className={`h-full rounded-full transition-all duration-500 ${qualityScore >= 80 ? 'bg-cs-green' : qualityScore >= 50 ? 'bg-cs-amber' : 'bg-cs-red'}`} style={{ width: `${qualityScore}%` }} />
                   </div>
                   <div className="text-[10px] text-muted-foreground mt-1">/100</div>
                 </div>
@@ -1075,7 +1075,7 @@ export default function RequirementDetailPage() {
               {qualityFindings.length > 0 && (
                 <div className="space-y-1">
                   {qualityFindings.slice(0, 5).map((f, i) => (
-                    <div key={i} className={`text-xs px-2 py-1 rounded ${f.severity === 'error' ? 'bg-red-500/5 text-red-400' : f.severity === 'warning' ? 'bg-amber-500/5 text-amber-400' : 'bg-muted text-muted-foreground'}`}>
+                    <div key={i} className={`text-xs px-2 py-1 rounded ${f.severity === 'error' ? 'bg-cs-red/5 text-cs-red' : f.severity === 'warning' ? 'bg-cs-amber/5 text-cs-amber' : 'bg-muted text-muted-foreground'}`}>
                       {f.message}
                     </div>
                   ))}
@@ -1191,7 +1191,7 @@ export default function RequirementDetailPage() {
                         className="text-[11px] text-foreground hover:text-primary flex-1 min-w-0"
                       />
                       <ArrowRight size={11} className="text-muted-foreground shrink-0" />
-                      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-500/10 text-emerald-400 shrink-0">{inc.type.replace(/_/g, ' ')}</span>
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-cs-green/10 text-cs-green shrink-0">{inc.type.replace(/_/g, ' ')}</span>
                       <ArrowRight size={11} className="text-muted-foreground shrink-0" />
                       <span className="font-mono text-[11px] font-semibold text-foreground shrink-0">{req.id}</span>
                       {editable && (
@@ -1404,7 +1404,7 @@ export default function RequirementDetailPage() {
               <div className="space-y-1.5">
                 {req.references.map((ref, i) => (
                   <div key={i} className="flex items-center gap-2 text-xs py-1.5 px-2 rounded hover:bg-accent group">
-                    <span className={`badge text-[9px] shrink-0 ${ref.kind === 'impl' ? 'bg-blue-500/10 text-blue-400' : ref.kind === 'test' ? 'bg-purple-500/10 text-purple-400' : ref.kind === 'doc' ? 'bg-teal-500/10 text-teal-400' : 'bg-muted text-muted-foreground'}`}>{ref.kind}</span>
+                    <span className={`badge text-[9px] shrink-0 ${ref.kind === 'impl' ? 'bg-cs-blue/10 text-cs-blue' : ref.kind === 'test' ? 'bg-cs-purple/10 text-cs-purple' : ref.kind === 'doc' ? 'bg-cs-teal/10 text-cs-teal' : 'bg-muted text-muted-foreground'}`}>{ref.kind}</span>
                     <span className="font-mono text-[11px] text-foreground flex-1 truncate">{ref.path}</span>
                     {ref.lines && <span className="text-[10px] text-muted-foreground shrink-0">{ref.lines}</span>}
                   </div>
@@ -1550,7 +1550,7 @@ export default function RequirementDetailPage() {
                           <span className="font-mono text-[11px] text-foreground">{value}</span>
                           {known
                             ? <span className="text-[10px] text-muted-foreground block">{known.label}</span>
-                            : <span className="text-[10px] text-amber-400 block">Not a recognised obligation — nothing can satisfy it</span>}
+                            : <span className="text-[10px] text-cs-amber block">Not a recognised obligation — nothing can satisfy it</span>}
                         </span>
                       </label>
                     );
@@ -1619,7 +1619,7 @@ export default function RequirementDetailPage() {
                 {(reqValue?.unknown_stakeholders?.length ?? 0) > 0 && (
                   <div className="mt-1.5 space-y-1">
                     {reqValue!.unknown_stakeholders.map((name) => (
-                      <div key={name} className="flex items-center gap-2 text-[10px] text-amber-400">
+                      <div key={name} className="flex items-center gap-2 text-[10px] text-cs-amber">
                         <span className="flex-1 min-w-0 truncate">{name}: {req.priorities?.[name]} — not a project stakeholder</span>
                         {editable && (
                           <button

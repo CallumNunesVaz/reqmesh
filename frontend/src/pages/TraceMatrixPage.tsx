@@ -16,12 +16,12 @@ import LoadingSplash from '../components/LoadingSplash';
 // Cell tint per link type. Falls back to a neutral chip for any type not
 // listed here (importers emit types like `verifies`/`traces` too).
 const LINK_TYPE_COLORS: Record<string, string> = {
-  satisfies: 'bg-blue-500/20 text-blue-400',
-  refines: 'bg-purple-500/20 text-purple-400',
-  verified_by: 'bg-emerald-500/20 text-emerald-400',
-  verifies: 'bg-emerald-500/20 text-emerald-400',
-  derives: 'bg-orange-500/20 text-orange-400',
-  conflicts: 'bg-red-500/20 text-red-400',
+  satisfies: 'bg-cs-blue/20 text-cs-blue',
+  refines: 'bg-cs-purple/20 text-cs-purple',
+  verified_by: 'bg-cs-green/20 text-cs-green',
+  verifies: 'bg-cs-green/20 text-cs-green',
+  derives: 'bg-cs-orange/20 text-cs-orange',
+  conflicts: 'bg-cs-red/20 text-cs-red',
 };
 
 // Axis-label indentation per tree level. Capped so a pathologically deep tree

@@ -555,10 +555,10 @@ export default function ProjectSettingsPage() {
 
       {/* Save */}
       <div className="flex items-center gap-3">
-        <button onClick={save} className={`btn-primary ${dirty ? 'ring-2 ring-amber-500/50' : ''}`} disabled={!editable || saving}>
+        <button onClick={save} className={`btn-primary ${dirty ? 'ring-2 ring-cs-amber/50' : ''}`} disabled={!editable || saving}>
           <Save size={14} /> {saving ? 'Saving…' : dirty ? 'Save Changes *' : 'Save'}
         </button>
-        {dirty && <span className="text-[10px] text-amber-400">Unsaved changes</span>}
+        {dirty && <span className="text-[10px] text-cs-amber">Unsaved changes</span>}
       </div>
     </div>
   );

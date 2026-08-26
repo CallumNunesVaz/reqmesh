@@ -20,13 +20,13 @@ const AXES: { key: MatrixAxis; label: string; colKind: 'component' | 'verificati
 ];
 
 const STATUS_CLASSES: Record<string, string> = {
-  proposed: 'border-blue-500/30 bg-blue-500/5',
-  in_review: 'border-amber-500/30 bg-amber-500/5',
-  approved: 'border-green-500/30 bg-green-500/5',
-  implemented: 'border-purple-500/30 bg-purple-500/5',
-  verified: 'border-teal-500/30 bg-teal-500/5',
-  rejected: 'border-red-500/30 bg-red-500/5',
-  deprecated: 'border-zinc-500/30 bg-zinc-500/5',
+  proposed: 'border-cs-blue/30 bg-cs-blue/5',
+  in_review: 'border-cs-amber/30 bg-cs-amber/5',
+  approved: 'border-cs-green/30 bg-cs-green/5',
+  implemented: 'border-cs-purple/30 bg-cs-purple/5',
+  verified: 'border-cs-teal/30 bg-cs-teal/5',
+  rejected: 'border-cs-red/30 bg-cs-red/5',
+  deprecated: 'border-cs-grey/30 bg-cs-grey/5',
 };
 
 export default function AllocationMatrixPage() {

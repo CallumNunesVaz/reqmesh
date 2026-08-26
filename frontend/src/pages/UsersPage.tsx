@@ -34,18 +34,18 @@ function RoleOptions({ describe = false }: { describe?: boolean }) {
   );
 }
 const ROLE_BADGE: Record<string, string> = {
-  admin: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
-  maintainer: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
-  contributor: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
+  admin: 'bg-cs-amber/15 text-cs-amber border-cs-amber/30',
+  maintainer: 'bg-cs-green/15 text-cs-green border-cs-green/30',
+  contributor: 'bg-cs-blue/15 text-cs-blue border-cs-blue/30',
   guest: 'bg-muted text-muted-foreground border-border',
 };
 
 /** Compact account-status badge (disabled / locked / invited / active). */
 function StatusBadge({ u }: { u: ManagedUser }) {
-  if (u.disabled) return <span className="badge border text-[10px] bg-red-500/15 text-red-400 border-red-500/30 gap-1"><Ban size={9} /> Disabled</span>;
-  if (u.locked) return <span className="badge border text-[10px] bg-amber-500/15 text-amber-400 border-amber-500/30 gap-1"><Lock size={9} /> Locked</span>;
-  if (u.invited) return <span className="badge border text-[10px] bg-blue-500/15 text-blue-400 border-blue-500/30 gap-1"><UserPlus size={9} /> Invited</span>;
-  return <span className="badge border text-[10px] bg-emerald-500/10 text-emerald-400 border-emerald-500/30">Active</span>;
+  if (u.disabled) return <span className="badge border text-[10px] bg-cs-red/15 text-cs-red border-cs-red/30 gap-1"><Ban size={9} /> Disabled</span>;
+  if (u.locked) return <span className="badge border text-[10px] bg-cs-amber/15 text-cs-amber border-cs-amber/30 gap-1"><Lock size={9} /> Locked</span>;
+  if (u.invited) return <span className="badge border text-[10px] bg-cs-blue/15 text-cs-blue border-cs-blue/30 gap-1"><UserPlus size={9} /> Invited</span>;
+  return <span className="badge border text-[10px] bg-cs-green/10 text-cs-green border-cs-green/30">Active</span>;
 }
 
 export default function UsersPage() {
@@ -485,7 +485,7 @@ export default function UsersPage() {
                         </td>
                         <td className="px-4 py-2.5">
                           <div className="flex items-center gap-2">
-                            <div className={`w-7 h-7 rounded-md flex items-center justify-center shrink-0 ${u.role === 'admin' ? 'bg-amber-500/10 text-amber-400' : 'bg-muted text-muted-foreground'}`}>
+                            <div className={`w-7 h-7 rounded-md flex items-center justify-center shrink-0 ${u.role === 'admin' ? 'bg-cs-amber/10 text-cs-amber' : 'bg-muted text-muted-foreground'}`}>
                               {u.role === 'admin' ? <ShieldCheck size={14} /> : <UserIcon size={14} />}
                             </div>
                             <div>
@@ -503,7 +503,7 @@ export default function UsersPage() {
                           {isEditing ? (
                             <input className="input text-xs !py-1 w-full" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} />
                           ) : (u.email || <span className="text-muted-foreground/40 italic">—</span>)}
-                          {u.email_verified && u.email && <span className="text-[9px] text-emerald-400 ml-1">✓</span>}
+                          {u.email_verified && u.email && <span className="text-[9px] text-cs-green ml-1">✓</span>}
                         </td>
                         <td className="px-4 py-2.5">
                           <select
@@ -524,7 +524,7 @@ export default function UsersPage() {
                           <div className="flex items-center gap-1">
                             {isEditing ? (
                               <>
-                                <button onClick={() => saveEditRow(u.username)} className="p-1.5 rounded-md text-emerald-400 hover:bg-emerald-500/10" title="Save"><Check size={14} /></button>
+                                <button onClick={() => saveEditRow(u.username)} className="p-1.5 rounded-md text-cs-green hover:bg-cs-green/10" title="Save"><Check size={14} /></button>
                                 <button onClick={() => setEditingRow(null)} className="p-1.5 rounded-md text-muted-foreground hover:text-foreground" title="Cancel"><X size={14} /></button>
                               </>
                             ) : (
@@ -553,7 +553,7 @@ export default function UsersPage() {
                                   {u.locked && (
                                     <button
                                       onClick={() => { handleUnlock(u.username); setMenuUser(null); }}
-                                      className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-amber-400 hover:bg-accent text-left"
+                                      className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-cs-amber hover:bg-accent text-left"
                                       title="Unlock account"
                                     >
                                       <Unlock size={13} /> Unlock account
@@ -601,7 +601,7 @@ export default function UsersPage() {
           <p className="text-xs text-muted-foreground mb-4">Creates an account and emails a set-password link (shown here if email isn't configured).</p>
           {inviteLink ? (
             <div className="space-y-3">
-              <p className="text-xs text-emerald-500 flex items-center gap-1"><Check size={13} /> Account created. Share this set-password link:</p>
+              <p className="text-xs text-cs-green flex items-center gap-1"><Check size={13} /> Account created. Share this set-password link:</p>
               <div className="flex gap-1">
                 <input readOnly className="input text-xs font-mono flex-1" value={inviteLink} onFocus={(e) => e.target.select()} />
                 <button type="button" onClick={async () => { if (!await copyText(inviteLink)) setInviteCopyFailed(true); }} className="btn-secondary shrink-0 p-2" title="Copy"><Copy size={13} /></button>
@@ -638,8 +638,8 @@ export default function UsersPage() {
         <p className="text-xs text-muted-foreground mb-3">Columns: <code className="bg-muted px-1 rounded">username,full_name,email,role</code>. Each new user is invited to set a password.</p>
         {importResult ? (
           <div className="space-y-2 text-xs">
-            <p className="text-emerald-500">Created {importResult.created.length}: {importResult.created.join(', ') || '—'}</p>
-            {importResult.skipped.length > 0 && <p className="text-amber-500">Skipped: {importResult.skipped.join(', ')}</p>}
+            <p className="text-cs-green">Created {importResult.created.length}: {importResult.created.join(', ') || '—'}</p>
+            {importResult.skipped.length > 0 && <p className="text-cs-amber">Skipped: {importResult.skipped.join(', ')}</p>}
             {importResult.invites.length > 0 && (
               <div className="max-h-40 overflow-auto border rounded p-2 bg-muted/30 font-mono">
                 {importResult.invites.map((iv) => <div key={iv.username} className="truncate">{iv.username}: {iv.invite_link}</div>)}

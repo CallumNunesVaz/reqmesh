@@ -299,7 +299,7 @@ export default function SystemPage() {
           </button>
         </div>
         {depError && (
-          <div className="mb-3 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs">{depError}</div>
+          <div className="mb-3 px-3 py-2 rounded-lg bg-cs-red/10 border border-cs-red/20 text-cs-red text-xs">{depError}</div>
         )}
         <div className="space-y-2">
           {/* Group by category */}
@@ -379,7 +379,7 @@ export default function SystemPage() {
               : `${demo.name} is not loaded.`}
         </p>
         {demo?.exists && (
-          <p className="text-xs text-amber-500/90 mt-2 flex items-start gap-1.5">
+          <p className="text-xs text-cs-amber/90 mt-2 flex items-start gap-1.5">
             <AlertTriangle size={13} className="mt-0.5 shrink-0" />
             Re-seeding deletes the project and rebuilds it from the bundled copy.
             Anything changed in it — including its git history — is lost.
@@ -443,9 +443,9 @@ export default function SystemPage() {
 
         {/* Completed / failed banners */}
         {completed && (
-          <div className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-4 mb-3">
+          <div className="rounded-lg border border-cs-green/40 bg-cs-green/10 p-4 mb-3">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 font-medium text-sm"><CheckCircle2 size={16} className="text-emerald-500" /> Updated to v{status?.current}.</div>
+              <div className="flex items-center gap-2 font-medium text-sm"><CheckCircle2 size={16} className="text-cs-green" /> Updated to v{status?.current}.</div>
               <button className="btn-ghost text-xs" onClick={dismiss}><X size={14} /> Dismiss</button>
             </div>
             <button className="btn-secondary mt-3 text-xs" onClick={() => window.location.reload()}>Reload the app</button>
@@ -465,9 +465,9 @@ export default function SystemPage() {
         {!active && (
           <>
             {check?.offline && <p className="text-sm text-muted-foreground">Offline mode is on — update checks are disabled.</p>}
-            {check?.error && <p className="text-sm text-amber-500 flex items-center gap-2"><AlertTriangle size={14} /> {check.error}</p>}
+            {check?.error && <p className="text-sm text-cs-amber flex items-center gap-2"><AlertTriangle size={14} /> {check.error}</p>}
             {!check?.offline && !check?.error && !updateAvailable && (
-              <p className="text-sm text-muted-foreground flex items-center gap-2"><CheckCircle2 size={14} className="text-emerald-500" /> You're on the latest version (v{check?.current}).</p>
+              <p className="text-sm text-muted-foreground flex items-center gap-2"><CheckCircle2 size={14} className="text-cs-green" /> You're on the latest version (v{check?.current}).</p>
             )}
 
             {updateAvailable && !completed && (
@@ -562,7 +562,7 @@ export default function SystemPage() {
       {/* ── Confirm restart ──────────────────────────────────────── */}
       <Modal open={confirmReseed} onClose={() => setConfirmReseed(false)} panelClassName="p-6 max-w-md w-full">
         <h3 className="font-semibold flex items-center gap-2">
-          <AlertTriangle size={18} className="text-amber-500" />
+          <AlertTriangle size={18} className="text-cs-amber" />
           {demo?.exists ? 'Replace the example project?' : 'Load the example project?'}
         </h3>
         <p className="text-sm text-muted-foreground mt-3">

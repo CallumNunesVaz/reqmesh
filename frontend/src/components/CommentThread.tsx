@@ -133,7 +133,7 @@ export function CommentThread({ entityKind, entityId }: {
                   {relative}
                 </span>
                 {c.resolved && (
-                  <span className="badge bg-emerald-500/10 text-emerald-400 text-[9px]">
+                  <span className="badge bg-cs-green/10 text-cs-green text-[9px]">
                     Resolved
                   </span>
                 )}
@@ -148,8 +148,8 @@ export function CommentThread({ entityKind, entityId }: {
                   onClick={() => toggleResolved(c)}
                   className={`p-1 rounded hover:bg-accent transition-colors ${
                     c.resolved
-                      ? 'text-emerald-400 hover:text-emerald-500'
-                      : 'text-muted-foreground hover:text-emerald-400'
+                      ? 'text-cs-green'
+                      : 'text-muted-foreground hover:text-cs-green'
                   }`}
                   title={c.resolved ? 'Mark unresolved' : 'Mark resolved'}
                 >

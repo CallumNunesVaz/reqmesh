@@ -52,7 +52,7 @@ function ConstraintStep({ step }: { step: ImpactStepConstraint }) {
         <VerdictBadge status={afterStatus} />
         {step.after.margin && !flipped && <MarginTag margin={step.after.margin} />}
         {step.after.margin && flipped && (
-          <span className="text-[10px] font-mono text-red-400">
+          <span className="text-[10px] font-mono text-cs-red">
             {step.after.margin.value > 0 ? '+' : ''}{step.after.margin.value}
             {step.after.margin.pct !== undefined ? ` (${step.after.margin.pct > 0 ? '+' : ''}${step.after.margin.pct}%)` : ''}
           </span>
@@ -152,8 +152,8 @@ export default function WhatIfPanel(): JSX.Element | null {
       {overrideCount} value{overrideCount !== 1 ? 's' : ''}
       <span className="mx-1 text-muted-foreground/50">·</span>
       {affected.length} affected
-      {failNow > 0 && <span className="text-red-400 ml-1">· {failNow} failing</span>}
-      {passNow > 0 && <span className="text-emerald-400 ml-1">· {passNow} passing</span>}
+      {failNow > 0 && <span className="text-cs-red ml-1">· {failNow} failing</span>}
+      {passNow > 0 && <span className="text-cs-green ml-1">· {passNow} passing</span>}
     </>
   );
 
@@ -166,7 +166,7 @@ export default function WhatIfPanel(): JSX.Element | null {
           {rootLines.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-1">
               {rootLines.map((line: string, i: number) => (
-                <span key={i} className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                <span key={i} className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-cs-blue/10 text-cs-blue border border-cs-blue/20">
                   {line}
                 </span>
               ))}
@@ -185,7 +185,7 @@ export default function WhatIfPanel(): JSX.Element | null {
       )}
 
       {error && (
-        <div className="p-3 text-xs text-red-400">Error: {error}</div>
+        <div className="p-3 text-xs text-cs-red">Error: {error}</div>
       )}
 
       {impact && impact.steps.length === 0 && !pending && (
@@ -245,14 +245,14 @@ export default function WhatIfPanel(): JSX.Element | null {
             {impact.steps.slice(0, stepIndex + 1).map((step, i) => {
               const v = impact.evaluation ? requirementVerdict(impact.evaluation, step.owner) : 'unknown';
               const verdictBorder = v === 'pass'
-                ? 'border-l-emerald-400/70'
+                ? 'border-l-cs-green/70'
                 : v === 'fail'
-                  ? 'border-l-red-400/70'
+                  ? 'border-l-cs-red/70'
                   : '';
               const verdictBg = v === 'pass'
-                ? 'bg-emerald-500/5'
+                ? 'bg-cs-green/5'
                 : v === 'fail'
-                  ? 'bg-red-500/5'
+                  ? 'bg-cs-red/5'
                   : '';
               return (
               <button
@@ -272,18 +272,18 @@ export default function WhatIfPanel(): JSX.Element | null {
                       this is the answer the whole panel exists to give. */}
                   {v !== 'unknown' && (
                     <span className={`text-[9px] font-semibold uppercase tracking-wider ${
-                      v === 'pass' ? 'text-emerald-400' : 'text-red-400'}`}>
+                      v === 'pass' ? 'text-cs-green' : 'text-cs-red'}`}>
                       {v === 'pass' ? 'pass' : 'fail'}
                     </span>
                   )}
                   <span className="text-[9px] uppercase tracking-wider text-muted-foreground font-semibold">
                     {step.kind === 'param' ? 'Param' : 'Constraint'}
                   </span>
-                  <span className={`text-[9px] font-mono ${rootOwners.has(step.owner) ? 'text-blue-400' : 'text-muted-foreground'}`}>
+                  <span className={`text-[9px] font-mono ${rootOwners.has(step.owner) ? 'text-cs-blue' : 'text-muted-foreground'}`}>
                     {step.owner}
                   </span>
                   {v !== 'unknown' && (
-                    <span className={`text-[9px] font-semibold ml-auto ${v === 'pass' ? 'text-emerald-400' : 'text-red-400'}`}>
+                    <span className={`text-[9px] font-semibold ml-auto ${v === 'pass' ? 'text-cs-green' : 'text-cs-red'}`}>
                       {v === 'pass' ? 'pass' : 'fail'}
                     </span>
                   )}

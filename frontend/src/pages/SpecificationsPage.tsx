@@ -319,7 +319,7 @@ export default function SpecificationsPage() {
                   aria-expanded={isExpanded}
                   className="flex flex-1 min-w-0 items-center gap-3 text-left cursor-pointer"
                 >
-                  <div className="w-9 h-9 bg-amber-500/10 text-amber-400 rounded-lg flex items-center justify-center shrink-0">
+                  <div className="w-9 h-9 bg-cs-amber/10 text-cs-amber rounded-lg flex items-center justify-center shrink-0">
                     <FileText size={18} />
                   </div>
                   <div className="flex-1 min-w-0">

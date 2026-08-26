@@ -9,13 +9,13 @@ import { useAuthStore } from '../store/auth';
 import { formatReqType, reqTypeColor } from '../lib/requirementTypes';
 
 const statusColors: Record<string, string> = {
-  proposed: 'border-blue-500/50 bg-blue-500/10 text-blue-400',
-  in_review: 'border-amber-500/50 bg-amber-500/10 text-amber-400',
-  approved: 'border-green-500/50 bg-green-500/10 text-green-400',
-  implemented: 'border-purple-500/50 bg-purple-500/10 text-purple-400',
-  verified: 'border-emerald-500/50 bg-emerald-500/10 text-emerald-400',
-  rejected: 'border-red-500/50 bg-red-500/10 text-red-400',
-  deprecated: 'border-zinc-500/50 bg-zinc-500/10 text-zinc-400',
+  proposed: 'border-cs-blue/50 bg-cs-blue/10 text-cs-blue',
+  in_review: 'border-cs-amber/50 bg-cs-amber/10 text-cs-amber',
+  approved: 'border-cs-green/50 bg-cs-green/10 text-cs-green',
+  implemented: 'border-cs-purple/50 bg-cs-purple/10 text-cs-purple',
+  verified: 'border-cs-green/50 bg-cs-green/10 text-cs-green',
+  rejected: 'border-cs-red/50 bg-cs-red/10 text-cs-red',
+  deprecated: 'border-cs-grey/50 bg-cs-grey/10 text-cs-grey',
 };
 
 const priorityColors: Record<string, string> = {
@@ -144,11 +144,11 @@ export default function ProjectOverview() {
   }
 
   const statCards = [
-    { label: 'Requirements', value: stats.totalRequirements, icon: ClipboardList, color: 'text-blue-400 bg-blue-400/10', to: `/project/${projectId}/requirements` },
-    { label: 'Specifications', value: stats.totalSpecifications, icon: FileText, color: 'text-amber-400 bg-amber-400/10', to: `/project/${projectId}/specifications` },
-    { label: 'Components', value: stats.totalComponents, icon: Boxes, color: 'text-orange-400 bg-orange-400/10', to: `/project/${projectId}/components` },
-    { label: 'Verification Cases', value: stats.totalVerificationCases, icon: CheckCircle2, color: 'text-green-400 bg-green-400/10', to: `/project/${projectId}/verification` },
-    { label: 'Coverage', value: `${stats.coverage}%`, icon: BarChart3, color: 'text-purple-400 bg-purple-400/10', to: `/project/${projectId}/traces` },
+    { label: 'Requirements', value: stats.totalRequirements, icon: ClipboardList, color: 'text-cs-blue bg-cs-blue/10', to: `/project/${projectId}/requirements` },
+    { label: 'Specifications', value: stats.totalSpecifications, icon: FileText, color: 'text-cs-amber bg-cs-amber/10', to: `/project/${projectId}/specifications` },
+    { label: 'Components', value: stats.totalComponents, icon: Boxes, color: 'text-cs-orange bg-cs-orange/10', to: `/project/${projectId}/components` },
+    { label: 'Verification Cases', value: stats.totalVerificationCases, icon: CheckCircle2, color: 'text-cs-green bg-cs-green/10', to: `/project/${projectId}/verification` },
+    { label: 'Coverage', value: `${stats.coverage}%`, icon: BarChart3, color: 'text-cs-purple bg-cs-purple/10', to: `/project/${projectId}/traces` },
   ];
 
   const priorityData = Object.entries(stats.priorityCounts)
@@ -211,15 +211,15 @@ export default function ProjectOverview() {
             {Object.entries(stats.statusCounts).map(([status, count]) => {
               const pct = stats.totalRequirements > 0 ? (count / stats.totalRequirements) * 100 : 0;
               const barColor =
-                status === 'verified' ? 'bg-emerald-500' :
-                status === 'approved' ? 'bg-green-500' :
-                status === 'proposed' ? 'bg-blue-500' :
+                status === 'verified' ? 'bg-cs-green' :
+                status === 'approved' ? 'bg-cs-green' :
+                status === 'proposed' ? 'bg-cs-blue' :
                 status === 'rejected' ? 'bg-destructive' :
-                'bg-purple-500';
+                'bg-cs-purple';
               return (
                 <div key={status} className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className={`badge ${statusColors[status] || 'border-zinc-500/50 bg-zinc-500/10 text-zinc-400'}`}>
+                    <span className={`badge ${statusColors[status] || 'border-cs-grey/50 bg-cs-grey/10 text-cs-grey'}`}>
                       {status}
                     </span>
                   </div>
@@ -390,13 +390,13 @@ export default function ProjectOverview() {
             </div>
             <div className="flex gap-4 pt-2">
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-emerald-500" />
+                <div className="w-3 h-3 rounded-full bg-cs-green" />
                 <span className="text-xs text-muted-foreground">
                   Passed: <strong className="text-foreground">{stats.verificationStatus.passed}</strong>
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-amber-500" />
+                <div className="w-3 h-3 rounded-full bg-cs-amber" />
                 <span className="text-xs text-muted-foreground">
                   Pending: <strong className="text-foreground">{stats.verificationStatus.pending}</strong>
                 </span>

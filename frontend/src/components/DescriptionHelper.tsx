@@ -96,10 +96,10 @@ export default function DescriptionHelper({ description, verificationMethod }: D
       {/* Live quality bar */}
       {findings.length > 0 && (
         <div className="flex items-center gap-2 text-[10px]">
-          {errors.length > 0 && <span className="badge bg-red-500/10 text-red-400">{errors.length} issue{errors.length > 1 ? 's' : ''}</span>}
-          {warnings.length > 0 && <span className="badge bg-amber-500/10 text-amber-400">{warnings.length} suggestion{warnings.length > 1 ? 's' : ''}</span>}
+          {errors.length > 0 && <span className="badge bg-cs-red/10 text-cs-red">{errors.length} issue{errors.length > 1 ? 's' : ''}</span>}
+          {warnings.length > 0 && <span className="badge bg-cs-amber/10 text-cs-amber">{warnings.length} suggestion{warnings.length > 1 ? 's' : ''}</span>}
           {infos.length > 0 && <span className="badge bg-muted text-muted-foreground">{infos.length} note{infos.length > 1 ? 's' : ''}</span>}
-          {findings.length === 0 && <span className="text-emerald-400 text-[10px] flex items-center gap-1"><CheckCircle2 size={10} /> Good writing</span>}
+          {findings.length === 0 && <span className="text-cs-green text-[10px] flex items-center gap-1"><CheckCircle2 size={10} /> Good writing</span>}
           <button onClick={() => setOpen(!open)} className="text-muted-foreground/50 hover:text-muted-foreground ml-auto flex items-center gap-0.5">
             <BookOpen size={10} />
             {open ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
@@ -111,9 +111,9 @@ export default function DescriptionHelper({ description, verificationMethod }: D
       <AnimatePresence>
         {open && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-            <div className="card p-3 bg-amber-500/[0.03] border-amber-500/10 space-y-2">
+            <div className="card p-3 bg-cs-amber/[0.03] border-cs-amber/10 space-y-2">
               {/* Guideline reference */}
-              <p className="text-[10px] text-muted-foreground/70 leading-relaxed border-b border-amber-500/10 pb-2">
+              <p className="text-[10px] text-muted-foreground/70 leading-relaxed border-b border-cs-amber/10 pb-2">
                 Requirements text guidelines (based on INCOSE, EARS, and ISO 29148 practices). These checks run automatically against your description.
               </p>
 
@@ -123,15 +123,15 @@ export default function DescriptionHelper({ description, verificationMethod }: D
                   <div key={g.id}>
                     <button
                       onClick={() => setExpanded(expanded === g.id ? null : g.id)}
-                      className="flex items-center gap-1.5 w-full text-left py-0.5 hover:bg-amber-500/5 rounded px-1 transition-colors"
+                      className="flex items-center gap-1.5 w-full text-left py-0.5 hover:bg-cs-amber/5 rounded px-1 transition-colors"
                     >
-                      <GIcon size={11} className="text-amber-400/70 shrink-0" />
+                      <GIcon size={11} className="text-cs-amber/70 shrink-0" />
                       <span className="text-[10px] font-medium text-foreground/80">{g.title}</span>
                       <span className="flex-1" />
                       {expanded === g.id ? <ChevronDown size={10} className="text-muted-foreground" /> : <ChevronRight size={10} className="text-muted-foreground" />}
                     </button>
                     {expanded === g.id && (
-                      <p className="text-[9px] text-muted-foreground/60 leading-relaxed ml-5 pl-3 border-l border-amber-500/10 mt-0.5 mb-1">
+                      <p className="text-[9px] text-muted-foreground/60 leading-relaxed ml-5 pl-3 border-l border-cs-amber/10 mt-0.5 mb-1">
                         {g.content}
                       </p>
                     )}
@@ -141,11 +141,11 @@ export default function DescriptionHelper({ description, verificationMethod }: D
 
               {/* Inline findings */}
               {findings.length > 0 && (
-                <div className="border-t border-amber-500/10 pt-2 space-y-1">
+                <div className="border-t border-cs-amber/10 pt-2 space-y-1">
                   <p className="text-[9px] font-semibold text-foreground/60 uppercase tracking-wider">Current issues in this description</p>
                   {findings.map((f, i) => {
                     const FIcon = f.severity === 'error' ? XCircle : f.severity === 'warning' ? AlertTriangle : Info;
-                    const color = f.severity === 'error' ? 'text-red-400' : f.severity === 'warning' ? 'text-amber-400' : 'text-muted-foreground';
+                    const color = f.severity === 'error' ? 'text-cs-red' : f.severity === 'warning' ? 'text-cs-amber' : 'text-muted-foreground';
                     return (
                       <div key={i} className={`flex items-start gap-1.5 text-[9px] ${color} leading-relaxed`}>
                         <FIcon size={10} className="mt-px shrink-0" />
