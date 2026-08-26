@@ -395,7 +395,7 @@ export default function UsersPage() {
                   <label className="label text-[10px]">Password *<input className="input text-sm" type="password" placeholder="min 12 chars" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} /></label>
                 </div>
                 <div className="min-w-[130px]">
-                  <label className="label text-[10px]">Role<select className="input text-sm" value={newRole} onChange={(e) => setNewRole(e.target.value)}>
+                  <label className="label text-[10px]">Role<select className="select text-sm" value={newRole} onChange={(e) => setNewRole(e.target.value)}>
                     <RoleOptions />
                   </select></label>
                 </div>
@@ -417,11 +417,11 @@ export default function UsersPage() {
             </div>
             <div className="flex items-center gap-1.5">
               <Filter size={12} className="text-muted-foreground" />
-              <select className="input text-xs !w-auto !py-1.5" value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
+              <select className="select text-xs !w-auto !py-1.5" value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
                 <option value="all">All roles</option>
                 <RoleOptions />
               </select>
-              <select className="input text-xs !w-auto !py-1.5" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+              <select className="select text-xs !w-auto !py-1.5" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
                 <option value="all">All statuses</option>
                 <option value="active">Active</option>
                 <option value="disabled">Disabled</option>
@@ -441,7 +441,7 @@ export default function UsersPage() {
                 <div className="flex-1" />
                 <button onClick={() => handleBulk('disable')} className="btn-ghost text-xs"><Ban size={13} /> Disable</button>
                 <button onClick={() => handleBulk('enable')} className="btn-ghost text-xs"><CircleCheck size={13} /> Enable</button>
-                <select className="input text-xs !w-auto !py-1" defaultValue="" onChange={(e) => { if (e.target.value) { handleBulk('set_role', e.target.value); e.target.value = ''; } }}>
+                <select className="select text-xs !w-auto !py-1" defaultValue="" onChange={(e) => { if (e.target.value) { handleBulk('set_role', e.target.value); e.target.value = ''; } }}>
                   <option value="">Set role…</option>
                   <RoleOptions />
                 </select>
@@ -505,7 +505,7 @@ export default function UsersPage() {
                         </td>
                         <td className="px-4 py-2.5">
                           <select
-                            className="input !w-auto !py-1 text-[11px]"
+                            className="select !w-auto !py-1 text-[11px]"
                             value={u.role}
                             onChange={(e) => handleRoleChange(u.username, e.target.value)}
                             disabled={isSelf && u.role === 'admin'}
@@ -617,7 +617,7 @@ export default function UsersPage() {
               <div><label className="label text-[10px]">Username *<input className="input text-sm" value={invite.username} onChange={(e) => setInvite({ ...invite, username: e.target.value })} placeholder="jdoe" autoFocus /></label></div>
               <div><label className="label text-[10px]">Email<input className="input text-sm" value={invite.email} onChange={(e) => setInvite({ ...invite, email: e.target.value })} placeholder="jane@example.com" /></label></div>
               <div><label className="label text-[10px]">Full name<input className="input text-sm" value={invite.full_name} onChange={(e) => setInvite({ ...invite, full_name: e.target.value })} placeholder="Jane Doe" /></label></div>
-              <div><label className="label text-[10px]">Role<select className="input text-sm" value={invite.role} onChange={(e) => setInvite({ ...invite, role: e.target.value })}>
+              <div><label className="label text-[10px]">Role<select className="select text-sm" value={invite.role} onChange={(e) => setInvite({ ...invite, role: e.target.value })}>
                   <RoleOptions />
                 </select></label>
               </div>

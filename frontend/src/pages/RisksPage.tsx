@@ -54,7 +54,7 @@ function GroupPicker({ label, value, onChange, options, placeholder }: {
   return (
     <div ref={containerRef} className="relative" data-group-picker={label}>
       <button type="button" onClick={() => setOpen((v) => !v)}
-        className="select h-9 text-xs flex items-center gap-1.5 justify-between min-w-[10rem] max-w-[14rem]"
+        className="input h-9 text-xs flex items-center gap-1.5 justify-between min-w-[10rem] max-w-[14rem] cursor-pointer"
         aria-label={label} title={selected ? `${label}: ${selected.name}` : label}>
         <span className="truncate">{selected ? `${label}: ${selected.name}` : label}</span>
         <ChevronDown size={13} className="shrink-0 text-muted-foreground" />

@@ -233,7 +233,7 @@ export default function DefinitionsPage() {
             <div className="flex flex-wrap items-end gap-3">
               <div className="w-32">
                 <label className="label">Type
-                  <select className="input" value={draft.type}
+                  <select className="select" value={draft.type}
                     onChange={(e) => setDraft({ ...draft, type: e.target.value as 'constraint' | 'calc' })}>
                     <option value="constraint">constraint</option>
                     <option value="calc">calc</option>

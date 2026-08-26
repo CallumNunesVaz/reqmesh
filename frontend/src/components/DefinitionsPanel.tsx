@@ -83,7 +83,7 @@ export function DefinitionsManager({ projectId, editable }: { projectId: string;
       {editable && (
         <>
           <div className="flex flex-wrap gap-1 items-center">
-            <select className="input text-xs py-1 w-24" value={draft.type}
+            <select className="select text-xs py-1 w-24" value={draft.type}
               onChange={(e) => setDraft({ ...draft, type: e.target.value as 'constraint' | 'calc' })}>
               <option value="constraint">constraint</option>
               <option value="calc">calc</option>

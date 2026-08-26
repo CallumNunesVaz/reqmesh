@@ -259,7 +259,7 @@ export default function AllocationMatrixPage() {
             />
           </div>
           <select
-            className="bg-muted rounded-lg px-2.5 py-1.5 text-xs outline-none"
+            className="select text-xs py-1.5"
             value={filterType}
             onChange={(e) => setFilterType(e.target.value)}
           >

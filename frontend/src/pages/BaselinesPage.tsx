@@ -698,7 +698,7 @@ export default function BaselinesPage() {
 
               <div className="mb-3">
                 <select
-                  className="input text-sm"
+                  className="select text-sm"
                   value={diffAgainst ?? ''}
                   onChange={(e) => setDiffAgainst(e.target.value || undefined)}
                 >

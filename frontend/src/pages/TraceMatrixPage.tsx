@@ -259,7 +259,7 @@ export default function TraceMatrixPage() {
             <label className="label" htmlFor={sourceId}>Source</label>
             <AutocompleteInput
               id={sourceId}
-              className="select"
+              className="input cursor-pointer"
               placeholder="Select source..."
               value={newLink.source}
               onChange={(v) => setNewLink({ ...newLink, source: v })}
@@ -281,7 +281,7 @@ export default function TraceMatrixPage() {
             <label className="label" htmlFor={targetId}>Target</label>
             <AutocompleteInput
               id={targetId}
-              className="select"
+              className="input cursor-pointer"
               placeholder="Select target..."
               value={newLink.target}
               onChange={(v) => setNewLink({ ...newLink, target: v })}

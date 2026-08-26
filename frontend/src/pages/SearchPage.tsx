@@ -126,7 +126,7 @@ export default function SearchPage() {
           <div className="relative">
             <SlidersHorizontal size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
             <select
-              className="pl-7 pr-3 py-2 text-sm bg-muted/40 border rounded-lg outline-none focus:border-primary/60 text-foreground appearance-none cursor-pointer"
+              className="select pl-7"
               value={kind}
               onChange={(e) => handleKindChange(e.target.value)}
             >
