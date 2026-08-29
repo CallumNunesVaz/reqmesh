@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Header, Request, Response
 from pydantic import BaseModel
 from typing import Optional
 
-from app.core.rate_limit import rate_limit
+from app.core.rate_limit import rate_limit, _client_ip
 
 audit_logger = logging.getLogger("audit")
 
@@ -63,8 +63,8 @@ class RegisterRequest(BaseModel):
 
 
 @router.post("/auth/login")
-def login(data: LoginRequest, response: Response, _rate: None = Depends(rate_limit(5, 60))):
-    result = authenticate(data.username, data.password)
+def login(data: LoginRequest, request: Request, response: Response, _rate: None = Depends(rate_limit(5, 60))):
+    result = authenticate(data.username, data.password, client_ip=_client_ip(request))
     status = result.get("status")
 
     # Uniform error response for all failure paths — same status code,

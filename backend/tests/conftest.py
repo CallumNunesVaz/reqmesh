@@ -25,6 +25,9 @@ def workspace(tmp_path, monkeypatch):
     monkeypatch.setattr(auth, "RESET_TOKENS_FILE", tmp_path / "reset_tokens.yaml")
     monkeypatch.setattr(auth, "VERIFY_TOKENS_FILE", tmp_path / "verify_tokens.yaml")
     monkeypatch.setattr(auth, "_secret_cache", None)
+    # Per-source lockout counters are in-memory; reset them like the rate
+    # limiter's buckets so tests don't bleed failed-login state into each other.
+    auth._per_source_failures.clear()
     from app.core import settings_store
     monkeypatch.setattr(settings_store, "SETTINGS_FILE", tmp_path / "settings.yaml")
     return tmp_path
