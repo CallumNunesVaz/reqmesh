@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from starlette.background import BackgroundTask
 
 from app.core.config import settings
-from app.core.dependencies import get_store, require_maintain, get_current_user
+from app.core.dependencies import get_store, require_maintain, require_view, get_current_user
 from app.core.rate_limit import rate_limit
 from app.services.publisher import Publisher, compile_latex_to_pdf_detailed
 
@@ -58,6 +58,7 @@ def download_report(project_id: str, format: str = "html", subsystems: str | Non
                           # tried each of the nine offered formats once. 15 still
                           # bounds the cost (a PDF is ~11 s of CPU) while leaving
                           # room to work through the format list and retry.
+                          user: dict = Depends(require_view),
                           _rate: None = Depends(rate_limit(15, 60))):
     store = get_store(project_id)
     sub_list = [s.strip() for s in subsystems.split(",") if s.strip()] if subsystems is not None else None

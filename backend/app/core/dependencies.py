@@ -17,7 +17,7 @@ DEFAULT_PERMISSIONS = {
     "admin": "admin",
 }
 
-PERMISSION_LEVELS = {"view": 0, "propose": 1, "edit": 2, "admin": 3}
+PERMISSION_LEVELS = {"none": -1, "view": 0, "propose": 1, "edit": 2, "admin": 3}
 
 
 #: The permission tier required to write each entity kind, whether one at a
@@ -113,6 +113,28 @@ def require_auth(
 # NB: CSRF is enforced globally by ``main.csrf_middleware`` so it cannot be
 # forgotten on a new route. Deliberately not also a dependency — two
 # implementations of the same check drift apart.
+
+
+def require_view(project_id: str, request: Request,
+                 authorization: Optional[str] = Header(None)) -> dict:
+    """View tier — the user's effective permission in this project must be at
+    least ``view`` to read. The ``none`` tier (below ``view``) is what lets a
+    project's ``permissions`` map deny reads outright; without it every role
+    floors at ``view`` and this gate would be a no-op.
+
+    Guest handling mirrors ``require_auth``: when ``RT_REQUIRE_AUTH`` is set and
+    no valid session is present, the request is rejected with 401 rather than
+    falling through to the permission check."""
+    from app.core.config import settings
+
+    user = get_current_user(request=request, authorization=authorization)
+    is_authenticated = user.get("role", "guest") != "guest"
+
+    if settings.require_auth and not is_authenticated:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    if user_permission_level(user, project_id) < PERMISSION_LEVELS["view"]:
+        raise HTTPException(status_code=403, detail="View permission required")
+    return user
 
 
 def require_edit(project_id: str, request: Request,
