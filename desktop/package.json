@@ -9,7 +9,8 @@
   "license": "GPL-3.0-or-later",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder",
+    "build": "bash ../scripts/build_desktop_backend.sh && electron-builder",
+    "build:backend": "bash ../scripts/build_desktop_backend.sh",
     "lint": "oxlint"
   },
   "devDependencies": {
@@ -22,7 +23,8 @@
     "productName": "reqmesh",
     "files": ["main.js", "preload.js", "package.json"],
     "extraResources": [
-      { "from": "../frontend/dist", "to": "frontend/dist" }
+      { "from": "../frontend/dist", "to": "frontend/dist" },
+      { "from": "backend", "to": "backend" }
     ],
     "directories": { "output": "release" }
   }

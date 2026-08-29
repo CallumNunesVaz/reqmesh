@@ -138,6 +138,46 @@ jobs:
       # security.yml.
       - run: npm run lint --prefix desktop
 
+  desktop-package:
+    name: Desktop package (build & boot)
+    runs-on: ubuntu-latest
+    # The `desktop` job above only lints the two JS files, so a packaged app
+    # that cannot boot would still ship green. This job is the guard that was
+    # missing: it builds the real artifact (PyInstaller backend + electron-builder
+    # shell) and boots it headless, waiting on the existing GET /health — the
+    # same endpoint the shell itself waits on. It fails if the backend does not
+    # come up, which is exactly what a missing extraResources bundle produces.
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      # Electron creates a real GTK window, which needs a display. xvfb provides
+      # a virtual one; the boot check below prefers xvfb-run and only falls back
+      # to Chromium's offscreen headless mode when it is absent.
+      - run: sudo apt-get update && sudo apt-get install -y xvfb
+      - run: npm ci --prefix desktop
+      - run: npm ci --prefix frontend
+      # extraResources copies frontend/dist into the artifact, so the SPA must
+      # be built before electron-builder runs — a stale bundle tests stale code.
+      - run: npm run build --prefix frontend
+      # PyInstaller freezes the backend into desktop/backend/reqmesh-backend,
+      # which electron-builder then copies into the app's resources.
+      - run: pip install -r backend/requirements.txt pyinstaller
+      - run: bash scripts/build_desktop_backend.sh
+        env:
+          PYTHON: python
+      - run: npx electron-builder --linux dir
+        working-directory: desktop
+      # The job is the test: boot the packaged app headless and wait for /health.
+      - run: bash scripts/desktop_boot_check.sh
+
   deploy-checks:
     name: Deploy script checks
     runs-on: ubuntu-latest
