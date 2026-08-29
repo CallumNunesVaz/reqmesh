@@ -137,6 +137,44 @@ def test_written_yaml_is_readable_after_write(tmp_path):
     assert store._read_yaml(path)["title"] == "hello"
 
 
+def test_save_users_fsyncs_file_then_directory(workspace, monkeypatch):
+    """The users file must get the same durability ordering as entity writes.
+
+    A power loss that reverts users.yaml reverts it to an older set of
+    credentials — the most security-sensitive file in the product — so the temp
+    file must be fsynced before the rename and the directory after it.
+    """
+    from app.core import auth
+
+    calls: list[str] = []
+    real_fsync, real_replace = os.fsync, os.replace
+
+    def spy_fsync(fd):
+        import stat
+        kind = "dir" if stat.S_ISDIR(os.fstat(fd).st_mode) else "file"
+        calls.append(f"fsync:{kind}")
+        return real_fsync(fd)
+
+    def spy_replace(src, dst):
+        calls.append("replace")
+        return real_replace(src, dst)
+
+    monkeypatch.setattr(os, "fsync", spy_fsync)
+    monkeypatch.setattr(os, "replace", spy_replace)
+
+    auth.save_users({"admin": {"username": "admin", "role": "admin"}})
+
+    assert calls == ["fsync:file", "replace", "fsync:dir"], calls
+
+
+def test_save_users_writes_a_readable_users_file(workspace):
+    """The fsync work must not disturb the write itself."""
+    from app.core import auth
+
+    auth.save_users({"admin": {"username": "admin", "role": "admin"}})
+    assert auth.load_users()["admin"]["username"] == "admin"
+
+
 # ── Presence: prune the disconnected, keep the merely long-lived ─────────────
 
 def _age(bus: EventBus, project: str, client: str, *, minutes: float) -> None:

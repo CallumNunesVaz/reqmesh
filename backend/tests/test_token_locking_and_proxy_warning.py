@@ -144,6 +144,53 @@ def test_verify_email_still_verifies(workspace):
     assert auth.verify_email(token) is None
 
 
+# ── file_lock fallback: serialise without fcntl (Windows) ──────────────────────
+
+
+def test_fallback_file_lock_serialises_read_increment_write(tmp_path, monkeypatch):
+    """Without fcntl, file_lock must not degrade to an unguarded yield.
+
+    Two threads doing read-increment-write on the same path under a bare yield
+    would lose updates; the process-wide per-path lock must serialise them.
+    """
+    from app.core import filelock
+
+    monkeypatch.setattr(filelock, "fcntl", None)
+
+    path = tmp_path / "counter.yaml"
+    path.write_text("0")
+
+    def worker():
+        for _ in range(300):
+            with filelock.file_lock(path):
+                value = int(path.read_text())
+                value += 1
+                path.write_text(str(value))
+
+    threads = [threading.Thread(target=worker) for _ in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=20)
+
+    assert not any(t.is_alive() for t in threads)
+    assert int(path.read_text()) == 600
+
+
+def test_fallback_file_lock_returns_one_lock_per_path(tmp_path, monkeypatch):
+    """The fallback registry must hand out one lock per path, distinct across paths."""
+    from app.core import filelock
+
+    monkeypatch.setattr(filelock, "fcntl", None)
+
+    first = filelock._fallback_lock(tmp_path / "a.yaml")
+    again = filelock._fallback_lock(tmp_path / "a.yaml")
+    other = filelock._fallback_lock(tmp_path / "b.yaml")
+
+    assert first is again
+    assert first is not other
+
+
 # ── FAB-5: startup warning when X-Forwarded-For is trusted broadly ──────────────
 
 
