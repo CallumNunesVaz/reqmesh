@@ -1,6 +1,11 @@
 -r requirements.txt
 pytest==9.1.1
 httpx==0.28.1
+# Coverage for the fast suite, gated in CI with --cov-fail-under (see
+# pytest.ini and .github/workflows/ci.yml). Pinned so the reported number
+# cannot drift under us. Opt-in on the command line, not addopts — measuring
+# slows the fast inner loop that `pytest tests/` is deliberately kept quick for.
+pytest-cov==7.1.0
 # Property-based coverage of every documented API operation
 # (tests/test_openapi_contract.py).
 # schemathesis pulls three dependencies with no upper bound, and a fresh CI

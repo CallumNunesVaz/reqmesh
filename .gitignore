@@ -37,3 +37,9 @@ frontend/.last-run.json
 # Internal audit and review notes — records unfixed findings in actionable
 # detail, so it is kept out of the public repo.
 docs/internal/
+
+# Coverage data/artifacts (pytest-cov)
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
