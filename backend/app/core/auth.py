@@ -207,7 +207,18 @@ def save_users(users: dict) -> None:
         with os.fdopen(fd, "w") as f:
             with _yaml_lock:
                 _yaml.dump(users, f)
+            f.flush()
+            os.fsync(f.fileno())
         os.replace(tmp, USERS_FILE)
+        # Fsync the directory *after* the rename, so the new directory entry
+        # itself is durable. Doing it before only flushes the entry for the
+        # temp file, which the rename then replaces — the crash window this
+        # exists to close stayed wide open.
+        dir_fd = os.open(USERS_FILE.parent, os.O_RDONLY)
+        try:
+            os.fsync(dir_fd)
+        finally:
+            os.close(dir_fd)
         _chmod_private(USERS_FILE)
     except BaseException:
         try:
