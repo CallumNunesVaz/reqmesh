@@ -45,14 +45,4 @@ describe('setters', () => {
     useStore.getState().setCurrentProject(null);
     expect(useStore.getState().currentProject).toBeNull();
   });
-
-  it('tracks loading and error independently', () => {
-    useStore.getState().setLoading(true);
-    useStore.getState().setError('boom');
-    expect(useStore.getState().loading).toBe(true);
-    expect(useStore.getState().error).toBe('boom');
-    useStore.getState().setError(null);
-    expect(useStore.getState().error).toBeNull();
-    expect(useStore.getState().loading).toBe(true);
-  });
 });

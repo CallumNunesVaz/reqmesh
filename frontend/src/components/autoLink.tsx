@@ -154,8 +154,36 @@ export function AutoLinkText({ text, kinds, className, renderPlain }: AutoLinkTe
 // else (and every attribute) is dropped, which doubles as sanitisation.
 const ALLOWED_TAGS = new Set([
   'p', 'strong', 'em', 'b', 'i', 'u', 's', 'ul', 'ol', 'li',
-  'h1', 'h2', 'h3', 'code', 'pre', 'blockquote',
+  'h1', 'h2', 'h3', 'code', 'pre', 'blockquote', 'img',
 ]);
+
+/** True when an `<img>` `src` may be rendered in the read-only view. Only
+ *  `data:image/…` and same-origin relative paths pass; `javascript:`,
+ *  `vbscript:`, protocol-relative `//host` and any absolute URL are rejected —
+ *  a remote image would quietly reintroduce an outbound request into an
+ *  air-gapped bundle (see frontend/scripts/check-selfcontained.mjs). */
+function isSafeImgSrc(src: string): boolean {
+  // Match how a browser actually resolves the URL before reading the scheme,
+  // per the WHATWG URL parser: ASCII tab and newline are stripped from
+  // anywhere in the string, and leading/trailing C0 controls *and space* are
+  // trimmed. Stripping only tab/newline/CR left `" https://evil/x.png"` and
+  // `"\u000bhttps://…"` looking scheme-less, so they passed as relative paths
+  // and loaded a remote image — an outbound request from a bundle whose
+  // self-containment is only checked at build time.
+  // The C0 range is the point, not an accident: `.trim()` would miss a leading
+  // U+0001, which a browser strips and which would otherwise hide a scheme.
+  // eslint-disable-next-line no-control-regex
+  const stripLead = /^[\u0000-\u0020]+/;
+  // eslint-disable-next-line no-control-regex
+  const stripTrail = /[\u0000-\u0020]+$/;
+  const cleaned = src
+    .replace(/[\t\n\r]/g, '')
+    .replace(stripLead, '')
+    .replace(stripTrail, '');
+  if (/^data:image\//i.test(cleaned)) return true;
+  if (cleaned.startsWith('//')) return false;
+  return !/^[A-Za-z][A-Za-z0-9+.-]*:/.test(cleaned);
+}
 
 function nodeToReact(node: ChildNode, kinds: Map<string, EntityKind>, key: number,
                      renderPlain?: (text: string) => ReactNode): ReactNode {
@@ -184,6 +212,16 @@ function nodeToReact(node: ChildNode, kinds: Map<string, EntityKind>, key: numbe
 
   const tag = el.tagName.toLowerCase();
   if (tag === 'br') return <br key={key} />;
+  if (tag === 'img') {
+    const src = el.getAttribute('src') || '';
+    if (!isSafeImgSrc(src)) return null;
+    // Only `src` and `alt` survive; every other attribute (e.g. `onerror`) is
+    // dropped, which is what keeps this renderer a sanitising rebuild.
+    const alt = el.getAttribute('alt');
+    const props: { key: number; src: string; alt?: string } = { key, src };
+    if (alt !== null) props.alt = alt;
+    return createElement('img', props);
+  }
   const children = Array.from(node.childNodes).map((c, i) => nodeToReact(c, kinds, i, renderPlain));
   if (!ALLOWED_TAGS.has(tag)) return <Fragment key={key}>{children}</Fragment>;
   return createElement(tag, { key }, children.length > 0 ? children : undefined);
