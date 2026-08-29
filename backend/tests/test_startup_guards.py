@@ -43,6 +43,60 @@ class TestCorsWildcardRefused:
         self._reimport_main(monkeypatch, [])
 
 
+# ── Multiple workers ─────────────────────────────────────────────────────────
+
+class TestMultiWorkerRefused:
+    """Every piece of collaboration state is per-process, so uvicorn must never
+    be allowed to spawn more than one worker. Detected at import time — uvicorn
+    spawns children via ``multiprocessing`` ``spawn``, each of which re-imports
+    ``app.main`` — so the refusal fires in every worker.
+    """
+
+    def _reimport_main(self, monkeypatch, argv, web_concurrency=None):
+        monkeypatch.setattr(sys, "argv", argv)
+        if web_concurrency is None:
+            monkeypatch.delenv("WEB_CONCURRENCY", raising=False)
+        else:
+            monkeypatch.setenv("WEB_CONCURRENCY", web_concurrency)
+        sys.modules.pop("app.main", None)
+        try:
+            importlib.import_module("app.main")
+        finally:
+            sys.modules.pop("app.main", None)
+            importlib.import_module("app.main")
+
+    def test_workers_two_refuses_to_start(self, monkeypatch):
+        with pytest.raises(RuntimeError, match="reqmesh does not support multiple workers"):
+            self._reimport_main(monkeypatch, ["reqmesh", "--workers", "2"])
+
+    def test_workers_equals_two_refuses_to_start(self, monkeypatch):
+        with pytest.raises(RuntimeError, match="reqmesh does not support multiple workers"):
+            self._reimport_main(monkeypatch, ["reqmesh", "--workers=2"])
+
+    def test_short_w_four_refuses_to_start(self, monkeypatch):
+        with pytest.raises(RuntimeError, match="reqmesh does not support multiple workers"):
+            self._reimport_main(monkeypatch, ["reqmesh", "-w", "4"])
+
+    def test_single_worker_boots(self, monkeypatch):
+        self._reimport_main(monkeypatch, ["reqmesh", "--workers", "1"])
+
+    def test_no_worker_flag_boots(self, monkeypatch):
+        self._reimport_main(monkeypatch, ["reqmesh"])
+
+    def test_web_concurrency_three_refuses_to_start(self, monkeypatch):
+        with pytest.raises(RuntimeError, match="reqmesh does not support multiple workers"):
+            self._reimport_main(monkeypatch, ["reqmesh"], web_concurrency="3")
+
+    def test_web_concurrency_one_boots(self, monkeypatch):
+        self._reimport_main(monkeypatch, ["reqmesh"], web_concurrency="1")
+
+    def test_argv_workers_flag_wins_over_web_concurrency(self, monkeypatch):
+        self._reimport_main(monkeypatch, ["reqmesh", "--workers", "1"], web_concurrency="8")
+
+    def test_unparseable_web_concurrency_is_ignored(self, monkeypatch):
+        self._reimport_main(monkeypatch, ["reqmesh"], web_concurrency="banana")
+
+
 # ── Bootstrap admin credential ───────────────────────────────────────────────
 
 class TestInitialAdminFile:

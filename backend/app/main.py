@@ -1,7 +1,9 @@
 import asyncio
 import logging
+import os
 import re
 import secrets
+import sys
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -155,6 +157,54 @@ app = FastAPI(
 )
 
 app.add_middleware(GZipMiddleware, minimum_size=512)
+
+
+def _resolve_worker_count() -> int | None:
+    """The worker count uvicorn would honour, or ``None`` when absent.
+
+    Mirrors uvicorn's precedence: an explicit ``--workers``/``-w`` on the
+    command line wins; only when it is absent does ``WEB_CONCURRENCY`` apply.
+    A value that is not an int is ignored rather than fatal — the guard must
+    never be the reason a valid deployment fails to boot.
+    """
+    argv = list(sys.argv)
+    flag_value = None
+    flag_seen = False
+    for idx, arg in enumerate(argv):
+        for prefix in ("--workers=", "-w="):
+            if arg.startswith(prefix):
+                flag_seen = True
+                flag_value = arg[len(prefix):]
+                break
+        else:
+            if arg in ("--workers", "-w") and idx + 1 < len(argv):
+                flag_seen = True
+                flag_value = argv[idx + 1]
+
+    if flag_seen:
+        try:
+            return int(flag_value)
+        except (TypeError, ValueError):
+            return None
+
+    raw = os.environ.get("WEB_CONCURRENCY")
+    if raw is None:
+        return None
+    try:
+        return int(raw)
+    except ValueError:
+        return None
+
+
+_worker_count = _resolve_worker_count()
+if _worker_count is not None and _worker_count > 1:
+    raise RuntimeError(
+        "reqmesh does not support multiple workers: "
+        f"configured with {_worker_count}, but the event bus, presence roster, "
+        "rate-limit buckets and git debounce counters are all per-process. "
+        "Run with a single worker (--workers 1)."
+    )
+
 # Fail-fast on a dangerous CORS configuration. Sessions are cookie-based, so
 # credentials are always sent; a wildcard origin would tell the browser to
 # accept authenticated cross-origin requests from anywhere. Starlette silently
