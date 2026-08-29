@@ -16,7 +16,7 @@ from fastapi import APIRouter, HTTPException, Query, Depends, File, Form, Reques
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from app.core.config import settings
-from app.core.dependencies import get_store, require_edit, require_maintain, require_admin
+from app.core.dependencies import get_store, require_edit, require_maintain, require_admin, require_view
 from app.core.rate_limit import rate_limit
 from app.core.ids import safe_id
 from app.services.meta_defs import normalize_baseline_defs
@@ -72,13 +72,14 @@ def list_change_requests(
     project_id: str,
     offset: Optional[int] = Query(None, ge=0),
     limit: Optional[int] = Query(None, ge=1, le=2000),
+    user: dict = Depends(require_view),
 ):
     items = sorted_by_modified(get_store(project_id).list_items("change_requests"))
     return paginate(items, offset, limit)
 
 
 @router.get("/projects/{project_id}/change-requests/{cr_id}")
-def get_change_request(project_id: str, cr_id: str):
+def get_change_request(project_id: str, cr_id: str, user: dict = Depends(require_view)):
     store = get_store(project_id)
     cr = store.get_item("change_requests", cr_id)
     if cr is None:
@@ -145,6 +146,7 @@ def delete_change_request(project_id: str, cr_id: str, force: bool = False, user
 def get_cr_redline(
     project_id: str,
     cr_id: str,
+    user: dict = Depends(require_view),
     _rate: None = Depends(rate_limit(20, 60)),
 ):
     store = get_store(project_id)
@@ -273,7 +275,7 @@ def reject_change_request(
 
 
 @router.get("/projects/{project_id}/requirements/{req_id}/fingerprint")
-def get_requirement_fingerprint(project_id: str, req_id: str):
+def get_requirement_fingerprint(project_id: str, req_id: str, user: dict = Depends(require_view)):
     store = get_store(project_id)
     req = store.get_requirement(req_id)
     if req is None:
@@ -293,7 +295,7 @@ def _rated(store, risks: list[dict]) -> list[dict]:
 
 
 @router.get("/projects/{project_id}/risk-matrix")
-def get_risk_matrix(project_id: str):
+def get_risk_matrix(project_id: str, user: dict = Depends(require_view)):
     from app.services.risk_matrix import normalize_matrix
     return normalize_matrix(get_store(project_id).read_meta().get("risk_matrix"))
 
@@ -303,6 +305,7 @@ def list_risks(
     project_id: str,
     offset: Optional[int] = Query(None, ge=0),
     limit: Optional[int] = Query(None, ge=1, le=2000),
+    user: dict = Depends(require_view),
 ):
     store = get_store(project_id)
     items = _rated(store, sorted_by_modified(store.list_items("risks")))
@@ -310,7 +313,7 @@ def list_risks(
 
 
 @router.get("/projects/{project_id}/risks/{risk_id}")
-def get_risk(project_id: str, risk_id: str):
+def get_risk(project_id: str, risk_id: str, user: dict = Depends(require_view)):
     store = get_store(project_id)
     risk = store.get_item("risks", risk_id)
     if risk is None:
@@ -379,6 +382,7 @@ def list_comments(
     entity_id: Optional[str] = Query(None),
     offset: Optional[int] = Query(None, ge=0),
     limit: Optional[int] = Query(None, ge=1, le=2000),
+    user: dict = Depends(require_view),
 ):
     if entity_id and not entity_kind:
         raise HTTPException(status_code=400, detail="entity_kind is required when filtering by entity_id")
@@ -440,13 +444,14 @@ def list_decisions(
     project_id: str,
     offset: Optional[int] = Query(None, ge=0),
     limit: Optional[int] = Query(None, ge=1, le=2000),
+    user: dict = Depends(require_view),
 ):
     items = sorted_by_modified(get_store(project_id).list_items("decisions"))
     return paginate(items, offset, limit)
 
 
 @router.get("/projects/{project_id}/decisions/{dec_id}")
-def get_decision(project_id: str, dec_id: str):
+def get_decision(project_id: str, dec_id: str, user: dict = Depends(require_view)):
     store = get_store(project_id)
     decision = store.get_item("decisions", dec_id)
     if decision is None:
@@ -510,7 +515,7 @@ def delete_decision(project_id: str, dec_id: str, force: bool = False, user: dic
 # ── Version History ───────────────────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/history/{item_id}")
-def item_history(project_id: str, item_id: str):
+def item_history(project_id: str, item_id: str, user: dict = Depends(require_view)):
     return get_store(project_id).list_history(item_id)[:50]
 
 
@@ -522,6 +527,7 @@ def activity(
     since: str = Query(""),
     until: str = Query(""),
     bucket: str = Query("day"),
+    user: dict = Depends(require_view),
 ):
     """Aggregated audit activity bucketed by date and entity kind.
 
@@ -661,7 +667,7 @@ def activity(
 # ── Git Log ───────────────────────────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/git/log")
-def git_log(project_id: str, limit: int = Query(50, ge=1, le=500)):
+def git_log(project_id: str, limit: int = Query(50, ge=1, le=500), user: dict = Depends(require_view)):
     from app.services import git_service
 
     store = get_store(project_id)
@@ -887,14 +893,14 @@ def git_delete_key(project_id: str, user: dict = Depends(require_admin)):
 # ── Validation ────────────────────────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/validate")
-def validate_project(project_id: str, _rate: None = Depends(rate_limit(20, 60))):
+def validate_project(project_id: str, user: dict = Depends(require_view), _rate: None = Depends(rate_limit(20, 60))):
     store = get_store(project_id)
     checker = IntegrityChecker(store)
     return checker.check_all()
 
 
 @router.get("/projects/{project_id}/suspect-links")
-def get_suspect_links(project_id: str):
+def get_suspect_links(project_id: str, user: dict = Depends(require_view)):
     store = get_store(project_id)
     from app.services.fingerprint import check_suspect_links
     links = check_suspect_links(store)
@@ -952,7 +958,7 @@ def review_all_endpoint(project_id: str, user: dict = Depends(require_maintain))
 
 
 @router.get("/projects/{project_id}/unreviewed")
-def get_unreviewed(project_id: str):
+def get_unreviewed(project_id: str, user: dict = Depends(require_view)):
     from app.services.fingerprint import check_unreviewed
     return {"items": check_unreviewed(get_store(project_id)), "count": None}
 
@@ -1009,7 +1015,8 @@ def freeze_baseline(project_id: str, name: str, user: dict = Depends(require_mai
 
 
 @router.get("/projects/{project_id}/baselines/{name}/diff")
-def diff_baseline(project_id: str, name: str, against: str | None = None):
+def diff_baseline(project_id: str, name: str, against: str | None = None,
+                  user: dict = Depends(require_view)):
     """Compare a frozen baseline against the current requirements or another
     frozen baseline.
 

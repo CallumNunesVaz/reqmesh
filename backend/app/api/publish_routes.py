@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from starlette.background import BackgroundTask
 
 from app.core.config import settings
-from app.core.dependencies import get_store, require_maintain, require_view, get_current_user
+from app.core.dependencies import get_store, require_maintain, require_view
 from app.core.rate_limit import rate_limit
 from app.services.publisher import Publisher, compile_latex_to_pdf_detailed
 
@@ -165,7 +165,7 @@ def scan_code(project_id: str, code_root: str = Form(""), user: dict = Depends(r
 
 
 @router.get("/projects/{project_id}/references/freshness")
-def reference_freshness(project_id: str, user: dict = Depends(get_current_user)):
+def reference_freshness(project_id: str, user: dict = Depends(require_view)):
     from app.services.references import check_reference_freshness
     store = get_store(project_id)
     return check_reference_freshness(store, store.root)

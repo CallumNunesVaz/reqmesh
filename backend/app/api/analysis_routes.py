@@ -11,7 +11,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel
 
-from app.core.dependencies import get_store
+from app.core.dependencies import get_store, require_view
 from app.core.rate_limit import rate_limit
 
 router = APIRouter()
@@ -27,7 +27,7 @@ class ImpactRequest(BaseModel):
 # ── Impact Analysis ───────────────────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/requirements/{req_id}/impact")
-def get_impact(project_id: str, req_id: str):
+def get_impact(project_id: str, req_id: str, user: dict = Depends(require_view)):
     store = get_store(project_id)
     all_reqs = store.list_requirements()
     req = store.get_requirement(req_id)
@@ -49,7 +49,7 @@ def get_impact(project_id: str, req_id: str):
 # ── Gap Analysis ──────────────────────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/gap-analysis")
-def gap_analysis(project_id: str):
+def gap_analysis(project_id: str, user: dict = Depends(require_view)):
     store = get_store(project_id)
     reqs = store.list_requirements()
     gaps = []
@@ -68,7 +68,8 @@ def gap_analysis(project_id: str):
 
 @router.get("/projects/{project_id}/entities/{entity_id}/backlinks")
 def entity_backlinks(project_id: str, entity_id: str,
-                     collection: Optional[str] = Query(None)):
+                     collection: Optional[str] = Query(None),
+                     user: dict = Depends(require_view)):
     """Everything in the project that points at this entity, grouped by kind."""
     from app.services.link_registry import COLLECTION_LABELS, LINKS, find_referrers
 
@@ -109,7 +110,7 @@ def coverage_needs_vocabulary():
 
 
 @router.get("/projects/{project_id}/coverage")
-def coverage_analysis(project_id: str, _rate: None = Depends(rate_limit(20, 60))):
+def coverage_analysis(project_id: str, user: dict = Depends(require_view), _rate: None = Depends(rate_limit(20, 60))):
     from app.services.tracing import trace_all
     items = trace_all(get_store(project_id))
     total = len(items)
@@ -128,7 +129,7 @@ def coverage_analysis(project_id: str, _rate: None = Depends(rate_limit(20, 60))
 # ── Conflict Detection ────────────────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/conflicts")
-def detect_conflicts(project_id: str):
+def detect_conflicts(project_id: str, user: dict = Depends(require_view)):
     store = get_store(project_id)
     reqs = store.list_requirements()
     conflicts = []
@@ -151,7 +152,7 @@ def detect_conflicts(project_id: str):
 # ── Compliance ────────────────────────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/compliance")
-def compliance_status(project_id: str):
+def compliance_status(project_id: str, user: dict = Depends(require_view)):
     store = get_store(project_id)
     reqs = store.list_requirements()
     standards: dict[str, int] = {}
@@ -260,7 +261,7 @@ def _risk_metrics(store) -> dict:
 
 
 @router.get("/projects/{project_id}/metrics")
-def project_metrics(project_id: str, _rate: None = Depends(rate_limit(20, 60))):
+def project_metrics(project_id: str, user: dict = Depends(require_view), _rate: None = Depends(rate_limit(20, 60))):
     store = get_store(project_id)
     reqs = store.list_requirements()
     vcs = store.list_verification_cases()
@@ -309,7 +310,7 @@ def project_metrics(project_id: str, _rate: None = Depends(rate_limit(20, 60))):
 
 
 @router.get("/projects/{project_id}/risk-bingo", summary="Risk bingo grid")
-def risk_bingo_endpoint(project_id: str, _rate: None = Depends(rate_limit(20, 60))):
+def risk_bingo_endpoint(project_id: str, user: dict = Depends(require_view), _rate: None = Depends(rate_limit(20, 60))):
     """Severity × likelihood grid of risk counts per the project matrix."""
     from app.services.risk_matrix import risk_bingo, normalize_matrix
 
@@ -320,7 +321,7 @@ def risk_bingo_endpoint(project_id: str, _rate: None = Depends(rate_limit(20, 60
 
 
 @router.get("/projects/{project_id}/backlog")
-def prioritized_backlog(project_id: str, sort: str = "priority", _rate: None = Depends(rate_limit(20, 60))):
+def prioritized_backlog(project_id: str, sort: str = "priority", user: dict = Depends(require_view), _rate: None = Depends(rate_limit(20, 60))):
     """Requirements ranked by weighted stakeholder value, best first."""
     from app.services.meta_defs import normalize_stakeholders
     from app.services.stakeholder_value import rank_requirements
@@ -344,7 +345,7 @@ def prioritized_backlog(project_id: str, sort: str = "priority", _rate: None = D
 
 
 @router.get("/projects/{project_id}/requirements/{req_id}/value")
-def requirement_value(project_id: str, req_id: str):
+def requirement_value(project_id: str, req_id: str, user: dict = Depends(require_view)):
     """The weighted stakeholder value of one requirement, and its rank."""
     from app.services.meta_defs import normalize_stakeholders
     from app.services.stakeholder_value import rank_requirements
@@ -372,6 +373,7 @@ def pugh_matrix_endpoint(
     project_id: str,
     datum: Optional[str] = Query(None),
     limit: int = Query(8, ge=1, le=20),
+    user: dict = Depends(require_view),
     _rate: None = Depends(rate_limit(20, 60)),
 ):
     """A Pugh matrix comparing the best-valued requirements against each other,
@@ -391,7 +393,7 @@ def pugh_matrix_endpoint(
 # ── Quality Analysis ──────────────────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/quality")
-def quality_analysis(project_id: str, _rate: None = Depends(rate_limit(20, 60))):
+def quality_analysis(project_id: str, user: dict = Depends(require_view), _rate: None = Depends(rate_limit(20, 60))):
     from app.services.quality import project_quality
     return project_quality(get_store(project_id))
 
@@ -399,7 +401,7 @@ def quality_analysis(project_id: str, _rate: None = Depends(rate_limit(20, 60)))
 # ── Parametric Evaluation ─────────────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/evaluation")
-def parametric_evaluation(project_id: str, _rate: None = Depends(rate_limit(20, 60))):
+def parametric_evaluation(project_id: str, user: dict = Depends(require_view), _rate: None = Depends(rate_limit(20, 60))):
     """Evaluate every parameter, constraint and measurement in the project."""
     from app.services.evaluation import evaluate_project
     return evaluate_project(get_store(project_id))

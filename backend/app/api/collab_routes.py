@@ -14,7 +14,7 @@ from fastapi.responses import StreamingResponse, PlainTextResponse
 from pydantic import BaseModel
 
 from app.core.config import settings
-from app.core.dependencies import get_store, require_maintain, get_current_user
+from app.core.dependencies import get_store, require_maintain, require_view
 from app.core.filelock import file_lock
 from app.core.rate_limit import rate_limit
 from app.api._utils import read_upload_capped
@@ -73,7 +73,7 @@ def _acquire_lease(client_id: str, username: str, now: float) -> str | None:
 # ── Presence roster ───────────────────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/presence")
-def project_presence(project_id: str):
+def project_presence(project_id: str, user: dict = Depends(require_view)):
     """Return the users currently viewing the project (real-time roster)."""
     from app.services.event_bus import get_event_bus
 
@@ -84,7 +84,7 @@ def project_presence(project_id: str):
 # ── SSE Change Notifications ──────────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/events")
-async def project_events(project_id: str, user: dict = Depends(get_current_user)):
+async def project_events(project_id: str, user: dict = Depends(require_view)):
     """Server-Sent Events stream for real-time collaboration."""
     from app.services.event_bus import get_event_bus
 
@@ -145,6 +145,7 @@ async def project_events(project_id: str, user: dict = Depends(get_current_user)
 
 @router.get("/projects/{project_id}/search")
 def search_project(project_id: str, q: str = Query(""), kind: str | None = Query(None),
+                         user: dict = Depends(require_view),
                          _rate: None = Depends(rate_limit(20, 60))):
     """Full-text search across all entity types in a project."""
     from app.services.search import search_project as do_search
@@ -272,6 +273,7 @@ def _column_name(item: dict) -> str:
 def allocation_matrix(project_id: str, axis: str = Query("components"),
                       rows: str = Query("requirements"),
                       search: str = Query(""), filter_type: str = Query(""),
+                      user: dict = Depends(require_view),
                       _rate: None = Depends(rate_limit(20, 60))):
     """Requirements against components, verification cases, risks, or baselines."""
     ax = _axis_or_404(axis)
@@ -547,7 +549,7 @@ SAMPLE_JUNIT = """<?xml version="1.0" encoding="UTF-8"?>
 
 
 @router.get("/projects/{project_id}/test-results/sample")
-def sample_test_result(project_id: str):
+def sample_test_result(project_id: str, user: dict = Depends(require_view)):
     # `project_id` is unused — the sample is the same for every project — but it
     # has to be declared, or the generated OpenAPI schema describes a path with
     # a template variable it never defines, which no client generator (and no

@@ -8,7 +8,7 @@ from typing import Optional
 from fastapi import APIRouter, Header, HTTPException, Query, Depends, Request, Response
 from pydantic import BaseModel, ValidationError
 
-from app.core.dependencies import get_store, require_maintain, require_maintain_global, require_admin
+from app.core.dependencies import get_store, require_maintain, require_maintain_global, require_admin, require_view
 from app.core.filelock import file_lock
 from app.core.ids import safe_id
 from app.core.rate_limit import rate_limit
@@ -199,7 +199,8 @@ def create_project(data: ProjectCreate, user: dict = Depends(require_maintain_gl
 
 @router.get("/projects/{project_id}")
 def get_project(project_id: str, request: Request,
-                      authorization: Optional[str] = Header(None)):
+                      authorization: Optional[str] = Header(None),
+                      user: dict = Depends(require_view)):
     store = get_store(project_id)
     meta = store.read_meta()
     naming = meta.get("naming", {})
@@ -323,7 +324,7 @@ def delete_project(project_id: str, user: dict = Depends(require_admin)):
 
 
 @router.get("/projects/{project_id}/workflow")
-def get_workflow_config(project_id: str):
+def get_workflow_config(project_id: str, user: dict = Depends(require_view)):
     """Return the project's workflow configuration (states, transitions, default)."""
     store = get_store(project_id)
     from app.services.workflow import get_workflow
@@ -335,7 +336,7 @@ def get_workflow_config(project_id: str):
 # /requirements/{req_id} route or they are shadowed by it.
 
 @router.get("/projects/{project_id}/requirements/tree")
-def get_requirement_tree(project_id: str):
+def get_requirement_tree(project_id: str, user: dict = Depends(require_view)):
     store = get_store(project_id)
     reqs = store.list_requirements()
     vcs = store.list_verification_cases()
@@ -422,7 +423,7 @@ def rename_parameter_route(project_id: str, owner_id: str, data: dict,
 
 
 @router.get("/projects/{project_id}/requirements/next-uid", summary="Next free UID")
-def next_uid(project_id: str, parent: str | None = None):
+def next_uid(project_id: str, parent: str | None = None, user: dict = Depends(require_view)):
     store = get_store(project_id)
     meta = store.read_meta()
     parent_id = None
@@ -436,7 +437,7 @@ def next_uid(project_id: str, parent: str | None = None):
 
 
 @router.get("/projects/{project_id}/{kind}/next-id", summary="Next free id for a kind")
-def next_id(project_id: str, kind: str):
+def next_id(project_id: str, kind: str, user: dict = Depends(require_view)):
     if kind not in KINDS:
         raise HTTPException(status_code=404, detail=f"Unknown kind: {kind}")
     store = get_store(project_id)
@@ -452,6 +453,7 @@ def list_requirements(
     priority: Optional[str] = Query(None),
     offset: int = Query(0, ge=0),
     limit: int = Query(500, ge=1, le=2000),
+    user: dict = Depends(require_view),
 ):
     store = get_store(project_id)
     # No validate-on-load call here: the store applies it at the cache-fill
@@ -469,7 +471,7 @@ def list_requirements(
 
 
 @router.get("/projects/{project_id}/requirements/{req_id}")
-def get_requirement(project_id: str, req_id: str):
+def get_requirement(project_id: str, req_id: str, user: dict = Depends(require_view)):
     store = get_store(project_id)
     req = store.get_requirement(req_id)
     if req is None:
@@ -764,6 +766,7 @@ def list_specifications(
     project_id: str,
     offset: Optional[int] = Query(None, ge=0),
     limit: Optional[int] = Query(None, ge=1, le=2000),
+    user: dict = Depends(require_view),
 ):
     store = get_store(project_id)
     items = store.list_specifications()
@@ -771,7 +774,7 @@ def list_specifications(
 
 
 @router.get("/projects/{project_id}/specifications/{spec_id}")
-def get_specification(project_id: str, spec_id: str):
+def get_specification(project_id: str, spec_id: str, user: dict = Depends(require_view)):
     store = get_store(project_id)
     spec = store.get_specification(spec_id)
     if spec is None:
@@ -827,7 +830,7 @@ def delete_specification(project_id: str, spec_id: str, force: bool = False, use
 # ── Baselines ──────────────────────────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/baselines")
-def list_baselines(project_id: str):
+def list_baselines(project_id: str, user: dict = Depends(require_view)):
     store = get_store(project_id)
     meta = store.read_meta()
     defs = normalize_baseline_defs(meta.get("baselines", []))
@@ -1089,7 +1092,7 @@ class ReorderSystemStates(BaseModel):
 
 
 @router.get("/projects/{project_id}/system-states")
-def list_system_states(project_id: str):
+def list_system_states(project_id: str, user: dict = Depends(require_view)):
     store = get_store(project_id)
     meta = store.read_meta()
     defs = normalize_system_states(meta.get("system_states", []))
@@ -1108,7 +1111,7 @@ def list_system_states(project_id: str):
 
 
 @router.get("/projects/{project_id}/system-states/{name}")
-def get_system_state(project_id: str, name: str):
+def get_system_state(project_id: str, name: str, user: dict = Depends(require_view)):
     store = get_store(project_id)
     defs = normalize_system_states(store.read_meta().get("system_states", []))
     for d in defs:
@@ -1254,6 +1257,7 @@ def list_definitions(
     project_id: str,
     offset: Optional[int] = Query(None, ge=0),
     limit: Optional[int] = Query(None, ge=1, le=2000),
+    user: dict = Depends(require_view),
 ):
     store = get_store(project_id)
     items = store.list_items("definitions")
@@ -1261,7 +1265,7 @@ def list_definitions(
 
 
 @router.get("/projects/{project_id}/definitions/{def_id}")
-def get_definition(project_id: str, def_id: str):
+def get_definition(project_id: str, def_id: str, user: dict = Depends(require_view)):
     store = get_store(project_id)
     item = store.get_item("definitions", def_id)
     if item is None:
@@ -1316,6 +1320,7 @@ def list_analysis_cases(
     project_id: str,
     offset: Optional[int] = Query(None, ge=0),
     limit: Optional[int] = Query(None, ge=1, le=2000),
+    user: dict = Depends(require_view),
 ):
     store = get_store(project_id)
     items = store.list_items("analysis_cases")
@@ -1323,7 +1328,7 @@ def list_analysis_cases(
 
 
 @router.get("/projects/{project_id}/analysis/{case_id}")
-def get_analysis_case(project_id: str, case_id: str):
+def get_analysis_case(project_id: str, case_id: str, user: dict = Depends(require_view)):
     store = get_store(project_id)
     item = store.get_item("analysis_cases", case_id)
     if item is None:
@@ -1372,7 +1377,7 @@ def delete_analysis_case(project_id: str, case_id: str, force: bool = False, use
 
 
 @router.get("/projects/{project_id}/analysis/{case_id}/run", summary="Run an analysis case")
-def run_analysis_case_endpoint(project_id: str, case_id: str):
+def run_analysis_case_endpoint(project_id: str, case_id: str, user: dict = Depends(require_view)):
     store = get_store(project_id)
     case = store.get_item("analysis_cases", case_id)
     if case is None:
@@ -1388,6 +1393,7 @@ def list_verification_cases(
     project_id: str,
     offset: Optional[int] = Query(None, ge=0),
     limit: Optional[int] = Query(None, ge=1, le=2000),
+    user: dict = Depends(require_view),
 ):
     store = get_store(project_id)
     items = store.list_verification_cases()
@@ -1395,7 +1401,7 @@ def list_verification_cases(
 
 
 @router.get("/projects/{project_id}/verification/{vc_id}")
-def get_verification_case(project_id: str, vc_id: str):
+def get_verification_case(project_id: str, vc_id: str, user: dict = Depends(require_view)):
     store = get_store(project_id)
     vc = store.get_verification_case(vc_id)
     if vc is None:
@@ -1501,7 +1507,7 @@ def run_verification(project_id: str, vc_id: str, data: RunVerification, user: d
 # ── Traces ───────────────────────────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/traces")
-def get_traces(project_id: str, response: Response):
+def get_traces(project_id: str, response: Response, user: dict = Depends(require_view)):
     store = get_store(project_id)
     # Handed back so a subsequent PUT can prove it is replacing the document it
     # actually read; see update_traces.
@@ -1529,7 +1535,7 @@ def update_traces(project_id: str, data: TraceMatrix, response: Response,
 
 
 @router.get("/projects/{project_id}/trace-model")
-def get_trace_model(project_id: str, _rate: None = Depends(rate_limit(20, 60))):
+def get_trace_model(project_id: str, user: dict = Depends(require_view), _rate: None = Depends(rate_limit(20, 60))):
     """Every declared relationship: registry-derived edges + hand-authored traces."""
     store = get_store(project_id)
     links = all_links(store)

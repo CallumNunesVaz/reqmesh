@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import Response
 
 from app.api._utils import check_precondition, enforce_naming
-from app.core.dependencies import get_store, require_maintain
+from app.core.dependencies import get_store, require_maintain, require_view
 from app.core.ids import safe_id
 from app.core.tree_utils import build_flat_tree
 from app.models.component import ComponentCreate, ComponentUpdate
@@ -60,7 +60,7 @@ def _validate_links(store: YamlStore, satisfies: list[str] | None, vcs: list[str
 # catch-all, or "tree" is parsed as a component id.
 
 @router.get("/projects/{project_id}/components/tree")
-def get_component_tree(project_id: str):
+def get_component_tree(project_id: str, user: dict = Depends(require_view)):
     store = get_store(project_id)
     return build_flat_tree(store.list_components(), project=lambda c: {
         "id": c["id"],
@@ -82,7 +82,7 @@ def _flatten_bom(components: list[dict], parent_id: str | None, indent: int = 0)
 
 
 @router.get("/projects/{project_id}/components/export/bom")
-def export_bill_of_materials(project_id: str):
+def export_bill_of_materials(project_id: str, user: dict = Depends(require_view)):
     """Export an indented bill-of-materials as CSV."""
     store = get_store(project_id)
     all_comps = store.list_components()
@@ -113,6 +113,7 @@ def list_components(
     satisfies: str | None = Query(None),
     offset: int = Query(0, ge=0),
     limit: int = Query(500, ge=1, le=2000),
+    user: dict = Depends(require_view),
 ):
     store = get_store(project_id)
     items = store.list_components()
@@ -164,7 +165,7 @@ def rename_component_route(project_id: str, component_id: str, data: dict,
 
 
 @router.get("/projects/{project_id}/components/{component_id}")
-def get_component(project_id: str, component_id: str):
+def get_component(project_id: str, component_id: str, user: dict = Depends(require_view)):
     store = get_store(project_id)
     component = store.get_component(component_id)
     if component is None:
@@ -235,7 +236,7 @@ def delete_component(project_id: str, component_id: str, force: bool = False, us
 # ── Reverse lookups ──────────────────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/requirements/{req_id}/components")
-def components_for_requirement(project_id: str, req_id: str):
+def components_for_requirement(project_id: str, req_id: str, user: dict = Depends(require_view)):
     """Which parts of the design claim to realise this requirement."""
     store = get_store(project_id)
     if store.get_requirement(req_id) is None:
@@ -244,7 +245,7 @@ def components_for_requirement(project_id: str, req_id: str):
 
 
 @router.get("/projects/{project_id}/verification/{vc_id}/components")
-def components_for_verification_case(project_id: str, vc_id: str):
+def components_for_verification_case(project_id: str, vc_id: str, user: dict = Depends(require_view)):
     """Which parts of the design this verification case exercises."""
     store = get_store(project_id)
     if store.get_verification_case(vc_id) is None:
