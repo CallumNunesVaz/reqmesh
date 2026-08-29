@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import bisect
 import contextlib
 import logging
 import os
@@ -104,6 +105,33 @@ def invalidate_cache(path: Optional[Path] = None) -> None:
         else:
             _collection_cache.pop(str(path.parent), None)
 
+
+def _splice_item(items: list[dict], new_item: dict, filename: str) -> list[dict]:
+    """Return ``items`` with ``new_item`` replacing the same-id entry, or
+    inserted at its filename-sorted position.
+
+    ``_read_collection`` iterates ``sorted(d.glob("*.yaml"))``, so a new item's
+    position is its filename's lexicographic place among the other files, which
+    the cached dicts reproduce via ``id + ".yaml"`` (``_item_path`` names files
+    ``safe_id(id).yaml``).
+    """
+    new_id = new_item.get("id")
+    out: list[dict] = []
+    replaced = False
+    for item in items:
+        if not replaced and item.get("id") == new_id:
+            out.append(new_item)
+            replaced = True
+        else:
+            out.append(item)
+    if replaced:
+        return out
+
+    keys = [f"{i.get('id', '')}.yaml" for i in out]
+    pos = bisect.bisect_left(keys, filename)
+    out.insert(pos, new_item)
+    return out
+
 # Every entity type is a directory of one-YAML-file-per-item. New entity
 # types only need an entry here.
 COLLECTIONS = (
@@ -191,10 +219,6 @@ class YamlStore:
             return {}
 
     def _write_yaml(self, path: Path, data: dict) -> None:
-        # Any write invalidates the cached parse of its collection. The mtime
-        # signature would catch it anyway, but only at ~1s granularity on some
-        # filesystems — an explicit drop avoids a stale read right after a save.
-        invalidate_cache(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
         try:
@@ -219,6 +243,12 @@ class YamlStore:
                 pass
             os.unlink(tmp)
             raise
+        # Splice the written file into the cached collection rather than
+        # dropping it: an active editing session would otherwise push every
+        # subsequent list read back onto the cold path. The merge re-reads just
+        # this file (through the same parse + validate steps as a cold fill) and
+        # recomputes the signature, so the next `list_items` still hits.
+        self._merge_into_cache(path)
 
     # --- _meta ---
 
@@ -274,6 +304,56 @@ class YamlStore:
         if not isinstance(data, dict):
             raise ValueError(f"expected a mapping, got {type(data).__name__}")
         return data
+
+    def _merge_into_cache(self, path: Path) -> None:
+        """Splice one written/deleted file into its cached collection.
+
+        ``list_items`` caches a whole collection directory; dropping it on every
+        save forces the next read back onto the cold path, re-parsing every
+        file. When the collection is already cached, update just this file's
+        entry in place: re-read and re-validate the one file (the same two steps
+        as :meth:`_read_collection`) and splice it into the cached list, or
+        remove it on delete. The directory signature is recomputed afterwards so
+        the next ``list_items`` comparison still matches and reads from cache.
+
+        A no-op when the collection is not cached — the next read fills it.
+        """
+        from app.services.load_guard import validate_on_load
+
+        parent = path.parent
+        key = str(parent)
+
+        with _cache_lock:
+            entry = _collection_cache.get(key)
+            if entry is None:
+                return
+            items = list(entry[1])
+
+            if path.exists():
+                try:
+                    raw = self._parse_fast(path)
+                except Exception as exc:
+                    # A file we just wrote should parse; if it does not, drop
+                    # the entry and let the next read rebuild it honestly.
+                    logger.warning("Skipping cache merge of unreadable YAML %s: %s", path, exc)
+                    _collection_cache.pop(key, None)
+                    return
+                new_item = raw if raw.get("id") else None
+                if new_item is not None:
+                    new_item = validate_on_load(parent.name, new_item)
+
+                if new_item is None:
+                    # Withheld (no/unsafe id): never insert it, and drop any
+                    # cached entry bearing that id.
+                    items = [i for i in items if i.get("id") != raw.get("id")]
+                else:
+                    items = _splice_item(items, new_item, path.name)
+            else:
+                items = [i for i in items if i.get("id") != path.stem]
+
+            _collection_cache[key] = (_dir_signature(parent), [dict(i) for i in items])
+            _collection_cache.move_to_end(key)
+
 
     def list_items(self, collection: str) -> list[dict]:
         d = self._root / collection
@@ -413,7 +493,7 @@ class YamlStore:
                 os.remove(path)
             except FileNotFoundError:
                 return False
-        invalidate_cache(path)
+        self._merge_into_cache(path)
         return True
 
     def write_item(self, collection: str, item_id: str, data: dict) -> dict:

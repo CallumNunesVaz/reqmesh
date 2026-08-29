@@ -7,6 +7,13 @@ This test measures that cost at 100, 1,000 and 10,000 requirements: wall time
 for the first, middle and last page, plus the peak memory of the cold
 materialisation.
 
+It also measures the page read that *follows a save*, which is the path an
+editing session actually walks and the one the other columns cannot see. Every
+write used to drop the whole cached collection, so this column measured a full
+cold re-parse while `warm 1st pg` beside it stayed in single-digit milliseconds
+— a 14x regression sitting in plain sight that no column here would have
+caught. It is measured last so the cache state it disturbs is nobody else's.
+
 The benchmark is marked ``bench`` (the repo's registered "slow" marker — see
 pytest.ini) so it does not run in the default fast suite. Run it explicitly:
 
@@ -148,12 +155,32 @@ def test_pagination_benchmark(pagination_projects, monkeypatch):
             warm_mid = timed(mid_offset)
             warm_last = timed(last_offset)
 
-            rows.append((n, cold, warm_first, warm_mid, warm_last, peak))
+            # The read that follows a write. The save goes through the store
+            # rather than the API because the write routes require maintainer
+            # and this client is deliberately anonymous — but it is the same
+            # `write_item` the route handler calls, so it exercises the same
+            # `_write_yaml` -> cache path. The page read stays a real request.
+            # Averaged over a few iterations: one sample is dominated by
+            # whichever file the write happened to touch.
+            store = yaml_store.YamlStore(pagination_projects / project_id)
+            reps = 5
+            t0 = time.perf_counter()
+            for rep in range(reps):
+                store.write_item("requirements", "REQ-00000", {
+                    "id": "REQ-00000",
+                    "name": f"edited {rep}",
+                    "description": "Requirement number 00000.",
+                })
+                _get_page(client, project_id, 0)
+            after_write = (time.perf_counter() - t0) / reps
+
+            rows.append((n, cold, warm_first, warm_mid, warm_last, after_write, peak))
 
     print("\nPagination benchmark (page size=%d):" % PAGE_SIZE)
-    print("  requirements  cold 1st pg  warm 1st pg  warm middle  warm last   peak mem")
-    for n, cold, warm_first, warm_mid, warm_last, peak in rows:
+    print("  requirements  cold 1st pg  warm 1st pg  warm middle  warm last  read-after-write   peak mem")
+    for n, cold, warm_first, warm_mid, warm_last, after_write, peak in rows:
         print(
-            "  %12d  %9.1f ms  %10.1f ms  %11.1f ms  %9.1f ms  %7.1f MiB"
-            % (n, cold * 1000, warm_first * 1000, warm_mid * 1000, warm_last * 1000, peak / 2**20)
+            "  %12d  %9.1f ms  %10.1f ms  %11.1f ms  %9.1f ms  %14.1f ms  %7.1f MiB"
+            % (n, cold * 1000, warm_first * 1000, warm_mid * 1000, warm_last * 1000,
+               after_write * 1000, peak / 2**20)
         )
