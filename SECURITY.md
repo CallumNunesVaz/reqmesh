@@ -73,6 +73,27 @@ not published, because it records unfixed findings in enough detail to act on
 them. If you want to know whether something you have found is already tracked,
 raise it through the process above and you will be told.
 
+## Permission tiers and the view gate
+
+Each project's `_meta.yaml` carries a `permissions` map from role to one of five
+tiers, lowest first: `none`, `view`, `propose`, `edit`, `admin`.
+
+- `none` — no access at all; even reads are denied
+- `view` — read-only
+- `propose` — create change requests, risks, comments, decisions
+- `edit` — edit requirements, components, specifications, baselines
+- `admin` — everything, including project settings and the git remote
+
+The **default** permissions map still grants `view` to every role, so the `view`
+gate does not switch an instance to default-deny: it makes denial *possible*. A
+project denies a role all access by setting that role's tier to `none` through
+the project settings update. A global `admin` is never demoted by a project's
+map.
+
+At the time of writing the `view` gate is enforced on a single route
+(`GET /projects/{project_id}/publish/download`); gating the rest of the read
+surface is tracked follow-up work.
+
 ## Supported Versions
 
 | Version | Supported |
