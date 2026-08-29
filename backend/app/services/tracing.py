@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from typing import cast
 
 from app.services.link_registry import LINKS, targets_of
 from app.services.verification_links import attach as attach_verification_cases
@@ -119,7 +120,7 @@ MAX_DEPTH = 1000
 
 def deep_status(req: dict, graph: dict, memo: dict | None = None, visiting: set | None = None, depth: int = 0) -> bool:
     if depth > MAX_DEPTH:
-        memo[req["id"]] = False if memo is not None else False
+        cast(dict, memo)[req["id"]] = False if memo is not None else False
         return False
     if memo is None:
         memo = {}

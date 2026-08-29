@@ -103,7 +103,8 @@ def normalize_matrix(matrix) -> dict:
     likelihoods = _names("likelihoods")
 
     bands = []
-    for b in (matrix.get("bands") if isinstance(matrix.get("bands"), list) else []):
+    raw_bands = matrix.get("bands")
+    for b in (raw_bands if isinstance(raw_bands, list) else []):
         if isinstance(b, dict) and str(b.get("key", "")).strip():
             key = str(b["key"]).strip()
             bands.append({
@@ -116,7 +117,9 @@ def normalize_matrix(matrix) -> dict:
     band_keys = {b["key"] for b in bands}
     fallback = bands[0]["key"]
 
-    raw_cells = matrix.get("cells") if isinstance(matrix.get("cells"), list) else []
+    raw_cells = matrix.get("cells")
+    if not isinstance(raw_cells, list):
+        raw_cells = []
     cells = []
     for si in range(len(severities)):
         row_in = raw_cells[si] if si < len(raw_cells) and isinstance(raw_cells[si], list) else []

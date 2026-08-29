@@ -7,6 +7,8 @@ existing entities, coerce values into the schema's enums, and write them out.
 
 from __future__ import annotations
 
+from typing import Any
+
 from app.core.ids import _ID_RE
 from app.models.analysis import AnalysisCase
 from app.models.definition import Definition
@@ -87,7 +89,7 @@ def _normalise_component(raw: dict) -> dict | None:
 # Fields the import formats don't carry; seeded on create so imported records
 # have the same shape as UI-created ones, but left untouched when updating an
 # existing requirement (a merge must not wipe local-only data).
-_CREATE_DEFAULTS = {"allocated_to": "", "cascade_from": None, "baselines": []}
+_CREATE_DEFAULTS: dict[str, Any] = {"allocated_to": "", "cascade_from": None, "baselines": []}
 
 
 def import_into_store(store, parsed: dict, mode: str = "merge") -> dict:
@@ -98,7 +100,7 @@ def import_into_store(store, parsed: dict, mode: str = "merge") -> dict:
     summary of what changed.
     """
     store.ensure_dirs()
-    summary = {"created": 0, "updated": 0, "skipped": 0, "traces_added": 0, "verification_cases": 0}
+    summary: dict[str, Any] = {"created": 0, "updated": 0, "skipped": 0, "traces_added": 0, "verification_cases": 0}
     summary["ignored"] = parsed.get("ignored") or {"lines": 0, "constructs": {}}
 
     # Normalise everything before touching the store. A malformed field (e.g.

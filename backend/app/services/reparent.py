@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from typing import cast
 
 
 def leading_prefix(item_id: str) -> str:
@@ -23,7 +24,7 @@ def leading_prefix(item_id: str) -> str:
     return m.group(1) if m else ""
 
 
-def collect_subtree(children_by_parent: dict[str, list[str]], root_id: str) -> list[str]:
+def collect_subtree(children_by_parent: dict[str | None, list[str]], root_id: str) -> list[str]:
     """Return root_id followed by all transitive descendant ids (pre-order)."""
     out = [root_id]
     for child_id in children_by_parent.get(root_id, []):
@@ -95,7 +96,7 @@ def plan_reparent(
     by_id = {r["id"]: r for r in requirements}
 
     # Snapshot the hierarchy before any mutation so subtree collection is stable.
-    children_by_parent: dict[str, list[str]] = {}
+    children_by_parent: dict[str | None, list[str]] = {}
     for r in requirements:
         children_by_parent.setdefault(r.get("parent"), []).append(r["id"])
 
@@ -175,7 +176,7 @@ def apply_reparent(store, plan: ReparentPlan, username: str = "") -> dict:
             if old_id == group.root_id:
                 node["parent"] = plan.new_parent
             else:
-                node["parent"] = group.local_map.get(node.get("parent"), node.get("parent"))
+                node["parent"] = group.local_map.get(cast(str, node.get("parent")), node.get("parent"))
             for rel in node.get("relations", []):
                 if rel.get("target") in group.local_map:
                     rel["target"] = group.local_map[rel["target"]]
@@ -227,7 +228,7 @@ def validate_component_parent(components: list[dict], component_id: str, parent_
         return f"Parent component not found: {parent_id}"
 
     seen = {component_id}
-    cursor = parent_id
+    cursor: str | None = parent_id
     while cursor is not None:
         if cursor in seen:
             return "Circular parent reference"

@@ -130,12 +130,12 @@ def _list_files(code_root: Path) -> list[Path]:
             timeout=30,
         )
         if result.returncode == 0:
-            paths = result.stdout.rstrip(b"\0").split(b"\0")
-            return [Path(p.decode("utf-8", errors="replace")) for p in paths if p]
+            raw_paths = result.stdout.rstrip(b"\0").split(b"\0")
+            return [Path(p.decode("utf-8", errors="replace")) for p in raw_paths if p]
     except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
         pass
 
-    paths = []
+    paths: list[Path] = []
     for entry in sorted(code_root.rglob("*")):
         # A symlink committed into the tree points anywhere on the host, which
         # escapes the confinement the caller established on code_root.

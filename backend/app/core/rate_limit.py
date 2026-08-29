@@ -1,5 +1,7 @@
 import time
 from collections import defaultdict
+from typing import Any, cast
+
 from fastapi import HTTPException, Request
 
 
@@ -25,7 +27,7 @@ def _trusted_proxies() -> list:
             nets.append(ipaddress.ip_network(part, strict=False))
         except ValueError:
             continue
-    _trusted_proxies._cache = (raw, nets)
+    cast(Any, _trusted_proxies)._cache = (raw, nets)
     return nets
 
 

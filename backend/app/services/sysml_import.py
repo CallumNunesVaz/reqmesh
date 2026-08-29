@@ -17,6 +17,7 @@ which keeps the parser small without pulling in a full KerML grammar.
 from __future__ import annotations
 
 import re
+from typing import Any
 
 _SHORT = r"(?:<\s*'((?:[^'\\]|\\.)*)'\s*>\s*)?"
 _REQ_DEF_RE = re.compile(r"^requirement\s+def\s+" + _SHORT + r"([A-Za-z0-9_]+)\s*\{")
@@ -198,7 +199,7 @@ def parse_sysml(content: str | bytes) -> dict:
             short, declared = cdm.group(2), cdm.group(3)
             eid = _unescape(short) if short else declared
             aliases[declared] = eid
-            entry = {"id": eid, "type": dtype, "name": eid, "parameters": [],
+            entry: dict[str, Any] = {"id": eid, "type": dtype, "name": eid, "parameters": [],
                      "expr": "", "unit": "", "doc": ""}
             definitions.append(entry)
             stack.append(("definition", entry))

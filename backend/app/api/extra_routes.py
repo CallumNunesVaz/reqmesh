@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Optional, cast
 
 from fastapi import APIRouter, HTTPException, Query, Depends, File, Form, Request, Response, UploadFile
 from pydantic import BaseModel, ConfigDict, ValidationError
@@ -232,11 +232,11 @@ def execute_change_request(
         before = store.get_requirement(target_id)
         if before is None:
             continue
-        result = store.update_requirement(target_id, proposed)
-        if result is not None:
+        updated = store.update_requirement(target_id, proposed)
+        if updated is not None:
             updated_count += 1
             from app.services.history import record_change as rc
-            rc(store, target_id, "update", before, result, user.get("username", ""))
+            rc(store, target_id, "update", before, updated, user.get("username", ""))
 
     # 3. Mark the request as implemented.
     from app.services.history import record_change as rc
@@ -421,7 +421,7 @@ def update_comment(project_id: str, comment_id: str, data: CommentUpdate, user: 
     existing = store.get_item("comments", comment_id)
     if existing is None:
         raise HTTPException(status_code=404, detail="Comment not found")
-    updates = {}
+    updates: dict[str, Any] = {}
     if data.resolved is not None:
         updates["resolved"] = bool(data.resolved)
     if data.text is not None:
@@ -623,7 +623,7 @@ def activity(
             key = d.isoformat()
 
         bd = bucket_data.get(key, {})
-        b = {"date": key, **{k: len(bd.get(k, set())) for k in all_kind_keys}}
+        b: dict[str, Any] = {"date": key, **{k: len(bd.get(k, set())) for k in all_kind_keys}}
         buckets_out.append(b)
 
     # Deduplicate consecutive week keys (the loop produces the same key for Mon–Sun).
@@ -1169,7 +1169,7 @@ def import_project(
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=f"Import failed: {exc}") from exc
 
-    content = read_upload_capped(file, settings.max_upload_size_mb)
+    content = read_upload_capped(cast(UploadFile, file), settings.max_upload_size_mb)
 
     if format in ("csv", "tsv"):
         from app.services.table_io import import_table as table_import

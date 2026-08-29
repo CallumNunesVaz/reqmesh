@@ -10,6 +10,7 @@ Usage as a library:
 """
 
 from pathlib import Path
+from typing import cast
 
 
 def open(project_path: str) -> "Project":
@@ -67,8 +68,9 @@ class Project:
                 return output
             return pub.build_markdown()
         elif format == "pdf":
-            pub.to_pdf_file(output)
-            return output
+            path = cast(str, output)
+            pub.to_pdf_file(path)
+            return path
         elif format == "latex":
             if output:
                 pub.to_latex_file(output)

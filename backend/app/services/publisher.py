@@ -4,6 +4,7 @@ import logging
 import re
 from datetime import datetime, timezone
 from html import escape as esc
+from typing import Any
 
 from app.core.config import settings as global_settings
 from app.services.sanitize import sanitize_html
@@ -111,7 +112,7 @@ class Publisher:
         self.traces = store.read_traces()
         self.now = datetime.now(timezone.utc)
         self.now_str = self.now.strftime("%Y-%m-%d %H:%M UTC")
-        self._toc = []  # list of (level, label, anchor) for TOC
+        self._toc: list[tuple[int, str, str]] = []  # list of (level, label, anchor) for TOC
 
         # Record every entity id in the project before any scope filter, so
         # _unresolved_suffix can distinguish "filtered out" from "not in the
@@ -919,7 +920,7 @@ class Publisher:
 
         if "conflicts" in sections:
             conflicts = []
-            dupes = {}
+            dupes: dict[str, list[str]] = {}
             for r in self.reqs:
                 name = r.get("name", "").strip().lower()
                 if name:
@@ -1972,7 +1973,7 @@ class Publisher:
 
         # ── Conflicts ─────────────────────────────────────────────────────
         if "conflicts" in sections:
-            conflicts = []
+            conflicts: list[dict[str, Any]] = []
             dupes: dict[str, list[str]] = {}
             for r in self.reqs:
                 name = r.get("name", "").strip().lower()

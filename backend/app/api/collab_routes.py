@@ -8,6 +8,7 @@ import json
 import time
 import uuid
 from dataclasses import dataclass
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Depends, File, Form, UploadFile, WebSocket
 from fastapi.responses import StreamingResponse, PlainTextResponse
@@ -335,7 +336,7 @@ def allocation_matrix(project_id: str, axis: str = Query("components"),
     rows_out = []
     for entity in row_entities:
         hits = linked.get(entity["id"], set())
-        row: dict[str, object] = {
+        row: dict[str, Any] = {
             "row_id": entity["id"],
             "row_name": entity.get("name", ""),
             "row_status": entity.get("status", "") if rows == "requirements" else "",

@@ -8,6 +8,7 @@ trigger a supervised update, and report its progress.
 from __future__ import annotations
 
 import asyncio
+from typing import Any, Callable, cast
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, RootModel
@@ -101,7 +102,7 @@ async def system_info(admin: dict = Depends(require_admin)):
     internal_ips: list[str] = []
     try:
         from socket import AF_INET
-        for iface in ([l[4][0] for l in socket.getaddrinfo(socket.gethostname(), None) if l[0] == AF_INET]):
+        for iface in ([cast(str, l[4][0]) for l in socket.getaddrinfo(socket.gethostname(), None) if l[0] == AF_INET]):
             if iface not in internal_ips and not iface.startswith("127."):
                 internal_ips.append(iface)
     except Exception:
@@ -306,7 +307,7 @@ async def dismiss_update(admin: dict = Depends(require_admin)):
 
 # ── System Dependencies ───────────────────────────────────────────────────────
 
-DEPENDENCY_CHECKERS: dict[str, callable] = {}
+DEPENDENCY_CHECKERS: dict[str, Callable[..., Any]] = {}
 
 
 def _register(name: str):

@@ -584,7 +584,7 @@ def update_requirement(project_id: str, req_id: str, data: RequirementUpdate,
             if src:
                 children_of.setdefault(src, []).append(r)
 
-        seen: set[str] = {req_id}
+        seen = {req_id}
         queue = list(children_of.get(req_id, []))
         while queue:
             child = queue.pop(0)

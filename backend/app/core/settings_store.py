@@ -210,7 +210,7 @@ def effective_settings() -> dict:
         # unwrap before testing presence so an empty SecretStr isn't treated as set.
         has_secret = False
         if secret:
-            rawval = raw.get_secret_value() if hasattr(raw, "get_secret_value") else raw
+            rawval = raw.get_secret_value() if raw is not None and hasattr(raw, "get_secret_value") else raw
             has_secret = bool(rawval)
             value = _SECRET_MASK if has_secret else ""
         items.append({
