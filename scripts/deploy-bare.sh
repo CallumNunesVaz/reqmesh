@@ -26,7 +26,7 @@ install_deps() {
     install_system_pkgs
     install_tectonic
 
-    # Python 3.12+ check
+    # Python 3.11+ check
     local python="python3"
     # Test for the capability, not the binary. Ubuntu 24.04 ships python3 but
     # splits venv/ensurepip into python3-venv, so `has_cmd python3` succeeded,
@@ -44,6 +44,15 @@ install_deps() {
             error "On Debian/Ubuntu: sudo apt install python3-venv"
             exit 1
         fi
+    fi
+
+    # The version floor is 3.11: the image uses 3.12, but nothing in the code
+    # requires 3.12, and raising the floor would exclude working installs for no
+    # reason. Refuse anything older here so the failure is clear, rather than
+    # dying mid-venv on syntax the interpreter does not understand.
+    if ! python3 -c 'import sys; sys.exit(sys.version_info < (3, 11))' 2>/dev/null; then
+        error "Python 3.11 or newer is required, found $(python3 --version 2>&1)."
+        exit 1
     fi
 
     # Node.js (only needed if building frontend from source, not from tarball)

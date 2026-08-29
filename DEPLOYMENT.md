@@ -262,20 +262,59 @@ Ensure the [requirements](#requirements) are met before installing.
 
 8.  **Create a systemd service** (optional, for autostart)
 
+    The service runs as an unprivileged `reqmesh` user rather than root. Create
+    that user and hand the install directory over before enabling the unit:
+
+    ```bash
+    sudo useradd -r -s /usr/sbin/nologin -d /opt/reqmesh reqmesh
+    sudo chown -R reqmesh:reqmesh /opt/reqmesh
+    ```
+
     Create `/etc/systemd/system/reqmesh.service`:
     ```ini
     [Unit]
     Description=reqmesh requirements management
-    After=network.target
+    Documentation=https://github.com/CallumNunesVaz/reqmesh
+    After=network-online.target
+    Wants=network-online.target
 
     [Service]
     Type=simple
-    User=root
+    User=reqmesh
+    Group=reqmesh
     WorkingDirectory=/opt/reqmesh/backend
     EnvironmentFile=/opt/reqmesh/.env
-    ExecStart=/opt/reqmesh/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+    ExecStart=/opt/reqmesh/.venv/bin/uvicorn app.main:app \
+        --host 127.0.0.1 \
+        --port 8000 \
+        --workers 1 \
+        --proxy-headers \
+        --forwarded-allow-ips "127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
     Restart=always
     RestartSec=5
+    StandardOutput=journal
+    StandardError=journal
+    SyslogIdentifier=reqmesh
+    PrivateTmp=yes
+    NoNewPrivileges=yes
+    LimitNOFILE=65536
+
+    # Hardening (compatible with Python + weasyprint)
+    ProtectSystem=strict
+    ProtectHome=yes
+    ReadWritePaths=/opt/reqmesh/data/projects /opt/reqmesh/.reqmesh /opt/reqmesh/.venv
+    ReadOnlyPaths=/opt/reqmesh/backend/app
+    PrivateDevices=yes
+    ProtectKernelTunables=yes
+    ProtectKernelModules=yes
+    ProtectControlGroups=yes
+    RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+    RestrictNamespaces=yes
+    MemoryDenyWriteExecute=no
+    LockPersonality=yes
+    RestrictRealtime=yes
+    RestrictSUIDSGID=yes
+    RemoveIPC=yes
 
     [Install]
     WantedBy=multi-user.target
@@ -294,6 +333,10 @@ Ensure the [requirements](#requirements) are met before installing.
 A production-ready Docker Compose stack is included. It runs reqmesh as a
 single container serving both the API and the built frontend (no separate
 Vite dev server, no CORS configuration needed).
+
+The published container image is **x86_64 only**: tectonic — the LaTeX engine
+bundled in the image — does not ship an arm64 binary, so no arm64 image is
+built. On an arm64 host, use the bare-metal install instead.
 
 #### Quick Start
 
