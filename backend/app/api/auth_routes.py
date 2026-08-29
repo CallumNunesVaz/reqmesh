@@ -113,6 +113,7 @@ def register(data: RegisterRequest, response: Response,
     if data.role != "contributor":
         if not is_admin:
             raise HTTPException(status_code=403, detail="Only admins can assign roles")
+        _validate_role(data.role)
         role = data.role
     result = register_user(data.username, data.password, role)
     if not result:

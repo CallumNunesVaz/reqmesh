@@ -151,8 +151,11 @@ class Settings(BaseSettings):
 
     # ── Proxy / forwarded headers ─────────────────────────────────────────
     # Comma-separated list of trusted proxy CIDRs whose X-Forwarded-For header
-    # is used to derive the real client IP for rate limiting.
-    proxy_trusted_cidr: str = "127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+    # is used to derive the real client IP for rate limiting. Narrowed to
+    # loopback by default: trusting every RFC1918 range let any LAN host that
+    # could reach the app port spoof its client IP. Set this to your reverse
+    # proxy's exact address when it is not on localhost.
+    proxy_trusted_cidr: str = "127.0.0.0/8"
 
     # ── Request limits ────────────────────────────────────────────────────
     max_upload_size_mb: int = 50

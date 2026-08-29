@@ -39,7 +39,7 @@ def _resolve_socket_user(token: str | None) -> dict | None:
         return None
     if payload.get("scp", "session") not in ("ws", "session"):
         return None
-    return get_user_from_token(token)
+    return get_user_from_token(token, allow_ws=True)
 
 
 async def websocket_handler(websocket: WebSocket, project_id: str, token: str | None = None):
@@ -89,7 +89,7 @@ async def websocket_handler(websocket: WebSocket, project_id: str, token: str | 
                 data = json.loads(raw)
                 if data.get("type") == "auth":
                     client_token = data.get("token", "")
-                    user = get_user_from_token(client_token)
+                    user = get_user_from_token(client_token, allow_ws=True)
                     if user:
                         username = user.get("username", "guest")
                         role = user.get("role", "guest")

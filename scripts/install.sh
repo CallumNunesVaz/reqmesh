@@ -433,10 +433,23 @@ non_interactive() {
     save_cfg "SEED_DEMO" "${RT_SEED_DEMO:-$(prev_env RT_SEED_DEMO 'true')}"
     save_cfg "OFFLINE_MODE" "${RT_OFFLINE_MODE:-$(prev_env RT_OFFLINE_MODE '')}"
     save_cfg "INSTALL_DIR" "${REQMESH_INSTALL_DIR:-/opt/reqmesh}"
-    save_cfg "PROXY_TRUSTED_CIDR" "${RT_PROXY_TRUSTED_CIDR:-127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}"
+    # Narrowed from the old RFC1918-wide default (any LAN host could spoof
+    # X-Forwarded-For). Docker needs the bridge range because the app's peer is
+    # the gateway, not loopback; a bare-metal install has nginx on the same host
+    # talking to 127.0.0.1 and needs nothing else.
+    _default_cidr="127.0.0.0/8"
+    [ "${CFG[DEPLOY_MODE]:-docker}" = "docker" ] && _default_cidr="127.0.0.0/8,172.16.0.0/12"
+    save_cfg "PROXY_TRUSTED_CIDR" "${RT_PROXY_TRUSTED_CIDR:-$_default_cidr}"
     save_cfg "UPDATE_CONTROL_DIR" "${RT_UPDATE_CONTROL_DIR:-/control}"
     save_cfg "CORS_ORIGINS" "${RT_CORS_ORIGINS:-$(prev_env RT_CORS_ORIGINS '')}"
-    save_cfg "ALLOWED_HOSTS" "${RT_ALLOWED_HOSTS:-$(prev_env RT_ALLOWED_HOSTS '')}"
+    # Default the Host allowlist to the domain the installer already collected,
+    # so a fresh deployment gets Host-header defence without the operator having
+    # to know the setting exists. Falls back to empty (no check) when there is
+    # no domain, which is the pre-existing behaviour — never to a localhost-only
+    # list, which would 400 every proxied request.
+    _default_hosts=""
+    [ -n "${CFG[DOMAIN]:-}" ] && _default_hosts="${CFG[DOMAIN]},localhost,127.0.0.1"
+    save_cfg "ALLOWED_HOSTS" "${RT_ALLOWED_HOSTS:-$(prev_env RT_ALLOWED_HOSTS "$_default_hosts")}"
     save_cfg "REQMESH_USER" "${REQMESH_USER:-reqmesh}"
     save_cfg "REQMESH_GROUP" "${REQMESH_GROUP:-reqmesh}"
 

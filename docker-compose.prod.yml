@@ -68,9 +68,23 @@ services:
       # the *development* default (localhost:5173), which has no business
       # being an allowed credentialed origin in production.
       - RT_CORS_ORIGINS=${RT_CORS_ORIGINS:-[]}
+      # Host-header defence. Deliberately NOT defaulted to localhost here: nginx
+      # forwards the original `Host` (proxy_set_header Host $$host), so the app
+      # sees the public hostname and a localhost-only allowlist would 400 every
+      # request behind a reverse proxy. The installer writes the real hostname
+      # into .env from the domain it already collects; set it yourself
+      # (comma-separated) for a hand-rolled deployment. Empty means no check.
+      - RT_ALLOWED_HOSTS=${RT_ALLOWED_HOSTS:-}
       - RT_PROFILE=${RT_PROFILE:-team}
       - RT_COOKIE_SECURE=${RT_COOKIE_SECURE:-true}
-      - RT_PROXY_TRUSTED_CIDR=${RT_PROXY_TRUSTED_CIDR:-127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}
+      # Loopback alone is wrong *in a container*: the app is published on the
+      # host (`ports:` above), so traffic from a host-level nginx is DNAT'd and
+      # arrives from the Docker bridge gateway (172.17.0.1), not 127.0.0.1.
+      # Trusting only loopback would drop every X-Forwarded-For and key each
+      # rate-limit bucket on the gateway — i.e. all users sharing one bucket.
+      # Still much narrower than the old RFC1918-wide default: inside the
+      # bridge network there are no untrusted LAN hosts.
+      - RT_PROXY_TRUSTED_CIDR=${RT_PROXY_TRUSTED_CIDR:-127.0.0.0/8,172.16.0.0/12}
     volumes:
       - reqmesh-data:/data
       # Shared with the updater sidecar. The app writes update requests here; it

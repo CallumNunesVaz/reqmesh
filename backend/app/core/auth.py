@@ -409,9 +409,15 @@ def register_user(username: str, password: str, role: str = "contributor") -> di
         return {"username": username, "role": role, "token": create_token(username, role)}
 
 
-def get_user_from_token(token: str) -> dict | None:
+def get_user_from_token(token: str, *, allow_ws: bool = False) -> dict | None:
     payload = decode_token(token)
     if not payload:
+        return None
+    # A ``scope="ws"`` token is minted for WebSocket connections only (see
+    # whoami) and must not act as an HTTP session credential. The WebSocket path
+    # opts back in via ``allow_ws``; every HTTP caller uses the default, so a
+    # ws-scoped token resolves to no user here — the same as an invalid token.
+    if not allow_ws and payload.get("scp", "session") == "ws":
         return None
     username = payload.get("sub")
     users = load_users()

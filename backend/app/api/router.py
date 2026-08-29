@@ -167,7 +167,7 @@ def list_projects():
         if d.is_dir() and (d / "_meta.yaml").exists():
             store = YamlStore(d)
             meta = store.read_meta()
-            projects.append({"id": d.name, "name": meta.get("name", d.name), "path": str(d)})
+            projects.append({"id": d.name, "name": meta.get("name", d.name)})
     return projects
 
 

@@ -125,6 +125,13 @@ if `RT_STATE_DIR` resolves inside `RT_DATA_ROOT` — a layout in which git
 auto-commit would commit and push your password hashes. If that refusal fires,
 move the state directory outside the data root and restart; nothing is lost.
 
+**The `RT_PROXY_TRUSTED_CIDR` default is now `127.0.0.0/8`** (loopback only),
+down from every RFC1918 range. If your reverse proxy is not on localhost, you
+must set `RT_PROXY_TRUSTED_CIDR` to its exact address, otherwise per-IP rate
+limiting starts keying on the proxy's IP instead of the real client. The startup
+warning (`X-Forwarded-For is trusted from non-loopback range(s) …`) still fires
+whenever non-loopback ranges are trusted, so a misconfiguration is not silent.
+
 A plain re-run behaves the same way for settings, but does allow changes:
 
 ```bash
@@ -326,6 +333,18 @@ RT_SMTP_HOST=smtp.example.com
 `RT_SECRET` and `RT_ADMIN_PASSWORD` are still required, either in the
 environment or in `.env`.
 
+Two further settings are pinned with sane defaults in the compose file itself,
+so a fresh `docker compose up` already has them, but set them explicitly to
+match your deployment:
+
+- `RT_ALLOWED_HOSTS` defaults to `localhost,127.0.0.1`, which enables the
+  Host-header check and rejects requests for any other hostname. If the app is
+  reached under a real domain (e.g. through Caddy or a load balancer), set it to
+  that hostname (comma-separated) or clients will get `400 Bad Request`.
+- `RT_PROXY_TRUSTED_CIDR` defaults to `127.0.0.0/8`, trusting only loopback as a
+  reverse proxy. If your reverse proxy runs on another host, set this to its
+  exact address — see the upgrade note below.
+
 #### Making It Reachable on the Network
 
 Set `RT_BIND=0.0.0.0` to expose port 8000 to all interfaces:
@@ -514,7 +533,7 @@ and any `RT_*` value you set explicitly always wins over both.
 | `RT_STATE_DIR` | `~/.reqmesh` | Accounts, signing secret, settings. Must **not** be inside `RT_DATA_ROOT` — the app refuses to start if it is, because git auto-commit would push password hashes |
 | `RT_STATIC_DIR` | `""` | Path to built frontend `/dist`. Set for single-origin serve |
 | `RT_BASE_URL` | `http://localhost:8000` | Public URL for email links |
-| `RT_ALLOWED_HOSTS` | `["*"]` | Reject requests whose `Host` header doesn't match (comma-separated) |
+| `RT_ALLOWED_HOSTS` | `["*"]` (code); `localhost,127.0.0.1` (Docker) | Reject requests whose `Host` header doesn't match (comma-separated). The code default disables the check; `docker-compose.prod.yml` narrows it to loopback unless you set it |
 | `RT_CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` | Allowed cross-origin browser origins (comma-separated). Leave empty for a single-origin deployment; the app refuses to start on `*` |
 | `RT_SECRET` | (generated) | JWT signing key. Generate with `openssl rand -hex 32` |
 | `RT_ADMIN_PASSWORD` | (generated) | Initial admin password |
@@ -531,7 +550,7 @@ and any `RT_*` value you set explicitly always wins over both.
 | `RT_MAX_JSON_BODY_MB` | `10` | JSON request body size cap |
 | `RT_MAX_SSE_CONNS_PER_USER` | `5` | Maximum concurrent SSE connections per user |
 | `RT_MAX_SSE_CONNS_GLOBAL` | `100` | Maximum concurrent SSE connections in total |
-| `RT_PROXY_TRUSTED_CIDR` | `127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16` | Trusted proxy CIDRs whose `X-Forwarded-For` is used for the real client IP. Narrow to your reverse proxy's exact address |
+| `RT_PROXY_TRUSTED_CIDR` | `127.0.0.0/8` | Trusted proxy CIDRs whose `X-Forwarded-For` is used for the real client IP. Narrow to your reverse proxy's exact address when it is not on localhost — see the upgrade note below |
 | `RT_CSP_DEFAULT` | `""` | Content-Security-Policy override. Empty = profile-appropriate default (`hardened` adds `upgrade-insecure-requests`) |
 | `RT_GIT_AUTOCOMMIT` | `true` | Auto-commit changes in project git repos |
 | `RT_GIT_REMOTE_URL` | `""` | Remote to push auto-commits to |

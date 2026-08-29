@@ -18,6 +18,8 @@ import logging
 from pathlib import Path
 from typing import Callable
 
+from app.core.filelock import file_lock
+
 logger = logging.getLogger(__name__)
 
 CURRENT_SCHEMA_VERSION = 4
@@ -205,22 +207,28 @@ def run_migrations(data_root: Path) -> dict:
     """
     data_root = Path(data_root)
     data_root.mkdir(parents=True, exist_ok=True)
-    current = read_schema_version(data_root)
 
-    if current is None:
+    # The marker's read-modify-write must be exclusive: two instances against
+    # one data root otherwise both see the same recorded version and run the
+    # same migrations concurrently, interleaving file rewrites. Keyed on the
+    # marker path itself so every process serialises on the same lock.
+    with file_lock(_marker_path(data_root)):
+        current = read_schema_version(data_root)
+
+        if current is None:
+            _write_schema_version(data_root, CURRENT_SCHEMA_VERSION)
+            return {"initialized": CURRENT_SCHEMA_VERSION, "from": None, "to": CURRENT_SCHEMA_VERSION, "ran": []}
+
+        if current >= CURRENT_SCHEMA_VERSION:
+            return {"from": current, "to": current, "ran": []}
+
+        ran: list[int] = []
+        for target in range(current + 1, CURRENT_SCHEMA_VERSION + 1):
+            fn = MIGRATIONS.get(target)
+            if fn is not None:
+                logger.info("running data migration to schema %d", target)
+                fn(data_root)
+            ran.append(target)
         _write_schema_version(data_root, CURRENT_SCHEMA_VERSION)
-        return {"initialized": CURRENT_SCHEMA_VERSION, "from": None, "to": CURRENT_SCHEMA_VERSION, "ran": []}
-
-    if current >= CURRENT_SCHEMA_VERSION:
-        return {"from": current, "to": current, "ran": []}
-
-    ran: list[int] = []
-    for target in range(current + 1, CURRENT_SCHEMA_VERSION + 1):
-        fn = MIGRATIONS.get(target)
-        if fn is not None:
-            logger.info("running data migration to schema %d", target)
-            fn(data_root)
-        ran.append(target)
-    _write_schema_version(data_root, CURRENT_SCHEMA_VERSION)
-    logger.info("data migrated: schema %d -> %d", current, CURRENT_SCHEMA_VERSION)
-    return {"from": current, "to": CURRENT_SCHEMA_VERSION, "ran": ran}
+        logger.info("data migrated: schema %d -> %d", current, CURRENT_SCHEMA_VERSION)
+        return {"from": current, "to": CURRENT_SCHEMA_VERSION, "ran": ran}
