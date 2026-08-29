@@ -32,3 +32,7 @@ schemathesis==4.24.3
 # it going unnoticed is why it stayed broken.
 bandit[toml,sarif]==1.9.4
 ruff==0.16.4
+# Static type checking for `app` (gated in CI beside ruff — see
+# .github/workflows/ci.yml). Pinned to the exact version already present in the
+# shared venv, so requirements-dev.txt and the installed mypy cannot disagree.
+mypy==2.3.1

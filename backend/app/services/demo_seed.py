@@ -2203,7 +2203,7 @@ def seed_demo_project(data_root: Path, force: bool = False) -> bool:
         reqs[rid]["status"] = status
         reqs[rid]["baselines"] = list(baselines)
 
-    vcs = {}
+    vcs: dict[str, dict] = {}
     for vc in VERIFICATION_CASES:
         vcs[vc["id"]] = {
             **vc,

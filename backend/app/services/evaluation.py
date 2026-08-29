@@ -23,9 +23,9 @@ from __future__ import annotations
 
 import ast
 import math
-from typing import Optional
+from typing import Any, Callable, Optional
 
-ALLOWED_FUNCS = {
+ALLOWED_FUNCS: dict[str, Callable[..., Any]] = {
     "min": min,
     "max": max,
     "abs": abs,
@@ -86,7 +86,7 @@ class Evaluator:
                 if name:
                     self.params[f"{entity['id']}.{name}"] = p
         self.components = {c["id"]: c for c in components}
-        self.children: dict[str, list[dict]] = {}
+        self.children: dict[str | None, list[dict]] = {}
         for c in components:
             self.children.setdefault(c.get("parent"), []).append(c)
         self._cache: dict[str, float] = {}
@@ -226,11 +226,13 @@ class Evaluator:
                 raise EvalError("only plain calls to whitelisted functions are allowed")
             fname = node.func.id
             if fname == "rollup":
-                if (len(node.args) != 2
-                        or not all(isinstance(a, ast.Constant) and isinstance(a.value, str)
-                                   for a in node.args)):
+                if len(node.args) != 2:
                     raise EvalError("rollup takes two string arguments: rollup('COMP', 'param')")
-                return self.rollup(node.args[0].value, node.args[1].value, stack)
+                comp_arg, param_arg = node.args
+                if not (isinstance(comp_arg, ast.Constant) and isinstance(comp_arg.value, str)
+                        and isinstance(param_arg, ast.Constant) and isinstance(param_arg.value, str)):
+                    raise EvalError("rollup takes two string arguments: rollup('COMP', 'param')")
+                return self.rollup(comp_arg.value, param_arg.value, stack)
             func = ALLOWED_FUNCS.get(fname)
             if func is None:
                 raise EvalError(f"function '{fname}' is not allowed")
@@ -644,10 +646,11 @@ def _collect_refs(node: ast.AST, owner: str, env: dict[str, str],
             refs.update(_collect_refs(v, owner, env, definitions, collecting, stack))
     elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
         if node.func.id == "rollup":
-            if (len(node.args) == 2
-                    and all(isinstance(a, ast.Constant) and isinstance(a.value, str)
-                            for a in node.args)):
-                refs.add(f"{node.args[0].value}.{node.args[1].value}")
+            if len(node.args) == 2:
+                comp_arg, param_arg = node.args
+                if (isinstance(comp_arg, ast.Constant) and isinstance(comp_arg.value, str)
+                        and isinstance(param_arg, ast.Constant) and isinstance(param_arg.value, str)):
+                    refs.add(f"{comp_arg.value}.{param_arg.value}")
         else:
             for a in node.args:
                 refs.update(_collect_refs(a, owner, env, definitions, collecting, stack))

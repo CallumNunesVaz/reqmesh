@@ -6,7 +6,7 @@ stakeholder value, quality analysis, and parametric evaluation.
 """
 from __future__ import annotations
 
-from typing import Optional
+from typing import Optional, cast
 
 from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel
@@ -360,7 +360,7 @@ def requirement_value(project_id: str, req_id: str, user: dict = Depends(require
     mine = next((r for r in ranked if r["id"] == req_id), None)
     if mine is None:
         from app.services.stakeholder_value import compute_value
-        req = store.get_requirement(req_id)
+        req = cast(dict, store.get_requirement(req_id))
         mine = {"id": req_id, "name": req.get("name", ""), "status": req.get("status", ""),
                 **compute_value(req.get("priorities") or {}, stakeholders), "rank": None}
     return {**mine, "ranked_total": sum(1 for r in ranked if r["value"] is not None)}

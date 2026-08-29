@@ -10,8 +10,10 @@ import contextlib
 import hashlib
 import tempfile
 import threading
+import types
 from pathlib import Path
 
+fcntl: types.ModuleType | None
 try:
     import fcntl  # POSIX advisory locking
 except ImportError:  # pragma: no cover - non-POSIX (e.g. Windows)

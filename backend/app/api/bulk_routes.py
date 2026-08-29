@@ -3,6 +3,7 @@ specifications, risks, and change requests. Extracted from ``extra_routes.py``.
 """
 from __future__ import annotations
 
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field, ValidationError
@@ -142,7 +143,7 @@ def bulk_delete_requirements(project_id: str, data: BulkDeleteRequest, user: dic
         if store.delete_requirement(req_id):
             record_change(store, req_id, "delete", before, None, user.get("username", ""))
             deleted += 1
-    resp = {"deleted": deleted}
+    resp: dict[str, Any] = {"deleted": deleted}
     if refused:
         resp["refused"] = refused
     return resp
@@ -238,7 +239,7 @@ def bulk_delete_components(project_id: str, data: BulkDeleteRequest, user: dict 
         if store.delete_component(comp_id):
             record_change(store, comp_id, "delete", before, None, user.get("username", ""))
             deleted += 1
-    resp = {"deleted": deleted}
+    resp: dict[str, Any] = {"deleted": deleted}
     if refused:
         resp["refused"] = refused
     return resp
@@ -316,7 +317,7 @@ def bulk_delete_verification_cases(project_id: str, data: BulkDeleteRequest, use
         if store.delete_verification_case(vc_id):
             record_change(store, vc_id, "delete", before, None, user.get("username", ""))
             deleted += 1
-    resp = {"deleted": deleted}
+    resp: dict[str, Any] = {"deleted": deleted}
     if refused:
         resp["refused"] = refused
     return resp
@@ -370,7 +371,7 @@ def bulk_delete_specifications(project_id: str, data: BulkDeleteRequest, user: d
         if store.delete_specification(spec_id):
             record_change(store, spec_id, "delete", before, None, user.get("username", ""))
             deleted += 1
-    resp = {"deleted": deleted}
+    resp: dict[str, Any] = {"deleted": deleted}
     if refused:
         resp["refused"] = refused
     return resp
@@ -424,7 +425,7 @@ def bulk_delete_risks(project_id: str, data: BulkDeleteRequest, user: dict = Dep
         if store.delete_item("risks", risk_id):
             record_change(store, risk_id, "delete", before, None, user.get("username", ""))
             deleted += 1
-    resp = {"deleted": deleted}
+    resp: dict[str, Any] = {"deleted": deleted}
     if refused:
         resp["refused"] = refused
     return resp
@@ -478,7 +479,7 @@ def bulk_delete_change_requests(project_id: str, data: BulkDeleteRequest, user: 
         if store.delete_item("change_requests", cr_id):
             record_change(store, cr_id, "delete", before, None, user.get("username", ""))
             deleted += 1
-    resp = {"deleted": deleted}
+    resp: dict[str, Any] = {"deleted": deleted}
     if refused:
         resp["refused"] = refused
     return resp
@@ -506,7 +507,7 @@ def bulk_delete_decisions(project_id: str, data: BulkDeleteRequest, user: dict =
         if store.delete_item("decisions", dec_id):
             record_change(store, dec_id, "delete", before, None, user.get("username", ""))
             deleted += 1
-    resp = {"deleted": deleted}
+    resp: dict[str, Any] = {"deleted": deleted}
     if refused:
         resp["refused"] = refused
     return resp
@@ -534,7 +535,7 @@ def bulk_delete_definitions(project_id: str, data: BulkDeleteRequest, user: dict
         if store.delete_item("definitions", def_id):
             record_change(store, def_id, "delete", before, None, user.get("username", ""))
             deleted += 1
-    resp = {"deleted": deleted}
+    resp: dict[str, Any] = {"deleted": deleted}
     if refused:
         resp["refused"] = refused
     return resp
@@ -562,7 +563,7 @@ def bulk_delete_analysis_cases(project_id: str, data: BulkDeleteRequest, user: d
         if store.delete_item("analysis_cases", case_id):
             record_change(store, case_id, "delete", before, None, user.get("username", ""))
             deleted += 1
-    resp = {"deleted": deleted}
+    resp: dict[str, Any] = {"deleted": deleted}
     if refused:
         resp["refused"] = refused
     return resp

@@ -7,6 +7,7 @@ import sys
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Any, cast
 
 import anyio.to_thread
 
@@ -183,7 +184,7 @@ def _resolve_worker_count() -> int | None:
 
     if flag_seen:
         try:
-            return int(flag_value)
+            return int(cast(str, flag_value))
         except (TypeError, ValueError):
             return None
 
@@ -303,7 +304,7 @@ class BodySizeLimitMiddleware:
     @staticmethod
     async def _refuse(scope, send, status_code: int, detail: str) -> None:
         response = JSONResponse(status_code=status_code, content={"detail": detail})
-        await response(scope, None, send)
+        await response(scope, cast(Any, None), send)
 
 
 # Endpoints reachable without a session — the ones used to *obtain* one, plus

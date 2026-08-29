@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import keyword
 import re
+from typing import cast
 
 from app.services.history import record_change
 from app.services.link_registry import kind_matches, links_into, targets_of
@@ -70,7 +71,10 @@ def _rewrite_text(text: str, id_map: dict[str, str]) -> str:
         return text
     for old_id, new_id in sorted(id_map.items(), key=lambda kv: -len(kv[0])):
         pattern = re.compile(r"(?<![\w-])" + re.escape(old_id) + r"(?![\w-])")
-        text = pattern.sub(lambda _m, new_id=new_id: new_id, text)
+
+        def repl(_m: re.Match[str], new_id: str = new_id) -> str:
+            return new_id
+        text = pattern.sub(repl, text)
     return text
 
 
@@ -85,7 +89,10 @@ def _rewrite_expr(text: str, id_map: dict[str, str]) -> str:
         return text
     for old_id, new_id in sorted(id_map.items(), key=lambda kv: -len(kv[0])):
         pattern = re.compile(r"(?<![\w-])" + re.escape(old_id) + r"(?=\.)")
-        text = pattern.sub(lambda _m, new_id=new_id: new_id, text)
+
+        def repl(_m: re.Match[str], new_id: str = new_id) -> str:
+            return new_id
+        text = pattern.sub(repl, text)
     return text
 
 
@@ -188,7 +195,7 @@ def _rewrite_param_qualified(text: str, owner_id: str, old_name: str,
     pattern = re.compile(
         r"(?<![\w-])" + re.escape(owner_id) + r"\." + re.escape(old_name) + r"(?![\w-])"
     )
-    return pattern.sub(lambda _m, repl=replacement: repl, text)
+    return pattern.sub(lambda _m: replacement, text)
 
 
 def _rewrite_param_bare(text: str, old_name: str, new_name: str) -> str:
@@ -202,7 +209,7 @@ def _rewrite_param_bare(text: str, old_name: str, new_name: str) -> str:
     if not text:
         return text
     pattern = re.compile(r"(?<![\w.-])" + re.escape(old_name) + r"(?![\w-])")
-    return pattern.sub(lambda _m, new=new_name: new, text)
+    return pattern.sub(lambda _m: new_name, text)
 
 
 def _rewrite_param_rollup(text: str, owner_id: str, old_name: str,
@@ -374,7 +381,7 @@ def _plan_rename_id_map(requirements: list[dict], old_id: str, new_id: str,
     if cascade == "self" or not new_prefix or not old_prefix or new_prefix == old_prefix:
         return id_map
 
-    children_by_parent: dict[str, list[str]] = {}
+    children_by_parent: dict[str | None, list[str]] = {}
     for r in requirements:
         children_by_parent.setdefault(r.get("parent"), []).append(r["id"])
 
@@ -573,7 +580,7 @@ def _rewrite_requirement_snapshots(store, id_map: dict[str, str]) -> None:
         changed = False
         new_snapshot: dict[str, dict] = {}
         for rid, entry in snapshot.items():
-            new_rid = id_map.get(rid, rid)
+            new_rid = cast(str, id_map.get(rid, rid))
             if new_rid != rid:
                 changed = True
             if isinstance(entry, dict):
