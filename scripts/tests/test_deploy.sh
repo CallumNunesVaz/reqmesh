@@ -597,6 +597,19 @@ check "no host cert path leaks into the config" \
       "$(grep -c 'ssl_certificate     \$certdir' "$REPO/scripts/deploy-docker.sh")" "0"
 
 # ══════════════════════════════════════════════════════════════════════════════
+section "the SSE proxy leaves chunked encoding alone"
+# ══════════════════════════════════════════════════════════════════════════════
+# chunked_transfer_encoding off combined with HTTP/1.1 keep-alive and no
+# Content-Length strips the response of any framing except connection close —
+# the opposite of what an event stream wants. The Caddy path never set it; the
+# nginx configs must not either. The sum across all three files must be zero so
+# removing the directive from two of them still fails.
+check "no chunked_transfer_encoding off in any SSE proxy config" \
+      "$(grep -c 'chunked_transfer_encoding off' \
+         "$REPO/nginx.conf" "$REPO/scripts/templates/nginx.conf.tmpl" "$REPO/DEPLOYMENT.md" \
+         | awk -F: '{s+=$2} END {print s}')" "0"
+
+# ══════════════════════════════════════════════════════════════════════════════
 section "self-signed certificate generation"
 # ══════════════════════════════════════════════════════════════════════════════
 # Caddy mints its own; nginx does not, and nothing in the installer ever created
