@@ -1,0 +1,7 @@
+# Read by coverage.py itself (it does not read pytest.ini). Keeps a bare
+# `pytest --cov` locally measuring the same thing CI measures.
+[run]
+source = app
+
+[report]
+show_missing = True

@@ -63,7 +63,11 @@ jobs:
       # weasyprint is imported lazily everywhere it is used, so its native
       # dependencies are not needed to run the suite.
       - run: pip install -r backend/requirements-dev.txt
-      - run: python -m pytest tests/ -q
+      # Coverage rides the fast suite's existing run (no second full pass) and
+      # is gated at 82% — three points under the 85% the suite measured when the
+      # floor was set. The floor catches the number silently falling, without
+      # failing a run on normal non-deterministic wobble.
+      - run: python -m pytest tests/ -q --cov=app --cov-report=term-missing --cov-fail-under=82
         working-directory: backend
       # The benchmarks are deselected from the default run (pytest.ini addopts)
       # because they are measurements, not gates. They still run here: each one
