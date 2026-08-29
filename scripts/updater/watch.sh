@@ -20,6 +20,8 @@ CONTROL_DIR="${CONTROL_DIR:-/control}"
 DEPLOY_DIR="${DEPLOY_DIR:-/deploy}"
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
 POLL_SECONDS="${POLL_SECONDS:-5}"
+HEALTH_TIMEOUT_SECONDS="${HEALTH_TIMEOUT_SECONDS:-180}"
+HEALTH_POLL_SECONDS="${HEALTH_POLL_SECONDS:-5}"
 IMAGE_REPO="${IMAGE_REPO:-ghcr.io/callumnunesvaz/reqmesh}"
 
 TARGET_FILE="$CONTROL_DIR/update-target"
@@ -47,16 +49,71 @@ compose() {
   fi
 }
 
+previous_version() {
+  # The version the app is currently deployed on, read from the control env file
+  # before it gets overwritten with the new target. Empty when never recorded.
+  if [ -f "$VERSION_ENV" ]; then
+    sed -n 's/^REQMESH_VERSION=//p' "$VERSION_ENV" | head -n1
+  fi
+}
+
+await_healthy() {
+  # $1 = target version   $2 = previously deployed version (may be empty)
+  target="$1"
+  previous="$2"
+
+  container="$(compose ps -q reqmesh 2>/dev/null | head -n1)"
+  if [ -z "$container" ]; then
+    write_status failed "Could not resolve the reqmesh container to verify its health." "$target"
+    return
+  fi
+
+  elapsed=0
+  while [ "$elapsed" -lt "$HEALTH_TIMEOUT_SECONDS" ]; do
+    health="$(docker inspect --format '{{.State.Health.Status}}' "$container" 2>/dev/null || true)"
+
+    if [ "$health" = "healthy" ]; then
+      write_status ok "Updated to $target." "$target"
+      return
+    fi
+    if [ "$health" = "unhealthy" ]; then
+      break
+    fi
+    if [ -z "$health" ]; then
+      write_status ok "Updated to $target; health could not be confirmed (no healthcheck)." "$target"
+      return
+    fi
+
+    # "starting" (or any other transitional state) — still coming up.
+    sleep "$HEALTH_POLL_SECONDS"
+    elapsed=$((elapsed + HEALTH_POLL_SECONDS))
+  done
+
+  # Timed out or reported unhealthy: undo the swap.
+  if [ -n "$previous" ]; then
+    write_status in_progress "Unhealthy on $target; rolling back to $previous." "$target"
+    echo "REQMESH_VERSION=$previous" > "$VERSION_ENV"
+    if compose up -d reqmesh; then
+      write_status failed "Update to $target failed; rolled back to $previous." "$target"
+    else
+      write_status failed "Update to $target failed; rollback to $previous also failed." "$target"
+    fi
+  else
+    write_status failed "Update to $target failed; previous version unknown, no rollback attempted." "$target"
+  fi
+}
+
 handle_pull() {
   # $1 = target version
   target="$1"
+  previous="$(previous_version)"
   echo "[updater] pulling reqmesh $target"
   write_status in_progress "Pulling image for $target." "$target"
   echo "REQMESH_VERSION=$target" > "$VERSION_ENV"
   if compose pull reqmesh; then
     write_status in_progress "Recreating the app on $target." "$target"
     if compose up -d reqmesh; then
-      write_status in_progress "Waiting for the new version to come up." "$target"
+      await_healthy "$target" "$previous"
     else
       write_status failed "Failed to recreate the container." "$target"
     fi
@@ -71,6 +128,7 @@ handle_image() {
     write_status failed "No uploaded image archive found." ""
     return
   fi
+  previous="$(previous_version)"
   echo "[updater] loading uploaded image archive"
   write_status in_progress "Loading uploaded image…" ""
   loaded="$(docker load -i "$IMAGE_FILE" 2>&1 || true)"
@@ -89,7 +147,7 @@ handle_image() {
   echo "REQMESH_VERSION=$tag" > "$VERSION_ENV"
   write_status in_progress "Recreating the app on $tag." "$tag"
   if compose up -d --force-recreate reqmesh; then
-    write_status in_progress "Waiting for the new version to come up." "$tag"
+    await_healthy "$tag" "$previous"
   else
     write_status failed "Failed to recreate the container." "$tag"
   fi
