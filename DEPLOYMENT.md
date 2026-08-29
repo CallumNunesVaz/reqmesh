@@ -252,7 +252,6 @@ Ensure the [requirements](#requirements) are met before installing.
             proxy_buffering off;
             proxy_cache off;
             proxy_read_timeout 86400s;
-            chunked_transfer_encoding off;
         }
     }
     ```
