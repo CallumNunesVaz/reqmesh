@@ -13,13 +13,17 @@ const fs = require('node:fs');
 const net = require('node:net');
 const http = require('node:http');
 
-const REPO_ROOT = path.resolve(__dirname, '..');
+// In a packaged app __dirname is <resources>/app, so walking up once reaches
+// <resources> — the same directory `process.resourcesPath` names explicitly.
+const REPO_ROOT = app.isPackaged ? process.resourcesPath : path.resolve(__dirname, '..');
 const BACKEND_DIR = path.join(REPO_ROOT, 'backend');
 const FRONTEND_DIST = path.join(REPO_ROOT, 'frontend', 'dist');
 const HOST = '127.0.0.1';
 
 let backendProc = null;
 let mainWindow = null;
+let isQuitting = false;
+let backendSpawnError = null;
 
 /** Absolute path to the backend virtualenv's Python, or a bare fallback. */
 function resolvePython() {
@@ -30,6 +34,42 @@ function resolvePython() {
   if (fs.existsSync(venvPython)) return venvPython;
   // Fall back to whatever `python`/`python3` is on PATH.
   return isWin ? 'python' : 'python3';
+}
+
+/**
+ * The backend command to spawn, and the arguments that follow it.
+ *
+ * Packaged: the PyInstaller binary shipped in extraResources — no system Python.
+ * Source:   `python -m uvicorn app.main:app`, cwd'd at the backend checkout.
+ */
+function resolveBackend() {
+  if (app.isPackaged) {
+    const isWin = process.platform === 'win32';
+    const binary = isWin ? 'reqmesh-backend.exe' : 'reqmesh-backend';
+    return {
+      command: path.join(BACKEND_DIR, binary),
+      args: [],
+      cwd: BACKEND_DIR,
+    };
+  }
+  return {
+    command: resolvePython(),
+    args: ['-m', 'uvicorn', 'app.main:app'],
+    cwd: BACKEND_DIR,
+  };
+}
+
+/** Resolve the port from RT_PORT (validated) or a free loopback port. */
+async function resolvePort() {
+  const raw = process.env.RT_PORT;
+  if (raw === undefined || raw === '') return findFreePort();
+  const port = Number(raw);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    // A bad RT_PORT would otherwise reach uvicorn as `--port NaN` and kill the
+    // backend on spawn. Fall back to an ephemeral port instead of trusting it.
+    return findFreePort();
+  }
+  return port;
 }
 
 /** Resolve a free TCP port on the loopback interface. */
@@ -59,6 +99,9 @@ function waitForBackend(port, timeoutMs = 30000) {
       req.setTimeout(2000, () => req.destroy());
     };
     const retry = () => {
+      if (backendSpawnError) {
+        return reject(new Error(`backend failed to start: ${backendSpawnError.message}`));
+      }
       if (backendProc && backendProc.exitCode !== null) {
         return reject(new Error(`backend exited early (code ${backendProc.exitCode})`));
       }
@@ -70,7 +113,7 @@ function waitForBackend(port, timeoutMs = 30000) {
 }
 
 function startBackend(port) {
-  const python = resolvePython();
+  const target = resolveBackend();
   const env = {
     ...process.env,
     // Serve the built SPA from the same origin as the API so the renderer's
@@ -81,15 +124,23 @@ function startBackend(port) {
     // Without this it inherits the "team" default and demands credentials.
     RT_PROFILE: process.env.RT_PROFILE || 'personal',
   };
-  const args = ['-m', 'uvicorn', 'app.main:app', '--host', HOST, '--port', String(port)];
-  backendProc = spawn(python, args, { cwd: BACKEND_DIR, env, stdio: ['ignore', 'pipe', 'pipe'] });
+  const args = [...target.args, '--host', HOST, '--port', String(port)];
+  backendSpawnError = null;
+  backendProc = spawn(target.command, args, { cwd: target.cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
 
   backendProc.stdout.on('data', (d) => process.stdout.write(`[backend] ${d}`));
   backendProc.stderr.on('data', (d) => process.stderr.write(`[backend] ${d}`));
+  // A spawn failure (ENOENT when the binary is not bundled) emits 'error', not
+  // 'exit', and leaves exitCode null — without this the health poll would just
+  // spin until its timeout instead of reporting the real cause.
+  backendProc.on('error', (err) => {
+    backendSpawnError = err;
+    backendProc = null;
+  });
   backendProc.on('exit', (code, signal) => {
     backendProc = null;
     // If the backend dies while the app is up, there's nothing to show — quit.
-    if (!app.isQuiting && code !== 0 && signal !== 'SIGTERM') {
+    if (!isQuitting && code !== 0 && signal !== 'SIGTERM') {
       if (mainWindow) {
         dialog.showErrorBox('reqmesh', `Backend process exited unexpectedly (code ${code}).`);
       }
@@ -166,7 +217,7 @@ async function boot() {
     return;
   }
   try {
-    const port = process.env.RT_PORT ? Number(process.env.RT_PORT) : await findFreePort();
+    const port = await resolvePort();
     startBackend(port);
     await waitForBackend(port);
     createWindow(port);
@@ -205,7 +256,7 @@ if (!app.requestSingleInstanceLock()) {
     if (process.platform !== 'darwin') app.quit();
   });
 
-  app.on('before-quit', () => { app.isQuiting = true; stopBackend(); });
+  app.on('before-quit', () => { isQuitting = true; stopBackend(); });
   app.on('quit', stopBackend);
 }
 
