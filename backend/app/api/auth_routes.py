@@ -34,6 +34,7 @@ from app.core.auth import (
     verify_email,
     set_auth_cookies,
     clear_auth_cookies,
+    verify_password,
 )
 from app.core.dependencies import get_current_user, require_admin
 from app.core.password_policy import validate_password
@@ -201,6 +202,7 @@ class ProfileUpdateRequest(BaseModel):
     full_name: Optional[str] = None
     email: Optional[str] = None
     password: Optional[str] = None
+    current_password: Optional[str] = None
 
 
 @router.patch("/auth/profile")
@@ -214,6 +216,13 @@ def update_profile(data: ProfileUpdateRequest, user: dict = Depends(get_current_
         record = users.get(username)
         if record is None:
             raise HTTPException(status_code=404, detail="User not found")
+        email_changed = data.email is not None and data.email.strip() != record.get("email", "")
+        requires_current = data.password is not None or email_changed
+        if requires_current and not data.current_password:
+            raise HTTPException(status_code=400,
+                                detail="Current password is required to change your password or email address")
+        if data.current_password and not verify_password(data.current_password, record.get("password_hash", "")):
+            raise HTTPException(status_code=403, detail="Current password is incorrect")
         if data.full_name is not None:
             record["full_name"] = data.full_name.strip()
         if data.email is not None:

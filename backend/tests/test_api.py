@@ -470,12 +470,14 @@ def test_profile_email_change_resets_verification(client, workspace):
     auth_mod.save_users(users)
 
     tok = auth_mod.create_token("pat", "contributor")
-    res = client.patch("/api/auth/profile", json={"email": "new@example.com"},
+    res = client.patch("/api/auth/profile",
+                       json={"email": "new@example.com", "current_password": "Password123!"},
                        headers={"Authorization": f"Bearer {tok}"})
     assert res.status_code == 200
     assert auth_mod.load_users()["pat"]["email_verified"] is False
 
-    res = client.patch("/api/auth/profile", json={"email": "not-an-email"},
+    res = client.patch("/api/auth/profile",
+                       json={"email": "not-an-email", "current_password": "Password123!"},
                        headers={"Authorization": f"Bearer {tok}"})
     assert res.status_code == 400
 
