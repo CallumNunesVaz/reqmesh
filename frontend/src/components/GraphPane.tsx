@@ -20,6 +20,7 @@ import {
   useStore as useFlowStore,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
+import './GraphPane.css';
 import { forceSimulation, forceLink, forceManyBody, forceCollide, forceX, forceY } from 'd3-force';
 import { Search, RotateCw, ListTree, Orbit, SlidersHorizontal, ChevronsUpDown, ChevronsDownUp, Filter, Waypoints, Share2, Save, ArrowLeftRight, ArrowDownLeft, ArrowUpRight, EyeOff, GitMerge } from 'lucide-react';
 import { api, type Requirement, type TraceLink, type EvaluatedRequirement, type EvaluatedParameter, type Component } from '../api/client';

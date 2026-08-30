@@ -27,15 +27,6 @@ function daysBetween(a: string, b: string): number {
   return (new Date(b).getTime() - new Date(a).getTime()) / 86400000;
 }
 
-/** Read a --chart-* CSS variable from the document root at call time so we
- *  always pick up the active theme. */
-function chartColor(kind: string): string {
-  if (typeof document === 'undefined') return '#888';
-  return getComputedStyle(document.documentElement)
-    .getPropertyValue(`--chart-${kind}`)
-    .trim() || '#888';
-}
-
 /** The topmost non-zero segment in a bar gets a 4 px rounded top; all other
  *  segments get a 2 px gap against their neighbours by drawing a surface-colour
  *  stroke.  Recharts renders bars in stack order from bottom to top, so the
@@ -82,14 +73,6 @@ export default function ActivityChart() {
       }
     }).catch(() => {});
   }, [projectId, bucket]);
-
-  const kindColors = useMemo(() => {
-    const map: Record<string, string> = {};
-    for (const k of ACTIVITY_KIND_ORDER) {
-      map[k] = chartColor(k);
-    }
-    return map;
-  }, []);
 
   // Build the list of actually visible kinds sorted by the fixed order.
   const visibleKinds = useMemo(() => {
@@ -183,7 +166,7 @@ export default function ActivityChart() {
               key={kind}
               dataKey={kind}
               stackId="a"
-              fill={kindColors[kind]}
+              fill={`var(--chart-${kind})`}
               stroke={surfaceColor}
               strokeWidth={2}
               isAnimationActive={true}

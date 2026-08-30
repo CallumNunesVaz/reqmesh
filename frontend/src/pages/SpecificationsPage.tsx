@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { usePersistedState, setCodec } from '../hooks/usePersistedState';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { expandHeight, listItemSlide } from '../lib/animations';
 import { Plus, FileText, Trash2, ChevronDown, Square, CheckSquare, X, Search, ExternalLink, Edit3, Copy } from 'lucide-react';
 import { api, type Requirement, type Component, type Specification } from '../api/client';
 import { useStore } from '../store';
@@ -241,9 +242,7 @@ export default function SpecificationsPage() {
       <AnimatePresence>
         {showCreate && (
           <motion.form
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
+            variants={expandHeight} initial="initial" animate="animate" exit="exit"
             onSubmit={handleCreate}
             className="card p-4 mb-4 overflow-hidden"
           >
@@ -290,8 +289,7 @@ export default function SpecificationsPage() {
             <motion.div
               key={spec.id}
               id={`entity-${spec.id}`}
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
+              variants={listItemSlide} initial="initial" animate="animate" exit="exit"
               transition={{ delay: i * 0.03 }}
               className={`card hover:shadow-md transition-shadow group ${
                 focusId === spec.id ? 'ring-2 ring-primary/50' : ''
@@ -391,9 +389,7 @@ export default function SpecificationsPage() {
               <AnimatePresence initial={false}>
                 {isExpanded && (
                   <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
+                    variants={expandHeight} initial="initial" animate="animate" exit="exit"
                     transition={{ duration: 0.15 }}
                     className="overflow-hidden"
                   >

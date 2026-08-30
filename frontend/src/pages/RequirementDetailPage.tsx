@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo, useRef, useCallback, useId } from 'react'
 import { useParams, useNavigate } from 'react-router-dom';
 import { GuardedLink as Link } from '../components/navGuard';
 import { motion } from 'framer-motion';
+import { expandHeight } from '../lib/animations';
 import { Trash2, ArrowLeft, Plus, X, ArrowRight, ArrowLeftRight, Sparkles, ShieldCheck, ExternalLink, ChevronRight, Waypoints, AlertTriangle, CheckCircle2, GitFork, Loader, Save, Undo2, GitPullRequest, Pencil, Copy, Split } from 'lucide-react';
 import { api, baselineNames, CR_URGENCIES, type StakeholderDef, type SystemStateDef, type RequirementValue, type Requirement, type VerificationCase, type QualityItem, type Component, type Specification, type ChangeRequest, type Risk, type EvaluatedRequirement, type Definition, type DecisionRecord, type Backlinks, type RenameCascade } from '../api/client';
 import { ParametricsCard } from '../components/parametrics';
@@ -957,7 +958,7 @@ export default function RequirementDetailPage() {
         </div>
       </div>
       {showRequestChange && (
-        <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+        <motion.div variants={expandHeight} initial="initial" animate="animate" exit="exit"
           className="card p-4 mb-4 overflow-hidden">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-semibold text-foreground">Request a Change</h3>

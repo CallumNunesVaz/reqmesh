@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useId } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { fadeIn } from '../lib/animations';
 import { GitBranch, Plus, X, LayoutGrid, LayoutList, Search, Download } from 'lucide-react';
 import { api } from '../api/client';
 import type { TraceModelLink, Requirement, VerificationCase } from '../api/client';
@@ -316,8 +317,10 @@ export default function TraceMatrixPage() {
               {filteredLinks.map((link, i) => (
                 <motion.tr
                   key={`${link.source}-${link.target}-${i}`}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
+                  variants={fadeIn}
+                  initial="initial"
+                  animate="animate"
+                  exit="exit"
                   transition={{ delay: i * 0.02 }}
                   className="border-b hover:bg-muted/30 transition-colors group"
                 >

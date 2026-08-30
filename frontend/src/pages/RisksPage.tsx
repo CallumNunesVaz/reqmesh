@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, useId, useRef } from 'react';
 import { usePersistedState } from '../hooks/usePersistedState';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { expandHeight } from '../lib/animations';
 import { Plus, Trash2, Square, CheckSquare, X, Search, AlertTriangle, Link2, ChevronDown } from 'lucide-react';
 import { api, RISK_STATUSES, type Risk, type RiskMatrix, type RequirementTreeNode, type ComponentTreeNode } from '../api/client';
 import { useAuthStore } from '../store/auth';
@@ -330,7 +331,7 @@ export default function RisksPage() {
       </div>
       <AnimatePresence>
         {showCreate && (
-          <motion.form initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+          <motion.form variants={expandHeight} initial="initial" animate="animate" exit="exit"
             onSubmit={handleCreate} className="card p-4 mb-4 overflow-hidden">
             <div className="flex flex-wrap items-end gap-3">
               <div className="w-32"><label className="label">ID <input className="input font-mono" placeholder="RSK-001" value={form.id} onChange={e => setForm({...form, id: e.target.value})} disabled={!!editingId} /></label>{!editingId && idExample && <span className="text-3xs text-muted-foreground">e.g. {idExample}</span>}</div>

@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { expandHeight } from '../lib/animations';
 import { Plus, Trash2, Edit3, Check, Layers, Loader, AlertTriangle, Square, CheckSquare, GripVertical } from 'lucide-react';
 import { DndContext, DragOverlay, closestCenter, PointerSensor, KeyboardSensor, useSensor, useSensors, type DragStartEvent, type DragEndEvent } from '@dnd-kit/core';
 import { useSortable, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -321,9 +322,10 @@ export default function SystemStatesPage() {
         <AnimatePresence>
           {showForm && (
             <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
+              variants={expandHeight}
+              initial="initial"
+              animate="animate"
+              exit="exit"
               className="overflow-hidden"
             >
               <div className="card p-5 space-y-4 border-2 border-primary/20">

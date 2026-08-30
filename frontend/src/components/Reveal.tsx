@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion';
+import { slideUp } from '../lib/animations';
 import type { KeyboardEvent, ReactNode } from 'react';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 
@@ -7,7 +8,7 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
  *
  * This incantation was copy-pasted 55 times across 27 files:
  *
- *   <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+ *   <motion.div variants={slideUp} initial="initial" animate="animate" exit="exit"
  *               transition={{ delay: 0.15 }} className="card p-5">
  *
  * with **26 distinct delay values** — 0.05, 0.1, 0.12, 0.15, 0.18, 0.19, 0.2,
@@ -73,8 +74,7 @@ export default function Reveal({ step = 0, id, onClick, className, children }: R
       id={id}
       {...interactive}
       className={className}
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
+      variants={slideUp} initial="initial" animate="animate" exit="exit"
       transition={{ delay: beats * BEAT_SECONDS }}
     >
       {children}

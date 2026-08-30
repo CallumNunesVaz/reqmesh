@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { expandHeight } from '../lib/animations';
 import { BookOpen, ChevronDown, ChevronRight, CheckCircle2, AlertTriangle, XCircle, Info } from 'lucide-react';
 import { useStore } from '../store';
 import { runPatternRules } from '../lib/qualityRules';
@@ -110,7 +111,7 @@ export default function DescriptionHelper({ description, verificationMethod }: D
       {/* Expanded detail panel */}
       <AnimatePresence>
         {open && (
-          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+          <motion.div variants={expandHeight} initial="initial" animate="animate" exit="exit" className="overflow-hidden">
             <div className="card p-3 bg-cs-amber/[0.03] border-cs-amber/10 space-y-2">
               {/* Guideline reference */}
               <p className="text-3xs text-muted-foreground/70 leading-relaxed border-b border-cs-amber/10 pb-2">

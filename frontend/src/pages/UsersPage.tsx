@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { copyText } from '../lib/clipboard';
 import { motion, AnimatePresence } from 'framer-motion';
+import { slideDown } from '../lib/animations';
 import { Users, Plus, Trash2, ShieldCheck, User as UserIcon, KeyRound, X, Loader, Search, Filter, Pencil, Check, Clock, Ban, CircleCheck, Unlock, LogOut, UserPlus, Download, Upload, Copy, Lock, MoreHorizontal } from 'lucide-react';
 import { api, type ManagedUser } from '../api/client';
 import { useAuthStore } from '../store/auth';
@@ -378,7 +379,7 @@ export default function UsersPage() {
           <AnimatePresence>
             {showCreate && (
               <motion.form
-                initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
+                variants={slideDown} initial="initial" animate="animate" exit="exit"
                 onSubmit={handleCreate}
                 className="card p-4 mb-6 flex items-end gap-3 flex-wrap"
               >
@@ -435,7 +436,7 @@ export default function UsersPage() {
           {/* Bulk action bar */}
           <AnimatePresence>
             {selected.size > 0 && (
-              <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
+              <motion.div variants={slideDown} initial="initial" animate="animate" exit="exit"
                 className="flex items-center gap-2 mb-4 px-3 py-2 rounded-lg border bg-primary/5 border-primary/30 text-xs">
                 <span className="font-medium">{selected.size} selected</span>
                 <div className="flex-1" />

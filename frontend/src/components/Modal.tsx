@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { fadeIn, modalPanel } from '../lib/animations';
 import BodyPortal from './BodyPortal';
 
 /**
@@ -117,9 +118,7 @@ export default function Modal({
       <AnimatePresence>
         {open && (
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+            variants={fadeIn} initial="initial" animate="animate" exit="exit"
             className={`fixed inset-0 ${elevated ? 'z-[60]' : 'z-50'} bg-background/80 backdrop-blur-sm ${position}`}
             onClick={onClose}
           >
@@ -129,9 +128,10 @@ export default function Modal({
               role="dialog"
               aria-modal="true"
               tabIndex={-1}
-              initial={{ opacity: 0, scale: 0.95, y: 8 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 8 }}
+              variants={modalPanel}
+              initial="initial"
+              animate="animate"
+              exit="exit"
               transition={{ duration: 0.12 }}
               onClick={(e) => e.stopPropagation()}
               className={`relative bg-card border rounded-lg shadow-2xl ${panelClassName}`}

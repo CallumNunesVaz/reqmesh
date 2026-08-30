@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
+import { MotionConfig } from 'framer-motion';
 import { ThemeProvider } from './components/ThemeProvider';
 import { DensityProvider } from './components/DensityProvider';
 import { ConfirmProvider } from './components/ConfirmDialog';
@@ -11,18 +12,20 @@ import './styles/index.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <ErrorBoundary>
-      <ThemeProvider>
-        <DensityProvider>
-          <ConfirmProvider>
-            <AuthInit>
-              <BrowserRouter>
-                <App />
-              </BrowserRouter>
-            </AuthInit>
-          </ConfirmProvider>
-        </DensityProvider>
-      </ThemeProvider>
-    </ErrorBoundary>
+    <MotionConfig reducedMotion="user">
+      <ErrorBoundary>
+        <ThemeProvider>
+          <DensityProvider>
+            <ConfirmProvider>
+              <AuthInit>
+                <BrowserRouter>
+                  <App />
+                </BrowserRouter>
+              </AuthInit>
+            </ConfirmProvider>
+          </DensityProvider>
+        </ThemeProvider>
+      </ErrorBoundary>
+    </MotionConfig>
   </React.StrictMode>,
 );

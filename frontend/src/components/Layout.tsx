@@ -32,8 +32,11 @@ export function useGraphPane() { return useContext(GraphPaneCtx); }
 /** Lets the canvas reveal the inspector. Double-clicking a node selects it and
  *  loads its detail, which is invisible while the pane is collapsed — the
  *  interaction appeared to do nothing at all. */
-const ContextPaneCtx = createContext({ contextOpen: false, openContext: () => {} });
-export function useContextPane() { return useContext(ContextPaneCtx); }
+export function useContextPane() {
+  const contextOpen = useStore((s) => s.contextOpen);
+  const setContextOpen = useStore((s) => s.setContextOpen);
+  return { contextOpen, openContext: useCallback(() => setContextOpen(true), [setContextOpen]) };
+}
 
 // Fetched once per page load; the version rarely changes within a session.
 let _versionCache: string | null = null;
@@ -66,7 +69,7 @@ function VersionBadge() {
   if (!version) return null;
   return (
     <span
-      className="hidden 2xl:inline text-3xs font-mono text-muted-foreground/70 border rounded-md px-1 py-px"
+      className="hidden lg:inline text-3xs font-mono text-muted-foreground/70 border rounded-md px-1 py-px"
       title="reqmesh version"
     >
       v{version}
@@ -182,7 +185,8 @@ export default function Layout() {
   useListPosition(mainRef);
 
   const [graphOpen, setGraphOpen] = useState(() => readCanvasOpen(pageKey));
-  const [contextOpen, setContextOpen] = useState(true);
+  const contextOpen = useStore((s) => s.contextOpen);
+  const setContextOpen = useStore((s) => s.setContextOpen);
   const [loginOpen, setLoginOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -268,8 +272,6 @@ export default function Layout() {
 
   // Idempotent: revealing an already-open pane must not toggle it shut, so this
   // is deliberately not the existing toggle.
-  const openContext = useCallback(() => setContextOpen(true), []);
-  const contextPaneValue = useMemo(() => ({ contextOpen, openContext }), [contextOpen, openContext]);
 
   const [derivationReq, setDerivationReq] = useState<{ id: string; nonce: number } | null>(null);
   const showDerivation = useCallback((id: string) => {
@@ -429,7 +431,6 @@ export default function Layout() {
     <ToastProvider>
     <HoveredEntityCtx.Provider value={hoveredBus}>
     <GraphPaneCtx.Provider value={{ graphOpen, toggleGraph }}>
-    <ContextPaneCtx.Provider value={contextPaneValue}>
     <SelectedReqCtx.Provider value={{ selectedReqId, selectReq, derivationReq, showDerivation }}>
       <div className="h-screen flex flex-col bg-background">
         {/* overflow-x-auto: at very narrow windows the icon row degrades to a
@@ -457,7 +458,7 @@ export default function Layout() {
               title="Jump to anything (Ctrl+K)" aria-label="Open command palette"
             >
               <Search size={15} />
-              <kbd className="hidden 2xl:inline text-4xs border rounded-md px-1 py-px">Ctrl K</kbd>
+              <kbd className="hidden lg:inline text-4xs border rounded-md px-1 py-px">Ctrl K</kbd>
             </button>
           )}
 
@@ -468,7 +469,7 @@ export default function Layout() {
               title="Documentation (F1)"
             >
               <BookOpen size={15} />
-              <span className="hidden 2xl:inline text-3xs">Docs</span>
+              <span className="hidden lg:inline text-3xs">Docs</span>
             </button>
           )}
 
@@ -479,7 +480,7 @@ export default function Layout() {
               title={helpersEnabled ? 'Guided help is on — click to hide' : 'Guided help is off — click to show guidance'}
             >
               <HelpCircle size={15} />
-              <span className="hidden 2xl:inline text-3xs">{helpersEnabled ? 'GUIDED ON' : 'GUIDED OFF'}</span>
+              <span className="hidden lg:inline text-3xs">{helpersEnabled ? 'GUIDED ON' : 'GUIDED OFF'}</span>
             </button>
           )}
 
@@ -504,7 +505,7 @@ export default function Layout() {
               title="Export document"
             >
               <FileDown size={15} />
-              <span className="hidden 2xl:inline">Export</span>
+              <span className="hidden lg:inline">Export</span>
             </button>
           )}
 
@@ -515,7 +516,7 @@ export default function Layout() {
               title="Import ReqIF / SysML / spreadsheet"
             >
               <FileUp size={15} />
-              <span className="hidden 2xl:inline">Import</span>
+              <span className="hidden lg:inline">Import</span>
             </button>
           )}
 
@@ -565,7 +566,7 @@ export default function Layout() {
               title="Manage users"
             >
               <Users size={15} />
-              <span className="hidden 2xl:inline">Users</span>
+              <span className="hidden lg:inline">Users</span>
             </Link>
           )}
 
@@ -576,7 +577,7 @@ export default function Layout() {
               title="Application settings"
             >
               <SlidersHorizontal size={15} />
-              <span className="hidden 2xl:inline">Settings</span>
+              <span className="hidden lg:inline">Settings</span>
             </Link>
           )}
 
@@ -587,7 +588,7 @@ export default function Layout() {
               title="System & updates"
             >
               <Server size={15} />
-              <span className="hidden 2xl:inline">System</span>
+              <span className="hidden lg:inline">System</span>
             </Link>
           )}
 
@@ -595,7 +596,7 @@ export default function Layout() {
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground hidden sm:inline" title={`${user.username}${user.role ? ` (${user.role})` : ''}`}>
                 <User size={12} className="inline mr-1" />
-                <span className="hidden 2xl:inline">{user.username}</span>
+                <span className="hidden lg:inline">{user.username}</span>
                 {editMode && <span className="ml-1 text-cs-amber text-3xs">edit</span>}
               </span>
               <button onClick={signOut} className="btn-ghost p-2 rounded-lg text-muted-foreground hover:text-destructive" title="Sign out">
@@ -714,7 +715,6 @@ export default function Layout() {
       <ShortcutHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
       <DocumentationPanel open={docsOpen} onClose={() => setDocsOpen(false)} />
     </SelectedReqCtx.Provider>
-    </ContextPaneCtx.Provider>
     </GraphPaneCtx.Provider>
     </HoveredEntityCtx.Provider>
     </ToastProvider>

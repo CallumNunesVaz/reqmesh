@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { fadeIn } from '../lib/animations';
 import Reveal from '../components/Reveal';
 import { AlertTriangle, Search, TrendingUp, Shield, GitBranch, FileWarning, Sparkles, Sigma, Flame, ShieldCheck, Table } from 'lucide-react';
 import { api, type MetricsData, type GapItem, type QualityItem, type EvaluationData, type PughMatrix, type RiskBingo } from '../api/client';
@@ -91,7 +92,7 @@ export default function MetricsPage() {
       <ActivityChart />
 
       <div className="grid grid-cols-1 @3xl:grid-cols-2 gap-6">
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }} className="card p-5">
+        <motion.div variants={fadeIn} initial="initial" animate="animate" exit="exit" transition={{ delay: 0.2 }} className="card p-5">
           <h2 className="font-semibold text-sm text-card-foreground mb-4 flex items-center gap-2"><TrendingUp size={16} /> Quality Scores</h2>
           <div className="space-y-3">
             {Object.entries(q).map(([key, pct]) => (
@@ -103,7 +104,7 @@ export default function MetricsPage() {
           </div>
         </motion.div>
 
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }} className="card p-5">
+        <motion.div variants={fadeIn} initial="initial" animate="animate" exit="exit" transition={{ delay: 0.3 }} className="card p-5">
           <h2 className="font-semibold text-sm text-card-foreground mb-4 flex items-center gap-2"><GitBranch size={16} /> Traceability</h2>
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-muted/50 rounded-lg p-3 text-center">
@@ -127,7 +128,7 @@ export default function MetricsPage() {
       </div>
 
       {risks && risks.total > 0 && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.31 }} className="card p-5 mt-6">
+        <motion.div variants={fadeIn} initial="initial" animate="animate" exit="exit" transition={{ delay: 0.31 }} className="card p-5 mt-6">
           <h2 className="font-semibold text-sm text-card-foreground mb-1 flex items-center gap-2">
             <Flame size={16} className="text-cs-red" /> Risk Profile
             <span className="text-xs font-normal text-muted-foreground">
@@ -248,7 +249,7 @@ export default function MetricsPage() {
       )}
 
       {bingo && bingo.total > 0 && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.315 }} className="card p-5 mt-6">
+        <motion.div variants={fadeIn} initial="initial" animate="animate" exit="exit" transition={{ delay: 0.315 }} className="card p-5 mt-6">
           <h2 className="font-semibold text-sm text-card-foreground mb-3 flex items-center gap-2">
             <Table size={16} className="text-cs-teal" /> Risk Bingo
             <span className="text-xs font-normal text-muted-foreground">
@@ -310,7 +311,7 @@ export default function MetricsPage() {
       )}
 
       {evaluation && (evaluation.requirements.length > 0 || evaluation.data_issues.length > 0) && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.32 }} className="card p-5 mt-6">
+        <motion.div variants={fadeIn} initial="initial" animate="animate" exit="exit" transition={{ delay: 0.32 }} className="card p-5 mt-6">
           <h2 className="font-semibold text-sm text-card-foreground mb-3 flex items-center gap-2">
             <Sigma size={16} className="text-cs-teal" /> Parametric Constraints
             <span className="text-xs font-normal text-muted-foreground">
@@ -377,7 +378,7 @@ export default function MetricsPage() {
       )}
 
       {pugh && pugh.columns.length > 0 && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.33 }} className="card p-5 mt-6">
+        <motion.div variants={fadeIn} initial="initial" animate="animate" exit="exit" transition={{ delay: 0.33 }} className="card p-5 mt-6">
           <h2 className="font-semibold text-sm text-card-foreground mb-1 flex items-center gap-2">
             <Table size={16} className="text-cs-teal" /> Pugh Matrix
             <span className="text-xs font-normal text-muted-foreground">
@@ -455,7 +456,7 @@ export default function MetricsPage() {
       )}
 
       {quality.length > 0 && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.35 }} className="card p-5 mt-6">
+        <motion.div variants={fadeIn} initial="initial" animate="animate" exit="exit" transition={{ delay: 0.35 }} className="card p-5 mt-6">
           <h2 className="font-semibold text-sm text-card-foreground mb-3 flex items-center gap-2"><Sparkles size={16} className="text-cs-purple" /> Requirement Quality ({qualityAvg}/100)</h2>
           <div className="space-y-2">
             {quality.slice(0, 10).map((q) => (
@@ -477,7 +478,7 @@ export default function MetricsPage() {
       )}
 
       {gaps.length > 0 && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }} className="card p-5 mt-6">
+        <motion.div variants={fadeIn} initial="initial" animate="animate" exit="exit" transition={{ delay: 0.4 }} className="card p-5 mt-6">
           <h2 className="font-semibold text-sm text-card-foreground mb-3 flex items-center gap-2"><AlertTriangle size={16} className="text-cs-amber" /> Gap Analysis ({gaps.length} issues)</h2>
           <div className="space-y-1.5">
             {gaps.slice(0, 10).map((g, i) => (
@@ -492,7 +493,7 @@ export default function MetricsPage() {
       )}
 
       {conflicts.count > 0 && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }} className="card p-5 mt-6">
+        <motion.div variants={fadeIn} initial="initial" animate="animate" exit="exit" transition={{ delay: 0.5 }} className="card p-5 mt-6">
           <h2 className="font-semibold text-sm text-card-foreground mb-3 flex items-center gap-2"><AlertTriangle size={16} className="text-cs-red" /> Conflicts ({conflicts.count})</h2>
           <div className="space-y-1.5">
             {conflicts.conflicts.map((c, i) => (

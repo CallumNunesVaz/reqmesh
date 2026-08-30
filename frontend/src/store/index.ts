@@ -36,6 +36,8 @@ interface AppState {
   /** A page with unsaved edits registers a guard here; navigators await it and
    *  abort when it resolves false (user chose to keep editing). Null = free. */
   navGuard: (() => boolean | Promise<boolean>) | null;
+  /** Whether the context pane (right sidebar) is open. */
+  contextOpen: boolean;
 
   setProjects: (projects: Project[]) => void;
   setCurrentProject: (project: Project | null) => void;
@@ -60,6 +62,7 @@ interface AppState {
    *  nobody had touched it. Saved views are already scoped per project
    *  (`rt-graph-views-<id>`); this brings the live state in line. */
   resetVisibility: () => void;
+  setContextOpen: (updater: boolean | ((prev: boolean) => boolean)) => void;
 }
 
 export const useStore = create<AppState>((set) => ({
@@ -75,6 +78,7 @@ export const useStore = create<AppState>((set) => ({
   hiddenBaselines: [],
   hiddenComponents: [],
   navGuard: null,
+  contextOpen: true,
 
   setProjects: (projects) => set({ projects }),
   setCurrentProject: (project) => set({ currentProject: project }),
@@ -106,4 +110,7 @@ export const useStore = create<AppState>((set) => ({
     return { hiddenComponents: [...s.hiddenComponents, id] };
   }),
   resetVisibility: () => set({ hiddenBaselines: [], hiddenComponents: [] }),
+  setContextOpen: (updater) => set((s) => ({
+    contextOpen: typeof updater === 'function' ? updater(s.contextOpen) : updater
+  })),
 }));

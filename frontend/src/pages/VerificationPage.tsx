@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { usePersistedState } from '../hooks/usePersistedState';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { expandHeight } from '../lib/animations';
 import { Plus, CheckCircle2, X, Link as LinkIcon, Loader, Search, UploadCloud, Copy } from 'lucide-react';
 import { api, type VerificationCase, type TestResultImportSummary } from '../api/client';
 import { useStore } from '../store';
@@ -251,9 +252,10 @@ export default function VerificationPage() {
       <AnimatePresence>
         {showCreate && (
           <motion.form
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
+            variants={expandHeight}
+            initial="initial"
+            animate="animate"
+            exit="exit"
             onSubmit={handleCreate}
             className="card p-4 mb-4 overflow-hidden"
           >
@@ -379,9 +381,10 @@ export default function VerificationPage() {
       <AnimatePresence>
         {showImport && (
           <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
+            variants={expandHeight}
+            initial="initial"
+            animate="animate"
+            exit="exit"
             className="overflow-hidden mb-4"
           >
             <div className="card p-5 border-2 border-primary/20">

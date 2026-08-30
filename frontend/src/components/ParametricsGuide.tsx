@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { expandHeight } from '../lib/animations';
 import { BookOpen, ChevronDown, ChevronRight, Sigma, FlaskConical, Layers, ArrowRightLeft, Ruler, Boxes } from 'lucide-react';
 import { useStore } from '../store';
 
@@ -120,7 +121,7 @@ export default function ParametricsGuide() {
 
       <AnimatePresence>
         {open && (
-          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+          <motion.div variants={expandHeight} initial="initial" animate="animate" exit="exit" className="overflow-hidden">
             <div className="mt-3 space-y-1.5 border-t border-cs-purple/10 pt-3">
               <p className="text-3xs text-muted-foreground/70 leading-relaxed mb-3">
                 You don't need to know SysML v2. This page explains the parametrics engine in plain terms.
@@ -143,7 +144,7 @@ export default function ParametricsGuide() {
 
                     <AnimatePresence>
                       {isExpanded && (
-                        <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+                        <motion.div variants={expandHeight} initial="initial" animate="animate" exit="exit" className="overflow-hidden">
                           <div className="space-y-1.5 ml-5 pl-3 border-l border-cs-purple/10 mb-1 mt-0.5">
                             {section.questions.map((item, qi) => (
                               <div key={qi}>

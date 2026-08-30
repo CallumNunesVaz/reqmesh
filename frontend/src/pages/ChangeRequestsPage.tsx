@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { usePersistedState } from '../hooks/usePersistedState';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { expandHeight, listItemSlide } from '../lib/animations';
 import { Plus, Trash2, GitPullRequest, Square, CheckSquare, X, Search, Play, Edit3, Ban } from 'lucide-react';
 import { api, type ChangeRequest, type Component, type CRRedline, type Project, type Requirement, CR_URGENCIES } from '../api/client';
 import { useAuthStore } from '../store/auth';
@@ -431,7 +432,7 @@ export default function ChangeRequestsPage() {
 
       <AnimatePresence>
         {showCreate && (
-          <motion.form initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+          <motion.form variants={expandHeight} initial="initial" animate="animate" exit="exit"
             onSubmit={handleCreate} className="card p-4 mb-4 overflow-hidden">
             <div className="flex items-end gap-3">
               <div className="w-32"><label className="label">ID <input className="input font-mono" placeholder="CR-001" value={form.id} onChange={e => setForm({...form, id: e.target.value})} /></label>{idExample && <span className="text-3xs text-muted-foreground">e.g. {idExample}</span>}</div>
@@ -489,7 +490,7 @@ export default function ChangeRequestsPage() {
         {filteredCRs.map((cr, i) => {
           const rl = redlines[cr.id];
           return (
-          <motion.div key={cr.id} id={`entity-${cr.id}`} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.03 }}
+          <motion.div key={cr.id} id={`entity-${cr.id}`} variants={listItemSlide} initial="initial" animate="animate" exit="exit" transition={{ delay: i * 0.03 }}
             className={`card rt-row p-4 hover:shadow-md transition-shadow group ${focusId === cr.id ? 'ring-2 ring-primary/50' : ''}`}>
             <div className="flex items-center gap-3">
               {canBulk && (

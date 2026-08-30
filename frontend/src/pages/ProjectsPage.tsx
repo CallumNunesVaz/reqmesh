@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { slideDown } from '../lib/animations';
 import Reveal from '../components/Reveal';
 import { FolderOpen, Plus, Trash2, WifiOff, LogIn } from 'lucide-react';
 import { api } from '../api/client';
@@ -92,8 +93,10 @@ export default function ProjectsPage() {
 
       {showCreate && (
         <motion.form
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
+          variants={slideDown}
+          initial="initial"
+          animate="animate"
+          exit="exit"
           onSubmit={handleCreate}
           className="card p-4 mb-6 flex items-end gap-3"
         >

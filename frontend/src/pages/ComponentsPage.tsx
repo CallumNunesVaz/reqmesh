@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { usePersistedState, setCodec } from '../hooks/usePersistedState';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { expandHeight } from '../lib/animations';
 import { Plus, ChevronRight, Boxes, Square, CheckSquare, Trash2, X, Search, Eye, EyeOff, Download, Copy } from 'lucide-react';
 import { api, COMPONENT_TYPES, getTruncationInfo, type Component, type ComponentTreeNode, type TruncationInfo } from '../api/client';
 import { useStore } from '../store';
@@ -534,7 +535,7 @@ export default function ComponentsPage() {
       <AnimatePresence>
         {showCreate && (
           <motion.form
-            initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+            variants={expandHeight} initial="initial" animate="animate" exit="exit"
             onSubmit={handleCreate}
             className="card p-4 mb-4 overflow-hidden"
           >

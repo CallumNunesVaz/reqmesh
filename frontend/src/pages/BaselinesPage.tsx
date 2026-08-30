@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useId } from 'react';
 import { usePersistedState, setCodec } from '../hooks/usePersistedState';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { expandHeight, slideUp } from '../lib/animations';
 import Reveal from '../components/Reveal';
 import { Plus, Trash2, Edit3, Check, X, Snowflake, GitBranch, Clock, Layers, ArrowRight, ChevronDown, ChevronUp, ChevronRight, Loader, Eye, EyeOff, Calendar, GripVertical } from 'lucide-react';
 import { api, type BaselineInfo, type BaselineDiff } from '../api/client';
@@ -422,9 +423,7 @@ export default function BaselinesPage() {
           <AnimatePresence>
             {expanded.has(b.name) && (
               <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
+                variants={expandHeight} initial="initial" animate="animate" exit="exit"
                 className="overflow-hidden"
               >
                 <div className="flex flex-wrap gap-1.5 mt-2">
@@ -460,9 +459,7 @@ export default function BaselinesPage() {
           <AnimatePresence>
             {expanded.has(b.name) && (
               <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
+                variants={expandHeight} initial="initial" animate="animate" exit="exit"
                 className="overflow-hidden"
               >
                 <div className="flex flex-wrap gap-1.5 mt-2">
@@ -534,9 +531,7 @@ export default function BaselinesPage() {
         <AnimatePresence>
           {showForm && (
             <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
+              variants={expandHeight} initial="initial" animate="animate" exit="exit"
               className="overflow-hidden"
             >
               <div className="card p-5 space-y-4 border-2 border-primary/20">
@@ -672,9 +667,7 @@ export default function BaselinesPage() {
         <AnimatePresence>
           {diffResult && (
             <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 10 }}
+              variants={slideUp} initial="initial" animate="animate" exit="exit"
               className="card p-5 border-l-2 border-l-cs-purple"
             >
               <div className="flex items-center justify-between mb-4">
