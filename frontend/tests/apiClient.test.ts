@@ -309,7 +309,7 @@ describe('truncation detection', () => {
   it('marks the collection truncated when total > items.length', async () => {
     stubFetch({ json: async () => ({ items: [{ id: 'R1' }], total: 5, offset: 0, limit: 2000 }) });
     await api.listRequirements('demo');
-    const info = getTruncationInfo('requirements');
+    const info = getTruncationInfo('demo', 'requirements');
     expect(info).not.toBeNull();
     expect(info!.shown).toBe(1);
     expect(info!.total).toBe(5);
@@ -319,14 +319,14 @@ describe('truncation detection', () => {
   it('does NOT mark truncated when total === items.length (small set)', async () => {
     stubFetch({ json: async () => ({ items: [{ id: 'R1' }, { id: 'R2' }], total: 2, offset: 0, limit: 2000 }) });
     await api.listRequirements('demo');
-    expect(getTruncationInfo('requirements')).toBeNull();
+    expect(getTruncationInfo('demo', 'requirements')).toBeNull();
   });
 
   it('does NOT mark truncated when total === items.length at exactly 2000', async () => {
     const twoThousand = Array.from({ length: 2000 }, (_, i) => ({ id: `R${i + 1}` }));
     stubFetch({ json: async () => ({ items: twoThousand, total: 2000, offset: 0, limit: 2000 }) });
     await api.listRequirements('demo');
-    expect(getTruncationInfo('requirements')).toBeNull();
+    expect(getTruncationInfo('demo', 'requirements')).toBeNull();
   });
 
   it('listRequirements still returns a plain array of items, unchanged', async () => {
@@ -340,22 +340,35 @@ describe('truncation detection', () => {
     // First call: truncated.
     stubFetch({ json: async () => ({ items: [{ id: 'R1' }], total: 5, offset: 0, limit: 2000 }) });
     await api.listRequirements('demo');
-    expect(getTruncationInfo('requirements')!.total).toBe(5);
+    expect(getTruncationInfo('demo', 'requirements')!.total).toBe(5);
 
     // Second call: not truncated.
     stubFetch({ json: async () => ({ items: [{ id: 'R1' }], total: 1, offset: 0, limit: 2000 }) });
     await api.listRequirements('demo');
-    expect(getTruncationInfo('requirements')).toBeNull();
+    expect(getTruncationInfo('demo', 'requirements')).toBeNull();
   });
 
   it('tracks components truncation independently', async () => {
     // Truncated components.
     stubFetch({ json: async () => ({ items: [{ id: 'C1' }], total: 5, offset: 0, limit: 2000 }) });
     await api.listComponents('demo');
-    expect(getTruncationInfo('components')).not.toBeNull();
+    expect(getTruncationInfo('demo', 'components')).not.toBeNull();
 
     // Requirements is independent — not affected by the component call.
-    expect(getTruncationInfo('requirements')).toBeNull();
+    expect(getTruncationInfo('demo', 'requirements')).toBeNull();
+  });
+
+  it('two projects do not clobber each other’s truncation info', async () => {
+    // Project A is truncated.
+    stubFetch({ json: async () => ({ items: [{ id: 'R1' }], total: 5, offset: 0, limit: 2000 }) });
+    await api.listRequirements('project-a');
+
+    // Project B is not truncated.
+    stubFetch({ json: async () => ({ items: [{ id: 'R1' }], total: 1, offset: 0, limit: 2000 }) });
+    await api.listRequirements('project-b');
+
+    expect(getTruncationInfo('project-a', 'requirements')!.total).toBe(5);
+    expect(getTruncationInfo('project-b', 'requirements')).toBeNull();
   });
 });
 

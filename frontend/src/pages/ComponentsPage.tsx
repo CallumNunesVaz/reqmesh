@@ -90,7 +90,7 @@ export default function ComponentsPage() {
   const load = () => {
     if (!projectId) return;
     Promise.all([api.listComponents(projectId), api.getComponentTree(projectId)])
-      .then(([list, t]) => { setComponents(list); setTree(t); setTruncation(getTruncationInfo('components')); })
+      .then(([list, t]) => { setComponents(list); setTree(t); setTruncation(getTruncationInfo(projectId, 'components')); })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   };
