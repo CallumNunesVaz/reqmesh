@@ -13,17 +13,18 @@ def _clear_rate_limit():
 
 def test_lockout_after_failed_attempts(workspace, monkeypatch):
     monkeypatch.setattr(settings, "lockout_max_attempts", 3)
+    monkeypatch.setattr(settings, "lockout_per_ip_max_attempts", 3)
     monkeypatch.setattr(settings, "lockout_window_minutes", 15)
     auth.register_user("bob", "GoodPass123!", "contributor")
 
-    for _ in range(3):
-        assert auth.authenticate("bob", "wrong")["status"] == "invalid"
-    # Now locked, even with the right password.
-    locked = auth.authenticate("bob", "GoodPass123!")
+    for i in range(3):
+        assert auth.authenticate("bob", "wrong", client_ip=f"203.0.113.{i + 1}")["status"] == "invalid"
+    # Three distinct sources: the account-level backstop is now tripped.
+    locked = auth.authenticate("bob", "GoodPass123!", client_ip="203.0.113.9")
     assert locked["status"] == "locked"
 
     assert auth.unlock_user("bob")
-    assert auth.authenticate("bob", "GoodPass123!")["status"] == "ok"
+    assert auth.authenticate("bob", "GoodPass123!", client_ip="203.0.113.9")["status"] == "ok"
 
 
 def test_disabled_account_cannot_login(workspace):

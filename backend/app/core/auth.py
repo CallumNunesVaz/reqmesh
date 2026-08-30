@@ -304,13 +304,85 @@ def decode_token(token: str) -> dict | None:
         return None
 
 
-def authenticate(username: str, password: str) -> dict:
+# Per-source failed-login accounting, keyed ``(client_ip, username)``.
+#
+# In-memory and per-process, exactly like the rate limiter in
+# `core/rate_limit.py`: it resets on restart, which is acceptable for a DoS
+# mitigation and is the same posture that module already documents. The
+# account-level counter (`failed_attempts` on the user record) stays persisted
+# and survives a restart; this dict only decides whether one more failure is a
+# *new* source for that counter and whether a single origin has tripped its own
+# `lockout_per_ip_max_attempts` limit. It is only ever read or written under
+# `users_lock()`, so it needs no lock of its own.
+_per_source_failures: dict[tuple[str, str], int] = {}
+
+
+def _clear_per_source_failures(username: str) -> None:
+    """Drop every per-source failure count for *username*.
+
+    Called wherever the account-level counter is reset (a successful login, the
+    moment the account locks, an admin unlock, a password reset) so the two
+    counters never disagree about how fresh the attack window is.
+    """
+    stale = [key for key in _per_source_failures if key[1] == username]
+    for key in stale:
+        del _per_source_failures[key]
+
+
+def _record_failed_login(username: str, client_ip: str | None, user: dict,
+                         users: dict, now: int) -> None:
+    """Account for one wrong password against *username* from *client_ip*.
+
+    Two counters, two jobs:
+
+    * **Per-source** (in-memory, keyed ``(client_ip, username)``): trips at
+      ``lockout_per_ip_max_attempts`` and refuses that one source without
+      touching the account, so a single origin cannot lock an account it does
+      not control.
+    * **Per-account** (``failed_attempts`` on the user record): the backstop for
+      genuinely distributed attempts. It counts *distinct* sources rather than
+      raw failures — it only rises once more than one origin is attacking — and
+      locks the account for everybody at ``lockout_max_attempts``.
+    """
+    from app.core.config import settings
+
+    src = client_ip or "unknown"
+    key = (src, username)
+    per_source = _per_source_failures.get(key, 0) + 1
+    _per_source_failures[key] = per_source
+
+    per_ip = int(settings.lockout_per_ip_max_attempts or 0)
+    if per_ip > 0 and per_source >= per_ip:
+        # This source has tripped its own limit: refuse it without feeding the
+        # account counter. The account stays usable from every other origin.
+        return
+
+    # Only the first failure from a source counts as a new source for the
+    # account-level backstop.
+    attempts = int(user.get("failed_attempts", 0))
+    if per_source == 1:
+        attempts += 1
+
+    max_attempts = int(settings.lockout_max_attempts or 0)
+    if max_attempts > 0 and attempts >= max_attempts:
+        user["locked_until"] = now + int(settings.lockout_window_minutes or 0) * 60
+        user["failed_attempts"] = 0
+        _clear_per_source_failures(username)
+    else:
+        user["failed_attempts"] = attempts
+    save_users(users)
+
+
+def authenticate(username: str, password: str, *, client_ip: str | None = None) -> dict:
     """Attempt a login. Returns a dict with a ``status`` of ``ok``, ``invalid``,
     ``disabled``, ``locked`` (with ``until``), or ``unverified``.
 
     Enforces account disable, failed-login lockout, and (when configured)
-    email-verification. On success the token carries the user's current
-    ``token_version`` so admin password resets / force-logouts invalidate it.
+    email-verification. ``client_ip`` is the resolved caller address (see
+    ``core.rate_limit._client_ip``) and feeds the per-source lockout; pass
+    ``None`` to group the attempt under the ``"unknown"`` source. On success the
+    token carries the user's current ``token_version`` so admin password resets
+    / force-logouts invalidate it.
     """
     with users_lock():
         from app.core.config import settings
@@ -339,14 +411,7 @@ def authenticate(username: str, password: str) -> dict:
             return {"status": "disabled"}
 
         if not verify_password(password, user["password_hash"]):
-            attempts = int(user.get("failed_attempts", 0)) + 1
-            max_attempts = int(settings.lockout_max_attempts or 0)
-            if max_attempts > 0 and attempts >= max_attempts:
-                user["locked_until"] = now + int(settings.lockout_window_minutes or 0) * 60
-                user["failed_attempts"] = 0
-            else:
-                user["failed_attempts"] = attempts
-            save_users(users)
+            _record_failed_login(username, client_ip, user, users, now)
             audit_logger.warning("Login failed: user=%s reason=invalid_password", username)
             return {"status": "invalid"}
 
@@ -357,6 +422,7 @@ def authenticate(username: str, password: str) -> dict:
 
         user["failed_attempts"] = 0
         user["locked_until"] = 0
+        _clear_per_source_failures(username)
         user["last_active"] = time.strftime("%Y-%m-%dT%H:%M:%SZ")
         # A successful login is the only moment the plaintext is legitimately in
         # hand, so it is where a hash written under an older work factor gets
@@ -524,6 +590,7 @@ def unlock_user(username: str) -> bool:
         users[username]["locked_until"] = 0
         users[username]["failed_attempts"] = 0
         save_users(users)
+        _clear_per_source_failures(username)
         return True
 
 
@@ -551,6 +618,7 @@ def set_user_password(username: str, password: str) -> bool:
         users[username]["failed_attempts"] = 0
         users[username]["password_change_required"] = False
         save_users(users)
+        _clear_per_source_failures(username)
         return True
 
 

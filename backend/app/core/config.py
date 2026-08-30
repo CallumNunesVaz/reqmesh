@@ -141,7 +141,11 @@ class Settings(BaseSettings):
     # Set Secure flag on auth cookies. Defaults to true in "team" and "hardened".
     cookie_secure: bool = True
     # Account lockout: lock for this many minutes after too many failed logins.
-    lockout_max_attempts: int = 5
+    # `lockout_per_ip_max_attempts` caps the failures any single source may make
+    # before it is refused (without locking the account for others);
+    # `lockout_max_attempts` is the multi-source backstop for distributed attempts.
+    lockout_max_attempts: int = 20
+    lockout_per_ip_max_attempts: int = 5
     lockout_window_minutes: int = 15
 
     # ── Rate limiting ─────────────────────────────────────────────────────
