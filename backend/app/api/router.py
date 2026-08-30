@@ -248,6 +248,7 @@ class ProjectSettings(BaseModel):
 from app.services.git_service import ALLOWED_REMOTE_SCHEMES as _ALLOWED_REMOTE_SCHEMES
 from app.services.git_service import REMOTE_SCHEME_ERROR as _REMOTE_SCHEME_ERROR
 from app.services.delete_guard import check_deletable
+from app.core.filelock import project_lock
 
 
 def _guard_git_settings(new_git: dict, existing_git: dict, user: dict) -> None:
@@ -609,10 +610,11 @@ def update_requirement(project_id: str, req_id: str, data: RequirementUpdate,
 @router.delete("/projects/{project_id}/requirements/{req_id}")
 def delete_requirement(project_id: str, req_id: str, force: bool = False, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
-    check_deletable(store, "requirements", req_id, force)
-    before = store.get_requirement(req_id)
-    if not store.delete_requirement(req_id):
-        raise HTTPException(status_code=404, detail="Requirement not found")
+    with project_lock(store.root):
+        check_deletable(store, "requirements", req_id, force)
+        before = store.get_requirement(req_id)
+        if not store.delete_requirement(req_id):
+            raise HTTPException(status_code=404, detail="Requirement not found")
     record_change(store, req_id, "delete", before, None, user.get("username", ""))
     return {"ok": True}
 
@@ -805,11 +807,12 @@ def update_specification(project_id: str, spec_id: str, data: SpecificationUpdat
     if before is None:
         raise HTTPException(status_code=404, detail="Specification not found")
     check_precondition(request, before)
-    reason = first_missing(store, [("requirements", data.requirements)])
-    if reason:
-        raise HTTPException(status_code=400, detail=reason)
     update_dict = data.model_dump(mode="json", exclude_unset=True)
-    result = store.update_specification(spec_id, update_dict)
+    with project_lock(store.root):
+        reason = first_missing(store, [("requirements", data.requirements)])
+        if reason:
+            raise HTTPException(status_code=400, detail=reason)
+        result = store.update_specification(spec_id, update_dict)
     if result is None:
         raise HTTPException(status_code=404, detail="Specification not found")
     record_change(store, spec_id, "update", before, result, user.get("username", ""))
@@ -819,10 +822,11 @@ def update_specification(project_id: str, spec_id: str, data: SpecificationUpdat
 @router.delete("/projects/{project_id}/specifications/{spec_id}")
 def delete_specification(project_id: str, spec_id: str, force: bool = False, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
-    check_deletable(store, "specifications", spec_id, force)
-    before = store.get_specification(spec_id)
-    if not store.delete_specification(spec_id):
-        raise HTTPException(status_code=404, detail="Specification not found")
+    with project_lock(store.root):
+        check_deletable(store, "specifications", spec_id, force)
+        before = store.get_specification(spec_id)
+        if not store.delete_specification(spec_id):
+            raise HTTPException(status_code=404, detail="Specification not found")
     record_change(store, spec_id, "delete", before, None, user.get("username", ""))
     return {"ok": True}
 
@@ -1305,10 +1309,11 @@ def update_definition(project_id: str, def_id: str, data: DefinitionUpdate,
 @router.delete("/projects/{project_id}/definitions/{def_id}")
 def delete_definition(project_id: str, def_id: str, force: bool = False, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
-    check_deletable(store, "definitions", def_id, force)
-    before = store.get_item("definitions", def_id)
-    if not store.delete_item("definitions", def_id):
-        raise HTTPException(status_code=404, detail="Definition not found")
+    with project_lock(store.root):
+        check_deletable(store, "definitions", def_id, force)
+        before = store.get_item("definitions", def_id)
+        if not store.delete_item("definitions", def_id):
+            raise HTTPException(status_code=404, detail="Definition not found")
     record_change(store, def_id, "delete", before, None, user.get("username", ""))
     return {"ok": True}
 
@@ -1368,10 +1373,11 @@ def update_analysis_case(project_id: str, case_id: str, data: AnalysisCaseUpdate
 @router.delete("/projects/{project_id}/analysis/{case_id}")
 def delete_analysis_case(project_id: str, case_id: str, force: bool = False, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
-    check_deletable(store, "analysis_cases", case_id, force)
-    before = store.get_item("analysis_cases", case_id)
-    if not store.delete_item("analysis_cases", case_id):
-        raise HTTPException(status_code=404, detail="Analysis case not found")
+    with project_lock(store.root):
+        check_deletable(store, "analysis_cases", case_id, force)
+        before = store.get_item("analysis_cases", case_id)
+        if not store.delete_item("analysis_cases", case_id):
+            raise HTTPException(status_code=404, detail="Analysis case not found")
     record_change(store, case_id, "delete", before, None, user.get("username", ""))
     return {"ok": True}
 
@@ -1444,10 +1450,11 @@ def update_verification_case(project_id: str, vc_id: str, data: VerificationCase
 @router.delete("/projects/{project_id}/verification/{vc_id}")
 def delete_verification_case(project_id: str, vc_id: str, force: bool = False, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
-    check_deletable(store, "verification_cases", vc_id, force)
-    before = store.get_verification_case(vc_id)
-    if not store.delete_verification_case(vc_id):
-        raise HTTPException(status_code=404, detail="Verification case not found")
+    with project_lock(store.root):
+        check_deletable(store, "verification_cases", vc_id, force)
+        before = store.get_verification_case(vc_id)
+        if not store.delete_verification_case(vc_id):
+            raise HTTPException(status_code=404, detail="Verification case not found")
     record_change(store, vc_id, "delete", before, None, user.get("username", ""))
     return {"ok": True}
 

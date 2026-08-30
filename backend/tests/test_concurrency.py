@@ -39,6 +39,27 @@ def _run_concurrently(fns):
     assert not errors, f"worker raised: {errors}"
 
 
+class Latch:
+    """One-shot rendezvous for interleaving two threads deterministically.
+
+    A thread that needs to pause at a chosen point calls ``release`` to tell the
+    other side it has arrived, then ``wait`` to block until the other side has
+    finished its interleaving and calls ``release``. ``wait`` fails the test
+    (rather than hanging) if the rendezvous never completes.
+    """
+
+    def __init__(self, name: str) -> None:
+        self._name = name
+        self._event = threading.Event()
+
+    def wait(self, timeout: float = 5.0) -> None:
+        if not self._event.wait(timeout=timeout):
+            raise AssertionError(f"latch {self._name!r} timed out after {timeout}s")
+
+    def release(self) -> None:
+        self._event.set()
+
+
 class TestUserStoreLocking:
     def test_concurrent_account_creation_loses_nobody(self, workspace):
         auth.load_users()  # materialise the file (and the default admin) first
