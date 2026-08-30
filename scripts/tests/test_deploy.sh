@@ -1022,4 +1022,13 @@ check "no git config --global remains" "$(grep -c 'git config --global' "$DF")" 
 check "requirements.txt drops slowapi and Jinja2" \
       "$(grep -cE 'slowapi|Jinja2' "$REQ")" "0"
 
+# ══════════════════════════════════════════════════════════════════════════════
+section "the documented systemd unit does not run as root"
+# ══════════════════════════════════════════════════════════════════════════════
+# A reader following DEPLOYMENT.md by hand gets a unit that ran the app as root,
+# while the installer's generated template runs it as an unprivileged user. Pin
+# the doc so it cannot silently drift back.
+check "DEPLOYMENT.md contains no User=root" \
+      "$(grep -c 'User=root' "$REPO/DEPLOYMENT.md")" "0"
+
 finish
