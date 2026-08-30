@@ -108,10 +108,13 @@ detect_os() {
     if [ -f /etc/os-release ]; then
         . /etc/os-release
         OS_ID="${ID}"
+        # shellcheck disable=SC2034  # set as detection state for scripts that source lib.sh
         OS_VERSION="${VERSION_ID:-}"
+        # shellcheck disable=SC2034  # set as detection state for scripts that source lib.sh
         OS_CODENAME="${VERSION_CODENAME:-}"
     elif [ "$(uname -s)" = "Darwin" ]; then
         OS_ID="macos"
+        # shellcheck disable=SC2034  # set as detection state for scripts that source lib.sh
         OS_VERSION="$(sw_vers -productVersion 2>/dev/null || echo 'unknown')"
     else
         OS_ID="unknown"
@@ -138,6 +141,7 @@ check_systemd() {
     if [ -d /run/systemd/system ] && has_cmd systemctl; then
         SYSTEMD_OK=true
     else
+        # shellcheck disable=SC2034  # set as detection state for scripts that source lib.sh
         SYSTEMD_OK=false
     fi
 }
@@ -150,7 +154,9 @@ install_docker() {
             sudo apt-get install -y docker-compose-plugin 2>/dev/null || true
         fi
         sudo usermod -aG docker "$USER" 2>/dev/null || true
+        # shellcheck disable=SC2034  # set as detection state for scripts that source lib.sh
         COMPOSE_CMD="docker compose"
+        # shellcheck disable=SC2034  # set as detection state for scripts that source lib.sh
         DOCKER_OK=true
     else
         error "Automatic Docker install not supported on $OS_ID. Install manually: https://docs.docker.com/engine/install/"
@@ -707,7 +713,7 @@ detect_deploy_mode() {
     # failed conversion leaves a compose file behind on a box whose systemd
     # service is still the thing actually serving traffic.
     if systemctl is-active --quiet reqmesh 2>/dev/null; then printf 'bare'; return 0; fi
-    if [ -n "$(${DOCKER[@]:-docker} ps -q --filter name=reqmesh 2>/dev/null)" ]; then
+    if [ -n "$("${DOCKER[@]:-docker}" ps -q --filter name=reqmesh 2>/dev/null)" ]; then
         printf 'docker'; return 0
     fi
     if [ -f /etc/systemd/system/reqmesh.service ]; then printf 'bare'; return 0; fi
@@ -780,7 +786,7 @@ live_evidence() {
         printf ' (reqmesh.service is active)'
     elif [ -f /etc/systemd/system/reqmesh.service ]; then
         printf ' (reqmesh.service is installed)'
-    elif [ -n "$(${DOCKER[@]:-docker} ps -q --filter name=reqmesh 2>/dev/null)" ]; then
+    elif [ -n "$("${DOCKER[@]:-docker}" ps -q --filter name=reqmesh 2>/dev/null)" ]; then
         printf ' (reqmesh containers are running)'
     elif [ -f "$dir/docker-compose.prod.yml" ]; then
         printf ' (a compose file is present)'
@@ -832,7 +838,7 @@ ensure_data_root() {
 port_holder() {
     local port="$1"
     local cname
-    cname="$(${DOCKER[@]:-docker} ps --format '{{.Names}} {{.Ports}}' 2>/dev/null \
+    cname="$("${DOCKER[@]:-docker}" ps --format '{{.Names}} {{.Ports}}' 2>/dev/null \
              | awk -v p=":$port->" '$0 ~ p {print $1; exit}')"
     if [ -n "$cname" ]; then
         printf 'the container %s' "$cname"
@@ -873,7 +879,7 @@ reqmesh_services() {
         echo "unit:caddy"
     fi
     local c
-    for c in $(${DOCKER[@]:-docker} ps --format '{{.Names}}' --filter 'name=reqmesh-' 2>/dev/null); do
+    for c in $("${DOCKER[@]:-docker}" ps --format '{{.Names}}' --filter 'name=reqmesh-' 2>/dev/null); do
         echo "container:$c"
     done
 }
@@ -886,7 +892,7 @@ port_is_ours() {
         [ -n "$svc" ] || continue
         case "$svc" in
             container:*)
-                ${DOCKER[@]:-docker} port "${svc#container:}" 2>/dev/null \
+                "${DOCKER[@]:-docker}" port "${svc#container:}" 2>/dev/null \
                     | grep -q ":${port}\$" && return 0
                 ;;
             unit:reqmesh) [ "$port" = "${CFG[PORT]:-8000}" ] && return 0 ;;
@@ -1620,7 +1626,7 @@ healthcheck() {
         local dc="${DOCKER[*]:-docker} compose -f ${CFG[COMPOSE_FILE]:-docker-compose.prod.yml}"
         echo ""
         echo "  Container state:"
-        ${DOCKER[@]:-docker} ps -a --filter 'name=reqmesh' \
+        "${DOCKER[@]:-docker}" ps -a --filter 'name=reqmesh' \
             --format '    {{.Names}}  {{.Status}}' 2>/dev/null || true
         echo ""
         echo "  Last 20 log lines:"
@@ -1630,7 +1636,7 @@ healthcheck() {
         # The container reporting healthy while this probe fails means the app
         # is up and the address is wrong — worth saying, because it sends the
         # reader to the proxy and the bind address instead of the app.
-        if ${DOCKER[@]:-docker} ps --filter 'name=reqmesh' --filter 'health=healthy' \
+        if "${DOCKER[@]:-docker}" ps --filter 'name=reqmesh' --filter 'health=healthy' \
              --format '{{.Names}}' 2>/dev/null | grep -q .; then
             warn "The container reports healthy — the app is running and this address is wrong."
             warn "Check the published port and RT_BIND rather than the application logs."

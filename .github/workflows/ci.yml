@@ -186,6 +186,30 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Static analysis on the installer scripts, the most security-sensitive
+      # code outside the app (run as root on a fresh host). Severity `warning`:
+      # `error` and `warning` are the levels that catch real defects (unquoted
+      # array expansion, dead variables); `info`/`style` are dominated by
+      # intentional idioms shellcheck only flags at low confidence (the test
+      # harness's `&& ok || bad`, single-quoted grep patterns, `source` of
+      # dynamically-located files), so they are deliberately out of scope.
+      # scripts/updater/watch.sh is POSIX sh and is linted as sh via its shebang.
+      # Pinned by version + SHA-256 rather than using the runner image's
+      # shellcheck: the runner's version changes with the image, and a linter
+      # bump that adds a new check would fail this job on an unrelated PR. Same
+      # pattern as the pinned tectonic in Dockerfile.prod.
+      - name: Install shellcheck
+        env:
+          SHELLCHECK_VERSION: v0.10.0
+          SHELLCHECK_SHA256: 6c881ab0698e4e6ea235245f22832860544f17ba386442fe7e9d629f8cbedf87
+        run: |
+          url="https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/shellcheck-${SHELLCHECK_VERSION}.linux.x86_64.tar.xz"
+          curl -fsSL "$url" -o /tmp/shellcheck.tar.xz
+          echo "${SHELLCHECK_SHA256}  /tmp/shellcheck.tar.xz" | sha256sum -c -
+          tar -xJf /tmp/shellcheck.tar.xz -C /tmp
+          sudo install -m 0755 "/tmp/shellcheck-${SHELLCHECK_VERSION}/shellcheck" /usr/local/bin/shellcheck
+          shellcheck --version
+      - run: shellcheck -S warning scripts/*.sh scripts/*/*.sh
       # Discover test_*.sh suites via run.sh — a hardcoded roster silently skips
       # a newly added suite (comment at scripts/tests/run.sh:19-21).
       - run: bash scripts/tests/run.sh
