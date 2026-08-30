@@ -99,14 +99,18 @@ jobs:
       # this gate exists to catch — so the desktop is audited in full, unlike the
       # frontend. `npm audit` reads the lockfile directly and needs no install.
       #
-      # Current findings: electron@31 (shipped runtime) and electron-builder@24's
-      # packaging toolchain (tar, extract-zip, js-yaml, brace-expansion) report
-      # 12 advisories (11 high, 1 critical). Clearing them is an electron 31->39
-      # and electron-builder 24->26 major bump — tracked separately, for the same
-      # reason the frontend's vite/vitest bumps are: a major bump needs its own
-      # verification, and gating releases on it would block shipping while the
-      # fix is not yet proven. The findings are surfaced here (npm prints them on
-      # every run); only a tool/network failure (exit >= 2) fails the job.
+      # Current findings: electron@39 + electron-builder@26 cleared 10 of the 12
+      # advisories this gate used to surface (was 11 high + 1 critical; the
+      # critical was node-tar in electron-builder@24's packaging toolchain). The
+      # two remaining findings are a single advisory: extract-zip
+      # (GHSA-jmr9-qjv8-65gv), which electron pulls in to unzip its downloaded
+      # binary at install time — a build-time tool, not part of the packaged
+      # runtime. extract-zip has no patched release (latest 2.0.1 is still
+      # flagged), so npm reports electron itself as affected through the
+      # dependency; the only fix is a further electron bump past 40
+      # (41.7.2+ / 42.3.4+ / 43.0.0+), which is out of this task's 31->39 scope.
+      # The findings are surfaced here (npm prints them on every run); only a
+      # tool/network failure (exit >= 2) fails the job.
       - run: |
           set +e
           npm audit --prefix desktop --audit-level=high
