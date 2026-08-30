@@ -235,6 +235,11 @@ def _patch_bundle(monkeypatch, inst):
     monkeypatch.setattr(bu, "bundle_update_supported", lambda: True)
     monkeypatch.setattr(bu, "get_version", lambda: "1.0.0")
     monkeypatch.setattr(updater, "create_backup", lambda fv: {"tag": "pre", "projects": ["p"]})
+    # These tests exercise staging/apply/rollback mechanics, not signature
+    # verification (which test_bundle_signature.py covers), so opt the unsigned
+    # test bundles in via the explicit SEC-9 escape hatch.
+    monkeypatch.setattr(settings, "update_public_key", "")
+    monkeypatch.setattr(settings, "update_allow_unsigned", True)
 
 
 def test_bundle_stage_and_apply(tmp_path, monkeypatch):

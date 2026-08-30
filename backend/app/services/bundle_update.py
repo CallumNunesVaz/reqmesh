@@ -186,17 +186,26 @@ def verify_bundle_signature(archive: Path, signature: Path | None) -> None:
     """Verify the Ed25519 detached signature over the bundle archive bytes.
 
     Raises ``RuntimeError`` on any failure. With ``settings.update_public_key``
-    unset the signature is not checked — unsigned bundles remain accepted, with
-    a single prominent SEC-9 warning logged — so existing deployments keep
-    working until an operator configures a key.
+    unset the signature cannot be checked, so the update is refused — the one
+    explicit opt-out is ``RT_UPDATE_ALLOW_UNSIGNED=1``, which restores the old
+    accept-unsigned behaviour and still logs the SEC-9 warning.
     """
     key_b64 = settings.update_public_key
     if not key_b64:
-        logger.warning(
-            "SEC-9: update bundle signing is not enabled (RT_UPDATE_PUBLIC_KEY is "
-            "unset) — accepting an unsigned bundle."
+        if settings.update_allow_unsigned:
+            logger.warning(
+                "SEC-9: update bundle signing is not enabled (RT_UPDATE_PUBLIC_KEY "
+                "is unset) — accepting an unsigned bundle because "
+                "RT_UPDATE_ALLOW_UNSIGNED=1."
+            )
+            return
+        raise RuntimeError(
+            "Signed updates are required, but RT_UPDATE_PUBLIC_KEY is not set. "
+            "Set RT_UPDATE_PUBLIC_KEY to the Ed25519 public key published with "
+            "each release (the reqmesh-vX.Y.Z.pub asset on the GitHub release, "
+            "and in SECURITY.md), or set RT_UPDATE_ALLOW_UNSIGNED=1 to explicitly "
+            "accept unsigned bundles."
         )
-        return
 
     if signature is None:
         raise RuntimeError(

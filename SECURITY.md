@@ -94,6 +94,23 @@ At the time of writing the `view` gate is enforced on a single route
 (`GET /projects/{project_id}/publish/download`); gating the rest of the read
 surface is tracked follow-up work.
 
+## Software update authenticity
+
+Self-updates are verified end to end so a compromised release account or
+container registry is not arbitrary code execution on every self-updating
+instance:
+
+- **Update bundles** (`reqmesh-vX.Y.Z.tar.gz`) carry a detached Ed25519
+  signature. The public key is published with every release as the
+  `reqmesh-vX.Y.Z.pub` asset and set on the instance as `RT_UPDATE_PUBLIC_KEY`
+  (base64 of the raw 32-byte key). With the key unset an instance **refuses**
+  unsigned updates; `RT_UPDATE_ALLOW_UNSIGNED=1` is the explicit, logged opt-out.
+- **Container images** are signed keylessly with cosign, tied to the release
+  workflow's OIDC identity (`release.yml@refs/tags/vX.Y.Z`, issuer
+  `https://token.actions.githubusercontent.com`). The updater sidecar resolves
+  the requested tag to a digest, verifies that signature, and pulls **by digest**
+  — never a mutable tag.
+
 ## Supported Versions
 
 | Version | Supported |

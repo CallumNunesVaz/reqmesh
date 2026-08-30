@@ -43,6 +43,13 @@ _STATUS_FILE = "update-status.json"
 _TARGET_FILE = "update-target"  # plain version string; the sidecar's trigger
 _MODE_FILE = "update-mode"      # "pull" (from registry) or "image" (uploaded archive)
 _IMAGE_FILE = "update-image.tar"  # uploaded Docker image archive staged for the sidecar
+_IDENTITY_FILE = "update-cosign-identity"  # expected OIDC identity for cosign keyless
+_ISSUER_FILE = "update-cosign-issuer"      # expected OIDC issuer for cosign keyless
+
+#: OIDC issuer GitHub Actions signs with under keyless (cosign) signing. Constant
+#: for every repo; only the identity (which names this repo's release workflow
+#: and the pushed tag) varies.
+_COSIGN_OIDC_ISSUER = "https://token.actions.githubusercontent.com"
 
 # Cached GitHub check: (timestamp, payload)
 _check_cache: tuple[float, dict] | None = None
@@ -255,6 +262,16 @@ def request_update(target_version: str, requested_by: str) -> dict:
     backup = create_backup(current)
 
     image = f"ghcr.io/{settings.github_repo.lower()}:{target_version}"
+    # The sidecar verifies the pulled image's keyless (cosign) signature against
+    # the OIDC identity of *this repo's* release workflow running on the pushed
+    # tag. Passed through the control dir rather than hardcoded in the sidecar so
+    # a fork/deploy that changes RT_GITHUB_REPO still verifies against the right
+    # workflow — a `cosign verify` with no identity constraint would accept
+    # "something signed it", which is not a control.
+    identity = (
+        f"https://github.com/{settings.github_repo}/.github/workflows/"
+        f"release.yml@refs/tags/v{target_version}"
+    )
     request = {
         "target_version": target_version,
         "image": image,
@@ -262,6 +279,8 @@ def request_update(target_version: str, requested_by: str) -> dict:
         "requested_by": requested_by,
         "requested_at": _now_iso(),
         "backup": backup,
+        "cosign": {"certificate_identity": identity,
+                   "certificate_oidc_issuer": _COSIGN_OIDC_ISSUER},
     }
     control = _control_dir()
     # Seed a status the UI can read immediately; the sidecar overwrites it.
@@ -271,6 +290,8 @@ def request_update(target_version: str, requested_by: str) -> dict:
     })
     _write_json_atomic(control / _REQUEST_FILE, request)
     (control / _MODE_FILE).write_text("pull\n")
+    (control / _IDENTITY_FILE).write_text(identity + "\n")
+    (control / _ISSUER_FILE).write_text(_COSIGN_OIDC_ISSUER + "\n")
     # Plain trigger the shell sidecar reads without parsing JSON. Written last so
     # the sidecar never sees a target before the request/status/mode are in place.
     (control / _TARGET_FILE).write_text(target_version + "\n")
@@ -359,7 +380,8 @@ def get_update_status() -> dict:
 def clear_update_state() -> None:
     """Reset the control files (e.g. to dismiss a completed/failed update)."""
     control = _control_dir()
-    for name in (_REQUEST_FILE, _STATUS_FILE, _TARGET_FILE, _MODE_FILE, _IMAGE_FILE):
+    for name in (_REQUEST_FILE, _STATUS_FILE, _TARGET_FILE, _MODE_FILE, _IMAGE_FILE,
+                 _IDENTITY_FILE, _ISSUER_FILE):
         try:
             (control / name).unlink()
         except OSError:

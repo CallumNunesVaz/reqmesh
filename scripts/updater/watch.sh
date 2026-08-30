@@ -4,9 +4,10 @@
 #
 # Runs in a minimal container that holds the Docker socket (which the main app
 # container deliberately does NOT). It watches a control directory shared with
-# the app; when the app writes an `update-target` file, this pulls the requested
-# ghcr.io image tag and recreates the reqmesh service, then reports status back
-# through the same directory.
+# the app; when the app writes an `update-target` file, this resolves the
+# requested ghcr.io image tag to a digest, verifies its cosign (keyless/OIDC)
+# signature, pulls by digest, and recreates the reqmesh service, then reports
+# status back through the same directory.
 #
 # Expected mounts/env (see docker-compose.prod.yml, `updater` service):
 #   /var/run/docker.sock   the Docker socket
@@ -23,12 +24,19 @@ POLL_SECONDS="${POLL_SECONDS:-5}"
 HEALTH_TIMEOUT_SECONDS="${HEALTH_TIMEOUT_SECONDS:-180}"
 HEALTH_POLL_SECONDS="${HEALTH_POLL_SECONDS:-5}"
 IMAGE_REPO="${IMAGE_REPO:-ghcr.io/callumnunesvaz/reqmesh}"
+# Pinned cosign (used to verify the image signature). The binary is fetched from
+# the official release with a recorded SHA-256, the same values the release
+# workflow signs with. x86_64 only, matching Dockerfile.prod's tectonic build.
+COSIGN_VERSION="${COSIGN_VERSION:-v2.5.0}"
+COSIGN_SHA256="${COSIGN_SHA256:-1f6c194dd0891eb345b436bb71ff9f996768355f5e0ce02dde88567029ac2188}"
 
 TARGET_FILE="$CONTROL_DIR/update-target"
 MODE_FILE="$CONTROL_DIR/update-mode"
 IMAGE_FILE="$CONTROL_DIR/update-image.tar"
 STATUS_FILE="$CONTROL_DIR/update-status.json"
 VERSION_ENV="$CONTROL_DIR/version.env"
+IDENTITY_FILE="$CONTROL_DIR/update-cosign-identity"
+ISSUER_FILE="$CONTROL_DIR/update-cosign-issuer"
 
 now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 
@@ -103,6 +111,26 @@ await_healthy() {
   fi
 }
 
+ensure_cosign() {
+  # cosign is not in the docker:27-cli sidecar image. Fetch the pinned official
+  # binary (URL + SHA-256 recorded) on demand so signature verification is never
+  # silently skipped: a missing or checksum-failed tool must fail the update,
+  # not pass it. Only the pull path calls this — the offline `docker load` path
+  # never reaches it, so an air-gapped sidecar still works.
+  if command -v cosign >/dev/null 2>&1; then
+    return 0
+  fi
+  url="https://github.com/sigstore/cosign/releases/download/${COSIGN_VERSION}/cosign-linux-amd64"
+  if wget -q -O /tmp/cosign "$url" \
+      && printf '%s  %s\n' "$COSIGN_SHA256" "/tmp/cosign" | sha256sum -c - >/dev/null 2>&1; then
+    chmod +x /tmp/cosign
+    mv /tmp/cosign /usr/local/bin/cosign
+    return 0
+  fi
+  rm -f /tmp/cosign
+  return 1
+}
+
 handle_pull() {
   # $1 = target version
   target="$1"
@@ -110,15 +138,65 @@ handle_pull() {
   echo "[updater] pulling reqmesh $target"
   write_status in_progress "Pulling image for $target." "$target"
   echo "REQMESH_VERSION=$target" > "$VERSION_ENV"
-  if compose pull reqmesh; then
-    write_status in_progress "Recreating the app on $target." "$target"
-    if compose up -d reqmesh; then
-      await_healthy "$target" "$previous"
-    else
-      write_status failed "Failed to recreate the container." "$target"
-    fi
+
+  if ! ensure_cosign; then
+    write_status failed "cosign is unavailable and could not be installed; refusing to pull an unverified image." "$target"
+    return
+  fi
+
+  # Resolve the mutable tag to an immutable digest, then verify its keyless
+  # (cosign/OIDC) signature before anything is pulled. A `cosign verify` with no
+  # identity constraint would only prove *something* signed it, so the identity
+  # and issuer are required and come from the app's update request.
+  image_tag="$IMAGE_REPO:$target"
+  # `cosign triangulate` (there is no `cosign resolve`) prints where cosign
+  # stores the signature — `<repo>:sha256-<hex>.sig` — and the hex is the tag's
+  # current digest. Extract it, then pull exactly that digest once it verifies.
+  sig_ref="$(cosign triangulate "$image_tag" 2>/dev/null || true)"
+  case "$sig_ref" in
+    *:sha256-*.sig) ;;
+    *)
+      write_status failed "Could not resolve $image_tag to a digest." "$target"
+      return
+      ;;
+  esac
+  digest="${sig_ref##*:}"     # "sha256-<hex>.sig"
+  digest="${digest#sha256-}"  # "<hex>.sig"
+  digest="${digest%.sig}"     # "<hex>"
+  digest="sha256:$digest"
+
+  identity=""
+  [ -f "$IDENTITY_FILE" ] && identity="$(head -n1 "$IDENTITY_FILE" | tr -d ' \t\r\n')"
+  issuer=""
+  [ -f "$ISSUER_FILE" ] && issuer="$(head -n1 "$ISSUER_FILE" | tr -d ' \t\r\n')"
+  if [ -z "$identity" ] || [ -z "$issuer" ]; then
+    write_status failed "Refusing to verify without a cosign identity/issuer (the app did not supply them)." "$target"
+    return
+  fi
+
+  if ! cosign verify \
+      --certificate-identity "$identity" \
+      --certificate-oidc-issuer "$issuer" \
+      "$IMAGE_REPO@$digest" >/dev/null 2>&1; then
+    write_status failed "cosign signature verification failed for $IMAGE_REPO@$digest." "$target"
+    return
+  fi
+  echo "[updater] verified $IMAGE_REPO@$digest; pulling by digest"
+
+  # Pull the verified, immutable digest and re-tag it to the version tag so the
+  # compose service resolves to the image we actually verified.
+  if docker pull "$IMAGE_REPO@$digest" >/dev/null 2>&1; then
+    docker tag "$IMAGE_REPO@$digest" "$image_tag"
   else
-    write_status failed "Failed to pull image for $target." "$target"
+    write_status failed "Failed to pull image $IMAGE_REPO@$digest." "$target"
+    return
+  fi
+
+  write_status in_progress "Recreating the app on $target." "$target"
+  if compose up -d reqmesh; then
+    await_healthy "$target" "$previous"
+  else
+    write_status failed "Failed to recreate the container." "$target"
   fi
 }
 

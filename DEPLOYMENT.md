@@ -350,7 +350,15 @@ docker compose -f docker-compose.prod.yml --profile self-update up -d
 
 The sidecar holds the Docker socket (the app container does not) and
 orchestrates image pulls and container recreation when an admin clicks
-"Update" in the app UI.
+"Update" in the app UI. Before pulling, the sidecar resolves the requested tag
+to a digest, verifies its cosign (keyless/OIDC) signature against the release
+workflow's identity, and pulls **by digest** — it refuses an image it cannot
+verify.
+
+Bare-metal bundle updates are verified the same way: set `RT_UPDATE_PUBLIC_KEY`
+to the base64 public key attached to each release (`reqmesh-vX.Y.Z.pub`). With
+the key unset, a bare-metal instance refuses unsigned bundles unless
+`RT_UPDATE_ALLOW_UNSIGNED=1` is set explicitly.
 
 #### Offline / Air-Gapped
 
@@ -572,5 +580,7 @@ and any `RT_*` value you set explicitly always wins over both.
 | `RT_UPDATE_CONTROL_DIR` | `/control` | Directory the app shares with the updater sidecar |
 | `RT_UPDATE_CHECK_TTL_SECONDS` | `3600` | How long update-check results are cached |
 | `RT_MAX_UPDATE_UPLOAD_MB` | `2048` | Size cap for uploaded update archives |
+| `RT_UPDATE_PUBLIC_KEY` | `""` | Base64 Ed25519 public key (the `reqmesh-vX.Y.Z.pub` release asset) used to verify uploaded update bundles. Empty (default) → unsigned bundles are **refused** |
+| `RT_UPDATE_ALLOW_UNSIGNED` | `false` | Explicit opt-out: accept unsigned update bundles when `RT_UPDATE_PUBLIC_KEY` is unset. A SEC-9 warning is still logged |
 | `RT_LOG_LEVEL` | `INFO` | Python log level |
 | `RT_DEBUG` | `false` | Show stack traces in error responses |
