@@ -14,7 +14,7 @@
 #
 set -uo pipefail
 
-cd "$(dirname "${BASH_SOURCE[0]}")"
+cd "$(dirname "${BASH_SOURCE[0]}")" || exit
 
 # Discovered, not listed. A hardcoded roster silently skips a newly added suite,
 # which is how test_deploy.sh sat in the directory passing nothing — the same
