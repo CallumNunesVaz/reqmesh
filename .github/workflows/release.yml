@@ -9,8 +9,9 @@ on:
       - "v*.*.*"
 
 permissions:
-  contents: write   # create releases
+  contents: write   # create releases + attach assets
   packages: write   # push to ghcr.io
+  id-token: write   # OIDC token for cosign keyless (keyless) image signing
 
 jobs:
   # Gate the release on the full CI suite.
@@ -67,11 +68,34 @@ jobs:
           git tag -l --format='%(contents)' "$GITHUB_REF_NAME" > RELEASE_NOTES.md
           cat RELEASE_NOTES.md
 
+      - name: Write Ed25519 signing key
+        env:
+          REQMESH_SIGNING_KEY: ${{ secrets.REQMESH_SIGNING_KEY }}
+        run: |
+          if [ -z "${REQMESH_SIGNING_KEY:-}" ]; then
+            echo "::error::REQMESH_SIGNING_KEY secret is not set — refusing to publish an unsigned bundle."
+            exit 1
+          fi
+          printf '%s\n' "$REQMESH_SIGNING_KEY" > signing-key.pem
+          chmod 600 signing-key.pem
+
       - name: Build bundle
         env:
           PYTHON: python
           RELEASE_NOTES_FILE: RELEASE_NOTES.md
+          # Ed25519 private key (PEM) from a repo secret. build_bundle.sh emits
+          # dist/reqmesh-vX.Y.Z.tar.gz.sig over the raw tarball bytes; the verify
+          # side checks it with RT_UPDATE_PUBLIC_KEY (the .pub asset below).
+          REQMESH_SIGNING_KEY: signing-key.pem
         run: bash scripts/build_bundle.sh
+
+      - name: Derive public key asset
+        run: |
+          VERSION="$(cat VERSION)"
+          # Ed25519 SubjectPublicKeyInfo is 12 bytes of DER header + the 32-byte
+          # raw key. RT_UPDATE_PUBLIC_KEY wants exactly those 32 bytes, base64.
+          openssl pkey -in signing-key.pem -pubout -outform DER \
+            | tail -c 32 | base64 -w0 > "dist/reqmesh-v${VERSION}.pub"
 
       - name: Publish GitHub Release
         env:
@@ -82,7 +106,9 @@ jobs:
             --title "reqmesh v${VERSION}" \
             --notes-file RELEASE_NOTES.md \
             "dist/reqmesh-v${VERSION}.tar.gz" \
-            "dist/reqmesh-v${VERSION}.tar.gz.sha256"
+            "dist/reqmesh-v${VERSION}.tar.gz.sha256" \
+            "dist/reqmesh-v${VERSION}.tar.gz.sig" \
+            "dist/reqmesh-v${VERSION}.pub"
 
   docker:
     name: Build & push Docker image
@@ -95,6 +121,18 @@ jobs:
       - name: Log in to ghcr.io
         run: echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
+      # cosign is not on the runner. Pin the binary by version + SHA-256 (the
+      # same values the updater sidecar uses), matching the tectonic pattern in
+      # Dockerfile.prod — rather than pulling an unpinned installer action.
+      - name: Install cosign
+        env:
+          COSIGN_VERSION: v2.5.0
+          COSIGN_SHA256: 1f6c194dd0891eb345b436bb71ff9f996768355f5e0ce02dde88567029ac2188
+        run: |
+          curl -fsSL "https://github.com/sigstore/cosign/releases/download/${COSIGN_VERSION}/cosign-linux-amd64" -o /usr/local/bin/cosign
+          echo "${COSIGN_SHA256}  /usr/local/bin/cosign" | sha256sum -c -
+          chmod +x /usr/local/bin/cosign
+
       - name: Build and push image
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
@@ -105,6 +143,38 @@ jobs:
             -t "$IMAGE:$VERSION" -t "$IMAGE:latest" .
           docker push "$IMAGE:$VERSION"
           docker push "$IMAGE:latest"
+          # Sign both tags keylessly. cosign derives the OIDC identity from this
+          # workflow's id-token — `https://github.com/<repo>/.github/workflows/
+          # release.yml@refs/tags/vX.Y.Z` — which is exactly the identity the
+          # updater sidecar requires. A signature with no identity constraint
+          # would prove only that *something* signed it, not that this release
+          # workflow did.
+          cosign sign --yes "$IMAGE:$VERSION"
+          cosign sign --yes "$IMAGE:latest"
+
+      # Publish an SPDX SBOM alongside the image (audit finding T7 / F-26).
+      # syft runs digest-pinned as a container, matching the trivy convention in
+      # security.yml. The SBOM is attached to the release below.
+      - name: Generate image SBOM
+        env:
+          SYFT: anchore/syft@sha256:95fe0835e5bebc6f8b1f8acef68d47d63d594ef4c0f25c097ff853b23cbac74c # v1.51.1
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          IMAGE="ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            "$SYFT" "$IMAGE:$VERSION" -o spdx-json \
+            > "reqmesh-v${VERSION}.sbom.spdx.json"
+
+      - name: Attach SBOM to the release
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          SBOM="reqmesh-v${VERSION}.sbom.spdx.json"
+          gh release upload "$GITHUB_REF_NAME" "$SBOM" --clobber \
+            || echo "::warning::Could not attach $SBOM; the image and release are still published."
 
       # The archive's size is logged because it is the one number that would
       # explain a later upload failure that the retry loop cannot absorb.

@@ -114,10 +114,24 @@ def test_unsigned_bundle_rejected_when_key_configured(tmp_path, monkeypatch):
     assert str(excinfo.value) == "Bundle is not signed, and this instance requires signed updates."
 
 
-def test_unsigned_bundle_accepted_without_key_logs_warning(tmp_path, monkeypatch, caplog):
+def test_unsigned_bundle_refused_without_key(tmp_path, monkeypatch):
     inst = _make_install(tmp_path)
     _patch_bundle(monkeypatch, inst)
     monkeypatch.setattr(settings, "update_public_key", "")
+    tarball = _make_bundle(tmp_path)
+
+    with pytest.raises(RuntimeError) as excinfo:
+        bu.stage_from_archive(tarball, "admin")
+    msg = str(excinfo.value)
+    assert "RT_UPDATE_PUBLIC_KEY" in msg
+    assert "RT_UPDATE_ALLOW_UNSIGNED" in msg
+
+
+def test_unsigned_bundle_accepted_with_allow_unsigned_logs_warning(tmp_path, monkeypatch, caplog):
+    inst = _make_install(tmp_path)
+    _patch_bundle(monkeypatch, inst)
+    monkeypatch.setattr(settings, "update_public_key", "")
+    monkeypatch.setattr(settings, "update_allow_unsigned", True)
     tarball = _make_bundle(tmp_path)
 
     with caplog.at_level(logging.WARNING, logger="app.services.bundle_update"):
