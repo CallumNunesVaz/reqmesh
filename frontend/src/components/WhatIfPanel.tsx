@@ -1,12 +1,14 @@
 import { useMemo, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Play, Pause, SkipBack, SkipForward, Check, RotateCcw, Loader2, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useWhatIf } from './WhatIfContext';
 import { VerdictBadge, MarginTag } from './parametrics';
 import { requirementVerdict } from '../lib/whatIfVerdict';
+import { listItemSlide } from '../lib/animations';
 import { useAuthStore } from '../store/auth';
 import { useToasts } from './Toast';
-import type { ImpactStepParam, ImpactStepConstraint, ConstraintStatus } from '../api/client';
+import type { ImpactStepParam, ImpactStepConstraint, ImpactStep, EvaluationData, ConstraintStatus } from '../api/client';
 
 // A stable "no roots yet" sentinel so `impact?.roots ?? EMPTY_ROOTS` does not
 // mint a fresh array on every render and churn the `rootLines` memo below.
@@ -58,6 +60,85 @@ function ConstraintStep({ step }: { step: ImpactStepConstraint }) {
           </span>
         )}
       </span>
+    </div>
+  );
+}
+
+export function WhatIfSteps({ steps, stepIndex, evaluation, rootOwners, onSelect, onKeyDown }: {
+  steps: ImpactStep[];
+  stepIndex: number;
+  /** `impact.evaluation`; when absent every verdict is `'unknown'`. */
+  evaluation?: EvaluationData;
+  /** Owner ids that the override was applied to, rendered in `text-cs-blue`. */
+  rootOwners: Set<string>;
+  onSelect: (index: number) => void;
+  onKeyDown: (e: React.KeyboardEvent) => void;
+}): JSX.Element {
+  return (
+    <div className="p-3 space-y-1.5">
+      <AnimatePresence initial={false}>
+        {steps.slice(0, stepIndex + 1).map((step, i) => {
+          const v = evaluation ? requirementVerdict(evaluation, step.owner) : 'unknown';
+          const verdictBorder = v === 'pass'
+            ? 'border-l-cs-green/70'
+            : v === 'fail'
+              ? 'border-l-cs-red/70'
+              : '';
+          const verdictBg = v === 'pass'
+            ? 'bg-cs-green/5'
+            : v === 'fail'
+              ? 'bg-cs-red/5'
+              : '';
+          return (
+            <motion.button
+              type="button"
+              key={`${step.kind}-${step.owner}-${i}`}
+              data-whatif-step={i}
+              layout
+              variants={listItemSlide}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              transition={{ duration: 0.15 }}
+              className={`p-2 w-full text-left rounded-md border transition-colors cursor-pointer border-l-2 ${verdictBorder} ${verdictBg} ${
+                i === stepIndex
+                  ? 'border-primary/60 bg-primary/5'
+                  : 'border-transparent hover:bg-accent'
+              }`}
+              onClick={() => onSelect(i)}
+              onKeyDown={onKeyDown}
+            >
+              <div className="flex items-center gap-1.5 mb-1">
+                {/* The verdict in words as well as colour. A tint alone is
+                    unreadable to anyone who cannot separate the hues, and
+                    this is the answer the whole panel exists to give. */}
+                {v !== 'unknown' && (
+                  <span className={`text-4xs font-semibold uppercase tracking-wider ${
+                    v === 'pass' ? 'text-cs-green' : 'text-cs-red'}`}>
+                    {v === 'pass' ? 'pass' : 'fail'}
+                  </span>
+                )}
+                <span className="text-4xs uppercase tracking-wider text-muted-foreground font-semibold">
+                  {step.kind === 'param' ? 'Param' : 'Constraint'}
+                </span>
+                <span className={`text-4xs font-mono ${rootOwners.has(step.owner) ? 'text-cs-blue' : 'text-muted-foreground'}`}>
+                  {step.owner}
+                </span>
+                {v !== 'unknown' && (
+                  <span className={`text-4xs font-semibold ml-auto ${v === 'pass' ? 'text-cs-green' : 'text-cs-red'}`}>
+                    {v === 'pass' ? 'pass' : 'fail'}
+                  </span>
+                )}
+              </div>
+              {step.kind === 'param' ? (
+                <ParamStep step={step} />
+              ) : (
+                <ConstraintStep step={step} />
+              )}
+            </motion.button>
+          );
+        })}
+      </AnimatePresence>
     </div>
   );
 }
@@ -241,62 +322,14 @@ export default function WhatIfPanel(): JSX.Element | null {
             </span>
           </div>
 
-          <div className="p-3 space-y-1.5">
-            {impact.steps.slice(0, stepIndex + 1).map((step, i) => {
-              const v = impact.evaluation ? requirementVerdict(impact.evaluation, step.owner) : 'unknown';
-              const verdictBorder = v === 'pass'
-                ? 'border-l-cs-green/70'
-                : v === 'fail'
-                  ? 'border-l-cs-red/70'
-                  : '';
-              const verdictBg = v === 'pass'
-                ? 'bg-cs-green/5'
-                : v === 'fail'
-                  ? 'bg-cs-red/5'
-                  : '';
-              return (
-              <button
-                type="button"
-                key={i}
-                className={`p-2 w-full text-left rounded-md border transition-colors cursor-pointer border-l-2 ${verdictBorder} ${verdictBg} ${
-                  i === stepIndex
-                    ? 'border-primary/60 bg-primary/5'
-                    : 'border-transparent hover:bg-accent'
-                }`}
-                onClick={() => { setStepIndex(i); setPlaying(false); }}
-                onKeyDown={handleKeyDown}
-              >
-                <div className="flex items-center gap-1.5 mb-1">
-                  {/* The verdict in words as well as colour. A tint alone is
-                      unreadable to anyone who cannot separate the hues, and
-                      this is the answer the whole panel exists to give. */}
-                  {v !== 'unknown' && (
-                    <span className={`text-4xs font-semibold uppercase tracking-wider ${
-                      v === 'pass' ? 'text-cs-green' : 'text-cs-red'}`}>
-                      {v === 'pass' ? 'pass' : 'fail'}
-                    </span>
-                  )}
-                  <span className="text-4xs uppercase tracking-wider text-muted-foreground font-semibold">
-                    {step.kind === 'param' ? 'Param' : 'Constraint'}
-                  </span>
-                  <span className={`text-4xs font-mono ${rootOwners.has(step.owner) ? 'text-cs-blue' : 'text-muted-foreground'}`}>
-                    {step.owner}
-                  </span>
-                  {v !== 'unknown' && (
-                    <span className={`text-4xs font-semibold ml-auto ${v === 'pass' ? 'text-cs-green' : 'text-cs-red'}`}>
-                      {v === 'pass' ? 'pass' : 'fail'}
-                    </span>
-                  )}
-                </div>
-                {step.kind === 'param' ? (
-                  <ParamStep step={step} />
-                ) : (
-                  <ConstraintStep step={step} />
-                )}
-              </button>
-              );
-            })}
-          </div>
+          <WhatIfSteps
+            steps={steps}
+            stepIndex={stepIndex}
+            evaluation={impact.evaluation}
+            rootOwners={rootOwners}
+            onSelect={(i) => { setStepIndex(i); setPlaying(false); }}
+            onKeyDown={handleKeyDown}
+          />
         </>
       )}
 
