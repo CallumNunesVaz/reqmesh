@@ -11,6 +11,7 @@ export COLLECTED_DIR; COLLECTED_DIR="$(mktemp -d)"
 trap 'rm -rf "$COLLECTED_DIR"' EXIT
 # shellcheck disable=SC1090
 source "$REPO/scripts/wizard.sh"
+# shellcheck disable=SC2034  # set for the sourced wizard.sh
 GUMMED=false
 clear() { :; }
 
@@ -49,6 +50,7 @@ section "declining self-registration writes no SELF_REG line"
 # prompt, so exactly three answers are consumed.
 CFG=()
 : > "$CONFIG_FILE"
+# shellcheck disable=SC2034  # CFG is read by p6_credentials (sourced wizard.sh)
 CFG[PROFILE]="team"
 printf '%s\n' "1" "1" "n" | p6_credentials >/dev/null 2>&1
 if cfg_has SELF_REG; then bad "declining self-registration must not write SELF_REG"; else ok "declining self-registration writes no SELF_REG line"; fi

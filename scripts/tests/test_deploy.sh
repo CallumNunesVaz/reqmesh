@@ -429,6 +429,7 @@ section "no invented password on an upgrade"
 # reported credential returned 401 and the original still returned 200.
 cred_for() {   # <existing_install>
     ( declare -A CFG=([INSTALL_DIR]="$TMP/cred" [ADMIN_PASSWORD]="pw" [EXISTING_INSTALL]="$1")
+      # shellcheck disable=SC2034  # fixture consumed by the sourced lib.sh
       INSTALL_DIR="$TMP/cred"
       mkdir -p "$TMP/cred"
       source "$REPO/scripts/lib.sh" >/dev/null 2>&1
@@ -482,6 +483,7 @@ check "it is mode 0600 (it can contain secrets)" "$(stat -c '%a' "$log" 2>/dev/n
 check "it captures output" "$(grep -c 'hello from the installer' "$log" 2>/dev/null)" "1"
 
 log2="$TMP/nolog.log"
+# shellcheck disable=SC2034  # fixtures consumed by the sourced lib.sh
 ( declare -A CFG=(); REQMESH_LOG="$log2" REQMESH_NO_LOG=1
   source "$REPO/scripts/lib.sh" >/dev/null 2>&1
   start_transcript ) >/dev/null 2>&1
@@ -743,6 +745,7 @@ check "the bare port check is fatal" \
 
 # TLS inferred from the URL the deployment was advertising — the only honest
 # signal when REQMESH_TLS was never written.
+# shellcheck disable=SC2034  # PREV_ENV read by lib.sh's prev_env after source
 tls_from() { ( declare -A CFG=() PREV_ENV=([RT_BASE_URL]="$1" [REQMESH_DOMAIN]="${2-}")
                source "$REPO/scripts/lib.sh" >/dev/null 2>&1; detect_tls ); }
 check "an http deployment stays http" "$(tls_from http://10.0.0.5:8000)" "none"
@@ -845,6 +848,7 @@ section "a domain is added, not swapped in"
 # the domain named https://<lan-ip> matched no site and returned nothing. While
 # DNS was wrong or a certificate pending, the deployment was reachable from
 # nowhere — the operator was locked out of their own box.
+# shellcheck disable=SC2034  # CFG/TEMPLATES_DIR read by lib.sh's render_caddyfile after source
 with_domain="$( declare -A CFG=([DOMAIN]=reqs.example.com [TLS]=letsencrypt [LAN_IP]=10.1.1.5)
                 TEMPLATES_DIR="$REPO/scripts/templates"
                 source "$REPO/scripts/lib.sh" >/dev/null 2>&1

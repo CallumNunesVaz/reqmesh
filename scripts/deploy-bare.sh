@@ -27,7 +27,6 @@ install_deps() {
     install_tectonic
 
     # Python 3.11+ check
-    local python="python3"
     # Test for the capability, not the binary. Ubuntu 24.04 ships python3 but
     # splits venv/ensurepip into python3-venv, so `has_cmd python3` succeeded,
     # this whole block was skipped, and the install died later with "The virtual
@@ -196,7 +195,6 @@ generate_configs() {
     local host="${CFG[HOST]:-127.0.0.1}"
     local port="${CFG[PORT]:-8000}"
     local domain="${CFG[DOMAIN]:-}"
-    local tls="${CFG[TLS]:-none}"
     local proxy="${CFG[PROXY]:-none}"
     local proxy_cidr="${CFG[PROXY_TRUSTED_CIDR]:-127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}"
 

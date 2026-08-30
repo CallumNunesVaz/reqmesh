@@ -526,8 +526,14 @@ main() {
     local args=() arg
     for arg in "$@"; do
         case "$arg" in
-            --debug|--verbose) REQMESH_DEBUG=1 ;;
-            --no-log)          REQMESH_NO_LOG=1 ;;
+            --debug|--verbose)
+                # shellcheck disable=SC2034  # read by lib.sh's logging (sourced above)
+                REQMESH_DEBUG=1
+                ;;
+            --no-log)
+                # shellcheck disable=SC2034  # read by lib.sh's logging (sourced above)
+                REQMESH_NO_LOG=1
+                ;;
             # An upgrade is a scripted run that is not allowed to reshape the
             # deployment, so it implies --non-interactive rather than adding a
             # second mode that would need its own copy of the same logic.
