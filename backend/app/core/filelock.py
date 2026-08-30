@@ -38,6 +38,21 @@ def _fallback_lock(target: Path) -> threading.Lock:
 
 
 @contextlib.contextmanager
+def project_lock(project_root: Path):
+    """Exclusive lock scoped to one project's directory tree.
+
+    The delete guard needs to serialise ``check_deletable`` (which reads whole
+    collections) against the removal of a single item, and no per-file lock can
+    cover a read that spans them all. Keyed by the project root rather than a
+    global constant so unrelated projects never serialise against each other;
+    reuses ``file_lock``'s hashing and its fcntl/threading fallback, so both
+    behaviours survive.
+    """
+    with file_lock(project_root):
+        yield
+
+
+@contextlib.contextmanager
 def file_lock(target: Path):
     """Best-effort exclusive lock guarding a read-modify-write on ``target``.
 

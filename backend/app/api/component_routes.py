@@ -21,6 +21,7 @@ from app.models.component import ComponentCreate, ComponentUpdate
 from app.services.yaml_store import YamlStore
 from app.services.history import record_change
 from app.services.delete_guard import check_deletable
+from app.core.filelock import project_lock
 from app.services.reparent import validate_component_parent
 from app.services.link_validation import first_missing
 from app.services.rename import rename_component
@@ -181,8 +182,10 @@ def create_component(project_id: str, data: ComponentCreate, user: dict = Depend
     if store.get_component(data.id):
         raise HTTPException(status_code=409, detail="Component already exists")
     _validate_parent(store, data.id, data.parent)
-    _validate_links(store, data.satisfies, data.verification_cases)
-    result = store.create_component(data.model_dump(mode="json"))
+    component = data.model_dump(mode="json")
+    with project_lock(store.root):
+        _validate_links(store, data.satisfies, data.verification_cases)
+        result = store.create_component(component)
     record_change(store, result["id"], "create", None, result, user.get("username", ""))
     return result
 
@@ -203,9 +206,9 @@ def update_component(
     update = data.model_dump(mode="json", exclude_unset=True)
     if "parent" in update:
         _validate_parent(store, component_id, update["parent"])
-    _validate_links(store, update.get("satisfies"), update.get("verification_cases"))
-
-    result = store.update_component(component_id, update)
+    with project_lock(store.root):
+        _validate_links(store, update.get("satisfies"), update.get("verification_cases"))
+        result = store.update_component(component_id, update)
     if result is None:
         raise HTTPException(status_code=404, detail="Component not found")
     record_change(store, component_id, "update", before, result, user.get("username", ""))
@@ -215,20 +218,21 @@ def update_component(
 @router.delete("/projects/{project_id}/components/{component_id}")
 def delete_component(project_id: str, component_id: str, force: bool = False, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
-    check_deletable(store, "components", component_id, force)
-    doomed = store.get_component(component_id)
-    if doomed is None:
-        raise HTTPException(status_code=404, detail="Component not found")
-
-    # Promote children to the removed component's parent. Orphaning them would
-    # leave a dangling `parent` and drop the whole branch out of /tree.
     promoted = []
-    for child in store.list_components():
-        if child.get("parent") == component_id:
-            store.update_component(child["id"], {"parent": doomed.get("parent")})
-            promoted.append(child["id"])
+    with project_lock(store.root):
+        check_deletable(store, "components", component_id, force)
+        doomed = store.get_component(component_id)
+        if doomed is None:
+            raise HTTPException(status_code=404, detail="Component not found")
 
-    store.delete_component(component_id)
+        # Promote children to the removed component's parent. Orphaning them would
+        # leave a dangling `parent` and drop the whole branch out of /tree.
+        for child in store.list_components():
+            if child.get("parent") == component_id:
+                store.update_component(child["id"], {"parent": doomed.get("parent")})
+                promoted.append(child["id"])
+
+        store.delete_component(component_id)
     record_change(store, component_id, "delete", doomed, None, user.get("username", ""))
     return {"ok": True, "promoted_children": promoted}
 

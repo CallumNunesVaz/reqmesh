@@ -28,6 +28,7 @@ from app.models.risk import RiskCreate, RiskUpdate, CommentCreate, DecisionRecor
 from app.services.errors import error_envelope
 from app.services.history import record_change
 from app.services.delete_guard import check_deletable
+from app.core.filelock import project_lock
 from app.services.integrity import IntegrityChecker
 from app.services.git_hooks import install_hook, uninstall_hook
 from app.services.link_validation import first_missing
@@ -94,16 +95,17 @@ def create_change_request(project_id: str, data: ChangeRequestCreate, user: dict
     enforce_naming(store, "change_requests", data.id)
     if store.get_item("change_requests", data.id):
         raise HTTPException(status_code=409, detail="Change request already exists")
-    reason = first_missing(store, [("requirements", data.affected_requirements)],
-                           allowed=set(data.creates))
-    if reason:
-        raise HTTPException(status_code=400, detail=reason)
     cr = data.model_dump(mode="json")
     cr.setdefault("status", "submitted")
     cr.setdefault("submitted_by", user.get("username", ""))
     cr.setdefault("reviewed_by", "")
     cr.setdefault("approved_by", "")
-    result = store.create_item("change_requests", cr)
+    with project_lock(store.root):
+        reason = first_missing(store, [("requirements", data.affected_requirements)],
+                               allowed=set(data.creates))
+        if reason:
+            raise HTTPException(status_code=400, detail=reason)
+        result = store.create_item("change_requests", cr)
     record_change(store, result["id"], "create", None, result, user.get("username", ""))
     from app.services.email_service import notify_change_request, _safe_notify
     _safe_notify(notify_change_request, store, project_id, result["id"], "created", user.get("username", ""))
@@ -118,11 +120,13 @@ def update_change_request(project_id: str, cr_id: str, data: ChangeRequestUpdate
     if before is None:
         raise HTTPException(status_code=404, detail="Change request not found")
     check_precondition(request, before)
-    reason = first_missing(store, [("requirements", data.affected_requirements)],
-                           allowed=set(data.creates or []))
-    if reason:
-        raise HTTPException(status_code=400, detail=reason)
-    result = store.update_item("change_requests", cr_id, data.model_dump(mode="json", exclude_unset=True))
+    update = data.model_dump(mode="json", exclude_unset=True)
+    with project_lock(store.root):
+        reason = first_missing(store, [("requirements", data.affected_requirements)],
+                               allowed=set(data.creates or []))
+        if reason:
+            raise HTTPException(status_code=400, detail=reason)
+        result = store.update_item("change_requests", cr_id, update)
     if result is None:
         raise HTTPException(status_code=404, detail="Change request not found")
     record_change(store, cr_id, "update", before, result, user.get("username", ""))
@@ -134,10 +138,11 @@ def update_change_request(project_id: str, cr_id: str, data: ChangeRequestUpdate
 @router.delete("/projects/{project_id}/change-requests/{cr_id}")
 def delete_change_request(project_id: str, cr_id: str, force: bool = False, user: dict = Depends(require_edit)):
     store = get_store(project_id)
-    check_deletable(store, "change_requests", cr_id, force)
-    before = store.get_item("change_requests", cr_id)
-    if not store.delete_item("change_requests", cr_id):
-        raise HTTPException(status_code=404, detail="Change request not found")
+    with project_lock(store.root):
+        check_deletable(store, "change_requests", cr_id, force)
+        before = store.get_item("change_requests", cr_id)
+        if not store.delete_item("change_requests", cr_id):
+            raise HTTPException(status_code=404, detail="Change request not found")
     record_change(store, cr_id, "delete", before, None, user.get("username", ""))
     return {"ok": True}
 
@@ -349,10 +354,12 @@ def update_risk(project_id: str, risk_id: str, data: RiskUpdate,
     if before is None:
         raise HTTPException(status_code=404, detail="Risk not found")
     check_precondition(request, before)
-    reason = first_missing(store, [("requirements", data.linked_requirements)])
-    if reason:
-        raise HTTPException(status_code=400, detail=reason)
-    result = store.update_item("risks", risk_id, data.model_dump(mode="json", exclude_unset=True))
+    update = data.model_dump(mode="json", exclude_unset=True)
+    with project_lock(store.root):
+        reason = first_missing(store, [("requirements", data.linked_requirements)])
+        if reason:
+            raise HTTPException(status_code=400, detail=reason)
+        result = store.update_item("risks", risk_id, update)
     if result is None:
         raise HTTPException(status_code=404, detail="Risk not found")
     record_change(store, risk_id, "update", before, result, user.get("username", ""))
@@ -365,10 +372,11 @@ def update_risk(project_id: str, risk_id: str, data: RiskUpdate,
 @router.delete("/projects/{project_id}/risks/{risk_id}")
 def delete_risk(project_id: str, risk_id: str, force: bool = False, user: dict = Depends(require_edit)):
     store = get_store(project_id)
-    check_deletable(store, "risks", risk_id, force)
-    before = store.get_item("risks", risk_id)
-    if not store.delete_item("risks", risk_id):
-        raise HTTPException(status_code=404, detail="Risk not found")
+    with project_lock(store.root):
+        check_deletable(store, "risks", risk_id, force)
+        before = store.get_item("risks", risk_id)
+        if not store.delete_item("risks", risk_id):
+            raise HTTPException(status_code=404, detail="Risk not found")
     record_change(store, risk_id, "delete", before, None, user.get("username", ""))
     return {"ok": True}
 
@@ -465,16 +473,17 @@ def create_decision(project_id: str, data: DecisionRecordCreate, user: dict = De
     safe_id(data.id, "decision id")
     if store.get_item("decisions", data.id):
         raise HTTPException(status_code=409, detail="Decision already exists")
-    reason = first_missing(store, [("requirements", data.linked_requirements)])
-    if reason:
-        raise HTTPException(status_code=400, detail=reason)
     d = data.model_dump(mode="json")
     d.setdefault("rationale", "")
     d.setdefault("consequences", "")
     d.setdefault("linked_requirements", [])
     d.setdefault("status", "accepted")
     d.setdefault("decided_by", user.get("username", ""))
-    result = store.create_item("decisions", d)
+    with project_lock(store.root):
+        reason = first_missing(store, [("requirements", data.linked_requirements)])
+        if reason:
+            raise HTTPException(status_code=400, detail=reason)
+        result = store.create_item("decisions", d)
     record_change(store, result["id"], "create", None, result, user.get("username", ""))
     from app.services.email_service import notify_decision, _safe_notify
     _safe_notify(notify_decision, store, project_id, result["id"], "created", user.get("username", ""))
@@ -489,10 +498,12 @@ def update_decision(project_id: str, dec_id: str, data: DecisionRecordUpdate,
     if before is None:
         raise HTTPException(status_code=404, detail="Decision not found")
     check_precondition(request, before)
-    reason = first_missing(store, [("requirements", data.linked_requirements)])
-    if reason:
-        raise HTTPException(status_code=400, detail=reason)
-    result = store.update_item("decisions", dec_id, data.model_dump(mode="json", exclude_unset=True))
+    update = data.model_dump(mode="json", exclude_unset=True)
+    with project_lock(store.root):
+        reason = first_missing(store, [("requirements", data.linked_requirements)])
+        if reason:
+            raise HTTPException(status_code=400, detail=reason)
+        result = store.update_item("decisions", dec_id, update)
     if result is None:
         raise HTTPException(status_code=404, detail="Decision not found")
     record_change(store, dec_id, "update", before, result, user.get("username", ""))
@@ -504,10 +515,11 @@ def update_decision(project_id: str, dec_id: str, data: DecisionRecordUpdate,
 @router.delete("/projects/{project_id}/decisions/{dec_id}")
 def delete_decision(project_id: str, dec_id: str, force: bool = False, user: dict = Depends(require_edit)):
     store = get_store(project_id)
-    check_deletable(store, "decisions", dec_id, force)
-    before = store.get_item("decisions", dec_id)
-    if not store.delete_item("decisions", dec_id):
-        raise HTTPException(status_code=404, detail="Decision not found")
+    with project_lock(store.root):
+        check_deletable(store, "decisions", dec_id, force)
+        before = store.get_item("decisions", dec_id)
+        if not store.delete_item("decisions", dec_id):
+            raise HTTPException(status_code=404, detail="Decision not found")
     record_change(store, dec_id, "delete", before, None, user.get("username", ""))
     return {"ok": True}
 
