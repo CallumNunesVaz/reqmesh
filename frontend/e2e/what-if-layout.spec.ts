@@ -28,8 +28,27 @@ test.describe('what-if inline layout', () => {
     await expect(app.getByText('Parameters & Constraints')).toBeVisible();
 
     // No full-screen overlay inside the inspector.
-    const overlays = app.locator('main .absolute.inset-0');
-    await expect(overlays).toHaveCount(0);
+    //
+    // Measured, not matched by class name. This used to select
+    // `main .absolute.inset-0`, which is a proxy for "overlay" that catches any
+    // absolutely-positioned element filling *its own* container — a 20 px
+    // expression-highlight mirror inside a textarea wrapper trips it just as a
+    // full-pane overlay does. Ask the question the test actually means: is
+    // anything positioned out of flow covering most of `main`?
+    const overlays = await app.evaluate(() => {
+      const main = document.querySelector('main');
+      if (!main) return [];
+      const box = main.getBoundingClientRect();
+      return [...main.querySelectorAll('*')]
+        .filter((el) => {
+          const pos = getComputedStyle(el).position;
+          if (pos !== 'absolute' && pos !== 'fixed') return false;
+          const r = el.getBoundingClientRect();
+          return r.width >= box.width * 0.9 && r.height >= box.height * 0.9;
+        })
+        .map((el) => `${el.tagName.toLowerCase()}.${(el.className || '').toString().split(' ')[0]}`);
+    });
+    expect(overlays).toEqual([]);
 
     // The results card height follows its content — no full-pane stretch.
     const geometry = await app.evaluate(() => {

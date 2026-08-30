@@ -1,4 +1,5 @@
 import { useEffect, useState, useId, useMemo, useRef } from 'react';
+import { motion } from 'framer-motion';
 import { Plus, X, Sigma, CheckCircle2, XCircle, HelpCircle, AlertTriangle, MinusCircle, FlaskConical, Ruler, Boxes, ArrowUp, ArrowDown, Beaker, Play, Pencil, Check, Lock } from 'lucide-react';
 import type {
   Parameter, Constraint, Definition,
@@ -60,6 +61,23 @@ export function MarginTag({ margin }: { margin: NonNullable<EvaluatedConstraint[
   );
 }
 
+/** Decorative gauge behind a constraint row, showing how close the margin is to
+ *  failing. Absolute and `aria-hidden` so it contributes no height and no
+ *  accessibility noise — `MarginTag`'s number stays the accessible answer. */
+export function MarginBar({ margin }: { margin: NonNullable<EvaluatedConstraint['margin']> }): JSX.Element | null {
+  if (margin.pct === undefined) return null;
+  const fill = Math.round(Math.min(Math.abs(margin.pct), 100));
+  return (
+    <div
+      data-margin-bar
+      data-margin-fill={fill}
+      aria-hidden="true"
+      className={`absolute inset-y-0 left-0 rounded-md pointer-events-none ${margin.value >= 0 ? 'bg-cs-green/10' : 'bg-cs-red/10'}`}
+      style={{ width: `${fill}%` }}
+    />
+  );
+}
+
 /** The `--cs-*` step per token class. Uses the theme tokens only — no raw hex
  *  and no literal palette classes — so the colours re-step for the light theme
  *  where literals would not. */
@@ -94,7 +112,7 @@ function Expr({ expr, className = '' }: { expr: string; className?: string }) {
  * ever valid in an expression), and while typing the identifier fragment under
  * the caret filters a fuzzy list of `refs`; picking one inserts at the caret.
  */
-function ExpressionField({ value, onChange, onSubmit, placeholder, className, refs }: {
+export function ExpressionField({ value, onChange, onSubmit, placeholder, className, refs }: {
   value: string;
   onChange: (next: string) => void;
   onSubmit?: () => void;
@@ -103,11 +121,13 @@ function ExpressionField({ value, onChange, onSubmit, placeholder, className, re
   refs: ParamReference[];
 }) {
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const mirrorRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [caret, setCaret] = useState(0);
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(0);
   const listboxId = useId();
+  const optionId = (i: number) => `${listboxId}-opt-${i}`;
 
   const fragment = identifierFragment(value, caret);
   const filtered = useMemo(() => filterReferences(refs, fragment), [refs, fragment]);
@@ -168,14 +188,31 @@ function ExpressionField({ value, onChange, onSubmit, placeholder, className, re
 
   return (
     <div ref={containerRef} className="relative min-w-0 flex-1">
+      <div
+        ref={mirrorRef}
+        data-expr-highlight
+        aria-hidden="true"
+        className={`${className ?? ''} absolute inset-0 pointer-events-none overflow-hidden whitespace-pre-wrap break-words`}
+      >
+        {tokenizeExpr(value).map((t, i) => (
+          <span key={i} className={EXPR_TOKEN_CLASS[t.kind] || undefined}>{t.text}</span>
+        ))}
+      </div>
+      {/* oxlint-disable jsx-a11y/prefer-tag-over-role -- a combobox textarea: no
+          native element reproduces a filterable expression suggestion list. */}
       <textarea
         ref={taRef}
         rows={1}
-        className={className}
+        className={`${className ?? ''} relative bg-transparent text-transparent caret-foreground placeholder:text-muted-foreground`}
         value={value}
         placeholder={placeholder}
         autoComplete="off"
         spellCheck={false}
+        role="combobox"
+        aria-autocomplete="list"
+        aria-expanded={show}
+        aria-controls={show ? listboxId : undefined}
+        aria-activedescendant={show ? optionId(highlight) : undefined}
         onChange={(e) => {
           onChange(e.target.value);
           setCaret(e.target.selectionStart ?? e.target.value.length);
@@ -186,7 +223,15 @@ function ExpressionField({ value, onChange, onSubmit, placeholder, className, re
         onKeyUp={(e) => setCaret((e.target as HTMLTextAreaElement).selectionStart ?? value.length)}
         onFocus={() => { if (fragment) setOpen(true); }}
         onKeyDown={onKeyDown}
+        onScroll={(e) => {
+          const mirror = mirrorRef.current;
+          if (!mirror) return;
+          const ta = e.target as HTMLTextAreaElement;
+          mirror.scrollTop = ta.scrollTop;
+          mirror.scrollLeft = ta.scrollLeft;
+        }}
       />
+      {/* oxlint-enable jsx-a11y/prefer-tag-over-role */}
       {show && (
         /* oxlint-disable jsx-a11y/prefer-tag-over-role -- a combobox popup: there
            is no native element that reproduces a filterable suggestion list. */
@@ -198,6 +243,7 @@ function ExpressionField({ value, onChange, onSubmit, placeholder, className, re
           {filtered.map((r, i) => (
             <div
               key={`${r.ref}-${i}`}
+              id={optionId(i)}
               data-ref-idx={i}
               role="option"
               aria-selected={i === highlight}
@@ -245,7 +291,7 @@ function ParameterEditRow({ original, refs, onSave, onCancel }: {
   };
 
   return (
-    <div data-param-edit={original.name} className="flex items-center gap-2 text-xs py-1.5 px-2 rounded-md bg-accent/40 ring-1 ring-primary/20">
+    <motion.div data-param-edit={original.name} layout className="flex items-center gap-2 text-xs py-1.5 px-2 rounded-md bg-accent/40 ring-1 ring-primary/20">
       <input
         id={nameId}
         className="input w-28 text-xs font-mono shrink-0"
@@ -284,7 +330,7 @@ function ParameterEditRow({ original, refs, onSave, onCancel }: {
       <button onClick={onCancel} className="text-muted-foreground hover:text-foreground shrink-0 p-1.5" title="Cancel">
         <X size={12} />
       </button>
-    </div>
+    </motion.div>
   );
 }
 
@@ -431,7 +477,7 @@ export function ParametricsCard({ reqId, parameters, constraints, evaluated, edi
             const origVal = whatIf?.base[ref];
             const whatIfOpenNow = whatIfOpen.has(ref);
             return (
-              <div key={`${p.name}-${i}`} data-param={p.name} className={`flex items-start gap-2 text-xs py-1.5 px-2 rounded-md hover:bg-accent group ${isOverridden ? 'ring-1 ring-dashed ring-cs-blue/50 bg-cs-blue/5' : ''}`}>
+              <motion.div key={`${p.name}-${i}`} data-param={p.name} layout className={`flex items-start gap-2 text-xs py-1.5 px-2 rounded-md hover:bg-accent group ${isOverridden ? 'ring-1 ring-dashed ring-cs-blue/50 bg-cs-blue/5' : ''}`}>
                 <span className="font-mono font-medium text-foreground w-28 shrink-0 truncate">{p.name}</span>
                 {p.expr || p.calc_def ? (
                   <span className="flex-1 min-w-0 break-words">
@@ -445,7 +491,7 @@ export function ParametricsCard({ reqId, parameters, constraints, evaluated, edi
                   <span className="flex-1 min-w-0">
                     {isOverridden ? (
                       <span className="flex items-center gap-1.5">
-                        <span className="font-mono text-muted-foreground line-through">{origVal}</span>
+                        <span data-override-baseline className="font-mono text-muted-foreground line-through">{origVal}</span>
                         <span className="text-4xs text-muted-foreground">→</span>
                         <span className="font-mono text-cs-blue font-semibold">{whatIf!.overrides[ref]}</span>
                       </span>
@@ -455,26 +501,40 @@ export function ParametricsCard({ reqId, parameters, constraints, evaluated, edi
                     {whatIf && isLiteral && (
                       <span className="inline-flex items-center gap-1 ml-1.5">
                         {whatIfOpenNow && (
-                          <input
-                            className="input w-20 text-xs font-mono py-0.5 px-1"
-                            type="number"
-                            step="any"
-                            value={whatIf.overrides[ref] ?? ''}
-                            placeholder={String(p.value ?? '')}
-                            onClick={(e) => e.stopPropagation()}
-                            onChange={(e) => {
-                              const n = parseFloat(e.target.value);
-                              if (!isNaN(n)) {
-                                whatIf.setOverride(ref, n, p.value ?? 0);
-                              }
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault();
-                                whatIf.evaluate();
-                              }
-                            }}
-                          />
+                          <>
+                            {/* The value being masked, so it stays readable while
+                                a replacement is typed. Only until the override is
+                                committed — from then on the `isOverridden` branch
+                                above already renders `original -> override`, and a
+                                second struck-through copy here is pure noise.
+                                `origVal` is `whatIf.base[ref]`, the true baseline;
+                                `p.value` only coincides with it today. */}
+                            {!isOverridden && (
+                              <span data-override-baseline className="font-mono text-muted-foreground line-through">
+                                {origVal ?? p.value}
+                              </span>
+                            )}
+                            <input
+                              className="input w-20 text-xs font-mono py-0.5 px-1"
+                              type="number"
+                              step="any"
+                              value={whatIf.overrides[ref] ?? ''}
+                              placeholder={String(p.value ?? '')}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => {
+                                const n = parseFloat(e.target.value);
+                                if (!isNaN(n)) {
+                                  whatIf.setOverride(ref, n, p.value ?? 0);
+                                }
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  whatIf.evaluate();
+                                }
+                              }}
+                            />
+                          </>
                         )}
                         <button
                           className={`shrink-0 ${whatIfOpenNow ? 'text-cs-blue' : 'text-muted-foreground hover:text-cs-blue'} transition-colors`}
@@ -524,7 +584,7 @@ export function ParametricsCard({ reqId, parameters, constraints, evaluated, edi
                     </button>
                   </span>
                 )}
-              </div>
+              </motion.div>
             );
           })}
         </div>
@@ -566,31 +626,34 @@ export function ParametricsCard({ reqId, parameters, constraints, evaluated, edi
             const ev = evaluated?.constraints?.[i];
             const mev = evaluated?.measured_constraints?.[i];
             return (
-              <div key={i} className="flex items-start gap-2 text-xs py-1.5 px-2 rounded-md hover:bg-accent group">
-                <div className="flex-1 min-w-0 break-words">
-                  <Expr expr={c.expr ?? ''} className="font-mono" />
-                  {c.assume && <span className="font-mono text-muted-foreground ml-2">{'when '}<Expr expr={c.assume} /></span>}
-                  {ev?.detail && <span className="text-muted-foreground ml-2">({ev.detail})</span>}
+              <div key={i} className="relative overflow-hidden flex items-start gap-2 text-xs py-1.5 px-2 rounded-md hover:bg-accent group">
+                {ev?.margin && <MarginBar margin={ev.margin} />}
+                <div className="relative flex items-start gap-2 flex-1 min-w-0">
+                  <div className="flex-1 min-w-0 break-words">
+                    <Expr expr={c.expr ?? ''} className="font-mono" />
+                    {c.assume && <span className="font-mono text-muted-foreground ml-2">{'when '}<Expr expr={c.assume} /></span>}
+                    {ev?.detail && <span className="text-muted-foreground ml-2">({ev.detail})</span>}
+                  </div>
+                  {ev?.margin && <MarginTag margin={ev.margin} />}
+                  {ev?.unit_warning && <UnitWarning message={ev.unit_warning} />}
+                  {ev && <VerdictBadge status={ev.status} />}
+                  {mev && mev.status !== ev?.status && <VerdictBadge status={mev.status} prefix="measured" />}
+                  {editable && (
+                    <span className="flex items-center gap-0.5">
+                      <button onClick={() => moveConstraintUp(i)} disabled={i === 0}
+                        className="text-muted-foreground hover:text-foreground disabled:opacity-25 opacity-0 group-hover:opacity-100 transition-[color,opacity]">
+                        <ArrowUp size={10} />
+                      </button>
+                      <button onClick={() => moveConstraintDown(i)} disabled={i >= constraints.length - 1}
+                        className="text-muted-foreground hover:text-foreground disabled:opacity-25 opacity-0 group-hover:opacity-100 transition-[color,opacity]">
+                        <ArrowDown size={10} />
+                      </button>
+                      <button onClick={() => removeConstraint(i)} className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-[color,opacity] ml-1">
+                        <X size={12} />
+                      </button>
+                    </span>
+                  )}
                 </div>
-                {ev?.margin && <MarginTag margin={ev.margin} />}
-                {ev?.unit_warning && <UnitWarning message={ev.unit_warning} />}
-                {ev && <VerdictBadge status={ev.status} />}
-                {mev && mev.status !== ev?.status && <VerdictBadge status={mev.status} prefix="measured" />}
-                {editable && (
-                  <span className="flex items-center gap-0.5">
-                    <button onClick={() => moveConstraintUp(i)} disabled={i === 0}
-                      className="text-muted-foreground hover:text-foreground disabled:opacity-25 opacity-0 group-hover:opacity-100 transition-[color,opacity]">
-                      <ArrowUp size={10} />
-                    </button>
-                    <button onClick={() => moveConstraintDown(i)} disabled={i >= constraints.length - 1}
-                      className="text-muted-foreground hover:text-foreground disabled:opacity-25 opacity-0 group-hover:opacity-100 transition-[color,opacity]">
-                      <ArrowDown size={10} />
-                    </button>
-                    <button onClick={() => removeConstraint(i)} className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-[color,opacity] ml-1">
-                      <X size={12} />
-                    </button>
-                  </span>
-                )}
               </div>
             );
           })}
@@ -721,7 +784,7 @@ export function ParameterEditor({ parameters, editable, onChange, id = '', refer
               );
             }
             return (
-              <div key={`${p.name}-${i}`} className="flex items-center gap-2 text-xs py-1 px-2 rounded-md hover:bg-accent group">
+              <motion.div key={`${p.name}-${i}`} layout className="flex items-center gap-2 text-xs py-1 px-2 rounded-md hover:bg-accent group">
                 <span className="font-mono font-medium text-foreground flex-1 truncate">{p.name}</span>
                 <span className="font-mono tabular-nums">{p.expr ? `= ${p.expr}` : p.value ?? '—'}</span>
                 <span className="text-muted-foreground w-10 truncate">{p.unit}</span>
@@ -743,7 +806,7 @@ export function ParameterEditor({ parameters, editable, onChange, id = '', refer
                     </button>
                   </span>
                 )}
-              </div>
+              </motion.div>
             );
           })}
         </div>
