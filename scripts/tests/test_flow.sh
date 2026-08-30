@@ -71,6 +71,7 @@ for n in p2_deploy_mode p3_proxy p4_domain p5_profile p6_credentials p7_integrat
     eval "$n() { VISITED=\"\$VISITED $n\"; }"
 done
 p9_review() { VISITED="$VISITED p9_review"; }
+# shellcheck disable=SC2034  # GUMMED is set for the sourced wizard.sh
 require_gum() { GUMMED=false; }
 detect_os() { :; }
 
@@ -81,6 +82,7 @@ check "normal run visits every phase once" \
     "$VISITED" " p2_deploy_mode p3_proxy p4_domain p5_profile p6_credentials p7_integrations p8_paths p9_review"
 
 # (b) Resume: p1 sets the flag; only the review must run.
+# shellcheck disable=SC2034  # RESUME_TO_REVIEW is set for the sourced wizard.sh
 p1_welcome() { RESUME_TO_REVIEW=true; }
 VISITED=""; run_wizard
 check "resume runs the review only" "$VISITED" " p9_review"
