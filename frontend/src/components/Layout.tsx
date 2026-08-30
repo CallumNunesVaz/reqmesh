@@ -21,6 +21,7 @@ import { useStore } from '../store';
 import { useListPosition } from '../hooks/useListPosition';
 import { useUndoStore } from '../store/undo';
 import { api, type PresenceUser } from '../api/client';
+import { SseBackoff } from '../lib/sseBackoff';
 import { WhatIfProvider } from './WhatIfContext';
 import WhatIfBar from './WhatIfBar';
 import { ToastProvider } from './Toast';
@@ -375,9 +376,11 @@ export default function Layout() {
     const url = `/api/projects/${projectId}/events?${params.toString()}`;
     let es: EventSource | null = null;
     let reconnectTimer: ReturnType<typeof setTimeout>;
+    const backoff = new SseBackoff();
 
     const connect = () => {
       es = new EventSource(url);
+      es.onopen = () => backoff.reset();
       es.addEventListener('change', () => {
         bumpGraphVersion();
         bumpDataVersion();
@@ -390,7 +393,7 @@ export default function Layout() {
       });
       es.onerror = () => {
         es?.close();
-        reconnectTimer = setTimeout(connect, 3000);
+        reconnectTimer = setTimeout(connect, backoff.nextDelayMs());
       };
     };
     connect();

@@ -373,11 +373,14 @@ export interface TruncationInfo {
 const _lastPageMeta: Record<string, TruncationInfo> = {};
 
 /** Read the truncation info recorded by the last `listRequirements` or
- *  `listComponents` call.  Returns `null` when the last call was not truncated. */
+ *  `listComponents` call for `projectId`.  Returns `null` when the last call
+ *  was not truncated.  Keyed by project *and* collection, so a second
+ *  project's fetch cannot clobber the first's truncation state. */
 export function getTruncationInfo(
+  projectId: string,
   collection: 'requirements' | 'components',
 ): TruncationInfo | null {
-  return _lastPageMeta[collection] ?? null;
+  return _lastPageMeta[`${projectId}:${collection}`] ?? null;
 }
 
 /** A typed numeric quantity; `expr` derives it, or a `calc_def` usage does. */
@@ -1194,9 +1197,9 @@ export const api = {
     // Record truncation info so the list page can show a warning without
     // changing the return signature that ~30 callers depend on.
     if (page.items.length < page.total) {
-      _lastPageMeta['requirements'] = { shown: page.items.length, total: page.total, collection: 'requirements' };
+      _lastPageMeta[`${projectId}:requirements`] = { shown: page.items.length, total: page.total, collection: 'requirements' };
     } else {
-      delete _lastPageMeta['requirements'];
+      delete _lastPageMeta[`${projectId}:requirements`];
     }
     return page.items;
   },
@@ -1215,9 +1218,9 @@ export const api = {
     // Record truncation info so the list page can show a warning without
     // changing the return signature that ~30 callers depend on.
     if (page.items.length < page.total) {
-      _lastPageMeta['components'] = { shown: page.items.length, total: page.total, collection: 'components' };
+      _lastPageMeta[`${projectId}:components`] = { shown: page.items.length, total: page.total, collection: 'components' };
     } else {
-      delete _lastPageMeta['components'];
+      delete _lastPageMeta[`${projectId}:components`];
     }
     return page.items;
   },

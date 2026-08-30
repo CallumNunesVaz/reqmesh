@@ -119,7 +119,7 @@ export default function RequirementsPage() {
   const load = () => {
     if (!projectId) return;
     api.listRequirements(projectId).then(setRequirements).catch(console.error)
-      .finally(() => { setLoading(false); setTruncation(getTruncationInfo('requirements')); });
+      .finally(() => { setLoading(false); setTruncation(getTruncationInfo(projectId, 'requirements')); });
     // Constraint verdicts, so a failing parametric bound is visible from the
     // list without opening each requirement.
     api.getEvaluation(projectId)
