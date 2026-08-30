@@ -1035,4 +1035,29 @@ section "the documented systemd unit does not run as root"
 check "DEPLOYMENT.md contains no User=root" \
       "$(grep -c 'User=root' "$REPO/DEPLOYMENT.md")" "0"
 
+# ══════════════════════════════════════════════════════════════════════════════
+section "watch.sh calls only real cosign subcommands"
+# ══════════════════════════════════════════════════════════════════════════════
+# `cosign resolve` is not a cosign subcommand, and a PATH stub that answered it
+# made watch.sh self-consistent but broken against the real binary. Assert every
+# subcommand the sidecar invokes is in the v2.5.0 command set. The pattern anchors
+# the two call sites — `$(cosign …)` and `! cosign …` — so the word "cosign"
+# inside a write_status message does not register as a subcommand.
+WATCH="$REPO/scripts/updater/watch.sh"
+KNOWN="attach attest attest-blob bundle clean completion copy dockerfile download env generate generate-key-pair import-key-pair initialize load login manifest piv-tool pkcs11-tool public-key save sign sign-blob tree triangulate trusted-root upload verify verify-attestation verify-blob verify-blob-attestation version"
+cosign_cmds="$(grep -oE '[(!][[:space:]]*cosign[[:space:]]+[a-z][a-z-]*' "$WATCH" \
+               | sed -E 's/.*cosign[[:space:]]+//' | sort -u)"
+check "the sidecar resolves a digest via triangulate" \
+      "$(printf '%s\n' "$cosign_cmds" | grep -c '^triangulate$')" "1"
+check "the sidecar verifies a signature via verify" \
+      "$(printf '%s\n' "$cosign_cmds" | grep -c '^verify$')" "1"
+unknown=""
+for c in $cosign_cmds; do
+    case " $KNOWN " in
+        *" $c "*) ;;
+        *) unknown="$unknown $c" ;;
+    esac
+done
+check "every cosign subcommand is in the v2.5.0 command set" "$unknown" ""
+
 finish

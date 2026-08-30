@@ -247,9 +247,14 @@ class Settings(BaseSettings):
     max_update_upload_mb: int = 2048
     # Base64-encoded raw Ed25519 public key (32 bytes) used to verify the
     # detached signature on uploaded update bundles. Empty (default) → unsigned
-    # bundles are still accepted, with a SEC-9 warning logged; set → a valid
-    # signature is mandatory.
+    # bundles are REFUSED (SEC-9), unless ``update_allow_unsigned`` is set; set →
+    # a valid signature is mandatory.
     update_public_key: str = ""
+    # Explicit opt-out from the mandatory-bundle-signature behaviour above. Only
+    # honoured when ``update_public_key`` is unset — a configured key always
+    # requires a valid signature. Setting this re-enables the pre-SEC-9-fix
+    # behaviour (accept unsigned bundles), and still logs the SEC-9 warning.
+    update_allow_unsigned: bool = False
 
     # ── Logging ───────────────────────────────────────────────────────────
     log_level: str = "INFO"
