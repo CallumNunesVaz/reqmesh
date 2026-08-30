@@ -171,7 +171,10 @@ jobs:
       - run: npm run build --prefix frontend
       # PyInstaller freezes the backend into desktop/backend/reqmesh-backend,
       # which electron-builder then copies into the app's resources.
-      - run: pip install -r backend/requirements.txt pyinstaller
+      # PyInstaller lives in its own hash-pinned file: requirements.txt's hashes
+      # put pip into --require-hashes mode, where an unpinned package named on
+      # the same command line is rejected outright.
+      - run: pip install -r backend/requirements.txt -r backend/requirements-desktop.txt
       - run: bash scripts/build_desktop_backend.sh
         env:
           PYTHON: python
