@@ -178,7 +178,11 @@ jobs:
       - run: bash scripts/build_desktop_backend.sh
         env:
           PYTHON: python
-      - run: npx electron-builder --linux dir
+      # AppImage, not `dir` — this is the exact target release.yml publishes, and
+      # a packaging path that only ever runs at release time is one CI cannot
+      # fail on. The AppImage build still emits release/linux-unpacked, which is
+      # what the boot check below launches.
+      - run: npx electron-builder --linux AppImage
         working-directory: desktop
       # The job is the test: boot the packaged app headless and wait for /health.
       - run: bash scripts/desktop_boot_check.sh

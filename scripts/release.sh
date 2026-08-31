@@ -10,9 +10,11 @@
 # publishes the GitHub Release, and pushes the Docker image to ghcr.io.
 #
 # Options:
-#   --dry-run     Do everything except commit/tag/push (leaves version files bumped).
-#   --no-push     Commit and tag locally but don't push.
-#   --no-verify   Skip the local bundle build smoke test.
+#   --dry-run          Do everything except commit/tag/push (leaves version files bumped).
+#   --no-push          Commit and tag locally but don't push.
+#   --no-verify        Skip the local bundle build smoke test.
+#   --notes-file FILE  Use FILE as the release notes verbatim, overriding both
+#                      CHANGELOG.md and the commit-log fallback.
 #
 set -euo pipefail
 
@@ -23,18 +25,20 @@ TARGET=""
 DRY_RUN=0
 NO_PUSH=0
 NO_VERIFY=0
-for arg in "$@"; do
-  case "$arg" in
-    --dry-run)   DRY_RUN=1 ;;
-    --no-push)   NO_PUSH=1 ;;
-    --no-verify) NO_VERIFY=1 ;;
-    -*)          echo "unknown option: $arg" >&2; exit 2 ;;
-    *)           TARGET="$arg" ;;
+NOTES_OVERRIDE=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --dry-run)    DRY_RUN=1; shift ;;
+    --no-push)    NO_PUSH=1; shift ;;
+    --no-verify)  NO_VERIFY=1; shift ;;
+    --notes-file) NOTES_OVERRIDE="${2:-}"; shift 2 ;;
+    -*)           echo "unknown option: $1" >&2; exit 2 ;;
+    *)            TARGET="$1"; shift ;;
   esac
 done
 
 if [ -z "$TARGET" ]; then
-  echo "usage: scripts/release.sh patch|minor|major|X.Y.Z [--dry-run] [--no-push] [--no-verify]" >&2
+  echo "usage: scripts/release.sh patch|minor|major|X.Y.Z [--dry-run] [--no-push] [--no-verify] [--notes-file FILE]" >&2
   exit 2
 fi
 
@@ -71,24 +75,22 @@ if git rev-parse "$TAG" >/dev/null 2>&1; then
   exit 1
 fi
 
-# ── Release notes: commits since the last tag ────────────────────────────────
-LAST_TAG="$(git describe --tags --abbrev=0 2>/dev/null || true)"
+# ── Release notes ────────────────────────────────────────────────────────────
+#
+# These are not just the tag message: updater.py serves the GitHub release body
+# to the System page, which renders it to anyone deciding whether to update. See
+# scripts/release_notes.sh for the source precedence (--notes-file, then
+# CHANGELOG.md's [Unreleased], then a grouped commit log).
 NOTES_FILE="$(mktemp)"
-{
-  echo "# reqmesh ${TAG}"
-  echo
-  if [ -n "$LAST_TAG" ]; then
-    echo "Changes since ${LAST_TAG}:"
-    echo
-    git log "${LAST_TAG}..HEAD" --pretty="- %s (%h)" --no-merges
-  else
-    echo "Initial tracked release."
-    echo
-    git log -20 --pretty="- %s (%h)" --no-merges
-  fi
-} > "$NOTES_FILE"
+if [ -n "$NOTES_OVERRIDE" ]; then
+  bash scripts/release_notes.sh "$TAG" --notes-file "$NOTES_OVERRIDE" > "$NOTES_FILE"
+else
+  bash scripts/release_notes.sh "$TAG" > "$NOTES_FILE"
+fi
 echo "==> Release notes:"
 sed 's/^/    /' "$NOTES_FILE"
+
+CHANGELOG_FILE="$ROOT/CHANGELOG.md"
 
 # ── Local smoke build ────────────────────────────────────────────────────────
 if [ "$NO_VERIFY" != "1" ]; then
@@ -104,7 +106,21 @@ if [ "$DRY_RUN" = "1" ]; then
 fi
 
 # ── Commit, tag, push ────────────────────────────────────────────────────────
+#
+# Retitle [Unreleased] as this version so the entry is dated and a fresh section
+# is open for the next cycle. After the dry-run exit above, so a dry run never
+# leaves a mutated CHANGELOG behind — and after the notes are read, since this
+# renames the very heading they come from. A no-op when the section is empty.
+if [ -f "$CHANGELOG_FILE" ] && [ -z "$NOTES_OVERRIDE" ]; then
+  bash scripts/release_notes.sh --promote "$NEW"
+fi
+
 git add "${VERSIONED_FILES[@]}"
+# Spelled as an `if` rather than `[ -f ] && git add` so the intent survives a
+# later `set -e` audit: the AND-list form is safe here but reads like a trap.
+if [ -f "$CHANGELOG_FILE" ]; then
+  git add "$CHANGELOG_FILE"
+fi
 git commit -m "release: ${TAG}"
 
 # A file set_version.py rewrote but release.sh failed to stage would ship a tag

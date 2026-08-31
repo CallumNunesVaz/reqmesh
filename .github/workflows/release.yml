@@ -110,6 +110,69 @@ jobs:
             "dist/reqmesh-v${VERSION}.tar.gz.sig" \
             "dist/reqmesh-v${VERSION}.pub"
 
+  desktop:
+    name: Package & attach desktop app
+    needs: bundle   # the release must exist before an asset can be attached
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      # Electron needs a display to boot; the smoke check below runs under xvfb,
+      # exactly as the CI desktop-package job does.
+      - run: sudo apt-get update && sudo apt-get install -y xvfb
+
+      - run: npm ci --prefix desktop
+      - run: npm ci --prefix frontend
+
+      # extraResources copies frontend/dist into the artifact, so the SPA has to
+      # be built before electron-builder runs.
+      - run: npm run build --prefix frontend
+
+      # PyInstaller lives in its own hash-pinned file: requirements.txt's hashes
+      # put pip into --require-hashes mode, where an unpinned package named on
+      # the same command line is rejected outright.
+      - run: pip install -r backend/requirements.txt -r backend/requirements-desktop.txt
+      - run: bash scripts/build_desktop_backend.sh
+        env:
+          PYTHON: python
+
+      - run: npx electron-builder --linux AppImage
+        working-directory: desktop
+
+      # Boot the packaged artifact before attaching it. CI already does this on
+      # every push, but the thing published here is a *different build* of it —
+      # attaching an AppImage nobody has launched is how a desktop app ships
+      # broken to the only users who cannot easily report why.
+      - run: bash scripts/desktop_boot_check.sh
+
+      - name: Attach AppImage to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="$(cat VERSION)"
+          SRC="$(find desktop/release -maxdepth 1 -name '*.AppImage' -print -quit)"
+          if [ -z "$SRC" ]; then
+            echo "::error::no AppImage found under desktop/release"
+            ls -la desktop/release || true
+            exit 1
+          fi
+          # Rename to the same reqmesh-vX.Y.Z-* convention as the other assets;
+          # electron-builder's default is "reqmesh-<version>.AppImage".
+          ASSET="reqmesh-v${VERSION}-linux-x86_64.AppImage"
+          mv "$SRC" "$ASSET"
+          sha256sum "$ASSET" > "${ASSET}.sha256"
+          ls -lh "$ASSET"
+          gh release upload "$GITHUB_REF_NAME" "$ASSET" "${ASSET}.sha256" --clobber
+
   docker:
     name: Build & push Docker image
     runs-on: ubuntu-latest
@@ -235,3 +298,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/prune_release_images.sh --keep=2
+
+      # The AppImage is ~157 MB per release and, unlike the server bundle, has
+      # no in-place updater that could want an older one — a desktop user
+      # re-downloads. Same keep-window as the image archives.
+      - name: Prune desktop AppImages from older releases
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/prune_release_images.sh --keep=2 --suffix=.AppImage

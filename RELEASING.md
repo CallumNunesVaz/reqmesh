@@ -8,12 +8,18 @@ deployment on a server. Each release ships:
 - deployment configs (`Dockerfile.prod`, `docker-compose.prod.yml`, `Caddyfile`, `nginx.conf`),
 - an `install.sh` and a `manifest.json` (version, git sha, build time, checksums).
 
-Two artifacts are produced per release:
+Three artifacts are produced per release:
 
 | Artifact | Where | Install with |
 |----------|-------|--------------|
 | `reqmesh-vX.Y.Z.tar.gz` | GitHub Release assets | unpack, run `./install.sh` |
 | `ghcr.io/<owner>/reqmesh:X.Y.Z` (+ `:latest`) | GitHub Container Registry | `docker compose -f docker-compose.prod.yml up -d` |
+| `reqmesh-vX.Y.Z-linux-x86_64.AppImage` | GitHub Release assets | `chmod +x` and run — no install, no root |
+
+The AppImage bundles a PyInstaller-frozen backend and the built SPA, so it needs
+no system Python and no server. It is built and boot-checked on **every push**
+by CI's `desktop-package` job as well as at release time — a packaging path that
+only ran during a release would be one CI could never fail on.
 
 ## Version source of truth
 
@@ -34,9 +40,9 @@ From a clean `main`:
 scripts/release.sh minor        # 0.4.0 -> 0.5.0   (also: patch | major | X.Y.Z)
 ```
 
-`release.sh` bumps the version everywhere, regenerates release notes from the
-commits since the last tag, builds the bundle locally as a smoke test, commits
-(`release: v0.5.0`), creates an annotated tag, and pushes the branch and tag.
+`release.sh` bumps the version everywhere, resolves the release notes (below),
+builds the bundle locally as a smoke test, commits (`release: v0.5.0`), creates
+an annotated tag, and pushes the branch and tag.
 
 Pushing the tag triggers `.github/workflows/release.yml`, which:
 
@@ -52,7 +58,32 @@ Useful flags:
 scripts/release.sh patch --dry-run     # bump + build bundle, no commit/tag/push
 scripts/release.sh patch --no-push     # commit + tag locally, push yourself
 scripts/release.sh patch --no-verify   # skip the local bundle smoke build
+scripts/release.sh patch --notes-file NOTES.md   # use NOTES.md verbatim
 ```
+
+## Release notes
+
+Notes are not an internal artifact. `updater.py` fetches the GitHub release body
+and the System page renders it to whoever is deciding whether to apply an
+update, so write them for that reader.
+
+`scripts/release_notes.sh` resolves them from the first source that has content:
+
+1. **`--notes-file FILE`** — used verbatim.
+2. **`CHANGELOG.md`** — the body of the `## [Unreleased]` section. This is the
+   normal path: add entries as you merge, and the release picks them up. An
+   untouched Keep a Changelog skeleton (headings with nothing under them) does
+   not count as content and falls through.
+3. **The commit log** — grouped by conventional-commit type, deduplicated, with
+   security and features ordered above build noise. A safety net, not a
+   substitute: v0.5.0 shipped a raw `git log` dump that named an internal review
+   file and listed one change twice.
+
+On release, `[Unreleased]` is retitled `## [X.Y.Z] - <date>` and a fresh empty
+`[Unreleased]` is opened above it. The rewritten `CHANGELOG.md` is staged into
+the same `release:` commit as the version bump. A `--dry-run` never touches it.
+
+The behaviour is covered by `scripts/tests/test_release_notes.sh`.
 
 ## Building a bundle without releasing
 

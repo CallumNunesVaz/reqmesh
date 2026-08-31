@@ -2,7 +2,7 @@
 #
 # Drop stale Docker image archives from published GitHub Releases.
 #
-#   scripts/prune_release_images.sh [--keep N] [--dry-run]
+#   scripts/prune_release_images.sh [--keep=N] [--suffix=SFX] [--dry-run]
 #
 # The release workflow attaches a `docker save | gzip` archive
 # (`reqmesh-vX.Y.Z-image.tar.gz`, ~150 MB and growing) to every release. Only
@@ -15,8 +15,12 @@
 # version stays installable and `releases/latest` is unaffected.
 #
 # Options:
-#   --keep N     Retain the archive on the N most recent releases (default 2:
+#   --keep=N     Retain the archive on the N most recent releases (default 2:
 #                the current release plus one rollback target).
+#   --suffix=SFX Asset suffix to prune (default `-image.tar.gz`). The desktop
+#                AppImage is ~157 MB per release and is pruned on the same
+#                terms — an old release's AppImage is never fetched, because
+#                the desktop app has no in-place updater.
 #   --dry-run    List what would be deleted; delete nothing.
 #
 # Needs `gh` on PATH and GH_TOKEN in the environment (both are already true on
@@ -26,14 +30,25 @@ set -euo pipefail
 
 KEEP=2
 DRY_RUN=0
+# The suffix the release workflow gives the archive (release.yml, "Save image
+# archive for offline updates"). Matching on it is what keeps the install
+# tarball and its .sha256 out of scope.
+SUFFIX="-image.tar.gz"
 for arg in "$@"; do
   case "$arg" in
-    --keep=*)  KEEP="${arg#*=}" ;;
-    --keep)    echo "usage: --keep=N (not '--keep N')" >&2; exit 2 ;;
-    --dry-run) DRY_RUN=1 ;;
-    *)         echo "unknown option: $arg" >&2; exit 2 ;;
+    --keep=*)   KEEP="${arg#*=}" ;;
+    --keep)     echo "usage: --keep=N (not '--keep N')" >&2; exit 2 ;;
+    --suffix=*) SUFFIX="${arg#*=}" ;;
+    --suffix)   echo "usage: --suffix=SFX (not '--suffix SFX')" >&2; exit 2 ;;
+    --dry-run)  DRY_RUN=1 ;;
+    *)          echo "unknown option: $arg" >&2; exit 2 ;;
   esac
 done
+
+if [ -z "$SUFFIX" ]; then
+  echo "error: --suffix must not be empty (it would match every asset)" >&2
+  exit 2
+fi
 
 case "$KEEP" in
   ''|*[!0-9]*) echo "error: --keep must be a non-negative integer, got '$KEEP'" >&2; exit 2 ;;
@@ -41,11 +56,6 @@ esac
 
 command -v gh >/dev/null || { echo "error: gh is not on PATH" >&2; exit 1; }
 [ -n "${GH_TOKEN:-}${GITHUB_TOKEN:-}" ] || { echo "error: GH_TOKEN is not set" >&2; exit 1; }
-
-# The suffix the release workflow gives the archive (release.yml, "Save image
-# archive for offline updates"). Matching on it is what keeps the install
-# tarball and its .sha256 out of scope.
-SUFFIX="-image.tar.gz"
 
 # Newest first. Drafts have no published date and are not something we prune.
 mapfile -t TAGS < <(
