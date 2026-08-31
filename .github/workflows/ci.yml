@@ -117,6 +117,10 @@ jobs:
       - run: npm ci --prefix frontend
       - run: npm run typecheck --prefix frontend
       - run: npm run test --prefix frontend
+      # Coverage is a floor, not a target: the four thresholds are the numbers
+      # the suite measured when the gate was added, floored to the whole number
+      # below (see vitest.config.ts). It ratchets upward from an honest low.
+      - run: npm run test:coverage --prefix frontend
       # `build` also runs check:selfcontained, which fails on any remote
       # <link>/<script>/url() in the output.
       - run: npm run build --prefix frontend

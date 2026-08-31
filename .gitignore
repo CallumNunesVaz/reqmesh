@@ -13,6 +13,9 @@ node_modules/
 
 # Electron desktop build output
 desktop/release/
+
+# vitest --coverage output; regenerated on every run, never committed.
+frontend/coverage/
 desktop/backend/
 
 # PyInstaller build output (desktop backend bundle)
