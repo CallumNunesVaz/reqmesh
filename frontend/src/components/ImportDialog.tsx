@@ -3,6 +3,7 @@ import { X, FileUp, UploadCloud, Loader, CheckCircle2, AlertTriangle, Eye, Clipb
 import { api, type ImportSummary } from '../api/client';
 import { useStore } from '../store';
 import Modal from './Modal';
+import { useAnnounce } from './LiveRegion';
 
 interface ImportDialogProps {
   open: boolean;
@@ -45,6 +46,7 @@ export default function ImportDialog({ open, onClose, projectId }: ImportDialogP
   const [result, setResult] = useState<ImportSummary | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const bumpGraphVersion = useStore((s) => s.bumpGraphVersion);
+  const announce = useAnnounce();
 
   const canPreview = source === 'file'
     ? PREVIEWABLE.has(format)
@@ -98,8 +100,13 @@ export default function ImportDialog({ open, onClose, projectId }: ImportDialogP
       }
       setResult(summary);
       if (!summary.dry_run) bumpGraphVersion();
+      announce(summary.dry_run
+        ? `Dry run: ${summary.would_create} to create, ${summary.would_update} to update${summary.would_delete > 0 ? `, ${summary.would_delete} to delete` : ''} out of ${summary.rows} row${summary.rows === 1 ? '' : 's'}.`
+        : `Imported ${summary.format}: ${summary.created} created, ${summary.updated} updated, ${summary.verification_cases} verification cases, ${summary.traces_added} traces added.`);
     } catch (err: any) {
-      setError(err.message || 'Import failed');
+      const message = err.message || 'Import failed';
+      setError(message);
+      announce(message, 'assertive');
     } finally {
       setBusy(false);
     }

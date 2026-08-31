@@ -36,45 +36,55 @@ export function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: (id: nu
   const reducedMotion = useReducedMotion();
 
   const [entering, setEntering] = useState(true);
+  const [paused, setPaused] = useState(false);
   useEffect(() => {
     const t = setTimeout(() => setEntering(false), 50);
     return () => clearTimeout(t);
   }, []);
 
   useEffect(() => {
+    if (paused) return;
     const ms = toast.kind === 'error' ? 8000 : 4000;
     const t = setTimeout(() => onRemove(toast.id), ms);
     return () => clearTimeout(t);
-  }, [toast.id, toast.kind, onRemove]);
+  }, [toast.id, toast.kind, onRemove, paused]);
 
   const bg = toast.kind === 'success' ? 'bg-cs-green' : 'bg-destructive';
 
   return (
     <div
-      role="alert"
-      className={`flex items-center gap-2 px-4 py-2.5 rounded-lg shadow-lg text-white text-sm ${bg} ${
-        reducedMotion ? '' : 'transition-[transform,opacity] duration-300'
-      } ${entering ? 'translate-y-4 opacity-0' : 'translate-y-0 opacity-100'}`}
+      data-toast-paused={paused ? 'true' : undefined}
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      onFocus={() => setPaused(true)}
+      onBlur={() => setPaused(false)}
     >
-      {toast.kind === 'success' ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
-      <span className="flex-1">
-        {toast.message}{toast.action ? ' ' : null}
-        {toast.action && (
-          <GuardedLink
-            to={toast.action.to}
-            className="underline underline-offset-2 hover:opacity-80"
-          >
-            {toast.action.label}
-          </GuardedLink>
-        )}
-      </span>
-      <button
-        onClick={() => onRemove(toast.id)}
-        className="p-0.5 rounded-md hover:bg-white/20 transition-colors"
-        aria-label="Dismiss"
+      <div
+        role="alert"
+        className={`flex items-center gap-2 px-4 py-2.5 rounded-lg shadow-lg text-white text-sm ${bg} ${
+          reducedMotion ? '' : 'transition-[transform,opacity] duration-300'
+        } ${entering ? 'translate-y-4 opacity-0' : 'translate-y-0 opacity-100'}`}
       >
-        <X size={14} />
-      </button>
+        {toast.kind === 'success' ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
+        <span className="flex-1">
+          {toast.message}{toast.action ? ' ' : null}
+          {toast.action && (
+            <GuardedLink
+              to={toast.action.to}
+              className="underline underline-offset-2 hover:opacity-80"
+            >
+              {toast.action.label}
+            </GuardedLink>
+          )}
+        </span>
+        <button
+          onClick={() => onRemove(toast.id)}
+          className="p-0.5 rounded-md hover:bg-white/20 transition-colors"
+          aria-label="Dismiss"
+        >
+          <X size={14} />
+        </button>
+      </div>
     </div>
   );
 }
