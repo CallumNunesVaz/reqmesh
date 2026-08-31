@@ -233,7 +233,6 @@ export default function SystemPage() {
   const staged = status?.state === 'staged';
   const completed = status?.state === 'completed';
   const failed = status?.state === 'failed';
-  const repoUrl = info ? `https://github.com/${info.github_repo}` : '';
 
   return (
     <div className="max-w-3xl mx-auto p-6 space-y-6">
@@ -256,8 +255,6 @@ export default function SystemPage() {
           <dd className="font-mono">v{build?.version ?? '…'} <span className="text-muted-foreground text-xs">({build?.channel})</span></dd>
           {build?.git_sha && (<><dt className="text-muted-foreground">Commit</dt><dd className="font-mono text-xs">{build.git_sha.slice(0, 12)}</dd></>)}
           {build?.built_at && (<><dt className="text-muted-foreground">Built</dt><dd className="text-xs">{build.built_at}</dd></>)}
-          <dt className="text-muted-foreground">Repository</dt>
-          <dd>{repoUrl ? <a className="text-primary hover:underline inline-flex items-center gap-1" href={repoUrl} target="_blank" rel="noreferrer">{info?.github_repo} <ExternalLink size={12} /></a> : '…'}</dd>
         </dl>
       </section>
 
