@@ -68,7 +68,7 @@ jobs:
       # too — auditing only requirements.txt would leave the code CI runs on
       # unexamined.
       - run: pip-audit -r backend/requirements-dev.txt
-      - uses: github/codeql-action/upload-sarif@faaa5d804fc648d0fdb28822a8e36cf7d0a6132c # v4.37.7
+      - uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
         if: always() && hashFiles('bandit.sarif') != ''
         with:
           sarif_file: bandit.sarif
@@ -177,7 +177,7 @@ jobs:
           run_trivy --exit-code 1 --format sarif --output trivy.sarif
       # Only upload a report that exists. `if: always()` alone made a missing
       # file fail the job a second time, for a reason unrelated to the scan.
-      - uses: github/codeql-action/upload-sarif@faaa5d804fc648d0fdb28822a8e36cf7d0a6132c # v4.37.7
+      - uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
         if: always() && hashFiles('trivy.sarif') != ''
         with:
           sarif_file: trivy.sarif
