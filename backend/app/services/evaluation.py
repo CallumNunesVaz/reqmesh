@@ -100,6 +100,11 @@ class Evaluator:
             return self._cache[ref]
         if ref in stack:
             raise EvalError(f"circular parameter derivation involving '{ref}'")
+        if len(stack) >= MAX_DERIVATION_DEPTH:
+            raise EvalError(
+                f"parameter derivation nested deeper than {MAX_DERIVATION_DEPTH} "
+                f"levels at '{ref}'"
+            )
         param = self.params.get(ref)
         if param is None:
             raise UnknownValue(f"unknown parameter '{ref}'")
@@ -132,22 +137,37 @@ class Evaluator:
         total = 0.0
         found = 0
 
-        def walk(cid: str, multiplier: float, visiting: set[str]):
-            nonlocal total, found
+        # Iterative DFS, not recursion. A component chain deeper than Python's
+        # frame limit used to raise RecursionError, which is neither EvalError
+        # nor UnknownValue and so escaped every caller's handling as a 500.
+        # Cycles were always caught; depth was not.
+        #
+        # `visiting` is the current *path*, so an exit marker is pushed under a
+        # node's children to pop it back off — the direct translation of the
+        # add/remove around the old recursive call. Children are pushed in
+        # reverse so they pop in declaration order, keeping the summation order
+        # (and therefore the float result) identical to the recursive version.
+        # The root's own quantity is relative to *its* parent — outside the
+        # scope of this rollup — so the root is seeded at multiplier 1.0 and
+        # contributes exactly once.
+        visiting: set[str] = set()
+        # (component id, multiplier, is_exit_marker)
+        work: list[tuple[str, float, bool]] = [(comp_id, 1.0, False)]
+        while work:
+            cid, multiplier, is_exit = work.pop()
+            if is_exit:
+                visiting.discard(cid)
+                continue
             if cid in visiting:
                 raise EvalError(f"circular component hierarchy at '{cid}'")
             visiting.add(cid)
+            work.append((cid, multiplier, True))
             ref = f"{cid}.{name}"
             if ref in self.params or ref in self.overrides:
                 total += self.resolve(ref, stack) * multiplier
                 found += 1
-            for child in self.children.get(cid, []):
-                walk(child["id"], multiplier * (child.get("quantity") or 1), visiting)
-            visiting.remove(cid)
-
-        # The root's own quantity is relative to *its* parent — outside the
-        # scope of this rollup — so the root contributes exactly once.
-        walk(comp_id, 1.0, set())
+            for child in reversed(self.children.get(cid, [])):
+                work.append((child["id"], multiplier * (child.get("quantity") or 1), False))
         if found == 0:
             raise UnknownValue(f"no component under '{comp_id}' has parameter '{name}'")
         return total
@@ -336,6 +356,19 @@ def _dimension_warning(dim_eval: "DimensionEvaluator", expr: str, owner: str) ->
     except DimensionError as e:
         return str(e)
     return None
+
+
+# A derived parameter that references another derived parameter recurses
+# resolve -> eval_expr -> _eval -> resolve, about four Python frames per level.
+# Measured against the default 1000-frame limit, a chain of 249 was the deepest
+# that survived *with an empty stack above it* — inside a request, with the ASGI
+# and router frames already spent, it is lower still. Past that the failure was
+# RecursionError, which is neither EvalError nor UnknownValue, so it escaped
+# every caller and surfaced as a 500.
+#
+# 100 leaves ample headroom and is far beyond any real model: it bounds the
+# derivation *chain*, not the number of parameters.
+MAX_DERIVATION_DEPTH = 100
 
 
 # ---- margins ------------------------------------------------------------
@@ -658,9 +691,18 @@ def _collect_refs(node: ast.AST, owner: str, env: dict[str, str],
 
 
 def _resolve_safe(evaluator: Evaluator, ref: str) -> Optional[float]:
+    """A parameter's value, or None when the model cannot produce one.
+
+    Catches only the evaluator's own two failure modes. It used to catch bare
+    `Exception`, which made "this parameter has no value" indistinguishable from
+    "this expression is broken" *and* swallowed genuine defects — a TypeError in
+    the evaluator surfaced as a silently missing impact row rather than a stack
+    trace. Depth is a domain error now (MAX_DERIVATION_DEPTH), so the one
+    non-domain failure this used to absorb is gone.
+    """
     try:
         return evaluator.resolve(ref)
-    except Exception:
+    except (EvalError, UnknownValue):
         return None
 
 

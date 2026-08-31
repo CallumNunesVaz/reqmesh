@@ -22,10 +22,22 @@ rather than a substitute.
 
 ### Changed
 
+- Async results are announced to screen readers through a shared live region.
+  Previously only toasts announced anything, so an import summary completed in
+  silence.
 - Release notes are curated from this file instead of being a raw commit log.
   When no entry exists the fallback groups commits by kind, deduplicates changes
   that landed on more than one branch, and orders security and features above
   build noise.
+
+### Fixed
+
+- Parametric rollups over a deep component tree no longer fail with a server
+  error. Component chains are walked iteratively, and a derived parameter chain
+  nested more than 100 levels now reports a clear expression error instead of
+  crashing.
+- A toast no longer disappears while you are hovering it or tabbing to its
+  link — the dismiss timer pauses and resumes.
 
 ### Removed
 

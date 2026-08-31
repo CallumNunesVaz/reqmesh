@@ -2,7 +2,9 @@
 constraint verdicts and measured verdicts."""
 import pytest
 
-from app.services.evaluation import Evaluator, EvalError, UnknownValue
+from app.services.evaluation import (
+    Evaluator, EvalError, UnknownValue, MAX_DERIVATION_DEPTH, _resolve_safe,
+)
 from tests.conftest import make_req
 
 
@@ -131,6 +133,41 @@ class TestRollup:
         e = ev([], self.comps())
         with pytest.raises(EvalError):
             e.eval_expr("rollup(AC, 'mass')", "R1")
+
+    def test_deep_component_chain_does_not_blow_the_stack(self):
+        """A chain deeper than Python's frame limit must still roll up.
+
+        `rollup` walked the tree recursively, so ~2000 levels raised
+        RecursionError — neither EvalError nor UnknownValue, so it escaped
+        every caller's handling and surfaced as a 500 rather than a result.
+        """
+        n = 5000
+        comps = [
+            {"id": f"C{i}", "parent": (f"C{i - 1}" if i else None), "quantity": 1,
+             "parameters": [param("mass", 1)]}
+            for i in range(n)
+        ]
+        assert ev([], comps).rollup("C0", "mass", frozenset()) == float(n)
+
+    def test_deep_chain_still_detects_a_cycle(self):
+        """Depth and cycles are separate concerns — fixing one must not lose
+        the other. The iterative walk keeps `visiting` as the current path."""
+        comps = [
+            {"id": "A", "parent": "B", "quantity": 1, "parameters": [param("m", 1)]},
+            {"id": "B", "parent": "A", "quantity": 1, "parameters": [param("m", 1)]},
+        ]
+        with pytest.raises(EvalError, match="circular"):
+            ev([], comps).rollup("A", "m", frozenset())
+
+    def test_shared_child_under_two_parents_is_not_a_cycle(self):
+        """`visiting` is the path, not a global seen-set: a diamond is legal."""
+        comps = [
+            {"id": "R", "parent": None, "quantity": 1, "parameters": []},
+            {"id": "L", "parent": "R", "quantity": 1, "parameters": []},
+            {"id": "M", "parent": "R", "quantity": 1, "parameters": []},
+            {"id": "X", "parent": "L", "quantity": 1, "parameters": [param("m", 7)]},
+        ]
+        assert ev([], comps).rollup("R", "m", frozenset()) == 7
 
 
 class TestMeasuredOverride:
@@ -311,3 +348,54 @@ def test_demo_seed_parametrics(tmp_path):
     assert by_id["AFRM0006"]["verdict"] == "pass"
 
     assert data["measurement_count"] == 8
+
+
+# ---- derivation depth and error narrowing --------------------------------
+
+
+def _derivation_chain(n):
+    """R.p0 = R.p1 + 0, R.p1 = R.p2 + 0, ... R.pn = 1 — a chain `n` deep."""
+    params = [
+        {"name": f"p{i}", "value": None, "expr": f"p{i + 1} + 0", "unit": ""}
+        for i in range(n)
+    ]
+    params.append({"name": f"p{n}", "value": 1, "expr": None, "unit": ""})
+    return Evaluator([{"id": "R", "parameters": params, "constraints": []}], [])
+
+
+class TestDerivationDepth:
+    """`resolve` recurses about four Python frames per derivation level, so a
+    long enough chain raised RecursionError — not a domain error, so it reached
+    the client as a 500. It is now bounded and reported as an EvalError."""
+
+    def test_a_chain_within_the_limit_resolves(self):
+        assert _derivation_chain(MAX_DERIVATION_DEPTH - 5).resolve("R.p0") == 1.0
+
+    def test_an_over_deep_chain_is_a_domain_error_not_a_crash(self):
+        with pytest.raises(EvalError, match="nested deeper than"):
+            _derivation_chain(MAX_DERIVATION_DEPTH * 20).resolve("R.p0")
+
+    def test_the_limit_leaves_headroom_under_the_frame_limit(self):
+        """The guard is only useful if it fires *before* the interpreter does."""
+        import sys
+        assert MAX_DERIVATION_DEPTH * 4 < sys.getrecursionlimit()
+
+
+class TestResolveSafeNarrowing:
+    """`_resolve_safe` used to catch bare Exception, which made a broken
+    expression indistinguishable from an absent value and hid real defects."""
+
+    def test_returns_none_for_an_unknown_parameter(self):
+        assert _resolve_safe(_derivation_chain(3), "R.nope") is None
+
+    def test_returns_none_for_an_over_deep_chain(self):
+        e = _derivation_chain(MAX_DERIVATION_DEPTH * 20)
+        assert _resolve_safe(e, "R.p0") is None
+
+    def test_a_genuine_defect_is_not_swallowed(self):
+        class Broken(Evaluator):
+            def resolve(self, ref, stack=frozenset()):
+                raise TypeError("a real bug in the evaluator")
+
+        with pytest.raises(TypeError, match="a real bug"):
+            _resolve_safe(Broken([], []), "R.x")
