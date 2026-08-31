@@ -142,6 +142,35 @@ check "promoting an empty [Unreleased] is a no-op" \
       "$(grep -c '^## \[0\.3\.0\]' "$TMP/CL-promote.md")" "0"
 
 # ══════════════════════════════════════════════════════════════════════════════
+section "the tag message survives git's comment stripping"
+# ══════════════════════════════════════════════════════════════════════════════
+
+# `git tag -F` strips every line beginning with '#' unless --cleanup=verbatim.
+# The notes are all Markdown, so the default ate `# reqmesh vX.Y.Z` and every
+# `### Added` / `### Fixed` heading — and release.yml publishes this exact tag
+# message as the GitHub release body, which the in-app updater renders. v0.6.0
+# was tagged that way before this was caught.
+TAGREPO="$TMP/tagrepo"
+mkdir -p "$TAGREPO"
+(
+  cd "$TAGREPO" || exit 1
+  git init -q .
+  git config user.email t@example.com
+  git config user.name Test
+  git commit -q --allow-empty -m "seed"
+) >/dev/null 2>&1
+
+printf '# reqmesh v1.0.0\n\n### Added\n\n- a thing\n\n### Fixed\n\n- another\n' > "$TMP/tagnotes.md"
+git -C "$TAGREPO" tag -a verbatim-tag --cleanup=verbatim -F "$TMP/tagnotes.md"
+
+check "the tag keeps its ### headings" \
+      "$(git -C "$TAGREPO" tag -l --format='%(contents)' verbatim-tag | grep -c '^### ')" "2"
+check "the tag keeps its title line" \
+      "$(git -C "$TAGREPO" tag -l --format='%(contents)' verbatim-tag | grep -c '^# reqmesh')" "1"
+check "release.sh tags with --cleanup=verbatim" \
+      "$(grep -c 'git tag -a "\$TAG" --cleanup=verbatim' "$REPO/scripts/release.sh")" "1"
+
+# ══════════════════════════════════════════════════════════════════════════════
 section "release.sh and the workflow stay wired to all of this"
 # ══════════════════════════════════════════════════════════════════════════════
 

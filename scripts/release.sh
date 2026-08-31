@@ -131,7 +131,12 @@ if [ -n "$(git status --porcelain)" ]; then
   git status --short >&2
   exit 1
 fi
-git tag -a "$TAG" -F "$NOTES_FILE"
+# --cleanup=verbatim, or git strips every line starting with '#' as a
+# comment — which silently ate all the Markdown headings out of v0.6.0's
+# notes, leaving bare bullets with no Added/Fixed/Security grouping. The
+# release body published by release.yml is this tag message, so the damage
+# reached users, not just the tag.
+git tag -a "$TAG" --cleanup=verbatim -F "$NOTES_FILE"
 rm -f "$NOTES_FILE"
 
 if [ "$NO_PUSH" = "1" ]; then
