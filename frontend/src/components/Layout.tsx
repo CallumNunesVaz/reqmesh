@@ -25,6 +25,7 @@ import { SseBackoff } from '../lib/sseBackoff';
 import { WhatIfProvider } from './WhatIfContext';
 import WhatIfBar from './WhatIfBar';
 import { ToastProvider } from './Toast';
+import { LiveRegionProvider } from './LiveRegion';
 
 const GraphPaneCtx = createContext({ graphOpen: false, toggleGraph: () => {} });
 export function useGraphPane() { return useContext(GraphPaneCtx); }
@@ -428,6 +429,7 @@ export default function Layout() {
   const canToggleEdit = useAuthStore((s) => s.canToggleEdit());
 
   return (
+    <LiveRegionProvider>
     <ToastProvider>
     <HoveredEntityCtx.Provider value={hoveredBus}>
     <GraphPaneCtx.Provider value={{ graphOpen, toggleGraph }}>
@@ -718,5 +720,6 @@ export default function Layout() {
     </GraphPaneCtx.Provider>
     </HoveredEntityCtx.Provider>
     </ToastProvider>
+    </LiveRegionProvider>
   );
 }

@@ -1,6 +1,18 @@
 import { test, expect, signIn, setEditMode, DEMO_PROJECT } from './fixtures';
 
 /**
+ * Dialog-content assertions are scoped with `dlg(app)`.
+ *
+ * The import dialog announces its summary through the app-wide live region
+ * (components/LiveRegion.tsx) — a real, non-hidden node carrying the same
+ * numbers as the visible panel — so a bare `getByText(/2 to create/)` matches
+ * twice and trips Playwright strict mode. Scoping is the fix, not loosening the
+ * assertion: it still requires the text to be in the dialog the user is looking
+ * at. Any future `useAnnounce` adoption needs the same care.
+ */
+const dlg = (app: any) => app.locator('[role="dialog"]');
+
+/**
  * The import dialog can preview a spreadsheet import without writing.
  *
  * Two things are load-bearing here and neither is visible from a unit test:
@@ -48,10 +60,10 @@ test('a merge dry run reports counts and changes nothing', async ({ app, server 
   await app.getByRole('checkbox').check();
   await app.getByRole('button', { name: 'Preview' }).click();
 
-  await expect(app.getByText('Nothing has been changed yet.')).toBeVisible();
+  await expect(dlg(app).getByText('Nothing has been changed yet.')).toBeVisible();
   // Two new ids, one that already exists.
-  await expect(app.getByText(/2\s*to create/)).toBeVisible();
-  await expect(app.getByText(/1\s*to update/)).toBeVisible();
+  await expect(dlg(app).getByText(/2\s*to create/)).toBeVisible();
+  await expect(dlg(app).getByText(/1\s*to update/)).toBeVisible();
 
   expect(await reqCount(app, P)).toBe(before);
 });
@@ -64,11 +76,11 @@ test('replace mode previews the creates as well as the deletions', async ({ app,
   await app.getByRole('checkbox').check();
   await app.getByRole('button', { name: 'Preview' }).click();
 
-  await expect(app.getByText('Nothing has been changed yet.')).toBeVisible();
+  await expect(dlg(app).getByText('Nothing has been changed yet.')).toBeVisible();
   // Everything is wiped first, so every id'd row is a create — including the
   // one whose id already exists.
-  await expect(app.getByText(/3\s*to create/)).toBeVisible();
-  await expect(app.getByText(new RegExp(`${before} existing requirements will be deleted first`))).toBeVisible();
+  await expect(dlg(app).getByText(/3\s*to create/)).toBeVisible();
+  await expect(dlg(app).getByText(new RegExp(`${before} existing requirements will be deleted first`))).toBeVisible();
 
   // Above all: the preview did not perform the deletion it described.
   expect(await reqCount(app, P)).toBe(before);
@@ -80,10 +92,10 @@ test('"Import for real" commits the previewed change', async ({ app, server }) =
 
   await app.getByRole('checkbox').check();
   await app.getByRole('button', { name: 'Preview' }).click();
-  await expect(app.getByText('Nothing has been changed yet.')).toBeVisible();
+  await expect(dlg(app).getByText('Nothing has been changed yet.')).toBeVisible();
 
   await app.getByRole('button', { name: 'Import for real' }).click();
-  await expect(app.getByText(/Imported/)).toBeVisible();
+  await expect(dlg(app).getByText(/Imported/)).toBeVisible();
 
   expect(await reqCount(app, P)).toBe(before + 2);
 });
