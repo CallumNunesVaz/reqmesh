@@ -14,6 +14,8 @@ rather than a substitute.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-01
+
 ### Added
 
 - Desktop app: Linux AppImage is now published with each release, alongside a

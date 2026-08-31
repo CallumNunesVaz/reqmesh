@@ -48,7 +48,7 @@ if ! [ -f "$SCRIPT_DIR/lib.sh" ]; then
     # next month would silently pull different companion scripts than the ones
     # it was tested against — and a force-push would change them under a user
     # mid-install. Override REQMESH_REF to track a branch deliberately.
-    _REF="${REQMESH_REF:-v0.5.0}"
+    _REF="${REQMESH_REF:-v0.6.0}"
     _REPO_RAW="${REQMESH_INSTALL_REPO:-https://raw.githubusercontent.com/CallumNunesVaz/reqmesh/${_REF}/scripts}"
 
     case "$_REPO_RAW" in
