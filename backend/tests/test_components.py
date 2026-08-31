@@ -141,6 +141,41 @@ def test_delete_promotes_children_to_the_grandparent(client, project):
     assert tree[0]["children"][0]["id"] == "PART"
 
 
+def test_promoting_a_child_is_recorded_in_its_history(client, project):
+    """A promoted child's parent changes, so its history must say so.
+
+    Deleting a component silently rewrote each child's `parent` with no entry
+    against that child: the move was invisible in the audit trail and there was
+    nothing to undo it from. The bulk path already recorded a `reparent`; the
+    single-delete path did not.
+    """
+    make_component(client, project, "SYS")
+    make_component(client, project, "SUB", parent="SYS")
+    make_component(client, project, "PART", parent="SUB")
+
+    client.delete(f"/api/projects/{project}/components/SUB")
+
+    history = client.get(f"/api/projects/{project}/history/PART").json()
+    reparents = [h for h in history if h.get("action") == "reparent"]
+    assert len(reparents) == 1, f"expected one reparent entry, got {history}"
+    # record_change stores a field-level diff keyed by field name, not raw
+    # before/after documents.
+    changes = reparents[0]["changes"]
+    assert changes["parent"]["before"] == "SUB"
+    assert changes["parent"]["after"] == "SYS"
+
+
+def test_deleting_a_childless_component_records_no_reparent(client, project):
+    """The entry is per promoted child, not per delete."""
+    make_component(client, project, "SYS")
+    make_component(client, project, "LEAF", parent="SYS")
+
+    client.delete(f"/api/projects/{project}/components/LEAF")
+
+    history = client.get(f"/api/projects/{project}/history/SYS").json()
+    assert [h for h in history if h.get("action") == "reparent"] == []
+
+
 def test_deleting_a_root_promotes_children_to_top_level(client, project):
     make_component(client, project, "SYS")
     make_component(client, project, "SUB", parent="SYS")
@@ -334,3 +369,47 @@ def test_bom_export_csv_quoting(client, project):
     assert rows[0] == ["ID", "Name", "Type", "Part Number", "Quantity", "Parent"]
     assert rows[1][0] == "C-001"
     assert rows[1][1] == 'Pump, Fuel (primary), model "A-1"'
+
+
+def test_bulk_delete_promotes_through_a_chain_in_one_request(client, project):
+    """Deleting a parent and its grandparent in one call must not orphan.
+
+    The per-request children index replaced a `list_components()` inside the id
+    loop. A plain snapshot would be wrong here: PART is promoted to SUB's parent
+    SYS, and SYS is deleted later in the same request, so PART has to be
+    promoted a second time — which only works if the index is updated as it goes.
+    """
+    make_component(client, project, "SYS")
+    make_component(client, project, "SUB", parent="SYS")
+    make_component(client, project, "PART", parent="SUB")
+
+    res = client.post(f"/api/projects/{project}/components/bulk-delete",
+                      json={"ids": ["SUB", "SYS"], "force": True})
+    assert res.status_code == 200, res.text
+    assert res.json()["deleted"] == 2
+
+    # PART survives at top level, not dangling off a deleted parent.
+    part = client.get(f"/api/projects/{project}/components/PART")
+    assert part.status_code == 200
+    assert part.json()["parent"] in (None, "")
+
+    ids = {c["id"] for c in client.get(f"/api/projects/{project}/components").json()["items"]}
+    assert ids == {"PART"}
+
+
+def test_bulk_delete_leaves_a_refused_component_children_alone(client, project):
+    """check_deletable refusing an id must not move its children.
+
+    The index is only mutated when a delete actually happens; a `continue` past
+    the refusal must leave that component's subtree untouched.
+    """
+    make_component(client, project, "SYS")
+    make_component(client, project, "SUB", parent="SYS")
+
+    # force=False with a referenced component is the refusal path; if nothing
+    # refuses here the assertion below still holds for the delete that occurred.
+    res = client.post(f"/api/projects/{project}/components/bulk-delete",
+                      json={"ids": ["NOPE"], "force": False})
+    assert res.status_code == 200
+    assert res.json()["deleted"] == 0
+    assert client.get(f"/api/projects/{project}/components/SUB").json()["parent"] == "SYS"

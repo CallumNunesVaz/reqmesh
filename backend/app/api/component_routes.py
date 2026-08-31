@@ -227,12 +227,25 @@ def delete_component(project_id: str, component_id: str, force: bool = False, us
 
         # Promote children to the removed component's parent. Orphaning them would
         # leave a dangling `parent` and drop the whole branch out of /tree.
+        #
+        # Each promotion is recorded, the same way the bulk path does it
+        # (bulk_routes.py). Without this a child's parent changed with nothing in
+        # its history: the move was invisible in the audit trail and there was no
+        # entry to undo it from. The records are written after the lock is
+        # released, matching the delete below.
+        reparented = []
         for child in store.list_components():
             if child.get("parent") == component_id:
                 store.update_component(child["id"], {"parent": doomed.get("parent")})
                 promoted.append(child["id"])
+                reparented.append(child["id"])
 
         store.delete_component(component_id)
+    for child_id in reparented:
+        record_change(store, child_id, "reparent",
+                      {"parent": component_id},
+                      {"parent": doomed.get("parent")},
+                      user.get("username", ""))
     record_change(store, component_id, "delete", doomed, None, user.get("username", ""))
     return {"ok": True, "promoted_children": promoted}
 

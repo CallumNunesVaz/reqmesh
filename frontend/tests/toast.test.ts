@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { StaticRouter } from 'react-router-dom/server';
+// react-router v7 folded the server entrypoints into the core package;
+// `react-router-dom/server` no longer exists.
+import { StaticRouter } from 'react-router';
 import { pushToast, ToastItem, type Toast, type ToastAction } from '../src/components/Toast';
 import { countMessage } from '../src/lib/feedback';
 

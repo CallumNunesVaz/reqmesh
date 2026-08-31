@@ -220,6 +220,17 @@ def bulk_delete_components(project_id: str, data: BulkDeleteRequest, user: dict 
     deleted = 0
     refused = []
     with project_lock(store.root):
+        # One listing for the whole request, kept current as we go, instead of
+        # re-listing per id. Writes merge into the collection cache rather than
+        # dropping it, so this was never the full re-parse the audit described —
+        # but it still copied every component dict once per deleted id.
+        #
+        # The index is only mutated when a delete actually happens: a component
+        # refused by check_deletable keeps its children.
+        children_of: dict[str | None, list[str]] = {}
+        for c in store.list_components():
+            children_of.setdefault(c.get("parent"), []).append(c["id"])
+
         for comp_id in data.ids:
             before = store.get_component(comp_id)
             if before is None:
@@ -231,16 +242,24 @@ def bulk_delete_components(project_id: str, data: BulkDeleteRequest, user: dict 
                     refused.append(exc.detail)
                     continue
                 raise
-            promoted = []
-            for child in store.list_components():
-                if child.get("parent") == comp_id:
-                    store.update_component(child["id"], {"parent": before.get("parent")})
-                    promoted.append(child["id"])
-                    record_change(store, child["id"], "reparent",
-                                  {"parent": comp_id},
-                                  {"parent": before.get("parent")},
-                                  user.get("username", ""))
+            new_parent = before.get("parent")
+            for child_id in children_of.pop(comp_id, []):
+                store.update_component(child_id, {"parent": new_parent})
+                # The promoted child becomes a child of the new parent, so a
+                # later id in this same request that deletes *that* parent
+                # promotes it again — which the per-request listing would have
+                # missed if it were a plain snapshot.
+                children_of.setdefault(new_parent, []).append(child_id)
+                record_change(store, child_id, "reparent",
+                              {"parent": comp_id},
+                              {"parent": new_parent},
+                              user.get("username", ""))
             if store.delete_component(comp_id):
+                # Drop the deleted id from its own parent's child list so it is
+                # never promoted by a later delete in this request.
+                siblings = children_of.get(before.get("parent"))
+                if siblings and comp_id in siblings:
+                    siblings.remove(comp_id)
                 record_change(store, comp_id, "delete", before, None, user.get("username", ""))
                 deleted += 1
     resp: dict[str, Any] = {"deleted": deleted}

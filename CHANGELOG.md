@@ -30,8 +30,17 @@ rather than a substitute.
   that landed on more than one branch, and orders security and features above
   build noise.
 
+### Security
+
+- `react-router` upgraded 6 → 7, clearing two moderate advisories (open redirect
+  via backslash in `<Link>`/`useNavigate`, and constructor injection during SSR
+  hydration). `npm audit` now reports no runtime vulnerabilities.
+
 ### Fixed
 
+- Deleting a component now records the move in each promoted child's history.
+  The child's parent changed silently before, so the move was invisible in the
+  audit trail.
 - Parametric rollups over a deep component tree no longer fail with a server
   error. Component chains are walked iteratively, and a derived parameter chain
   nested more than 100 levels now reports a clear expression error instead of

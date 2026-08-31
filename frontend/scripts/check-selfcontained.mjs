@@ -36,6 +36,10 @@ function walk(dir) {
   return out;
 }
 
+// Hosts that cannot leave the machine. An air-gapped deployment reaches these
+// exactly as well as a connected one, so they are not what this check is for.
+const LOCAL_HOST = /\/\/(localhost|127\.0\.0\.1|\[::1\])([:/"')]|$)/i;
+
 let failures = 0;
 for (const file of walk(DIST)) {
   const text = readFileSync(file, 'utf8');
@@ -43,6 +47,16 @@ for (const file of walk(DIST)) {
     for (const m of text.matchAll(re)) {
       // Data URIs and protocol-relative paths into our own origin are fine.
       if (/^(<[a-z]+\b[^>]*["'])?(data:|blob:)/i.test(m[0])) continue;
+      // Not a remote host at all — an air-gapped box reaches it fine.
+      //
+      // This is also what excuses the JavaScript `URL(...)` constructor, which
+      // the case-insensitive CSS `url()` pattern matches too: react-router v7
+      // builds `new URL(href, "http://localhost")` as a sentinel base for
+      // resolving relative hrefs. Skipping on the *host* rather than on the
+      // `URL(` spelling matters — `URL(https://cdn…)` is valid, case-
+      // insensitive CSS that really would fetch, and a spelling-based skip
+      // silently stopped catching it.
+      if (LOCAL_HOST.test(m[0])) continue;
       console.error(`✗ ${file.replace(DIST, 'dist/')}: ${what}`);
       console.error(`  ${m[0].slice(0, 140)}`);
       failures++;
