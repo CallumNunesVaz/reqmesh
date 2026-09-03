@@ -176,11 +176,18 @@ class Evaluator:
 
     def eval_expr(self, text: str, owner: str, stack: frozenset[str] = frozenset(),
                   env: Optional[dict[str, str]] = None):
+        if len(text) > MAX_EXPR_CHARS:
+            raise EvalError(f"expression exceeds {MAX_EXPR_CHARS} characters")
         try:
             tree = ast.parse(text, mode="eval")
         except SyntaxError as e:
             raise EvalError(f"syntax error: {e.msg}") from e
-        return self._eval(tree.body, owner, stack, env or {})
+        except (RecursionError, ValueError, MemoryError):
+            raise EvalError("expression could not be parsed") from None
+        try:
+            return self._eval(tree.body, owner, stack, env or {})
+        except RecursionError as e:
+            raise EvalError("expression nested too deeply to evaluate") from e
 
     def _eval(self, node: ast.AST, owner: str, stack: frozenset[str],
               env: Optional[dict[str, str]] = None):
@@ -303,9 +310,12 @@ class DimensionEvaluator:
             return None
         try:
             tree = ast.parse(text, mode="eval")
-        except (SyntaxError, ValueError, TypeError):
+        except (SyntaxError, ValueError, TypeError, RecursionError, MemoryError):
             return None
-        return self._walk(tree.body, owner, stack)
+        try:
+            return self._walk(tree.body, owner, stack)
+        except RecursionError:
+            return None
 
     def _walk(self, node, owner, stack):
         if isinstance(node, ast.Constant):
@@ -371,6 +381,23 @@ def _dimension_warning(dim_eval: "DimensionEvaluator", expr: str, owner: str) ->
 MAX_DERIVATION_DEPTH = 100
 
 
+# A single long expression raises RecursionError while ``ast.parse`` builds its
+# tree *or* while ``_eval`` walks the tree it just built — neither EvalError nor
+# UnknownValue, so it escaped every caller and surfaced as a 500 (the same
+# failure class as the derivation chain above).
+#
+# ``_eval`` recurses once per AST node, so a left-nested chain of ~999 BinOps
+# exhausts the default 1000-frame limit on its own, and how much stack is left
+# depends on how deep the caller already is (ASGI + router + service frames).
+# No cap can ever be exactly right: the cap is defence in depth, the catch in
+# ``eval_expr`` is the actual guarantee.
+#
+# Measured against the bundled Cessna demo, the longest constraint is 67
+# characters; 500 is ~7x real-world headroom while sitting well below the ~1800
+# where ``_eval`` gets into trouble.
+MAX_EXPR_CHARS = 500
+
+
 # ---- margins ------------------------------------------------------------
 
 def _margin(evaluator: Evaluator, expr: str, owner: str) -> Optional[dict]:
@@ -382,7 +409,7 @@ def _margin(evaluator: Evaluator, expr: str, owner: str) -> Optional[dict]:
     """
     try:
         tree = ast.parse(expr, mode="eval")
-    except SyntaxError:
+    except (SyntaxError, RecursionError, ValueError, MemoryError):
         return None
     node = tree.body
     if not isinstance(node, ast.Compare) or len(node.ops) != 1:
@@ -391,7 +418,7 @@ def _margin(evaluator: Evaluator, expr: str, owner: str) -> Optional[dict]:
     try:
         left = evaluator._eval(node.left, owner, frozenset())
         right = evaluator._eval(node.comparators[0], owner, frozenset())
-    except (EvalError, UnknownValue):
+    except (EvalError, UnknownValue, RecursionError):
         return None
     if isinstance(op, (ast.Lt, ast.LtE)):
         margin, bound = right - left, right
@@ -647,9 +674,12 @@ def _refs_in_expr(text: str, owner: str, env: dict[str, str],
         return set()
     try:
         tree = ast.parse(text, mode="eval")
-    except SyntaxError:
+    except (SyntaxError, RecursionError, ValueError, MemoryError):
         return set()
-    return _collect_refs(tree.body, owner, env, definitions, collecting, stack)
+    try:
+        return _collect_refs(tree.body, owner, env, definitions, collecting, stack)
+    except RecursionError:
+        return set()
 
 
 def _collect_refs(node: ast.AST, owner: str, env: dict[str, str],

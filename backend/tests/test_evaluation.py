@@ -3,7 +3,8 @@ constraint verdicts and measured verdicts."""
 import pytest
 
 from app.services.evaluation import (
-    Evaluator, EvalError, UnknownValue, MAX_DERIVATION_DEPTH, _resolve_safe,
+    Evaluator, EvalError, UnknownValue, MAX_DERIVATION_DEPTH, MAX_EXPR_CHARS,
+    _resolve_safe,
 )
 from tests.conftest import make_req
 
@@ -75,6 +76,57 @@ class TestExpressions:
     def test_syntax_error(self):
         with pytest.raises(EvalError):
             ev().eval_expr("1 +", "R1")
+
+    def test_long_expression_raises_eval_error_not_recursion(self):
+        """`'1' + '+1'*20000` used to raise RecursionError inside ``ast.parse``,
+        which is neither EvalError nor UnknownValue and so escaped every caller
+        as a 500."""
+        e = ev()
+        with pytest.raises(EvalError):
+            e.eval_expr('1' + '+1' * 20000, "X")
+
+    def test_expression_length_cap(self):
+        e = ev()
+        with pytest.raises(EvalError, match="exceeds"):
+            e.eval_expr('1' * (MAX_EXPR_CHARS + 1), "X")
+
+    def test_expression_at_the_cap_still_evaluates(self):
+        e = ev()
+        # "min(" + "1" + ",1"*k + ")" is exactly MAX_EXPR_CHARS characters long.
+        k = (MAX_EXPR_CHARS - 6) // 2
+        expr = "min(" + "1" + ",1" * k + ")"
+        assert len(expr) == MAX_EXPR_CHARS
+        assert e.eval_expr(expr, "X") == 1.0
+
+    def test_deep_nesting_within_the_cap_still_evaluates(self):
+        e = ev()
+        assert e.eval_expr('(' * 200 + '1' + ')' * 200, "X") == 1.0
+
+    def test_near_cap_deep_expression_evaluates(self):
+        """A left-nested chain just under the cap is the deepest tree the length
+        limit can admit. The old 2000-char cap left a band (~1810-2000 chars)
+        where ``_eval`` recursed past the frame limit and escaped as a 500."""
+        e = ev()
+        n = (MAX_EXPR_CHARS - 1) // 2
+        expr = '1' + '+1' * n
+        assert len(expr) < MAX_EXPR_CHARS
+        assert e.eval_expr(expr, "X") == float(n + 1)
+
+    def test_at_cap_from_a_deep_call_stack(self):
+        """How much stack remains depends on the caller, so the cap alone cannot
+        guarantee safety — the catch in ``eval_expr`` is what actually guards the
+        walk. From ~60 frames deep an at-cap left-nested expression must still
+        not raise RecursionError."""
+        e = ev()
+        n = (MAX_EXPR_CHARS - 1) // 2
+        expr = '1' + '+1' * n
+
+        def descend(depth):
+            if depth == 0:
+                return e.eval_expr(expr, "X")
+            return descend(depth - 1)
+
+        assert descend(60) == float(n + 1)
 
 
 class TestDerivation:
@@ -246,6 +298,25 @@ def test_evaluation_endpoint_full_chain(client, project):
     assert data["measured_summary"]["fail"] == 1
     assert data["parameter_count"] == 5
     assert data["measurement_count"] == 1
+
+
+def test_poisoned_constraint_degrades_gracefully(client, project):
+    """A poisoned (over-long) constraint must error as one row, not 500 the
+    whole request — the valid requirement's verdict is still computed."""
+    make_req(client, project, "R-POISON")
+    put_req(client, project, "R-POISON",
+            constraints=[{"expr": '1' + '+1' * 20000}])
+    make_req(client, project, "R-OK")
+    put_req(client, project, "R-OK",
+            parameters=[{"name": "x", "value": 5}],
+            constraints=[{"expr": "x > 0"}])
+
+    res = client.get(f"/api/projects/{project}/evaluation")
+    assert res.status_code == 200
+    data = res.json()
+    by_id = {r["id"]: r for r in data["requirements"]}
+    assert by_id["R-POISON"]["constraints"][0]["status"] == "error"
+    assert by_id["R-OK"]["verdict"] == "pass"
 
 
 def test_unknown_and_error_verdicts(client, project):
