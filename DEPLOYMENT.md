@@ -296,7 +296,7 @@ Ensure the [requirements](#requirements) are met before installing.
         --port 8000 \
         --workers 1 \
         --proxy-headers \
-        --forwarded-allow-ips "127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+        --forwarded-allow-ips "127.0.0.0/8"
     Restart=always
     RestartSec=5
     StandardOutput=journal
@@ -326,6 +326,13 @@ Ensure the [requirements](#requirements) are met before installing.
     [Install]
     WantedBy=multi-user.target
     ```
+
+    `--forwarded-allow-ips` must agree with `RT_PROXY_TRUSTED_CIDR` (default
+    `127.0.0.0/8`): uvicorn rewrites the client address from the forwarded header
+    before the app sees it, so widening one without the other silently disables
+    per-IP rate limiting. If your reverse proxy is not on loopback, change both
+    together — `RT_PROXY_TRUSTED_CIDR` is the setting to change, and its value
+    goes here.
     ```bash
     systemctl daemon-reload
     systemctl enable --now reqmesh

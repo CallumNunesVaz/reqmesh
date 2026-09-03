@@ -64,7 +64,7 @@ run_server() {
   # `python -m uvicorn` (not the uvicorn entry-point script): the script's
   # shebang hardcodes the venv's absolute path and breaks if the repo is
   # moved or renamed, while the python symlink keeps working.
-  .venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips '127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16' &
+  .venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips '127.0.0.0/8' &
   BACKEND_PID=$!
 
   echo "[2/2] Starting frontend..."
