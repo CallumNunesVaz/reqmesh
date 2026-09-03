@@ -132,6 +132,9 @@ class Publisher:
         if subsystems is not None:
             sub_ids = set()
             def collect(root_id):
+                # Guard the visited set as _collect_component does (parent cycles arrive on disk).
+                if root_id in sub_ids:
+                    return
                 sub_ids.add(root_id)
                 for r in all_reqs:
                     if r.get("parent") == root_id:
@@ -564,7 +567,9 @@ class Publisher:
 
         return html
 
-    def _build_hierarchy(self, parent=None, depth=0):
+    def _build_hierarchy(self, parent=None, depth=0, _seen=None):
+        if _seen is None:
+            _seen = frozenset()
         html = ""
         for r in self.reqs:
             if r.get("parent") == parent:
@@ -616,7 +621,10 @@ class Publisher:
                   {attr_html and f'<div class="field">{attr_html}</div>'}
                   {rel_html and f'<div class="relations">{rel_html}</div>'}
                 </div>"""
-                html += self._build_hierarchy(rid, depth + 1)
+                # Guard the ancestor path as _collect_component guards its visited set.
+                if rid in _seen:
+                    continue
+                html += self._build_hierarchy(rid, depth + 1, _seen | {rid})
         return html
 
     def _trace_matrix(self):
