@@ -1,11 +1,13 @@
 import time
-from collections import defaultdict
 from typing import Any, cast
 
 from fastapi import HTTPException, Request
 
 
-_window_attempts: defaultdict[str, list[float]] = defaultdict(list)
+# Each bucket carries the window (in seconds) it belongs to, alongside its
+# timestamps. The eviction sweep must judge staleness against *that* window, not
+# the window of whichever endpoint happened to trigger the sweep.
+_window_attempts: dict[str, tuple[int, list[float]]] = {}
 _last_eviction: float = 0.0
 
 
@@ -65,17 +67,31 @@ def _client_ip(request: Request) -> str:
     return peer
 
 
-def _evict_old_buckets(now: float, window_seconds: int) -> None:
-    """Periodically prune empty buckets to prevent unbounded memory growth."""
+def _evict_old_buckets(now: float) -> None:
+    """Periodically prune buckets whose timestamps are all older than their own window.
+
+    Each bucket carries the window it was created under, so staleness is judged
+    against that window rather than the caller's. A single global throttle
+    (``_last_eviction``) bounds how often this scans the whole dict.
+    """
     global _last_eviction
     if now - _last_eviction < 300:  # every 5 minutes
         return
     _last_eviction = now
-    to_delete = [k for k, v in _window_attempts.items()
-                 if not v or all(t <= now - window_seconds for t in v)]
+    to_delete = [k for k, (window_seconds, timestamps) in _window_attempts.items()
+                 if not timestamps or all(t <= now - window_seconds for t in timestamps)]
     for k in to_delete:
         del _window_attempts[k]
 
+
+# An earlier version of `_evict_old_buckets` took the caller's window as an
+# argument and swept *every* bucket against it. Because the bucket key did not
+# record which window a bucket belonged to, a request to a 60-second endpoint
+# (login) deleted the buckets of the 300-second endpoints (register,
+# forgot-password, verify-email) whose timestamps were still fresh. The strictest
+# limits in the app silently degraded toward login's 60-second effective window.
+# The fix keys each bucket on its window and derives the window per bucket during
+# eviction, so a short-window sweep no longer reaches into a long-window bucket.
 
 # Per-account lockout lives in `core.auth.authenticate`, not here. It counts
 # failed logins in the user record (`failed_attempts` / `locked_until`), so it
@@ -98,11 +114,11 @@ def rate_limit(max_attempts: int = 5, window_seconds: int = 60):
         if not getattr(settings, "rate_limit_enabled", True):
             return
         ip = _client_ip(request)
-        key = f"{ip}:{request.url.path}"
+        key = f"{ip}:{request.url.path}:{window_seconds}"
         now = time.time()
-        _evict_old_buckets(now, window_seconds)
-        attempts = _window_attempts[key]
-        attempts[:] = [t for t in attempts if t > now - window_seconds]
+        _evict_old_buckets(now)
+        window, attempts = _window_attempts.setdefault(key, (window_seconds, []))
+        attempts[:] = [t for t in attempts if t > now - window]
         if len(attempts) >= max_attempts:
             raise HTTPException(status_code=429, detail="Too many requests. Try again later.")
         attempts.append(now)
