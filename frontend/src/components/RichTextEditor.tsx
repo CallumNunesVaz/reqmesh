@@ -12,7 +12,7 @@ import { loadEntityIndex, useEntityKinds, type IndexedEntity } from './entityInd
 import { loadParameterIndex, overlayLocalParams, type ParameterRef } from './parameterIndex';
 import { ENTITY_META, entityIconMeta, entityPath, type EntityKind } from './entities';
 import { findMentionTrigger, type MentionOption } from './mentions';
-import { useStore } from '../store';
+import { useEntityVersion } from '../store';
 import type { Parameter } from '../api/client';
 import MentionPicker from './MentionPicker';
 
@@ -160,13 +160,15 @@ export default function RichTextEditor({ content, onChange, onBlur, disabled = f
   useEffect(() => { mentionOpen.current = mention !== null; }, [mention]);
   useEffect(() => { mentionIndexRef.current = mentionIndex; }, [mentionIndex]);
 
-  // `dataVersion` has to be a *dependency*, not just the indexes' cache key.
-  // A mutation does reach us — the backend publishes one per mutating request
-  // and Layout's SSE listener bumps dataVersion — but with the effect keyed on
-  // [projectId, disabled] a mounted editor never re-read, so it went on serving
-  // the list it loaded on mount. That is what made a newly added parameter
+  // The index has to be re-read when the entities it indexes change, not just
+  // on mount: Layout's SSE listener bumps the changed collection's version, and
+  // keying the effect on [projectId, disabled] alone meant a mounted editor went
+  // on serving the list it loaded on mount — making a newly added parameter
   // unmentionable until the page was reloaded.
-  const dataVersion = useStore((s) => s.dataVersion);
+  const dataVersion = useEntityVersion(
+    'requirements', 'verification', 'components', 'specifications',
+    'change-requests', 'risks', 'definitions',
+  );
   useEffect(() => {
     if (!projectId || disabled) return;
     let live = true;

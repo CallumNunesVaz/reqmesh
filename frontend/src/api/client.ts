@@ -47,7 +47,7 @@ function getCsrfToken(): string {
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = 'GET', body } = options;
+  const { method = 'GET', body, raw } = options;
   const headers: Record<string, string> = {};
 
   if (method !== 'GET' && method !== 'HEAD') {
@@ -121,6 +121,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
 
   if (res.status === 204) return undefined as T;
+  if (raw) return (await res.text()) as unknown as T;
   return res.json();
 }
 

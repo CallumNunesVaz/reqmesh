@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { expandHeight } from '../lib/animations';
 import { Plus, CheckCircle2, X, Link as LinkIcon, Loader, Search, UploadCloud, Copy } from 'lucide-react';
 import { api, type VerificationCase, type TestResultImportSummary } from '../api/client';
-import { useStore } from '../store';
+import { useEntityVersion } from '../store';
 import { useAuthStore } from '../store/auth';
 import { CopyLinkButton, SECTION_TITLES } from '../components/entities';
 import { useFocusedEntity } from '../components/useFocusedEntity';
@@ -31,7 +31,7 @@ export default function VerificationPage() {
   const navigate = useNavigate();
   const editable = useAuthStore((s) => s.canEdit());
   const { addToast } = useToasts();
-  const dataVersion = useStore((s) => s.dataVersion);
+  const dataVersion = useEntityVersion('verification');
   const [verificationCases, setVerificationCases] = useState<VerificationCase[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);

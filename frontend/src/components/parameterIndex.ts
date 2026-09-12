@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, type EvaluatedRequirement, type Parameter } from '../api/client';
-import { useStore } from '../store';
+import { useEntityVersion, entityEpoch } from '../store';
 
 /**
  * The project-wide parameter index: every fully-qualified `ID.param`
@@ -143,7 +143,7 @@ let cache: { key: string; promise: Promise<ParameterIndex> } | null = null;
  * invalidates both together.
  */
 export function loadParameterIndex(projectId: string): Promise<ParameterIndex> {
-  const key = `${projectId}:${useStore.getState().dataVersion}`;
+  const key = `${projectId}:${entityEpoch()}`;
   if (cache?.key === key) return cache.promise;
   const promise = Promise.all([
     api.listRequirements(projectId).catch(() => []),
@@ -159,7 +159,7 @@ export function loadParameterIndex(projectId: string): Promise<ParameterIndex> {
 
 /** The full index — refs for the picker, values for resolution. */
 export function useParameterIndex(projectId?: string): ParameterIndex {
-  const dataVersion = useStore((s) => s.dataVersion);
+  const dataVersion = useEntityVersion('requirements', 'components', 'verification', 'definitions');
   const [index, setIndex] = useState<ParameterIndex>({ refs: [], values: new Map() });
   useEffect(() => {
     if (!projectId) return;
@@ -172,7 +172,7 @@ export function useParameterIndex(projectId?: string): ParameterIndex {
 
 /** ref -> { value, unit } for read-mode resolution. */
 export function useParameterValues(projectId?: string): Map<string, ParameterValue> {
-  const dataVersion = useStore((s) => s.dataVersion);
+  const dataVersion = useEntityVersion('requirements', 'components', 'verification', 'definitions');
   const [values, setValues] = useState<Map<string, ParameterValue>>(new Map());
   useEffect(() => {
     if (!projectId) return;

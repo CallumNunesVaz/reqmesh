@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { expandHeight } from '../lib/animations';
 import { Plus, ChevronRight, Boxes, Square, CheckSquare, Trash2, X, Search, Eye, EyeOff, Download, Copy } from 'lucide-react';
 import { api, COMPONENT_TYPES, getTruncationInfo, type Component, type ComponentTreeNode, type TruncationInfo } from '../api/client';
-import { useStore } from '../store';
+import { useStore, useEntityVersion } from '../store';
 import { useHoveredEntityBus, useHoverHighlight } from '../components/Layout';
 import { componentsSatisfyingRequirement } from '../lib/crossHighlight';
 import { useAuthStore } from '../store/auth';
@@ -35,7 +35,7 @@ export default function ComponentsPage() {
   // Rows the reparent dialog is moving. Components are never renamed, so
   // there is no re-prefix step — only the cycle-safe parent choice.
   const [movingIds, setMovingIds] = useState<string[] | null>(null);
-  const dataVersion = useStore((s) => s.dataVersion);
+  const dataVersion = useEntityVersion('components');
   const hiddenComponents = useStore((s) => s.hiddenComponents);
   const toggleHiddenComponent = useStore((s) => s.toggleHiddenComponent);
   const setHiddenComponents = useStore((s) => s.setHiddenComponents);

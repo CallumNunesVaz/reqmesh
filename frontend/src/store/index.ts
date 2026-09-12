@@ -25,6 +25,10 @@ interface AppState {
   specifications: Specification[];
   graphVersion: number;
   dataVersion: number;
+  /** Per-collection invalidation counters, bumped when a remote mutation event
+   *  names that collection. Pages subscribe via `useEntityVersion(...kinds)`
+   *  so one user's edit refreshes only the views that display it. */
+  entityVersions: Record<string, number>;
   refocusGraph: number;
   helpersEnabled: boolean;
   /** List/table density — `comfortable` (default) or `compact`. */
@@ -45,6 +49,7 @@ interface AppState {
   setSpecifications: (specifications: Specification[]) => void;
   bumpGraphVersion: () => void;
   bumpDataVersion: () => void;
+  bumpEntityVersion: (kind: string) => void;
   toggleHelpers: () => void;
   setDensity: (density: Density) => void;
   setNavGuard: (fn: (() => boolean | Promise<boolean>) | null) => void;
@@ -72,6 +77,7 @@ export const useStore = create<AppState>((set) => ({
   specifications: [],
   graphVersion: 0,
   dataVersion: 0,
+  entityVersions: {},
   refocusGraph: 0,
   helpersEnabled: false,
   density: initialDensity,
@@ -86,6 +92,9 @@ export const useStore = create<AppState>((set) => ({
   setSpecifications: (specifications) => set({ specifications }),
   bumpGraphVersion: () => set((s) => ({ graphVersion: s.graphVersion + 1, refocusGraph: s.refocusGraph + 1 })),
   bumpDataVersion: () => set((s) => ({ dataVersion: s.dataVersion + 1 })),
+  bumpEntityVersion: (kind) => set((s) => ({
+    entityVersions: { ...s.entityVersions, [kind]: (s.entityVersions[kind] ?? 0) + 1 },
+  })),
   toggleHelpers: () => set((s) => ({ helpersEnabled: !s.helpersEnabled })),
   setDensity: (density) => set({ density }),
   setNavGuard: (navGuard) => set({ navGuard }),
@@ -114,3 +123,33 @@ export const useStore = create<AppState>((set) => ({
     contextOpen: typeof updater === 'function' ? updater(s.contextOpen) : updater
   })),
 }));
+
+/**
+ * Subscribe to a set of entity collections.
+ *
+ * Returns a number that changes when any named collection changes, or when the
+ * global `dataVersion` changes (a local mutation, or a remote change the server
+ * could not attribute to one collection). This is what lets one user's edit
+ * refresh only the views that display the edited collection instead of every
+ * mounted page re-fetching and re-solving the whole project.
+ */
+export function useEntityVersion(...kinds: string[]): number {
+  return useStore((s) => {
+    let v = s.dataVersion;
+    for (const k of kinds) v += s.entityVersions[k] ?? 0;
+    return v;
+  });
+}
+
+/**
+ * A single number that changes whenever *any* collection (or the global
+ * `dataVersion`) changes. Used to key the imperative entity/parameter index
+ * caches, which are broad and not tied to one collection.
+ */
+export function entityEpoch(): number {
+  const s = useStore.getState();
+  let v = s.dataVersion;
+  for (const k in s.entityVersions) v += s.entityVersions[k];
+  return v;
+}
+

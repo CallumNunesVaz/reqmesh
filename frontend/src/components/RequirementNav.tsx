@@ -26,7 +26,7 @@ import {
   FlaskConical,
 } from 'lucide-react';
 import { api, type RequirementTreeNode } from '../api/client';
-import { useStore } from '../store';
+import { useEntityVersion } from '../store';
 import { useSelectedReq } from './Layout';
 import { SECTION_TITLES } from './entities';
 
@@ -293,7 +293,10 @@ export default function RequirementNav({ width = 300, collapsed, onToggleCollaps
   const [panel, setPanel] = useState<{ section: Section; items: PanelItem[] }>({ section: 'requirements', items: [] });
   const [search, setSearch] = useState('');
   const { selectedReqId, selectReq } = useSelectedReq();
-  const dataVersion = useStore((s) => s.dataVersion);
+  const dataVersion = useEntityVersion(
+    'requirements', 'specifications', 'components', 'verification',
+    'traces', 'change-requests', 'risks',
+  );
 
   const section = sectionFor(location.pathname);
   const focusId = new URLSearchParams(location.search).get('focus');

@@ -6,7 +6,7 @@ import { expandHeight } from '../lib/animations';
 import { Plus, Trash2, Square, CheckSquare, X, Search, AlertTriangle, Link2, ChevronDown } from 'lucide-react';
 import { api, RISK_STATUSES, type Risk, type RiskMatrix, type RequirementTreeNode, type ComponentTreeNode } from '../api/client';
 import { useAuthStore } from '../store/auth';
-import { useStore } from '../store';
+import { useEntityVersion } from '../store';
 import { CopyLinkButton } from '../components/entities';
 import { useFocusedEntity } from '../components/useFocusedEntity';
 import RichTextEditor from '../components/RichTextEditor';
@@ -116,7 +116,7 @@ export default function RisksPage() {
   // individual create/edit/delete which are propose-tier.
   const canBulk = useAuthStore((s) => s.canEdit());
   const { addToast } = useToasts();
-  const dataVersion = useStore((s) => s.dataVersion);
+  const dataVersion = useEntityVersion('risks', 'requirements', 'components');
 
   const [reqTree, setReqTree] = useState<RequirementTreeNode[]>([]);
   const [compTree, setCompTree] = useState<ComponentTreeNode[]>([]);

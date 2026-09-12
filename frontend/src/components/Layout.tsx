@@ -22,6 +22,8 @@ import { useListPosition } from '../hooks/useListPosition';
 import { useUndoStore } from '../store/undo';
 import { api, type PresenceUser } from '../api/client';
 import { SseBackoff } from '../lib/sseBackoff';
+import { pageKeyFor } from '../lib/pageKey';
+import { graphRelevant } from '../lib/mutationInvalidation';
 import { WhatIfProvider } from './WhatIfContext';
 import WhatIfBar from './WhatIfBar';
 import { ToastProvider } from './Toast';
@@ -177,8 +179,11 @@ export default function Layout() {
   const isInProject = !!projectId;
 
   const location = useLocation();
-  const pageKey = (location.pathname.split('/').filter(Boolean).pop() || 'overview')
-    .replace(/[^a-z0-9-]/gi, '');
+  // Key preferences on the route *section*, not the trailing path segment. On a
+  // detail route like /project/x/requirements/REQ-001 the last segment is the
+  // record id, so keying on it gave every requirement its own remembered split
+  // and canvas state and grew localStorage one key per visited record.
+  const pageKey = pageKeyFor(location.pathname);
 
   // The app's single scroll container. Both <main> branches below are
   // mutually exclusive, so this ref always points at the mounted one.
@@ -203,9 +208,10 @@ export default function Layout() {
   // the requirement form does not need — so the fraction is remembered per page
   // rather than once for the app.
   //
-  // Keyed on the *last* path segment, not the whole path: keying on the full
-  // path would give every requirement its own remembered split, so dragging on
-  // one would teach the app nothing about the next.
+  // Keyed on the route *section*, not the whole path: keying on the full path
+  // would give every requirement its own remembered split, so dragging on one
+  // would teach the app nothing about the next. Detail routes share their
+  // section's key (see `pageKey` above).
   //
   // A page nobody has sized yet falls back to the last split the user chose
   // anywhere, not to a fixed default. Snapping an unvisited page to 0.52 when
@@ -364,6 +370,7 @@ export default function Layout() {
   // SSE listener for real-time collaboration: live data refresh + presence.
   const bumpGraphVersion = useStore((s) => s.bumpGraphVersion);
   const bumpDataVersion = useStore((s) => s.bumpDataVersion);
+  const bumpEntityVersion = useStore((s) => s.bumpEntityVersion);
   const helpersEnabled = useStore((s) => s.helpersEnabled);
   const toggleHelpers = useStore((s) => s.toggleHelpers);
   const { undo, redo, canUndo, canRedo } = useUndoStore();
@@ -384,9 +391,23 @@ export default function Layout() {
     const connect = () => {
       es = new EventSource(url);
       es.onopen = () => backoff.reset();
-      es.addEventListener('change', () => {
-        bumpGraphVersion();
-        bumpDataVersion();
+      es.addEventListener('change', (e) => {
+        // The server names the collection that changed. Invalidate just that
+        // one; only re-solve/re-layout the graph for collections it renders.
+        // An unattributed change (import, scan, new route) falls back to the
+        // global refresh so nothing is silently missed.
+        let collection: string | null = null;
+        try {
+          const data = JSON.parse((e as MessageEvent).data);
+          if (typeof data?.collection === 'string') collection = data.collection;
+        } catch { /* malformed frame — treat as global */ }
+        if (collection) {
+          bumpEntityVersion(collection);
+          if (graphRelevant(collection)) bumpGraphVersion();
+        } else {
+          bumpGraphVersion();
+          bumpDataVersion();
+        }
       });
       es.addEventListener('presence', (e) => {
         try {
@@ -405,7 +426,7 @@ export default function Layout() {
       clearTimeout(reconnectTimer);
       es?.close();
     };
-  }, [isInProject, projectId, username, user?.role, bumpGraphVersion, bumpDataVersion]);
+  }, [isInProject, projectId, username, user?.role, bumpGraphVersion, bumpDataVersion, bumpEntityVersion]);
 
   const toggleGraph = () => setGraphOpen((o) => {
     const next = !o;

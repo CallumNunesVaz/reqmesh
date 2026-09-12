@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { expandHeight, listItemSlide } from '../lib/animations';
 import { Plus, Sigma, Boxes, Trash2, X, Search, Edit3, ChevronDown, Square, CheckSquare } from 'lucide-react';
 import { api, type Definition } from '../api/client';
-import { useStore } from '../store';
+import { useEntityVersion } from '../store';
 import { useAuthStore } from '../store/auth';
 import { CopyLinkButton } from '../components/entities';
 import { useFocusedEntity } from '../components/useFocusedEntity';
@@ -43,7 +43,7 @@ const EMPTY = {
 export default function DefinitionsPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const editable = useAuthStore((s) => s.canEdit());
-  const dataVersion = useStore((s) => s.dataVersion);
+  const dataVersion = useEntityVersion('definitions');
   const { addToast } = useToasts();
   const showConfirm = useConfirm();
   const [defs, setDefs] = useState<Definition[]>([]);

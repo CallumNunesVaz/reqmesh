@@ -8,7 +8,7 @@ import {
   Inbox, Square, CheckSquare, SlidersHorizontal, Copy, AlertTriangle,
 } from 'lucide-react';
 import { api, baselineNames, getTruncationInfo, type Requirement, type EvalVerdict, type TruncationInfo, type Component, type StakeholderDef, type SystemStateDef } from '../api/client';
-import { useStore } from '../store';
+import { useStore, useEntityVersion } from '../store';
 import { useAuthStore } from '../store/auth';
 import { useUndoStore } from '../store/undo';
 import { useSelectedReq, useHoveredEntityBus, useHoverHighlight } from '../components/Layout';
@@ -60,7 +60,9 @@ export default function RequirementsPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { requirements, setRequirements } = useStore();
-  const dataVersion = useStore((s) => s.dataVersion);
+  const dataVersion = useEntityVersion(
+    'requirements', 'components', 'verification', 'definitions', 'baselines', 'system-states',
+  );
   const bumpGraphVersion = useStore((s) => s.bumpGraphVersion);
   const bumpDataVersion = useStore((s) => s.bumpDataVersion);
   const editMode = useAuthStore((s) => s.canEdit());

@@ -4,7 +4,7 @@ import { Plus, Search } from 'lucide-react';
 import { ENTITY_META, entityPath } from './entities';
 import { BACKEND_KIND_TO_ENTITY } from '../lib/searchKinds';
 import { loadEntityIndex, searchEntities, recordEntityVisit, type IndexedEntity } from './entityIndex';
-import { useStore } from '../store';
+import { useEntityVersion } from '../store';
 import { api, type SearchResult } from '../api/client';
 import Modal from './Modal';
 
@@ -39,7 +39,11 @@ export default function CommandPalette({ projectId }: { projectId: string }) {
   const [backendLoading, setBackendLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
-  const dataVersion = useStore((s) => s.dataVersion);
+  const dataVersion = useEntityVersion(
+    'requirements', 'components', 'verification', 'specifications',
+    'change-requests', 'risks', 'comments', 'decisions', 'definitions',
+    'analysis', 'baselines',
+  );
   const searchSeqRef = useRef(0);
 
   // Fetch backend project-wide search when query is 3+ chars.

@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { expandHeight, listItemSlide } from '../lib/animations';
 import { Plus, Scale, Trash2, ChevronDown, X, Search, Edit3, Square, CheckSquare } from 'lucide-react';
 import { api, type Requirement, type Component, type DecisionRecord } from '../api/client';
-import { useStore } from '../store';
+import { useEntityVersion } from '../store';
 import { useAuthStore } from '../store/auth';
 import { CopyLinkButton } from '../components/entities';
 import { useFocusedEntity } from '../components/useFocusedEntity';
@@ -55,7 +55,7 @@ const EMPTY = {
 export default function DecisionsPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const editable = useAuthStore((s) => s.canEdit());
-  const dataVersion = useStore((s) => s.dataVersion);
+  const dataVersion = useEntityVersion('decisions', 'requirements', 'components');
   const [decisions, setDecisions] = useState<DecisionRecord[]>([]);
   const [requirements, setRequirements] = useState<Requirement[]>([]);
   const [components, setComponents] = useState<Component[]>([]);

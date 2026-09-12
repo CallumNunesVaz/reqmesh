@@ -4,7 +4,7 @@ import { Search, X, SlidersHorizontal } from 'lucide-react';
 import { api, type SearchResult } from '../api/client';
 import { ENTITY_META, EntityLink, type EntityKind } from '../components/entities';
 import { BACKEND_KIND_TO_ENTITY, SEARCHABLE_KINDS } from '../lib/searchKinds';
-import { useStore } from '../store';
+import { useEntityVersion } from '../store';
 
 const TRUNCATION_LIMIT = 50;
 
@@ -35,7 +35,11 @@ const FILTER_KINDS: { value: string; label: string }[] = [
 export default function SearchPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
-  const dataVersion = useStore((s) => s.dataVersion);
+  const dataVersion = useEntityVersion(
+    'requirements', 'components', 'verification', 'specifications',
+    'change-requests', 'risks', 'comments', 'decisions', 'definitions',
+    'analysis', 'baselines',
+  );
 
   const q = searchParams.get('q') || '';
   const kind = searchParams.get('kind') || '';

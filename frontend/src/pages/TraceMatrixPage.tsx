@@ -9,7 +9,7 @@ import { removeTraceLink } from '../lib/traceLinks';
 import { depthFirstOrder } from '../lib/hierarchy';
 import { matrixToCsv, type MatrixCsvInput } from '../lib/matrixCsv';
 import { useAuthStore } from '../store/auth';
-import { useStore } from '../store';
+import { useEntityVersion } from '../store';
 import AutocompleteInput from '../components/AutocompleteInput';
 import { EntityLink, entityPath, SECTION_TITLES, type EntityKind } from '../components/entities';
 import LoadingSplash from '../components/LoadingSplash';
@@ -43,7 +43,7 @@ export default function TraceMatrixPage() {
   const [error, setError] = useState('');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const editable = useAuthStore((s) => s.canEdit());
-  const dataVersion = useStore((s) => s.dataVersion);
+  const dataVersion = useEntityVersion('traces', 'requirements', 'verification');
   const [search, setSearch] = useState('');
   const [filterLinkType, setFilterLinkType] = useState('');
   const [loading, setLoading] = useState(true);

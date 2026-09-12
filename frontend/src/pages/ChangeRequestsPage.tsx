@@ -6,7 +6,7 @@ import { expandHeight, listItemSlide } from '../lib/animations';
 import { Plus, Trash2, GitPullRequest, Square, CheckSquare, X, Search, Play, Edit3, Ban } from 'lucide-react';
 import { api, type ChangeRequest, type Component, type CRRedline, type Project, type Requirement, CR_URGENCIES } from '../api/client';
 import { useAuthStore } from '../store/auth';
-import { useStore } from '../store';
+import { useStore, useEntityVersion } from '../store';
 import { CopyLinkButton, EntityLink } from '../components/entities';
 import { useFocusedEntity } from '../components/useFocusedEntity';
 import { AutoLinkText } from '../components/autoLink';
@@ -115,7 +115,9 @@ export default function ChangeRequestsPage() {
   // id error, held separately so a bad id never reaches the API.
   const [proposals, setProposals] = useState<{ id: string; name: string; description: string }[]>([{ id: '', name: '', description: '' }]);
   const [proposalError, setProposalError] = useState('');
-  const dataVersion = useStore((s) => s.dataVersion);
+  const dataVersion = useEntityVersion(
+    'change-requests', 'components', 'requirements', 'baselines', 'system-states',
+  );
   const entityKinds = useEntityKinds(projectId);
   const showConfirm = useConfirm();
   const navigate = useNavigate();

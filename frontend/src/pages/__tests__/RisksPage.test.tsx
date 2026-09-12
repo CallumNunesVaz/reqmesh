@@ -31,6 +31,7 @@ vi.mock('../../store/auth', () => ({
 
 vi.mock('../../store', () => ({
   useStore: (selector: (s: unknown) => unknown) => selector({ dataVersion: 0 }),
+  useEntityVersion: () => 0,
 }));
 
 vi.mock('../../components/entities', () => ({

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/client';
-import { useStore } from '../store';
+import { useEntityVersion, entityEpoch } from '../store';
 import type { EntityKind } from './entities';
 
 /** One row of the project-wide entity index: everything linkable, flattened. */
@@ -149,7 +149,7 @@ let cache: { key: string; promise: Promise<IndexedEntity[]> } | null = null;
  * change event naturally invalidates it.
  */
 export function loadEntityIndex(projectId: string): Promise<IndexedEntity[]> {
-  const key = `${projectId}:${useStore.getState().dataVersion}`;
+  const key = `${projectId}:${entityEpoch()}`;
   if (cache?.key === key) return cache.promise;
   const promise = Promise.all([
     api.listRequirements(projectId).catch(() => []),
@@ -232,7 +232,10 @@ export function searchEntities(entities: IndexedEntity[], query: string, limit =
 
 /** id → kind for every entity in the project; feeds auto-linking. */
 export function useEntityKinds(projectId?: string): Map<string, EntityKind> {
-  const dataVersion = useStore((s) => s.dataVersion);
+  const dataVersion = useEntityVersion(
+    'requirements', 'verification', 'components', 'specifications',
+    'change-requests', 'risks',
+  );
   const [kinds, setKinds] = useState<Map<string, EntityKind>>(new Map());
   useEffect(() => {
     if (!projectId) return;

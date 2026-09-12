@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { expandHeight, listItemSlide } from '../lib/animations';
 import { Plus, FileText, Trash2, ChevronDown, Square, CheckSquare, X, Search, ExternalLink, Edit3, Copy } from 'lucide-react';
 import { api, type Requirement, type Component, type Specification } from '../api/client';
-import { useStore } from '../store';
+import { useStore, useEntityVersion } from '../store';
 import { useAuthStore } from '../store/auth';
 import { useToasts } from '../components/Toast';
 import { CopyLinkButton, EntityLink } from '../components/entities';
@@ -28,7 +28,7 @@ export default function SpecificationsPage() {
   const { specifications, setSpecifications } = useStore();
   const editable = useAuthStore((s) => s.canEdit());
   const { addToast } = useToasts();
-  const dataVersion = useStore((s) => s.dataVersion);
+  const dataVersion = useEntityVersion('specifications', 'requirements', 'components');
   const [showCreate, setShowCreate] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [newSpec, setNewSpec] = useState({ id: '', name: '', description: '', url: '' });

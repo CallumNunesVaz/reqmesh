@@ -1,8 +1,11 @@
-import { useEffect, useId, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useParams } from 'react-router-dom';
 import { ArrowLeft, Save, Settings, X, Plus } from 'lucide-react';
 import { api, type StakeholderDef, type RiskMatrix } from '../api/client';
 import { useAuthStore } from '../store/auth';
+import { useStore } from '../store';
+import { useConfirm } from '../components/ConfirmDialog';
+import { useGuardedNavigate } from '../components/navGuard';
 import { useToasts } from '../components/Toast';
 import GitPanel from '../components/GitPanel';
 import Reveal from '../components/Reveal';
@@ -37,7 +40,9 @@ const ENTITY_LABELS: Record<string, string> = {
 
 export default function ProjectSettingsPage() {
   const { projectId } = useParams<{ projectId: string }>();
-  const navigate = useNavigate();
+  const navigate = useGuardedNavigate();
+  const setNavGuard = useStore((s) => s.setNavGuard);
+  const showConfirm = useConfirm();
   const user = useAuthStore((s) => s.user);
   const editable = useAuthStore((s) => s.canEdit());
   const { addToast } = useToasts();
@@ -45,8 +50,11 @@ export default function ProjectSettingsPage() {
   const [projectName, setProjectName] = useState('');
   const [naming, setNaming] = useState<Record<string, NamingRule>>({});
   const [enforceNaming, setEnforceNaming] = useState(true);
-  const [originalName, setOriginalName] = useState('');
   const [saving, setSaving] = useState(false);
+  // JSON of the last loaded/saved editable payload, used to detect any change
+  // (not just the project name) and to arm the unsaved-changes guard.
+  const [savedSnapshot, setSavedSnapshot] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
 
   // Git settings
   const [gitUserName, setGitUserName] = useState('');
@@ -111,9 +119,12 @@ export default function ProjectSettingsPage() {
 
   useEffect(() => {
     if (!projectId) return;
+    // Reset the guard state for a different project so a stale snapshot from
+    // the previous one cannot mark the new project dirty.
+    setLoaded(false);
+    setSavedSnapshot(null);
     api.getProject(projectId).then((p: any) => {
       setProjectName(p.name || '');
-      setOriginalName(p.name || '');
       const incoming = p.naming || {};
       const merged: Record<string, NamingRule> = {};
       for (const [key, def] of Object.entries(DEFAULT_NAMING)) {
@@ -133,6 +144,7 @@ export default function ProjectSettingsPage() {
       setGitCommitChangesThreshold(git.commit_changes_threshold || 0);
       setStakeholders(p.stakeholders || []);
       setRiskMatrix(p.risk_matrix || null);
+      setLoaded(true);
     }).catch((err: any) => addToast('error', `Could not load project settings: ${err.message}`));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
@@ -150,24 +162,28 @@ export default function ProjectSettingsPage() {
     });
   };
 
+  const buildPayload = () => ({
+    name: projectName,
+    naming: { ...naming, enforce: enforceNaming },
+    stakeholders,
+    ...(riskMatrix ? { risk_matrix: riskMatrix } : {}),
+    git: {
+      user_name: gitUserName, user_email: gitUserEmail,
+      remote_url: gitRemoteUrl, auto_commit: gitAutocommit,
+      push_on_commit: gitPushOnCommit, push_interval_minutes: gitPushInterval,
+      commit_schedule: gitCommitSchedule,
+      commit_interval_hours: Number(gitCommitIntervalHours) || 0,
+      commit_changes_threshold: Number(gitCommitChangesThreshold) || 0,
+    },
+  });
+
   const save = async () => {
     if (!projectId) return;
     setSaving(true);
     try {
-      await api.updateProject(projectId, {
-        name: projectName, naming: { ...naming, enforce: enforceNaming },
-        stakeholders,
-        ...(riskMatrix ? { risk_matrix: riskMatrix } : {}),
-        git: {
-          user_name: gitUserName, user_email: gitUserEmail,
-          remote_url: gitRemoteUrl, auto_commit: gitAutocommit,
-          push_on_commit: gitPushOnCommit, push_interval_minutes: gitPushInterval,
-          commit_schedule: gitCommitSchedule,
-          commit_interval_hours: Number(gitCommitIntervalHours) || 0,
-          commit_changes_threshold: Number(gitCommitChangesThreshold) || 0,
-        },
-      });
-      setOriginalName(projectName);
+      const payload = buildPayload();
+      await api.updateProject(projectId, payload);
+      setSavedSnapshot(JSON.stringify(payload));
       addToast('success', 'Settings saved');
     } catch (err: any) {
       addToast('error', err.message || 'Failed to save');
@@ -176,7 +192,36 @@ export default function ProjectSettingsPage() {
     }
   };
 
-  const dirty = projectName !== originalName;
+  // Deep-compare the whole editable payload, not just the name: editing naming
+  // rules, stakeholders, the risk matrix or git settings and navigating away
+  // used to discard the edit with no warning.
+  const currentSnapshot = JSON.stringify(buildPayload());
+  const dirty = loaded && savedSnapshot !== null && currentSnapshot !== savedSnapshot;
+
+  // Snapshot the payload once the initial load has populated every field, so
+  // the first render's empty state is not treated as an edit.
+  useEffect(() => {
+    if (loaded && savedSnapshot === null) setSavedSnapshot(currentSnapshot);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded]);
+
+  const dirtyRef = useRef(dirty);
+  dirtyRef.current = dirty;
+  const confirmLeave = useCallback(async () => {
+    if (!dirtyRef.current) return true;
+    return showConfirm('You have unsaved changes. Discard them and leave?', 'Discard changes');
+  }, [showConfirm]);
+  useEffect(() => {
+    setNavGuard(confirmLeave);
+    return () => setNavGuard(null);
+  }, [confirmLeave, setNavGuard]);
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (dirtyRef.current) { e.preventDefault(); e.returnValue = ''; }
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, []);
 
   return (
     <div className="max-w-6xl mx-auto p-8">

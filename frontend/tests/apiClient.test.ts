@@ -2,12 +2,13 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { api, getTruncationInfo } from '../src/api/client';
 
 /** Build a fetch stub that always answers with one canned response. */
-function stubFetch(response: { status?: number; statusText?: string; json?: () => Promise<unknown> } = {}) {
+function stubFetch(response: { status?: number; statusText?: string; json?: () => Promise<unknown>; text?: () => Promise<string> } = {}) {
   const res = {
     ok: (response.status ?? 200) < 400,
     status: response.status ?? 200,
     statusText: response.statusText ?? 'OK',
     json: response.json ?? (async () => ({})),
+    text: response.text ?? (async () => ''),
   };
   const fetchMock = vi.fn(async () => res as unknown as Response);
   vi.stubGlobal('fetch', fetchMock);
@@ -94,6 +95,13 @@ describe('request', () => {
   it('returns undefined for 204 rather than parsing an empty body', async () => {
     stubFetch({ status: 204, json: async () => { throw new Error('no body to parse'); } });
     await expect(api.deleteProject('demo')).resolves.toBeUndefined();
+  });
+
+  it('returns the raw text body when the caller asks for it', async () => {
+    // The test-result sample endpoint answers with XML, not JSON, so the `raw`
+    // option must bypass res.json() rather than throw a parse error.
+    stubFetch({ text: async () => '<sample/>' });
+    await expect(api.getTestResultSample('demo')).resolves.toBe('<sample/>');
   });
 });
 

@@ -57,25 +57,27 @@ export default class ErrorBoundary extends Component<Props, State> {
           >
             Reload
           </button>
-          <details style={{ marginTop: '2rem', maxWidth: '36rem', width: '100%' }}>
-            <summary style={{ cursor: 'pointer', color: 'var(--c-muted, #64748b)', fontSize: '0.8125rem' }}>
-              Error details
-            </summary>
-            <pre style={{
-              marginTop: '0.5rem',
-              padding: '1rem',
-              fontSize: '0.75rem',
-              overflow: 'auto',
-              background: 'var(--c-surface, #fff)',
-              border: '1px solid var(--c-border, #e2e8f0)',
-              borderRadius: '0.375rem',
-              whiteSpace: 'pre-wrap',
-            }}>
-              {this.state.error.message}
-              {'\n\n'}
-              {this.state.error.stack}
-            </pre>
-          </details>
+          {import.meta.env.DEV && (
+            <details style={{ marginTop: '2rem', maxWidth: '36rem', width: '100%' }}>
+              <summary style={{ cursor: 'pointer', color: 'var(--c-muted, #64748b)', fontSize: '0.8125rem' }}>
+                Error details
+              </summary>
+              <pre style={{
+                marginTop: '0.5rem',
+                padding: '1rem',
+                fontSize: '0.75rem',
+                overflow: 'auto',
+                background: 'var(--c-surface, #fff)',
+                border: '1px solid var(--c-border, #e2e8f0)',
+                borderRadius: '0.375rem',
+                whiteSpace: 'pre-wrap',
+              }}>
+                {this.state.error.message}
+                {'\n\n'}
+                {this.state.error.stack}
+              </pre>
+            </details>
+          )}
         </div>
       );
     }
