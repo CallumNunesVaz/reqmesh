@@ -74,8 +74,14 @@ def _acquire_lease(client_id: str, username: str, now: float) -> str | None:
 # ── Presence roster ───────────────────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/presence")
-def project_presence(project_id: str, user: dict = Depends(require_view)):
-    """Return the users currently viewing the project (real-time roster)."""
+async def project_presence(project_id: str, user: dict = Depends(require_view)):
+    """Return the users currently viewing the project (real-time roster).
+
+    Async so it runs on the event loop, not Starlette's threadpool: the roster
+    is pruned and mutated from the loop (SSE/WS join/leave), and a synchronous
+    handler touching the same dict from a worker thread could drop a presence
+    update or raise "dictionary changed size during iteration".
+    """
     from app.services.event_bus import get_event_bus
 
     users = get_event_bus().roster(project_id)

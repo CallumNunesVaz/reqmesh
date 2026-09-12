@@ -119,3 +119,22 @@ def test_scan_api_endpoint(client, project, tmp_path):
     data = res.json()
     assert data["created"] >= 1
     assert data["requirements_touched"] >= 1
+
+
+def test_scan_tree_skips_a_committed_symlink(tmp_path):
+    """`git ls-files` lists a tracked symlink, which would otherwise let the
+    scanner read a file anywhere on the host, outside code_root."""
+    import subprocess
+
+    secret = tmp_path / "secret.py"
+    secret.write_text("# [impl->REQ-SECRET]\npass\n")
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "real.py").write_text("# [impl->REQ-REAL]\npass\n")
+    (src / "link.py").symlink_to(secret)
+    subprocess.run(["git", "init", "-q"], cwd=src, check=True)
+    subprocess.run(["git", "add", "-A"], cwd=src, check=True)
+
+    ids = {h["req_id"] for h in scan_tree(src)}
+    assert "REQ-REAL" in ids
+    assert "REQ-SECRET" not in ids

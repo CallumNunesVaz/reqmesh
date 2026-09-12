@@ -202,8 +202,8 @@ if _worker_count is not None and _worker_count > 1:
     raise RuntimeError(
         "reqmesh does not support multiple workers: "
         f"configured with {_worker_count}, but the event bus, presence roster, "
-        "rate-limit buckets and git debounce counters are all per-process. "
-        "Run with a single worker (--workers 1)."
+        "rate-limit buckets, git debounce counters and revoked-session set are "
+        "all per-process. Run with a single worker (--workers 1)."
     )
 
 # Fail-fast on a dangerous CORS configuration. Sessions are cookie-based, so
@@ -326,6 +326,7 @@ _PUBLIC_API_PATHS = frozenset({
     "/api/auth/verify-email",
     "/api/auth/resend-verification",
     "/api/version",
+    "/api/system/public-config",  # instance name / support email for the login screen
 })
 
 
@@ -657,6 +658,11 @@ def _mount_spa() -> None:
 
     @app.get("/{full_path:path}")
     async def serve_spa(full_path: str):
+        if full_path == "api" or full_path.startswith("api/"):
+            # An unmatched API path must be a JSON 404, not the SPA shell: a
+            # client or schema probe that mistyped a route got a 200 HTML
+            # document and could not tell it from a real endpoint.
+            return JSONResponse(status_code=404, content={"detail": "Not found"})
         if full_path:
             candidate = (static_root / full_path).resolve()
             if candidate.is_file() and candidate.is_relative_to(static_root):

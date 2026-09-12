@@ -131,7 +131,19 @@ def _list_files(code_root: Path) -> list[Path]:
         )
         if result.returncode == 0:
             raw_paths = result.stdout.rstrip(b"\0").split(b"\0")
-            return [Path(p.decode("utf-8", errors="replace")) for p in raw_paths if p]
+            out: list[Path] = []
+            for p in raw_paths:
+                if not p:
+                    continue
+                rel = Path(p.decode("utf-8", errors="replace"))
+                # A committed symlink points anywhere on the host, escaping the
+                # code_root confinement the caller established. `git ls-files`
+                # lists it as a tracked path, so it must be filtered here too —
+                # the rglob fallback below already skips symlinks.
+                if (code_root / rel).is_symlink():
+                    continue
+                out.append(rel)
+            return out
     except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
         pass
 

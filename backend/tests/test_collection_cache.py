@@ -83,6 +83,19 @@ def test_invalid_configured_bound_rejected(bad):
         Settings(collection_cache_max_entries=bad)
 
 
+def test_create_item_rejects_a_duplicate_id(tmp_path: Path):
+    """The route-level existence pre-check is unlocked, so the check must also
+    live inside `create_item` or two concurrent creates both succeed."""
+    from fastapi import HTTPException
+
+    store = YamlStore(tmp_path)
+    store.ensure_dirs()
+    store.create_requirement({"id": "R-1", "name": "one"})
+    with pytest.raises(HTTPException) as exc:
+        store.create_requirement({"id": "R-1", "name": "two"})
+    assert exc.value.status_code == 409
+
+
 def test_batch_defers_the_per_write_cache_rebuild(tmp_path: Path):
     """A batch of writes must not splice the cached collection on every write
     (which is O(n) per write and O(n²) for an import). The cache is dropped once

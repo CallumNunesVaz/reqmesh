@@ -105,3 +105,11 @@ class TestAnonymousReadIsActuallyBlocked:
     def test_personal_profile_keeps_anonymous_read(self, guest_client, monkeypatch, authed):
         monkeypatch.setattr(settings, "require_auth", False)
         assert guest_client.get("/api/projects").status_code == 200
+
+
+def test_public_config_stays_reachable_with_auth_required(guest_client, monkeypatch):
+    """The login screen needs the instance name and support email before a
+    session exists, so the endpoint must be on the public allowlist."""
+    monkeypatch.setattr(settings, "require_auth", True)
+    res = guest_client.get("/api/system/public-config")
+    assert res.status_code == 200, res.text

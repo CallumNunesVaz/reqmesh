@@ -9,6 +9,17 @@ from .conftest import make_req
 
 # ── Projects ─────────────────────────────────────────────────────────────────
 
+def test_unknown_api_path_is_a_json_404(client):
+    """An unmatched /api path must be a JSON 404, never the SPA shell: a 200
+    HTML document is indistinguishable from a real endpoint. (With the bundle
+    mounted, `serve_spa` enforces this; without it, Starlette's default 404
+    already satisfies it.)"""
+    res = client.get("/api/definitely-not-a-route")
+    assert res.status_code == 404
+    assert res.headers["content-type"].startswith("application/json")
+    assert isinstance(res.json().get("detail"), str)
+
+
 def test_project_lifecycle(client):
     res = client.post("/api/projects", json={"id": "p1", "name": "Project One"})
     assert res.status_code == 201

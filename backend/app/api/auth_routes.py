@@ -27,6 +27,7 @@ from app.core.auth import (
     set_user_disabled,
     unlock_user,
     bump_token_version,
+    revoke_token,
     create_invited_user,
     create_reset_token,
     consume_reset_token,
@@ -194,7 +195,18 @@ def whoami(request: Request, response: Response,
 
 
 @router.post("/auth/logout")
-def logout(response: Response):
+def logout(request: Request, response: Response):
+    # Revoke this session's token, not just the cookies: clearing a cookie does
+    # nothing to a token that was already captured, and the JWT stays valid for
+    # its full TTL otherwise. Scoped to this token, so other devices stay signed
+    # in — `logout-everywhere` is the deliberate all-device action.
+    token = request.cookies.get("token") or ""
+    if not token:
+        auth = request.headers.get("Authorization", "")
+        if auth.startswith("Bearer "):
+            token = auth.removeprefix("Bearer ")
+    if token:
+        revoke_token(token)
     clear_auth_cookies(response)
     return {"ok": True}
 

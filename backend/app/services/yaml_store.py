@@ -490,7 +490,15 @@ class YamlStore:
         path = self._item_path(collection, data["id"])
         # Locked like update_item: a create racing an update of the same id
         # would otherwise interleave read-modify-write against a fresh write.
+        # The existence check lives *inside* the lock so two concurrent creates
+        # of one id cannot both pass a route-level pre-check and silently
+        # overwrite each other.
         with _file_lock(path):
+            if path.exists():
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"{collection}/{data['id']} already exists",
+                )
             self._write_yaml(path, data)
         return data
 
@@ -669,7 +677,12 @@ class YamlStore:
     def append_history(self, item_id: str, entry: dict) -> None:
         d = self.history_dir(item_id)
         stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%f")
-        self._write_yaml(d / f"{stamp}.yaml", entry)
+        # A microsecond stamp is not unique under concurrency: two threads can
+        # land in the same microsecond and the second write silently replaced
+        # the first. The random suffix keeps both, and the timestamp prefix the
+        # activity window filters on is unchanged.
+        name = f"{stamp}-{os.urandom(4).hex()}.yaml"
+        self._write_yaml(d / name, entry)
 
     def list_all_history(self, since: str = "", until: str = "") -> list[dict]:
         """Every audit entry across every item, oldest first.

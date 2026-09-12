@@ -291,6 +291,10 @@ def create_token(username: str, role: str, token_version: int = 0,
         "role": role,
         "tv": token_version,
         "scp": scope,
+        # A per-token id so a single logout can revoke *this* session without
+        # signing the user out of every other device (that is what
+        # `logout-everywhere` and `token_version` are for).
+        "jti": secrets.token_hex(16),
         "iat": int(time.time()),
         "exp": int(time.time()) + (ttl if ttl is not None else _token_ttl()),
     }
@@ -302,6 +306,45 @@ def decode_token(token: str) -> dict | None:
         return jwt.decode(token, get_secret(), algorithms=["HS256"])
     except jwt.PyJWTError:
         return None
+
+
+# Revoked session ids, keyed by ``jti`` → token expiry (epoch seconds). In
+# memory and per-process, like the rate limiter and per-source failure counts:
+# a logout revokes the token for the life of the process. The single-worker
+# guard in `main.py` is what makes that sound; without it a logout on one worker
+# would not be seen by another.
+_revoked_jti: dict[str, float] = {}
+_revoked_lock = threading.Lock()
+
+
+def revoke_token(token: str) -> None:
+    """Revoke a single session token (best effort; ignores malformed input)."""
+    payload = decode_token(token)
+    if not payload:
+        return
+    jti = payload.get("jti")
+    if not jti:
+        return
+    exp = float(payload.get("exp", 0) or 0)
+    now = time.time()
+    with _revoked_lock:
+        for stale in [k for k, e in _revoked_jti.items() if e < now]:
+            del _revoked_jti[stale]
+        _revoked_jti[jti] = exp
+
+
+def _is_revoked(payload: dict) -> bool:
+    jti = payload.get("jti")
+    if not jti:
+        return False
+    with _revoked_lock:
+        exp = _revoked_jti.get(jti)
+        if exp is None:
+            return False
+        if exp < time.time():
+            del _revoked_jti[jti]
+            return False
+        return True
 
 
 # Per-source failed-login accounting, keyed ``(client_ip, username)``.
@@ -484,6 +527,8 @@ def get_user_from_token(token: str, *, allow_ws: bool = False) -> dict | None:
     # opts back in via ``allow_ws``; every HTTP caller uses the default, so a
     # ws-scoped token resolves to no user here — the same as an invalid token.
     if not allow_ws and payload.get("scp", "session") == "ws":
+        return None
+    if _is_revoked(payload):
         return None
     username = payload.get("sub")
     users = load_users()

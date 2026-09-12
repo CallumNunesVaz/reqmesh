@@ -53,6 +53,20 @@ def permission_level_for(user: dict, perms: dict) -> int:
     return PERMISSION_LEVELS.get(perm, 0)
 
 
+# Parsed permissions keyed by the ``_meta.yaml`` path → (file signature, map).
+# The signature is (mtime_ns, size), so an external edit or git checkout
+# invalidates the entry without a restart.
+_permissions_cache: dict[str, tuple[tuple[int, int], dict]] = {}
+
+
+def _meta_signature(path: Path) -> tuple[int, int] | None:
+    try:
+        st = path.stat()
+    except OSError:
+        return None
+    return (st.st_mtime_ns, st.st_size)
+
+
 def get_project_permissions(project_id: str) -> dict:
     """The project's permissions map, or the role defaults when it has none.
 
@@ -60,8 +74,20 @@ def get_project_permissions(project_id: str) -> dict:
     ``_meta.yaml`` that cannot be parsed are propagated rather than falling back
     to the permissive defaults. Falling back here would let a corrupt file grant
     ``view`` on a project that denies it.
+
+    Parsed once per file signature: every project-scoped request consults this
+    map, so re-parsing ``_meta.yaml`` each time is pure overhead. The signature
+    (mtime_ns + size) means an external edit or a git checkout is picked up
+    without a restart.
     """
     store = get_store(project_id)
+    meta_file = store.root / "_meta.yaml"
+    signature = _meta_signature(meta_file)
+    key = str(meta_file)
+    if signature is not None:
+        cached = _permissions_cache.get(key)
+        if cached is not None and cached[0] == signature:
+            return cached[1]
     try:
         meta = store.read_meta_strict()
     except Exception as exc:
@@ -69,7 +95,12 @@ def get_project_permissions(project_id: str) -> dict:
             status_code=500,
             detail="Project permissions are unreadable",
         ) from exc
-    return meta.get("permissions") or dict(DEFAULT_PERMISSIONS)
+    perms = meta.get("permissions") or dict(DEFAULT_PERMISSIONS)
+    if signature is not None:
+        if len(_permissions_cache) >= 512:
+            _permissions_cache.clear()
+        _permissions_cache[key] = (signature, perms)
+    return perms
 
 
 def user_permission_level(user: dict, project_id: str) -> int:

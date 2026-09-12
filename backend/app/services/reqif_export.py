@@ -10,7 +10,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 from xml.dom import minidom
-from xml.etree.ElementTree import Element, SubElement, tostring
+from xml.etree.ElementTree import Element, SubElement, fromstring, tostring
 
 REQIF_NS = "http://www.omg.org/spec/ReqIF/20110401/reqif.xsd"
 XHTML_NS = "http://www.w3.org/1999/xhtml"
@@ -188,8 +188,19 @@ def _spec_object(parent: Element, req: dict, req_type_id: str) -> None:
         SubElement(defn, _ns_tag("ATTRIBUTE-DEFINITION-XHTML-REF")).text = "ATTR-DESCRIPTION"
         the_val = SubElement(desc_val, _ns_tag("THE-VALUE"))
         div = SubElement(the_val, _xhtml_tag("div"))
-        # Insert raw description as XHTML content (will be escaped properly)
-        div.text = desc
+        # The stored description is sanitised HTML (`sanitize.py`), so emit it
+        # as markup. Assigning it to `.text` escaped every tag, so `<p>x</p>`
+        # round-tripped as the literal string "&lt;p&gt;x&lt;/p&gt;". If the
+        # fragment is not XML-well-formed (hand-edited YAML), fall back to the
+        # escaped text rather than failing the export.
+        try:
+            fragment = fromstring(f'<root xmlns="{XHTML_NS}">{desc}</root>')
+        except Exception:
+            div.text = desc
+        else:
+            div.text = fragment.text
+            for child in list(fragment):
+                div.append(child)
 
 
 def _attr_value(parent: Element, attr_id: str, value: str) -> None:
