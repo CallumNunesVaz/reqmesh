@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { api, type SystemInfo, type UpdateCheck, type UpdateStatus, type BuildInfo } from '../api/client';
 import { useAuthStore } from '../store/auth';
+import { isSafeExternalUrl } from '../lib/safeUrl';
 import Modal from '../components/Modal';
 
 /** States during which the update is actively running and we should poll. */
@@ -474,7 +475,7 @@ export default function SystemPage() {
                   Version {check?.latest} is available
                   <span className="text-xs text-muted-foreground font-normal">(you have {check?.current})</span>
                 </div>
-                {check?.html_url && (
+                {check?.html_url && isSafeExternalUrl(check.html_url) && (
                   <a className="text-xs text-primary hover:underline inline-flex items-center gap-1 mt-1" href={check.html_url} target="_blank" rel="noreferrer">Release notes <ExternalLink size={11} /></a>
                 )}
                 {check?.notes && (

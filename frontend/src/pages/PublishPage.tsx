@@ -5,6 +5,7 @@ import { FileDown, FileText, FileCode, File, Download, Loader, AlertTriangle } f
 import { api } from '../api/client';
 import EmptyState from '../components/EmptyState';
 import Reveal from '../components/Reveal';
+import { useToasts } from '../components/Toast';
 
 const formats = [
   { id: 'html', label: 'HTML Report', icon: FileCode, desc: 'Rich colorized web report with tables, charts, and hierarchy', ext: '.html' },
@@ -50,6 +51,7 @@ const allFormats = [...formats, ...dataFormats, ...interchangeFormats];
 
 export default function PublishPage() {
   const { projectId } = useParams<{ projectId: string }>();
+  const { addToast } = useToasts();
   const [selectedFormat, setSelectedFormat] = useState('html');
   const [sections, setSections] = useState<string[]>(allSections.map(s => s.id));
   const [downloading, setDownloading] = useState(false);
@@ -108,7 +110,7 @@ export default function PublishPage() {
       URL.revokeObjectURL(url);
       a.remove();
     } catch (err: any) {
-      alert(err.message || 'Download failed');
+      addToast('error', err.message || 'Download failed');
     } finally {
       clearTimeout(phase2);
       clearTimeout(phase3);

@@ -103,6 +103,12 @@ services:
       # shared data root via RT_STATE_DIR.
       - /tmp
     restart: unless-stopped
+    # Bound container logs; the default json-file driver grows without limit.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/health"]
       interval: 30s
@@ -138,6 +144,11 @@ services:
       # writes only to the control volume.
       - ./:/deploy:ro
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # ═══ Optional — reverse proxy with automatic TLS via Caddy ═══════════════════
   # Uncomment this block, comment the `ports:` section on the reqmesh service,

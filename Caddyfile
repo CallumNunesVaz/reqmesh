@@ -22,11 +22,12 @@ localserver.reqmesh.com {
         Permissions-Policy "camera=(), microphone=(), geolocation=()"
     }
 
-    # Defence in depth: refuse oversized request bodies at the proxy too. Set
-    # slightly above the app's own JSON body cap so the app produces its
-    # friendlier error in the normal case.
+    # Defence in depth: refuse oversized request bodies at the proxy too. The
+    # cap must cover the app's largest upload (imports, 50 MB), not just the
+    # 10 MB JSON body — otherwise a Caddy-fronted install rejects large imports
+    # that nginx and the app both accept.
     request_body {
-        max_size 12MB
+        max_size 52MB
     }
 
     reverse_proxy reqmesh:8000 {

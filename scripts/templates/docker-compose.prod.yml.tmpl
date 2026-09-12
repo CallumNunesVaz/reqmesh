@@ -86,6 +86,12 @@ services:
       # shared data root via RT_STATE_DIR.
       - /tmp
     restart: unless-stopped
+    # Bound container logs; the default json-file driver grows without limit.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/health"]
       interval: 30s
@@ -110,6 +116,11 @@ services:
       - reqmesh-control:/control
       - ./:/deploy:ro
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 %_CADDY_SERVICE_%
 %_NGINX_SERVICE_%
