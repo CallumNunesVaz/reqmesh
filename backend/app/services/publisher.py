@@ -567,41 +567,56 @@ class Publisher:
 
         return html
 
+    def _requirement_children(self) -> dict:
+        """Requirements grouped by parent id, built once per publisher.
+
+        ``_build_hierarchy`` used to scan every requirement for each node, which
+        is O(n²) on a large project. The map preserves ``self.reqs`` order within
+        each parent, so the rendered hierarchy is unchanged.
+        """
+        cached = getattr(self, "_req_children_cache", None)
+        if cached is None:
+            children: dict = {}
+            for r in self.reqs:
+                children.setdefault(r.get("parent"), []).append(r)
+            self._req_children_cache = children
+            cached = children
+        return cached
+
     def _build_hierarchy(self, parent=None, depth=0, _seen=None):
         if _seen is None:
             _seen = frozenset()
         html = ""
-        for r in self.reqs:
-            if r.get("parent") == parent:
-                indent = depth * 20
-                rid = r["id"]
-                # The only field emitted as HTML rather than escaped, so it is
-                # the one that must be sanitised. Applied here as well as on
-                # write, because descriptions stored before sanitisation
-                # existed are still in the YAML.
-                desc = sanitize_html(self._resolve(r.get("description", ""))).replace("<p>", "").replace("</p>", "")
-                relations = r.get("relations", [])
-                attrs = r.get("attributes", [])
+        for r in self._requirement_children().get(parent, []):
+            indent = depth * 20
+            rid = r["id"]
+            # The only field emitted as HTML rather than escaped, so it is
+            # the one that must be sanitised. Applied here as well as on
+            # write, because descriptions stored before sanitisation
+            # existed are still in the YAML.
+            desc = sanitize_html(self._resolve(r.get("description", ""))).replace("<p>", "").replace("</p>", "")
+            relations = r.get("relations", [])
+            attrs = r.get("attributes", [])
 
-                rel_html = ""
-                for rel in relations:
-                    rel_html += f'<span class="rel-item"><span class="type">{esc(rel["type"])}</span> → {self._link(rel["target"])}</span>'
+            rel_html = ""
+            for rel in relations:
+                rel_html += f'<span class="rel-item"><span class="type">{esc(rel["type"])}</span> → {self._link(rel["target"])}</span>'
 
-                attr_html = ""
-                for a in attrs:
-                    attr_html += f'<span style="margin-right:8px;font-size:9pt;"><strong>{esc(a["key"])}:</strong> {esc(a["value"])}</span>'
+            attr_html = ""
+            for a in attrs:
+                attr_html += f'<span style="margin-right:8px;font-size:9pt;"><strong>{esc(a["key"])}:</strong> {esc(a["value"])}</span>'
 
-                rationale = sanitize_html(self._resolve(r.get("rationale", ""))).replace("<p>", "").replace("</p>", "")
-                source = esc(self._resolve(r.get("source", "")))
-                allocated = esc(self._resolve(r.get("allocated_to", "")))
-                baseline = esc(", ".join(r.get("baselines", [])))
-                subject = r.get("subject")
-                subject_link = self._link(subject) if subject else ""
-                vc_links = ", ".join(self._link(vc_id) for vc_id in r.get("verification_cases", []))
-                cascade_from = r.get("cascade_from")
-                cascade_html = f'<div class="field"><strong>Cascaded from:</strong> {self._link(cascade_from)}</div>' if cascade_from else ""
+            rationale = sanitize_html(self._resolve(r.get("rationale", ""))).replace("<p>", "").replace("</p>", "")
+            source = esc(self._resolve(r.get("source", "")))
+            allocated = esc(self._resolve(r.get("allocated_to", "")))
+            baseline = esc(", ".join(r.get("baselines", [])))
+            subject = r.get("subject")
+            subject_link = self._link(subject) if subject else ""
+            vc_links = ", ".join(self._link(vc_id) for vc_id in r.get("verification_cases", []))
+            cascade_from = r.get("cascade_from")
+            cascade_html = f'<div class="field"><strong>Cascaded from:</strong> {self._link(cascade_from)}</div>' if cascade_from else ""
 
-                html += f"""
+            html += f"""
                 <div {self._anchor('req', rid)} style="margin-left:{indent}px; margin-bottom:14px; padding:10px 14px; border-left:3px solid #e2e8f0; border-radius:0 6px 6px 0; background:#fff;">
                   <div style="font-weight:700; font-size:12pt; margin-bottom:2px;">
                     <span style="font-family:monospace; color:#64748b; font-size:10pt;">{esc(rid)}</span>
@@ -621,10 +636,10 @@ class Publisher:
                   {attr_html and f'<div class="field">{attr_html}</div>'}
                   {rel_html and f'<div class="relations">{rel_html}</div>'}
                 </div>"""
-                # Guard the ancestor path as _collect_component guards its visited set.
-                if rid in _seen:
-                    continue
-                html += self._build_hierarchy(rid, depth + 1, _seen | {rid})
+            # Guard the ancestor path as _collect_component guards its visited set.
+            if rid in _seen:
+                continue
+            html += self._build_hierarchy(rid, depth + 1, _seen | {rid})
         return html
 
     def _trace_matrix(self):

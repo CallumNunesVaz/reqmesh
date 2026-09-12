@@ -295,6 +295,9 @@ def stage_from_archive(archive: Path, requested_by: str) -> dict:
     finally:
         shutil.rmtree(extract_tmp, ignore_errors=True)
         archive.unlink(missing_ok=True)
+        # The detached signature is consumed with the archive; leaving it behind
+        # would let a later unsigned upload silently pair with a stale one.
+        Path(str(archive) + ".sig").unlink(missing_ok=True)
 
 
 # ── Applying a staged bundle (at process start) ──────────────────────────────

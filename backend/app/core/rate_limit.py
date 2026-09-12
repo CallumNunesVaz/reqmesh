@@ -1,3 +1,4 @@
+import threading
 import time
 from typing import Any, cast
 
@@ -9,6 +10,14 @@ from fastapi import HTTPException, Request
 # the window of whichever endpoint happened to trigger the sweep.
 _window_attempts: dict[str, tuple[int, list[float]]] = {}
 _last_eviction: float = 0.0
+
+# FastAPI runs synchronous dependencies (the limiter among them) in Starlette's
+# threadpool, so the dict above is touched from several threads at once. Without
+# this lock two requests can both read ``len(attempts) < max`` and both append
+# (exceeding the limit), and an eviction sweep can mutate the dict while another
+# thread iterates it. Re-entrant because ``rate_limit`` calls
+# ``_evict_old_buckets`` while already holding it.
+_lock = threading.RLock()
 
 
 def _trusted_proxies() -> list:
@@ -75,13 +84,14 @@ def _evict_old_buckets(now: float) -> None:
     (``_last_eviction``) bounds how often this scans the whole dict.
     """
     global _last_eviction
-    if now - _last_eviction < 300:  # every 5 minutes
-        return
-    _last_eviction = now
-    to_delete = [k for k, (window_seconds, timestamps) in _window_attempts.items()
-                 if not timestamps or all(t <= now - window_seconds for t in timestamps)]
-    for k in to_delete:
-        del _window_attempts[k]
+    with _lock:
+        if now - _last_eviction < 300:  # every 5 minutes
+            return
+        _last_eviction = now
+        to_delete = [k for k, (window_seconds, timestamps) in _window_attempts.items()
+                     if not timestamps or all(t <= now - window_seconds for t in timestamps)]
+        for k in to_delete:
+            del _window_attempts[k]
 
 
 # An earlier version of `_evict_old_buckets` took the caller's window as an
@@ -116,10 +126,11 @@ def rate_limit(max_attempts: int = 5, window_seconds: int = 60):
         ip = _client_ip(request)
         key = f"{ip}:{request.url.path}:{window_seconds}"
         now = time.time()
-        _evict_old_buckets(now)
-        window, attempts = _window_attempts.setdefault(key, (window_seconds, []))
-        attempts[:] = [t for t in attempts if t > now - window]
-        if len(attempts) >= max_attempts:
-            raise HTTPException(status_code=429, detail="Too many requests. Try again later.")
-        attempts.append(now)
+        with _lock:
+            _evict_old_buckets(now)
+            window, attempts = _window_attempts.setdefault(key, (window_seconds, []))
+            attempts[:] = [t for t in attempts if t > now - window]
+            if len(attempts) >= max_attempts:
+                raise HTTPException(status_code=429, detail="Too many requests. Try again later.")
+            attempts.append(now)
     return limiter

@@ -36,25 +36,44 @@ WRITE_TIER: dict[str, str] = {
 }
 
 
-def get_project_permissions(project_id: str) -> dict:
-    try:
-        store = get_store(project_id)
-        meta = store.read_meta()
-        return meta.get("permissions") or dict(DEFAULT_PERMISSIONS)
-    except Exception:
-        return dict(DEFAULT_PERMISSIONS)
+def permission_level_for(user: dict, perms: dict) -> int:
+    """Effective permission level for *user* against an already-read map.
 
-
-def user_permission_level(user: dict, project_id: str) -> int:
+    Split out from :func:`user_permission_level` so a caller that already holds
+    a parsed ``_meta.yaml`` (the project listing) can reuse the logic without a
+    second read.
+    """
     role = user.get("role", "guest")
     # A project's permissions map can never demote a global admin.
     if role == "admin":
         return PERMISSION_LEVELS["admin"]
-    perms = get_project_permissions(project_id)
     # Unknown/legacy roles (e.g. pre-migration "viewer"/"editor") aren't in the
     # map and fall through to view (0), so they can neither propose nor edit.
     perm = perms.get(role, "view")
     return PERMISSION_LEVELS.get(perm, 0)
+
+
+def get_project_permissions(project_id: str) -> dict:
+    """The project's permissions map, or the role defaults when it has none.
+
+    Fail closed: a missing project (``get_store`` raises 404/400) and a
+    ``_meta.yaml`` that cannot be parsed are propagated rather than falling back
+    to the permissive defaults. Falling back here would let a corrupt file grant
+    ``view`` on a project that denies it.
+    """
+    store = get_store(project_id)
+    try:
+        meta = store.read_meta_strict()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="Project permissions are unreadable",
+        ) from exc
+    return meta.get("permissions") or dict(DEFAULT_PERMISSIONS)
+
+
+def user_permission_level(user: dict, project_id: str) -> int:
+    return permission_level_for(user, get_project_permissions(project_id))
 
 
 def get_store(project_id: str) -> YamlStore:

@@ -10,7 +10,7 @@ import json
 import logging
 import uuid
 
-from fastapi import WebSocket, WebSocketDisconnect
+from fastapi import HTTPException, WebSocket, WebSocketDisconnect
 
 from app.core.auth import GUEST_USER, decode_token, get_user_from_token
 from app.core.config import settings
@@ -62,8 +62,16 @@ async def websocket_handler(websocket: WebSocket, project_id: str, token: str | 
 
     # Same per-project permission check the HTTP routes get. Below the read tier
     # ("view") the subscriber cannot read the project, so refuse rather than
-    # accept and then feed it mutations it has no business seeing.
-    if user_permission_level(user, project_id) < PERMISSION_LEVELS["view"]:
+    # accept and then feed it mutations it has no business seeing. An
+    # unreadable/missing project raises rather than falling back to the
+    # permissive defaults (see ``get_project_permissions``), so treat that as a
+    # refusal too.
+    try:
+        level = user_permission_level(user, project_id)
+    except HTTPException:
+        await websocket.close(code=1008)
+        return
+    if level < PERMISSION_LEVELS["view"]:
         await websocket.close(code=1008)
         return
 

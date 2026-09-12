@@ -155,6 +155,12 @@ def merge_references(store, hits: list[dict]) -> dict:
     created = 0
     updated = 0
     touched = set()
+    # Accumulate per requirement before writing. A requirement referenced from
+    # several files produced one write per hit, each rebuilding the list from
+    # the *unchanged* snapshot, so every hit but the last was overwritten and
+    # the earlier references silently vanished.
+    pending: dict[str, list[dict]] = {}
+    changed: set[str] = set()
 
     for h in hits:
         rid = h["req_id"]
@@ -162,7 +168,10 @@ def merge_references(store, hits: list[dict]) -> dict:
         if req is None:
             continue
 
-        refs = list(req.get("references", []))
+        refs = pending.get(rid)
+        if refs is None:
+            refs = [dict(r) for r in req.get("references", [])]
+            pending[rid] = refs
         existing = next((r for r in refs if r["path"] == h["path"] and r.get("kind") == h["kind"]), None)
         if existing:
             if existing.get("sha256") == h["sha256"]:
@@ -178,8 +187,10 @@ def merge_references(store, hits: list[dict]) -> dict:
                 "line": str(h.get("line")),
             })
             created += 1
+        changed.add(rid)
 
-        store.update_requirement(rid, {"references": refs})
+    for rid in changed:
+        store.update_requirement(rid, {"references": pending[rid]})
         touched.add(rid)
 
     return {

@@ -261,9 +261,52 @@ ALLOWED_REMOTE_SCHEMES = ("https://", "ssh://", "git@")
 REMOTE_SCHEME_ERROR = ("git remote URL must start with https://, ssh:// or git@ "
                        "(file://, http:// and local paths are refused)")
 
+REMOTE_CREDENTIALS_ERROR = (
+    "git remote URL must not embed credentials. A token or password in the URL "
+    "would be written to _meta.yaml, committed, and pushed with the project. "
+    "Use a deploy key or a credential helper instead."
+)
+
+# A URL authority that carries userinfo (``scheme://user[:pass]@host``). The
+# scp-like ``git@host:path`` form is not matched: it is an SSH username, not a
+# URL credential.
+_URL_USERINFO_RE = re.compile(
+    r"^(?P<scheme>[a-zA-Z][a-zA-Z0-9+.-]*)://(?P<userinfo>[^/@\s]+)@"
+)
+
+
+def _has_embedded_credentials(remote_url: str) -> bool:
+    """True if *remote_url* carries a secret in its userinfo.
+
+    ``scheme://user:password@`` is a credential on any scheme. A bare token can
+    also be used as the username for HTTPS (GitHub PATs are used this way), so
+    any userinfo on an ``http(s)`` remote is treated as a credential. A plain
+    ``ssh://git@host`` username is not a secret and stays allowed.
+    """
+    m = _URL_USERINFO_RE.match(str(remote_url))
+    if not m:
+        return False
+    if ":" in m.group("userinfo"):
+        return True
+    return m.group("scheme").lower() in ("http", "https")
+
+
+def remote_url_error(remote_url: str) -> str | None:
+    """The reason *remote_url* is refused, or ``None`` when it is acceptable.
+
+    Shared by the write path (``router._guard_git_settings``), the connection
+    test, and ``test_remote`` so no caller can drift from the others.
+    """
+    url = str(remote_url)
+    if not url.startswith(ALLOWED_REMOTE_SCHEMES):
+        return REMOTE_SCHEME_ERROR
+    if _has_embedded_credentials(url):
+        return REMOTE_CREDENTIALS_ERROR
+    return None
+
 
 def is_allowed_remote(remote_url: str) -> bool:
-    return str(remote_url).startswith(ALLOWED_REMOTE_SCHEMES)
+    return remote_url_error(remote_url) is None
 
 
 def _ssh_env(remote_url: str, project_root: Path | None = None) -> dict:
@@ -315,8 +358,9 @@ def test_remote(project_root: Path, remote_url: str) -> dict:
         return {"ok": False, "error": "Project directory is not a git repository. Run 'git init' first."}
     if not remote_url:
         return {"ok": False, "error": "No remote URL configured."}
-    if not is_allowed_remote(remote_url):
-        return {"ok": False, "error": REMOTE_SCHEME_ERROR}
+    error = remote_url_error(remote_url)
+    if error:
+        return {"ok": False, "error": error}
     try:
         ident = _identity_for(project_root)
         env = _ssh_env(remote_url, project_root)
@@ -438,8 +482,12 @@ _HASH_RE = re.compile(r"^[0-9a-fA-F]{4,40}$")
 def restore_commit(project_root: Path, commit_hash: str, username: str = "") -> bool:
     """Restore the working tree to the state of a past commit.
 
-    Does ``git checkout <hash> -- .`` then creates a new commit recording the
-    restoration so the operation itself is always reversible.
+    Checks out the snapshot's tracked paths, deletes files that were added
+    after it, then creates a new commit recording the restoration so the
+    operation itself is always reversible. ``git checkout <hash> -- .`` alone
+    is additive: it restores paths present in the old commit but leaves later
+    additions in place, and the following ``git add -A`` would commit them, so
+    "restore" silently kept post-snapshot files.
     """
     project_root = Path(project_root)
     if not is_repo(project_root):
@@ -469,6 +517,27 @@ def restore_commit(project_root: Path, commit_hash: str, username: str = "") -> 
         if r.returncode != 0:
             logger.warning("git checkout %s failed in %s: %s", commit_hash, project_root, redact_url(r.stderr.strip()))
             return False
+        # Remove files that exist now but not in the snapshot. `git diff
+        # <commit>` compares the snapshot to the working tree, so `A` entries
+        # are exactly the post-snapshot additions.
+        added = subprocess.run(
+            ["git", *ident, "diff", "--name-only", "--diff-filter=A", resolved, "--"],
+            cwd=str(project_root), capture_output=True, text=True, timeout=30,
+        )
+        if added.returncode != 0:
+            logger.warning("git restore diff %s failed in %s: %s",
+                           commit_hash, project_root, redact_url(added.stderr.strip()))
+            return False
+        additions = [p for p in added.stdout.splitlines() if p.strip()]
+        if additions:
+            rm = subprocess.run(
+                ["git", *ident, "rm", "-f", "--quiet", "--", *additions],
+                cwd=str(project_root), capture_output=True, text=True, timeout=30,
+            )
+            if rm.returncode != 0:
+                logger.warning("git restore rm failed in %s: %s",
+                               project_root, redact_url(rm.stderr.strip()))
+                return False
         subprocess.run(
             ["git", *ident, "add", "-A"],
             cwd=str(project_root), capture_output=True, text=True, timeout=30,

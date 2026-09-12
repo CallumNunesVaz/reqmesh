@@ -585,6 +585,10 @@ def activity(
 
     store = get_store(project_id)
     raw = store.list_all_history(since_iso, until_iso)
+    # Build the id→kind/name index once; resolving per entry rebuilt every
+    # collection's map on each call (O(entries × entities)).
+    from app.services.entity_kinds import build_entity_index
+    entity_index = build_entity_index(store)
 
     # Stream-bucket: one pass over the history, one dict per bucket day.
     # days_in_range is computed *after* clamping every date to the window so
@@ -623,7 +627,7 @@ def activity(
         else:
             key = entry_date.isoformat()
 
-        kind_label, _name = resolve_entity_label(store, item_id)
+        kind_label, _name = resolve_entity_label(store, item_id, entity_index)
         kind_key = KIND_LABEL_TO_KEY.get(kind_label, "item")
         bucket_data[key][kind_key].add(item_id)
 
@@ -725,8 +729,9 @@ def git_test_remote(project_id: str, data: GitTestRemoteRequest, user: dict = De
     remote_url = data.remote_url.strip()
     if not remote_url:
         raise HTTPException(status_code=400, detail="remote_url is required")
-    if not git_service.is_allowed_remote(remote_url):
-        raise HTTPException(status_code=400, detail=git_service.REMOTE_SCHEME_ERROR)
+    error = git_service.remote_url_error(remote_url)
+    if error:
+        raise HTTPException(status_code=400, detail=error)
 
     store = get_store(project_id)
     return git_service.test_remote(store.root, remote_url)
@@ -1183,8 +1188,9 @@ def import_project(
 
         from app.services.table_io import import_table as table_import
         try:
-            return _normalise_summary(table_import(store, text, fmt=fmt, mode=mode,
-                                                   dry_run=dry_run, username=username))
+            with store.batch():
+                return _normalise_summary(table_import(store, text, fmt=fmt, mode=mode,
+                                                       dry_run=dry_run, username=username))
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=f"Import failed: {exc}") from exc
 
@@ -1193,15 +1199,17 @@ def import_project(
     if format in ("csv", "tsv"):
         from app.services.table_io import import_table as table_import
         try:
-            return _normalise_summary(table_import(store, content.decode("utf-8", errors="replace"),
-                                                   fmt=format, mode=mode, dry_run=dry_run, username=username))
+            with store.batch():
+                return _normalise_summary(table_import(store, content.decode("utf-8", errors="replace"),
+                                                       fmt=format, mode=mode, dry_run=dry_run, username=username))
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=f"Import failed: {exc}") from exc
 
     if format == "xlsx":
         from app.services.table_io import import_xlsx
         try:
-            return _normalise_summary(import_xlsx(store, content, mode=mode, dry_run=dry_run))
+            with store.batch():
+                return _normalise_summary(import_xlsx(store, content, mode=mode, dry_run=dry_run))
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=f"Import failed: {exc}") from exc
 
@@ -1210,7 +1218,8 @@ def import_project(
     from app.services.sysml_import import SysMLParseError
 
     try:
-        summary = parse_and_import(store, content, fmt=format, mode=mode)
+        with store.batch():
+            summary = parse_and_import(store, content, fmt=format, mode=mode)
     except (ReqIFParseError, SysMLParseError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=f"Import failed: {exc}") from exc
     return _normalise_summary(summary)

@@ -26,8 +26,46 @@ KIND_LABEL_TO_KEY: dict[str, str] = {
 }
 
 
-def resolve_entity_label(store, item_id: str) -> tuple[str, str]:
+def build_entity_index(store) -> dict[str, tuple[str, str]]:
+    """Build one ``id → (kind_label, name)`` index for a whole request.
+
+    ``resolve_entity_label`` rebuilds the id maps for every collection on each
+    call. A caller that resolves thousands of audit entries (the activity
+    endpoint) should build this once and pass it in, turning
+    O(entries × entities) into O(entities).
+
+    Iterated highest-precedence first so a higher-precedence collection wins a
+    shared id, matching :func:`resolve_entity_label`'s order.
+    """
+    index: dict[str, tuple[str, str]] = {}
+    for collection, label in (
+        ("requirements", "Requirement"),
+        ("verification_cases", "Verification"),
+        ("components", "Component"),
+        ("specifications", "Specification"),
+        ("risks", "Risk"),
+        ("change_requests", "Change Request"),
+        ("decisions", "Decision"),
+        ("definitions", "Definition"),
+        ("analysis_cases", "Analysis Case"),
+        ("comments", "Comment"),
+    ):
+        try:
+            for it in store.list_items(collection):
+                iid = it.get("id")
+                if iid and iid not in index:
+                    index[iid] = (label, it.get("title", "") or it.get("name", ""))
+        except Exception:
+            continue
+    return index
+
+
+def resolve_entity_label(store, item_id: str,
+                         index: dict[str, tuple[str, str]] | None = None) -> tuple[str, str]:
     """Return ``(kind_label, name)`` for an audited item id.
+
+    Pass ``index`` (from :func:`build_entity_index`) when resolving many ids in
+    one request to avoid rebuilding every collection's map per call.
 
     Precedence (the same order ``Publisher._entity_label`` used before the
     lift — kept deliberately so existing behaviour is preserved):
@@ -50,6 +88,9 @@ def resolve_entity_label(store, item_id: str) -> tuple[str, str]:
     the collection alongside the audit entry is the proper fix (out of scope
     here).
     """
+    if index is not None:
+        return index.get(item_id, ("Item", ""))
+
     # The collection cache inside the store makes repeated list_* calls in a
     # tight loop virtually free after the first — each list populates the
     # in‑memory cache, and a unit of work that calls this function hundreds of

@@ -435,11 +435,20 @@ def test_baseline_rename_missing_is_404(client, project):
 
 def test_project_git_settings_roundtrip_and_visibility(client, project):
     from app.core import auth as auth_mod
+    from app.services.yaml_store import YamlStore
 
     res = client.patch(f"/api/projects/{project}",
-                       json={"git": {"remote_url": "https://token@example.com/r.git",
+                       json={"git": {"remote_url": "https://example.com/r.git",
                                      "push_interval_minutes": 5}})
     assert res.status_code == 200
+
+    # The write path now refuses credentialed URLs, so model a legacy one on
+    # disk directly. It must still be redacted for a maintainer and withheld
+    # entirely from lesser roles.
+    store = YamlStore(Path(settings.data_root) / project)
+    meta = store.read_meta()
+    meta.setdefault("git", {})["remote_url"] = "https://token@example.com/r.git"
+    store.write_meta(meta)
 
     # Anonymous readers never see the git block (remote URLs may hold tokens).
     anon = client.get(f"/api/projects/{project}", headers={"Authorization": ""})
@@ -452,12 +461,13 @@ def test_project_git_settings_roundtrip_and_visibility(client, project):
                        headers={"Authorization": f"Bearer {ctok}"}).json()
     assert "git" not in cseen
 
-    # A maintainer gets it back for the settings page.
+    # A maintainer gets it back for the settings page, with the credential masked.
     auth_mod.register_user("maint", "Password123!", "maintainer")
     tok = auth_mod.create_token("maint", "maintainer")
     seen = client.get(f"/api/projects/{project}",
                       headers={"Authorization": f"Bearer {tok}"}).json()
     assert seen["git"]["push_interval_minutes"] == 5
+    assert seen["git"]["remote_url"] == "https://***@example.com/r.git"
 
 
 def test_profile_email_change_resets_verification(client, workspace):

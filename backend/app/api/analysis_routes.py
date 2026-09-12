@@ -408,7 +408,9 @@ def parametric_evaluation(project_id: str, user: dict = Depends(require_view), _
 
 
 @router.post("/projects/{project_id}/evaluation/impact")
-def evaluation_impact(project_id: str, data: ImpactRequest, _rate: None = Depends(rate_limit(20, 60))):
+def evaluation_impact(project_id: str, data: ImpactRequest,
+                      user: dict = Depends(require_view),
+                      _rate: None = Depends(rate_limit(20, 60))):
     """Returns the evaluation with hypothetical overrides plus a
     dependency-ordered trace of every parameter and constraint that
     changes — so the frontend can animate the what-if cascade."""

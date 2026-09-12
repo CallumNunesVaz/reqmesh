@@ -8,7 +8,7 @@ from typing import Optional
 from fastapi import APIRouter, Header, HTTPException, Query, Depends, Request, Response
 from pydantic import BaseModel, ValidationError
 
-from app.core.dependencies import get_store, require_maintain, require_maintain_global, require_admin, require_view
+from app.core.dependencies import get_store, require_auth, require_maintain, require_maintain_global, require_admin, require_view
 from app.core.filelock import file_lock
 from app.core.ids import safe_id
 from app.core.rate_limit import rate_limit
@@ -156,18 +156,30 @@ def api_version():
 # ── Projects ────────────────────────────────────────────────────────────────
 
 @router.get("/projects")
-def list_projects():
+def list_projects(user: dict = Depends(require_auth)):
     from app.core.config import settings
+    from app.core.dependencies import DEFAULT_PERMISSIONS, PERMISSION_LEVELS, permission_level_for
 
     root = Path(settings.data_root)
     if not root.exists():
         return []
     projects = []
     for d in sorted(root.iterdir()):
-        if d.is_dir() and (d / "_meta.yaml").exists():
-            store = YamlStore(d)
-            meta = store.read_meta()
-            projects.append({"id": d.name, "name": meta.get("name", d.name)})
+        if not d.is_dir() or not (d / "_meta.yaml").exists():
+            continue
+        store = YamlStore(d)
+        try:
+            meta = store.read_meta_strict()
+        except Exception:
+            # Fail closed: a project whose metadata cannot be read is withheld
+            # rather than listed with the permissive fallback, which would
+            # disclose the existence of a project that denies this user access.
+            logger.warning("Hiding project %s from the listing: unreadable _meta.yaml", d.name)
+            continue
+        perms = meta.get("permissions") or dict(DEFAULT_PERMISSIONS)
+        if permission_level_for(user, perms) < PERMISSION_LEVELS["view"]:
+            continue
+        projects.append({"id": d.name, "name": meta.get("name", d.name)})
     return projects
 
 
@@ -228,7 +240,14 @@ def get_project(project_id: str, request: Request,
     from app.core.dependencies import PERMISSION_LEVELS, get_current_user, user_permission_level
     user = get_current_user(request=request, authorization=authorization)
     if user_permission_level(user, project_id) >= PERMISSION_LEVELS["edit"]:
-        out["git"] = meta.get("git", {})
+        # Redact any credentials embedded in the remote URL. A legacy URL may
+        # still carry a token; the write path refuses new ones, and
+        # `update_project_settings` treats the redacted form as "unchanged" so
+        # echoing it back does not overwrite the stored value.
+        git_meta = dict(meta.get("git", {}) or {})
+        if git_meta.get("remote_url"):
+            git_meta["remote_url"] = _redact_url(str(git_meta["remote_url"]))
+        out["git"] = git_meta
     return out
 
 
@@ -245,8 +264,8 @@ class ProjectSettings(BaseModel):
 
 
 # Single definition, shared with git_service.test_remote — see the note there.
-from app.services.git_service import ALLOWED_REMOTE_SCHEMES as _ALLOWED_REMOTE_SCHEMES
-from app.services.git_service import REMOTE_SCHEME_ERROR as _REMOTE_SCHEME_ERROR
+from app.services.git_service import redact_url as _redact_url
+from app.services.git_service import remote_url_error as _remote_url_error
 from app.services.delete_guard import check_deletable
 from app.core.filelock import project_lock
 
@@ -266,11 +285,9 @@ def _guard_git_settings(new_git: dict, existing_git: dict, user: dict) -> None:
     if user.get("role") != "admin":
         raise HTTPException(status_code=403,
                             detail="Only an admin can change the git remote URL")
-    if incoming and not str(incoming).startswith(_ALLOWED_REMOTE_SCHEMES):
-        raise HTTPException(
-            status_code=400,
-            detail=_REMOTE_SCHEME_ERROR,
-        )
+    error = _remote_url_error(incoming) if incoming else None
+    if error:
+        raise HTTPException(status_code=400, detail=error)
 
 
 @router.patch("/projects/{project_id}")
@@ -287,6 +304,16 @@ def update_project_settings(project_id: str, data: ProjectSettings, user: dict =
         if not updates:
             raise HTTPException(status_code=400, detail="No fields to update")
         if "git" in updates:
+            # The read path redacts a credentialed remote URL, so the settings
+            # page echoes back the redacted form. Treat that as "leave the
+            # stored URL unchanged" rather than persisting the placeholder or
+            # demanding admin for an edit that does not touch the remote.
+            incoming_git = dict(updates["git"] or {})
+            existing_url = str((meta.get("git") or {}).get("remote_url") or "")
+            incoming_url = incoming_git.get("remote_url")
+            if incoming_url and existing_url and str(incoming_url) == _redact_url(existing_url):
+                incoming_git["remote_url"] = existing_url
+                updates["git"] = incoming_git
             _guard_git_settings(updates["git"], meta.get("git", {}), user)
         if "baselines" in updates and updates["baselines"] is not None:
             # Validate due dates on the raw input before normalization, which

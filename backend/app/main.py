@@ -230,14 +230,20 @@ if settings.allowed_hosts and settings.allowed_hosts != ["*"]:
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts)
 
 class BodySizeLimitMiddleware:
-    """Cap JSON request bodies as they arrive, not from ``Content-Length``.
+    """Cap request bodies as they arrive, not from ``Content-Length``.
 
     Counting the bytes of every ``http.request`` message as they stream in keeps
     the limit honest for a chunked body that declares no length at all. The cap
     is read from ``settings.max_json_body_mb`` on every request, so a runtime
     override (or a test flipping the setting) takes effect without a restart.
-    Non-HTTP scopes (WebSocket) and non-JSON content types pass through
-    untouched.
+
+    The cap applies to *every* non-multipart request, not just those declaring
+    ``application/json``: FastAPI buffers the raw body for any endpoint with a
+    body model regardless of the declared type, so conditioning on the header
+    let a caller bypass the limit by posting ``text/plain``. Multipart uploads
+    are exempt because they are bounded downstream against their own, larger
+    limits (``read_upload_capped`` / ``_stream_to_disk``). Non-HTTP scopes
+    (WebSocket) also pass through.
     """
 
     def __init__(self, app, *, max_bytes: int) -> None:
@@ -255,7 +261,7 @@ class BodySizeLimitMiddleware:
             key.decode("latin-1").lower(): value.decode("latin-1")
             for key, value in scope.get("headers", [])
         }
-        if "application/json" not in headers.get("content-type", ""):
+        if "multipart/form-data" in headers.get("content-type", ""):
             await self.app(scope, receive, send)
             return
 
@@ -384,6 +390,47 @@ async def csrf_middleware(request: Request, call_next):
 
 _PROJECT_PATH_RE = re.compile(r"^/api/projects/([^/]+)(/.*)?$")
 
+
+# Path segment after the project id → the collection key the SPA uses to
+# invalidate only the data that changed. A path not listed here reports no
+# collection, which the client treats as a coarse "reload everything" (used for
+# imports, scans and any new route that writes more than one collection).
+_MUTATION_COLLECTIONS = {
+    "requirements": "requirements",
+    "components": "components",
+    "verification": "verification",
+    "specifications": "specifications",
+    "risks": "risks",
+    "change-requests": "change-requests",
+    "comments": "comments",
+    "decisions": "decisions",
+    "definitions": "definitions",
+    "analysis": "analysis",
+    "baselines": "baselines",
+    "system-states": "system-states",
+    "traces": "traces",
+    "git": "git",
+}
+
+
+def _mutation_target(path: str) -> tuple[str | None, str | None]:
+    """``(collection, item_id)`` for a project-scoped mutation path.
+
+    Returns ``(None, None)`` when the path is not project-scoped or names no
+    single collection, so the client falls back to a full refresh rather than
+    guessing.
+    """
+    m = _PROJECT_PATH_RE.match(path)
+    if not m:
+        return None, None
+    rest = (m.group(2) or "").strip("/")
+    if not rest:
+        return None, None
+    parts = rest.split("/")
+    collection = _MUTATION_COLLECTIONS.get(parts[0])
+    item_id = parts[1] if collection and len(parts) >= 2 else None
+    return collection, item_id
+
 from app.services.git_auto_commit import (  # noqa: E402 - module-level machinery
     commit_due as _commit_due,
     git_schedule_for as _git_schedule_for,
@@ -508,10 +555,13 @@ async def git_autocommit_middleware(request: Request, call_next):
                             await asyncio.to_thread(push_to_remote, project_root)
 
             from app.services.event_bus import get_event_bus
+            collection, item_id = _mutation_target(request.url.path)
             get_event_bus().publish(project_id, {
                 "type": "mutation",
                 "method": request.method,
                 "path": request.url.path,
+                "collection": collection,
+                "id": item_id,
             })
     return response
 

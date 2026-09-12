@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import ast
 import math
+from functools import lru_cache
 from typing import Any, Callable, Optional
 
 ALLOWED_FUNCS: dict[str, Callable[..., Any]] = {
@@ -34,6 +35,20 @@ ALLOWED_FUNCS: dict[str, Callable[..., Any]] = {
     "ceil": math.ceil,
     "round": round,
 }
+
+
+@lru_cache(maxsize=2048)
+def _parse_expression(text: str) -> ast.Expression:
+    """Parse (and cache) an expression's AST.
+
+    ``eval_expr`` re-parsed the same constraint text up to four times per
+    request (verdict, margin, dimension warning) and again for every analysis
+    case; the AST is immutable and safe to share. The bound keeps a project
+    with many distinct expressions from growing the cache without limit.
+    Exceptions are not cached by ``lru_cache``, so malformed input is
+    re-reported each time rather than retained.
+    """
+    return ast.parse(text, mode="eval")
 
 _BIN_OPS = {
     ast.Add: lambda a, b: a + b,
@@ -179,7 +194,7 @@ class Evaluator:
         if len(text) > MAX_EXPR_CHARS:
             raise EvalError(f"expression exceeds {MAX_EXPR_CHARS} characters")
         try:
-            tree = ast.parse(text, mode="eval")
+            tree = _parse_expression(text)
         except SyntaxError as e:
             raise EvalError(f"syntax error: {e.msg}") from e
         except (RecursionError, ValueError, MemoryError):
@@ -188,6 +203,8 @@ class Evaluator:
             return self._eval(tree.body, owner, stack, env or {})
         except RecursionError as e:
             raise EvalError("expression nested too deeply to evaluate") from e
+        except OverflowError as e:
+            raise EvalError("numerical result out of range") from e
 
     def _eval(self, node: ast.AST, owner: str, stack: frozenset[str],
               env: Optional[dict[str, str]] = None):
@@ -196,7 +213,14 @@ class Evaluator:
         if isinstance(node, ast.Constant):
             if isinstance(node.value, bool) or not isinstance(node.value, (int, float)):
                 raise EvalError(f"literal {node.value!r} is not a number")
-            return float(node.value)
+            try:
+                return float(node.value)
+            except (OverflowError, ValueError):
+                # A large integer literal (e.g. 10**400) is within the character
+                # cap but cannot be represented as a float. Convert it to the
+                # same EvalError every other bad expression gets, rather than
+                # letting OverflowError escape as a 500.
+                raise EvalError(f"literal {node.value!r} is out of range") from None
 
         if isinstance(node, ast.Name):
             # A bound formal resolves to its actual ref; otherwise own-parameter.

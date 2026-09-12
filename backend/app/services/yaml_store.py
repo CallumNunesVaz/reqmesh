@@ -183,10 +183,33 @@ class YamlStore:
         self._root = Path(project_root)
         self._traces_file = self._root / "traces" / "traces.yaml"
         self._meta_file = self._root / "_meta.yaml"
+        # Batch-write coalescing: see `batch()`.
+        self._batch_depth = 0
+        self._batch_dirty: set[str] = set()
 
     @property
     def root(self) -> Path:
         return self._root
+
+    @contextlib.contextmanager
+    def batch(self):
+        """Coalesce cache maintenance across many writes.
+
+        Each write normally re-reads the written file and rebuilds the cached
+        collection's list (a full copy), so an N-row import costs O(N²). Inside
+        this block individual writes only mark the collection dirty; the cache
+        entries are dropped once on exit and rebuilt on the next read.
+        """
+        self._batch_depth += 1
+        try:
+            yield self
+        finally:
+            self._batch_depth -= 1
+            if self._batch_depth == 0 and self._batch_dirty:
+                with _cache_lock:
+                    for key in self._batch_dirty:
+                        _collection_cache.pop(key, None)
+                self._batch_dirty.clear()
 
     def ensure_dirs(self) -> None:
         for name in CORE_COLLECTIONS:
@@ -257,6 +280,18 @@ class YamlStore:
             return {"name": self._root.name, "created": _now()}
         return self._read_yaml(self._meta_file)
 
+    def read_meta_strict(self) -> dict:
+        """Parse ``_meta.yaml``, **raising** on malformed content.
+
+        ``read_meta`` is deliberately tolerant so one corrupt file does not take
+        the whole app down. Permission checks must not inherit that tolerance:
+        treating unparseable permissions as "no map configured" would fall back
+        to the permissive role defaults and expose a project that denies reads.
+        """
+        if not self._meta_file.exists():
+            return {"name": self._root.name, "created": _now()}
+        return self._parse_yaml(self._meta_file)
+
     @contextlib.contextmanager
     def meta_lock(self):
         """Hold the meta file lock for the duration, so a read-modify-write on
@@ -318,6 +353,12 @@ class YamlStore:
 
         A no-op when the collection is not cached — the next read fills it.
         """
+        if self._batch_depth:
+            # Inside a batch: skip the per-write splice; `batch()` drops the
+            # cache once on exit so the next read rebuilds it a single time.
+            self._batch_dirty.add(str(path.parent))
+            return
+
         from app.services.load_guard import validate_on_load
 
         parent = path.parent
@@ -351,7 +392,7 @@ class YamlStore:
             else:
                 items = [i for i in items if i.get("id") != path.stem]
 
-            _collection_cache[key] = (_dir_signature(parent), [dict(i) for i in items])
+            _collection_cache[key] = (_dir_signature(parent), items)
             _collection_cache.move_to_end(key)
 
 

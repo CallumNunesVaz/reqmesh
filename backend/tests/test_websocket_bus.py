@@ -18,6 +18,7 @@ SyntaxError.
 """
 
 import asyncio
+from pathlib import Path
 
 import pytest
 
@@ -74,6 +75,14 @@ def bus(workspace, monkeypatch):
     auth.register_user("wstest", "Password123!long", "contributor")
     wb._test_token = auth.create_token("wstest", "contributor")
     wb._test_user = "wstest"
+    # The handler now fails closed on an unknown project (the permission lookup
+    # raises), so the project must exist for these tests to reach the
+    # connection-limit logic they pin.
+    from app.core.config import settings as _settings
+    from app.services.yaml_store import YamlStore
+    store = YamlStore(Path(_settings.data_root) / "p")
+    store.ensure_dirs()
+    store.write_meta({"name": "P"})
     yield wb
     wb._ws_conns_global = 0
     wb._ws_conns_by_user.clear()

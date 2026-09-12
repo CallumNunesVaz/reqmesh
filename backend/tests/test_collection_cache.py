@@ -83,6 +83,30 @@ def test_invalid_configured_bound_rejected(bad):
         Settings(collection_cache_max_entries=bad)
 
 
+def test_batch_defers_the_per_write_cache_rebuild(tmp_path: Path):
+    """A batch of writes must not splice the cached collection on every write
+    (which is O(n) per write and O(n²) for an import). The cache is dropped once
+    on exit and rebuilt from disk on the next read."""
+    store = YamlStore(tmp_path)
+    store.ensure_dirs()
+    store.create_requirement({"id": "R-0", "name": "zero"})
+    store.list_requirements()  # populate the cache
+
+    key = str(tmp_path / "requirements")
+    with store.batch():
+        for i in range(1, 50):
+            store.create_requirement({"id": f"R-{i}", "name": f"n{i}"})
+        with _cache_lock:
+            cached = _collection_cache.get(key)
+        assert cached is not None
+        # Still the pre-batch snapshot: no per-write splice happened.
+        assert len(cached[1]) == 1
+
+    items = store.list_requirements()
+    assert len(items) == 50
+    assert {r["id"] for r in items} == {f"R-{i}" for i in range(50)}
+
+
 @pytest.mark.bench
 def test_benchmark_cache_hit_rate_across_project_counts(tmp_path: Path, monkeypatch):
     """Measure hit rate and wall time for a sweep across N projects.

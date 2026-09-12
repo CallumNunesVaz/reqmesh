@@ -132,14 +132,17 @@ def test_status_dirty_flag(client, project):
 
 def test_remote_url_credentials_are_redacted_in_status(client, project):
     """Tokens embedded in a remote URL must not appear in the status response."""
+    from app.services.yaml_store import YamlStore
+
     client.post(f"/api/projects/{project}/git/init")
 
-    # Set a remote URL with a token
-    res = _patch_project(
-        client, project,
-        {"remote_url": "https://ghp_secret123token@github.com/acme/repo.git"},
-    )
-    assert res.status_code == 200
+    # The write path now refuses credentialed URLs, so model a legacy one on
+    # disk directly — the read/status path must still redact it.
+    store = YamlStore(Path(settings.data_root) / project)
+    meta = store.read_meta()
+    meta.setdefault("git", {})["remote_url"] = \
+        "https://ghp_secret123token@github.com/acme/repo.git"
+    store.write_meta(meta)
 
     res = client.get(f"/api/projects/{project}/git/status")
     assert res.status_code == 200
@@ -156,14 +159,18 @@ def test_remote_url_credentials_are_redacted_in_status(client, project):
 
 def test_failed_push_error_is_redacted(client, project, monkeypatch):
     """When a push fails, the error in the response must not contain credentials."""
+    from app.services.yaml_store import YamlStore
+
     monkeypatch.setattr(settings, "offline_mode", False)
     client.post(f"/api/projects/{project}/git/init")
 
-    # Set a remote URL with a token, pointing at a non-existent host
-    _patch_project(
-        client, project,
-        {"remote_url": "https://token-abc123@push-target.invalid/repo.git"},
-    )
+    # Model a legacy credentialed remote directly on disk (the write path now
+    # refuses them), pointing at a non-existent host.
+    store = YamlStore(Path(settings.data_root) / project)
+    meta = store.read_meta()
+    meta.setdefault("git", {})["remote_url"] = \
+        "https://token-abc123@push-target.invalid/repo.git"
+    store.write_meta(meta)
 
     # Attempt a push — it will fail because the remote doesn't exist
     res = client.post(f"/api/projects/{project}/git/push")

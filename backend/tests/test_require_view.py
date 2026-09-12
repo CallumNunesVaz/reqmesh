@@ -95,3 +95,39 @@ def test_none_is_below_view_so_denial_is_expressible(project, admin_client):
     level = user_permission_level({"role": "contributor"}, project)
     assert level == PERMISSION_LEVELS["none"]
     assert level < PERMISSION_LEVELS["view"]
+
+
+def test_evaluation_impact_requires_view(project, admin_client, contributor_client):
+    """The what-if endpoint is a POST but a read: a role denied ``view`` must not
+    be able to pull the project's evaluation through it."""
+    admin_client.patch(f"/api/projects/{project}",
+                       json={"permissions": {"contributor": "none"}})
+    r = contributor_client.post(f"/api/projects/{project}/evaluation/impact",
+                                json={"overrides": {}})
+    assert r.status_code == 403, r.text
+
+
+def test_list_projects_hides_projects_the_user_cannot_view(project, admin_client, contributor_client):
+    admin_client.post("/api/projects", json={"id": "secret", "name": "Secret"})
+    admin_client.patch("/api/projects/secret",
+                       json={"permissions": {"contributor": "none"}})
+    ids = [p["id"] for p in contributor_client.get("/api/projects").json()]
+    assert project in ids
+    assert "secret" not in ids
+
+
+def test_list_projects_withholds_a_project_with_unreadable_meta(project, admin_client):
+    broken = Path(settings.data_root) / "broken"
+    broken.mkdir(parents=True, exist_ok=True)
+    (broken / "_meta.yaml").write_text("permissions: [unclosed\n")
+    ids = [p["id"] for p in admin_client.get("/api/projects").json()]
+    assert project in ids
+    assert "broken" not in ids
+
+
+def test_corrupt_meta_fails_closed_for_reads(project, admin_client):
+    broken = Path(settings.data_root) / "broken"
+    broken.mkdir(parents=True, exist_ok=True)
+    (broken / "_meta.yaml").write_text("permissions: [unclosed\n")
+    r = admin_client.get("/api/projects/broken/requirements")
+    assert r.status_code == 500, r.text

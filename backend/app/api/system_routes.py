@@ -246,6 +246,7 @@ async def upload_update(
 @router.post("/update/bundle")
 async def upload_bundle(
     file: UploadFile = File(...),
+    signature: UploadFile | None = File(None),
     admin: dict = Depends(require_admin),
 ):
     """Stage an uploaded release bundle for a bare-metal (non-Docker) install.
@@ -253,6 +254,11 @@ async def upload_bundle(
     The bundle (reqmesh-vX.Y.Z.tar.gz from a release) is streamed to the
     instance, validated, and staged. It's applied on the next restart — the
     admin can trigger that immediately via POST /system/restart. Works offline.
+
+    The release's detached Ed25519 signature (``reqmesh-vX.Y.Z.tar.gz.sig``) is
+    uploaded alongside it as ``signature``. Without a way to supply it, an
+    instance with ``RT_UPDATE_PUBLIC_KEY`` set could never stage a signed
+    bundle and was pushed toward disabling verification entirely.
     """
     from app.services import bundle_update
 
@@ -263,7 +269,12 @@ async def upload_bundle(
         )
 
     dest = bundle_update.incoming_path()
+    sig_dest = dest.with_name(dest.name + ".sig")
     limit = settings.max_update_upload_mb * 1024 * 1024
+
+    # Drop any signature left over from an earlier attempt so an unsigned
+    # upload can never be paired with a stale one.
+    sig_dest.unlink(missing_ok=True)
 
     try:
         size = await asyncio.to_thread(_stream_to_disk, file, dest, limit)
@@ -274,11 +285,22 @@ async def upload_bundle(
         dest.unlink(missing_ok=True)
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
 
+    if signature is not None:
+        # Ed25519 signatures are 64 bytes; cap generously so a malformed upload
+        # cannot be used to write an arbitrary large file into the updates dir.
+        try:
+            await asyncio.to_thread(_stream_to_disk, signature, sig_dest, 4096)
+        except ValueError:
+            sig_dest.unlink(missing_ok=True)
+            dest.unlink(missing_ok=True)
+            raise HTTPException(status_code=413, detail="Signature file is too large.") from None
+
     try:
         result = await asyncio.to_thread(
             bundle_update.stage_from_archive, dest, admin.get("username", "admin")
         )
     except RuntimeError as exc:
+        sig_dest.unlink(missing_ok=True)
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return {**result, "archive_bytes": size}
 

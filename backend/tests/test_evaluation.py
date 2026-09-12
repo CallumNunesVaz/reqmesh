@@ -90,6 +90,27 @@ class TestExpressions:
         with pytest.raises(EvalError, match="exceeds"):
             e.eval_expr('1' * (MAX_EXPR_CHARS + 1), "X")
 
+    def test_huge_integer_literal_is_eval_error_not_overflow(self):
+        """A 400-digit integer is under the character cap but overflows
+        ``float()``. It must surface as EvalError rather than escaping as an
+        OverflowError (a 500) from every evaluation endpoint."""
+        e = ev()
+        with pytest.raises(EvalError):
+            e.eval_expr("1" + "0" * 400, "X")
+
+    def test_expression_ast_is_parsed_once(self):
+        """The same expression text must not be re-parsed on every evaluation;
+        a constraint is parsed up to four times per request without this."""
+        from app.services import evaluation as ev_mod
+        ev_mod._parse_expression.cache_clear()
+        e = ev()
+        e.eval_expr("1 + 2", "X")
+        first = ev_mod._parse_expression.cache_info()
+        e.eval_expr("1 + 2", "X")
+        second = ev_mod._parse_expression.cache_info()
+        assert second.misses == first.misses == 1
+        assert second.hits == first.hits + 1
+
     def test_expression_at_the_cap_still_evaluates(self):
         e = ev()
         # "min(" + "1" + ",1"*k + ")" is exactly MAX_EXPR_CHARS characters long.

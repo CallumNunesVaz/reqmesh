@@ -9,6 +9,7 @@ bucket's own window.
 """
 
 import time
+import threading
 
 import pytest
 from fastapi import HTTPException
@@ -133,3 +134,30 @@ def test_limiter_still_limits(monkeypatch):
 
     clock["now"] += 61
     limiter(req)  # window elapsed: no longer limited
+
+
+def test_concurrent_limiters_do_not_exceed_the_limit(monkeypatch):
+    """The limiter runs in Starlette's threadpool. Without the lock two threads
+    can both read ``len(attempts) < max`` and both append, letting more than
+    ``max_attempts`` through."""
+    monkeypatch.setattr(rl.time, "time", lambda: 1000.0)
+    limiter = rl.rate_limit(50, 60)
+    req = _FakeRequest("/api/auth/concurrent")
+    allowed = []
+    rejected = []
+
+    def worker():
+        try:
+            limiter(req)
+            allowed.append(1)
+        except HTTPException:
+            rejected.append(1)
+
+    threads = [threading.Thread(target=worker) for _ in range(200)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert len(allowed) == 50
+    assert len(rejected) == 150

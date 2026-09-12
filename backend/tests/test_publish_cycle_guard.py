@@ -115,3 +115,19 @@ def test_three_level_tree_still_nests(tmp_path):
 
     assert "margin-left:20px" in html
     assert "margin-left:40px" in html
+
+
+def test_requirement_children_index_is_cached_and_ordered(tmp_path):
+    """The hierarchy walk uses a parent→children index built once, in
+    ``self.reqs`` order, instead of scanning every requirement per node."""
+    s = _store(tmp_path)
+    _write_req(s, "ROOT")
+    _write_req(s, "A", parent="ROOT")
+    _write_req(s, "B", parent="ROOT")
+
+    pub = Publisher(s)
+    children = pub._requirement_children()
+
+    assert [r["id"] for r in children[None]] == ["ROOT"]
+    assert [r["id"] for r in children["ROOT"]] == ["A", "B"]
+    assert pub._requirement_children() is children  # cached, not rebuilt

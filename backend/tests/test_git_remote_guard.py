@@ -88,10 +88,27 @@ def test_disallowed_schemes_are_rejected(url):
     assert git_service.is_allowed_remote(url) is False
 
 
+@pytest.mark.parametrize("url", [
+    "https://user:token@github.com/org/repo.git",
+    "https://ghp_abcdef@github.com/org/repo.git",
+    "ssh://user:pass@github.com/org/repo.git",
+])
+def test_credentials_embedded_in_the_url_are_rejected(url):
+    """A token in the URL would be committed to _meta.yaml and pushed."""
+    assert git_service.is_allowed_remote(url) is False
+    assert "credentials" in (git_service.remote_url_error(url) or "")
+
+
+def test_plain_ssh_username_is_not_a_credential():
+    """``ssh://git@host`` is the conventional SSH username, not a secret."""
+    assert git_service.is_allowed_remote("ssh://git@github.com/org/repo.git") is True
+    assert git_service.is_allowed_remote("git@github.com:org/repo.git") is True
+
+
 def test_allowlist_is_shared_with_the_write_path():
     """One definition, so a new caller cannot drift from the write path."""
     from app.api import router as router_mod
-    assert router_mod._ALLOWED_REMOTE_SCHEMES is git_service.ALLOWED_REMOTE_SCHEMES
+    assert router_mod._remote_url_error is git_service.remote_url_error
 
 
 # ── The endpoint requires admin ──────────────────────────────────────────────
@@ -141,4 +158,61 @@ def test_missing_url_is_a_400(tmp_path, monkeypatch):
     client.post("/api/projects", json={"id": "p", "name": "P"})
     res = client.post("/api/projects/p/git/test-remote", json={})
     assert res.status_code == 400
+    app.dependency_overrides.clear()
+
+
+# ── The write and read paths treat credentials as secrets ────────────────────
+
+def test_credentials_are_rejected_by_the_write_path(tmp_path, monkeypatch):
+    client = _client("admin", tmp_path, monkeypatch)
+    client.post("/api/projects", json={"id": "p", "name": "P"})
+    res = client.patch(
+        "/api/projects/p",
+        json={"git": {"remote_url": "https://user:token@github.com/o/r.git"}},
+    )
+    assert res.status_code == 400
+    assert "credentials" in res.text
+    app.dependency_overrides.clear()
+
+
+def test_read_path_redacts_a_legacy_credentialed_remote(tmp_path, monkeypatch):
+    from app.core import dependencies as deps
+    from app.services.yaml_store import YamlStore
+
+    # `get_project` resolves the user itself (the injected guard is not enough
+    # to decide whether to include the git key), so pin the resolver.
+    monkeypatch.setattr(
+        deps, "get_current_user",
+        lambda request, authorization=None: {"username": "adm", "role": "admin"},
+    )
+    client = _client("admin", tmp_path, monkeypatch)
+    client.post("/api/projects", json={"id": "p", "name": "P"})
+    store = YamlStore(Path(settings.data_root) / "p")
+    meta = store.read_meta()
+    meta["git"] = {"remote_url": "https://user:secret@github.com/o/r.git"}
+    store.write_meta(meta)
+
+    res = client.get("/api/projects/p")
+    assert res.status_code == 200
+    assert res.json()["git"]["remote_url"] == "https://***@github.com/o/r.git"
+    app.dependency_overrides.clear()
+
+
+def test_echoing_the_redacted_url_does_not_overwrite_the_stored_one(tmp_path, monkeypatch):
+    from app.services.yaml_store import YamlStore
+
+    client = _client("admin", tmp_path, monkeypatch)
+    client.post("/api/projects", json={"id": "p", "name": "P"})
+    store = YamlStore(Path(settings.data_root) / "p")
+    meta = store.read_meta()
+    meta["git"] = {"remote_url": "https://user:secret@github.com/o/r.git"}
+    store.write_meta(meta)
+
+    res = client.patch("/api/projects/p",
+                       json={"git": {"remote_url": "https://***@github.com/o/r.git",
+                                     "user_name": "Someone"}})
+    assert res.status_code == 200, res.text
+    stored = store.read_meta()["git"]["remote_url"]
+    assert stored == "https://user:secret@github.com/o/r.git"
+    assert store.read_meta()["git"]["user_name"] == "Someone"
     app.dependency_overrides.clear()

@@ -61,6 +61,33 @@ def test_body_under_limit_passes_through(client, small_body_limit):
     assert res.json()["id"] == "p1"
 
 
+def test_non_json_content_type_is_still_capped(client, small_body_limit):
+    """A caller cannot dodge the cap by declaring ``text/plain``: FastAPI
+    buffers the raw body for any endpoint with a body model regardless of the
+    declared type, so the cap must not be conditioned on the header."""
+    res = client.post(
+        "/api/projects",
+        content=b"x" * (MAX_BYTES + 1),
+        headers={"content-type": "text/plain"},
+    )
+    assert res.status_code == 413
+    assert res.json() == {"detail": "Request body too large"}
+
+
+def test_multipart_uploads_are_exempt_from_the_json_cap(client, small_body_limit):
+    """Multipart bodies are bounded downstream against their own, larger upload
+    limits, so the JSON cap must not reject them here."""
+    res = client.post(
+        "/api/projects",
+        data={"format": "csv"},
+        files={"file": ("big.csv", b"x" * (MAX_BYTES + 1), "text/csv")},
+    )
+    assert res.status_code != 413
+
+
 def test_websocket_connection_is_not_intercepted(client, small_body_limit):
+    # The project must exist: the WS handler now fails closed on an unknown
+    # project (permission lookup raises) rather than admitting the socket.
+    client.post("/api/projects", json={"id": "ws-test", "name": "WS"})
     with client.websocket_connect("/api/projects/ws-test/ws?token=x") as websocket:
         assert websocket.receive_json()["type"] == "connected"

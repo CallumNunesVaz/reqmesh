@@ -100,7 +100,7 @@ from fastapi.routing import APIRoute
 from app.main import app
 
 _PERM_DEP_NAMES = frozenset({
-    "require_edit", "require_maintain", "require_maintain_global", "require_admin",
+    "require_view", "require_edit", "require_maintain", "require_maintain_global", "require_admin",
 })
 
 _PROJECT_ID_RE = re.compile(r"^/api/projects/\{[^}]+\}(/.*)?$")
@@ -180,7 +180,9 @@ def _has_perm_dep(route: APIRoute) -> bool:
 
 # Path suffixes for POST endpoints that are genuinely read-only computations —
 # they take a request body because the query is too complex for a query string,
-# but they touch no state.
+# but they touch no state. They still need a *read* gate: an earlier version
+# returned None here, so a caller explicitly denied ``view`` could still read
+# the whole project's evaluation through the what-if endpoint.
 #
 # Keep this list minimal. `/import` and `/scan` were previously exempt here on
 # the grounds of being "dry-run"; both can in fact mutate (`/import` in replace
@@ -213,9 +215,9 @@ def _required_guard(route: APIRoute) -> str | None:
                 or path.endswith("/git/key") or path.endswith("/git/key/rotate"):
             return "require_admin"
         if methods & {"POST", "PUT", "PATCH", "DELETE"}:
-            # Allow read-only computation endpoints to skip permission guards.
+            # Read-only computation endpoints still require the read tier.
             if any(path.endswith(s) for s in _READONLY_POST_SUFFIXES):
-                return None
+                return "require_view"
             # Bulk operations need higher privilege regardless of entity type.
             if "/bulk" in path:
                 return "require_maintain"

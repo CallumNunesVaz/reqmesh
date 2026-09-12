@@ -77,6 +77,28 @@ def test_merge_references_creates_new_links(client, project):
     assert req["references"][0]["kind"] == "impl"
 
 
+def test_merge_references_keeps_every_file_when_one_requirement_is_hit_twice(client, project):
+    """Regression: each hit used to rebuild the list from the unchanged
+    snapshot and write it, so only the last file survived."""
+    from app.services.yaml_store import YamlStore
+    from app.core.config import settings
+    from pathlib import Path
+
+    store = YamlStore(Path(settings.data_root) / project)
+    store.create_requirement({"id": "REQ-MULTI", "name": "Multi"})
+
+    hits = [
+        {"req_id": "REQ-MULTI", "kind": "impl", "path": "src/a.py", "line": 1, "sha256": "aaa"},
+        {"req_id": "REQ-MULTI", "kind": "impl", "path": "src/b.py", "line": 2, "sha256": "bbb"},
+    ]
+    summary = merge_references(store, hits)
+    assert summary["created"] == 2
+    assert summary["requirements_touched"] == 1
+
+    req = store.get_requirement("REQ-MULTI")
+    assert sorted(r["path"] for r in req["references"]) == ["src/a.py", "src/b.py"]
+
+
 def test_scan_api_endpoint(client, project, tmp_path):
     from app.services.yaml_store import YamlStore
     from app.core.config import settings

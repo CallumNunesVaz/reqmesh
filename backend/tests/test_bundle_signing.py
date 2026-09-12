@@ -186,3 +186,45 @@ def test_unparseable_key_rejected(tmp_path, monkeypatch):
     with pytest.raises(RuntimeError) as excinfo:
         bu.stage_from_archive(tarball, "admin")
     assert str(excinfo.value) == "RT_UPDATE_PUBLIC_KEY is not a valid Ed25519 public key."
+
+
+# ── HTTP-level: the signature must be uploadable alongside the archive ────────
+
+def test_http_upload_accepts_tarball_and_signature(client, tmp_path, monkeypatch):
+    """Before this, the route accepted only the tarball while the verifier looked
+    for a sibling ``.sig`` no route could write, so a signed instance could
+    never stage a signed bundle through the API."""
+    inst = _make_install(tmp_path)
+    _patch_bundle(monkeypatch, inst)
+    private, pub_b64 = _keypair()
+    monkeypatch.setattr(settings, "update_public_key", pub_b64)
+    tarball = _make_bundle(tmp_path)
+    signature = private.sign(tarball.read_bytes())
+
+    with open(tarball, "rb") as tf:
+        res = client.post(
+            "/api/system/update/bundle",
+            files={
+                "file": ("reqmesh-v2.0.0.tar.gz", tf, "application/gzip"),
+                "signature": ("reqmesh-v2.0.0.tar.gz.sig", signature,
+                              "application/octet-stream"),
+            },
+        )
+    assert res.status_code == 200, res.text
+    assert res.json()["state"] == "staged"
+
+
+def test_http_upload_without_signature_is_rejected_when_key_configured(client, tmp_path, monkeypatch):
+    inst = _make_install(tmp_path)
+    _patch_bundle(monkeypatch, inst)
+    _, pub_b64 = _keypair()
+    monkeypatch.setattr(settings, "update_public_key", pub_b64)
+    tarball = _make_bundle(tmp_path)
+
+    with open(tarball, "rb") as tf:
+        res = client.post(
+            "/api/system/update/bundle",
+            files={"file": ("reqmesh-v2.0.0.tar.gz", tf, "application/gzip")},
+        )
+    assert res.status_code == 409
+    assert "not signed" in res.text
