@@ -1056,7 +1056,7 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
           priority: req.priority, type: req.type,
           verified: req.verification_status === 'passed',
           parent: req.parent, cascadeFrom: req.cascade_from,
-          hasChildren: reqs.some(r => r.parent === req.id),
+          hasChildren: (childrenByParent.get(req.id)?.length ?? 0) > 0,
           collapsed: collapsed.has(req.id),
           groupsOnly: groupsOnly.has(req.id),
           // Selection-derived styling lives on the node's own data (not the

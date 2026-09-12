@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
 import { useAuthStore } from '../store/auth';
 import { useStore } from '../store';
-import { api, type ImpactResultData } from '../api/client';
+import { api, type ImpactResultData, type Requirement } from '../api/client';
 
 interface WhatIfState {
   overrides: Record<string, number>;
@@ -149,15 +149,23 @@ export function WhatIfProvider({ projectId, children }: { projectId: string; chi
     // own a notification. Without it a refused write vanished as an unhandled
     // rejection partway through the loop, leaving some requirements committed
     // and others not, with the panel still showing the overrides as pending.
+    // The loop is not a transaction, so track what was written and put it back
+    // if a later requirement is refused; If-Match means a concurrent edit is
+    // refused rather than silently clobbered.
+    const applied: { reqId: string; parameters: Requirement['parameters'] }[] = [];
     try {
       for (const [reqId, changes] of Object.entries(byReq)) {
         const req = await api.getRequirement(pid, reqId);
         const params = (req.parameters ?? []).map((p) =>
           changes[p.name] !== undefined ? { ...p, value: changes[p.name] } : p
         );
-        await api.updateRequirement(pid, reqId, { parameters: params });
+        applied.push({ reqId, parameters: req.parameters ?? [] });
+        await api.updateRequirement(pid, reqId, { parameters: params }, req.modified);
       }
     } catch (err) {
+      await Promise.all(applied.map((a) =>
+        api.updateRequirement(pid, a.reqId, { parameters: a.parameters }).catch(() => {})
+      ));
       setError(err instanceof Error ? err.message : 'Could not apply the overrides');
       bumpGraphVersion();
       bumpDataVersion();

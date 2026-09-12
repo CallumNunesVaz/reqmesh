@@ -20,7 +20,7 @@ export function CommentThread({ entityKind, entityId }: {
   const [comments, setComments] = useState<Comment[]>([]);
   const [newText, setNewText] = useState('');
   const [busy, setBusy] = useState(false);
-  const canEdit = useAuthStore((s) => s.canEdit());
+  const canPropose = useAuthStore((s) => s.canPropose());
   const { addToast } = useToasts();
   const showConfirm = useConfirm();
 
@@ -87,7 +87,7 @@ export function CommentThread({ entityKind, entityId }: {
         </h2>
       </div>
 
-      {canEdit && (
+      {canPropose && (
         <div className="flex gap-1.5">
           <input
             className="input text-xs flex-1"
@@ -142,7 +142,7 @@ export function CommentThread({ entityKind, entityId }: {
                 {c.text}
               </p>
             </div>
-            {canEdit && (
+            {canPropose && (
               <div className="flex items-center gap-0.5 shrink-0">
                 <button
                   onClick={() => toggleResolved(c)}

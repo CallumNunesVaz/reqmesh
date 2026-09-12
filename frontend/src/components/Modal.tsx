@@ -38,6 +38,9 @@ interface ModalProps {
    * everyone else's `z-50` before this extraction, and that was deliberate.
    */
   elevated?: boolean;
+  /** Accessible name for the dialog, when the content has no heading the
+   *  component can point `aria-labelledby` at. */
+  ariaLabel?: string;
 }
 
 const FOCUSABLE =
@@ -52,8 +55,12 @@ export default function Modal({
   topOffset = 'pt-[8vh]',
   closeOnEscape = false,
   elevated = false,
+  ariaLabel,
 }: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
+  // The element that had focus before the dialog opened, restored on close so
+  // keyboard users land back on the trigger rather than at the top of the page.
+  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
 
   // Trap focus inside the panel while it is open. The one behavioural change
   // this refactor makes: without it, Tab reaches the page behind the dialog.
@@ -88,12 +95,19 @@ export default function Modal({
 
     // Focus the first control on open — unless something inside already took
     // focus (an `autoFocus` field commits before this effect runs).
+    previouslyFocusedRef.current = document.activeElement as HTMLElement | null;
     const active = document.activeElement;
     if (!panel.contains(active)) {
       (focusable()[0] ?? panel).focus();
     }
 
-    return () => document.removeEventListener('keydown', onKeyDown, true);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown, true);
+      const previous = previouslyFocusedRef.current;
+      if (previous && typeof previous.focus === 'function' && document.contains(previous)) {
+        previous.focus();
+      }
+    };
   }, [open]);
 
   useEffect(() => {
@@ -127,6 +141,7 @@ export default function Modal({
               // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
               role="dialog"
               aria-modal="true"
+              aria-label={ariaLabel}
               tabIndex={-1}
               variants={modalPanel}
               initial="initial"

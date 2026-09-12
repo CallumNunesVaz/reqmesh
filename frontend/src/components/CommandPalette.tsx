@@ -6,6 +6,7 @@ import { BACKEND_KIND_TO_ENTITY } from '../lib/searchKinds';
 import { loadEntityIndex, searchEntities, recordEntityVisit, type IndexedEntity } from './entityIndex';
 import { useEntityVersion } from '../store';
 import { api, type SearchResult } from '../api/client';
+import { OPEN_PALETTE_EVENT } from '../lib/appEvents';
 import Modal from './Modal';
 
 function highlightMatch(text: string, query: string): React.ReactNode {
@@ -20,9 +21,6 @@ function highlightMatch(text: string, query: string): React.ReactNode {
     part.toLowerCase() === query.toLowerCase() ? <mark key={i}>{part}</mark> : part
   );
 }
-
-/** Header button and other far-away UI can open the palette with this. */
-export const OPEN_PALETTE_EVENT = 'rt-open-palette';
 
 /**
  * Ctrl/Cmd+K jump-to-anything. Searches every entity in the project by id,

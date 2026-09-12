@@ -41,6 +41,10 @@ export function useKeyboardShortcuts(projectId: string | undefined, handlers: Sh
   const isInProject = !!projectId;
 
   const h = useCallback((e: KeyboardEvent) => {
+    // A dialog owns the keyboard while it is open. Without this, Escape inside
+    // a dialog that does not close on Escape also reached the page handler and
+    // navigated away, discarding the dialog and the edit behind it.
+    if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
     const target = e.target as HTMLElement;
     const tag = target.tagName;
     const inTextInput = TEXT_INPUT_TAGS.has(tag) || (target as any)?.isContentEditable;

@@ -56,3 +56,39 @@ describe('useKeyboardShortcuts Alt quick-nav', () => {
     expect(guard).toHaveBeenCalled();
   });
 });
+
+describe('useKeyboardShortcuts while a dialog is open', () => {
+  function EscapeHarness({ onEscape }: { onEscape: () => void }) {
+    useKeyboardShortcuts('p', { onDetailEscape: onEscape });
+    return <div />;
+  }
+
+  it('does not fire page-level Escape handlers behind a dialog', () => {
+    const onEscape = vi.fn();
+    render(
+      <MemoryRouter initialEntries={['/project/p/requirements/R-1']}>
+        <Routes>
+          <Route path="*" element={<EscapeHarness onEscape={onEscape} />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    act(() => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    });
+    expect(onEscape).toHaveBeenCalledTimes(1);
+
+    const dialog = document.createElement('div');
+    dialog.setAttribute('role', 'dialog');
+    dialog.setAttribute('aria-modal', 'true');
+    document.body.appendChild(dialog);
+    try {
+      act(() => {
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      });
+      expect(onEscape).toHaveBeenCalledTimes(1);
+    } finally {
+      document.body.removeChild(dialog);
+    }
+  });
+});

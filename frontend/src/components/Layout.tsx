@@ -1,4 +1,4 @@
-import { Suspense } from 'react';
+import { Suspense, lazy } from 'react';
 import { Outlet, useParams, useLocation } from 'react-router-dom';
 import { GuardedLink as Link } from './navGuard';
 import LoadingSplash from './LoadingSplash';
@@ -7,14 +7,9 @@ import { useState, useEffect, useCallback, useMemo, createContext, useContext, u
 import { ThemeToggle } from './ThemeToggle';
 import { type EntityKind } from './entities';
 import RequirementNav from './RequirementNav';
-import GraphPane from './GraphPane';
-import CommandPalette, { OPEN_PALETTE_EVENT } from './CommandPalette';
 import ShortcutHelp from './ShortcutHelp';
-import DocumentationPanel from './DocumentationPanel';
 import { useKeyboardShortcuts } from './useKeyboardShortcuts';
 import LoginModal from './LoginModal';
-import ExportDialog from './ExportDialog';
-import ImportDialog from './ImportDialog';
 import PresenceBar from './PresenceBar';
 import { useAuthStore } from '../store/auth';
 import { useStore } from '../store';
@@ -24,10 +19,20 @@ import { api, type PresenceUser } from '../api/client';
 import { SseBackoff } from '../lib/sseBackoff';
 import { pageKeyFor } from '../lib/pageKey';
 import { graphRelevant } from '../lib/mutationInvalidation';
+import { OPEN_PALETTE_EVENT } from '../lib/appEvents';
 import { WhatIfProvider } from './WhatIfContext';
 import WhatIfBar from './WhatIfBar';
 import { ToastProvider } from './Toast';
 import { LiveRegionProvider } from './LiveRegion';
+
+// Lazily loaded so the graph chunk (xyflow + d3) and the dialogs stay off the
+// first paint. The canvas only mounts when `graphOpen`, so a project list or a
+// settings page never downloads it.
+const GraphPane = lazy(() => import('./GraphPane'));
+const CommandPalette = lazy(() => import('./CommandPalette'));
+const DocumentationPanel = lazy(() => import('./DocumentationPanel'));
+const ExportDialog = lazy(() => import('./ExportDialog'));
+const ImportDialog = lazy(() => import('./ImportDialog'));
 
 const GraphPaneCtx = createContext({ graphOpen: false, toggleGraph: () => {} });
 export function useGraphPane() { return useContext(GraphPaneCtx); }
@@ -679,7 +684,9 @@ export default function Layout() {
                       transition: resizing ? 'none' : 'flex-grow 0.3s ease',
                     }}
                   >
-                    <GraphPane projectId={projectId!} />
+                    <Suspense fallback={null}>
+                      <GraphPane projectId={projectId!} />
+                    </Suspense>
                   </div>
                   {contextOpen && (
                     <div
@@ -732,11 +739,14 @@ export default function Layout() {
       </div>
 
       <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
-      {isInProject && <CommandPalette projectId={projectId!} />}
-      {isInProject && <ExportDialog open={exportOpen} onClose={() => setExportOpen(false)} projectId={projectId!} />}
-      {isInProject && <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} projectId={projectId!} />}
+      {isInProject && <Suspense fallback={null}><CommandPalette projectId={projectId!} /></Suspense>}
+      {isInProject && <Suspense fallback={null}><ExportDialog open={exportOpen} onClose={() => setExportOpen(false)} projectId={projectId!} /></Suspense>}
+      {isInProject && <Suspense fallback={null}><ImportDialog open={importOpen} onClose={() => setImportOpen(false)} projectId={projectId!} /></Suspense>}
+
+      <Suspense fallback={null}>
+        <DocumentationPanel open={docsOpen} onClose={() => setDocsOpen(false)} />
+      </Suspense>
       <ShortcutHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
-      <DocumentationPanel open={docsOpen} onClose={() => setDocsOpen(false)} />
     </SelectedReqCtx.Provider>
     </GraphPaneCtx.Provider>
     </HoveredEntityCtx.Provider>
