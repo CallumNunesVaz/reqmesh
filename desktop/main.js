@@ -181,10 +181,26 @@ function createWindow(port) {
   mainWindow.on('closed', () => { mainWindow = null; });
 
   // Prevent the renderer from navigating to unexpected URLs — the only allowed
-  // origin is the local backend serving the SPA.
+  // origin is the local backend serving the SPA. Compare origins rather than
+  // using a prefix test: `http://127.0.0.1:8000@evil.com/` and
+  // `http://127.0.0.1:80000/` both start with the allowed string.
   const allowedOrigin = `http://${HOST}:${port}`;
+  const isAllowed = (url) => {
+    try {
+      return new URL(url).origin === allowedOrigin;
+    } catch {
+      return false;
+    }
+  };
   mainWindow.webContents.on('will-navigate', (event, url) => {
-    if (!url.startsWith(allowedOrigin)) {
+    if (!isAllowed(url)) {
+      event.preventDefault();
+    }
+  });
+  // A server-side redirect is not covered by will-navigate, so a compromised
+  // backend could still 302 the renderer off-origin without this.
+  mainWindow.webContents.on('will-redirect', (event, url) => {
+    if (!isAllowed(url)) {
       event.preventDefault();
     }
   });

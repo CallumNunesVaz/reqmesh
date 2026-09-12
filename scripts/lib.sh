@@ -149,7 +149,20 @@ check_systemd() {
 install_docker() {
     if [ "$OS_ID" = "ubuntu" ] || [ "$OS_ID" = "debian" ]; then
         info "Installing Docker..."
-        curl -fsSL https://get.docker.com | sh
+        # Download first, then run. A network failure now aborts with a clear
+        # message instead of the shell executing a truncated script, and the
+        # download is checked to be non-empty before it runs. (Upstream does not
+        # publish a stable hash for this installer, so it cannot be pinned the
+        # way tectonic is.)
+        local script
+        script="$(mktemp)"
+        if ! curl -fsSL https://get.docker.com -o "$script" || [ ! -s "$script" ]; then
+            rm -f "$script"
+            error "Could not download the Docker install script."
+            return 1
+        fi
+        sh "$script"
+        rm -f "$script"
         if [ "$OS_ID" = "ubuntu" ]; then
             sudo apt-get install -y docker-compose-plugin 2>/dev/null || true
         fi
@@ -235,20 +248,36 @@ install_tectonic() {
         return 0
     fi
     info "Installing tectonic PDF engine..."
-    # The upstream script drops the binary into the *current* directory, so run
-    # it somewhere writable and known rather than wherever the installer was
-    # invoked from — which may be read-only, or already hold a stale binary.
-    local tmp
+    # Pinned release tarball verified against a recorded SHA-256, mirroring
+    # Dockerfile.prod. The old path piped an unpinned remote script straight
+    # into a shell (`curl ... | sh`), so a compromised or moved endpoint could
+    # run arbitrary code as the installing user. x86_64 only, as in the image.
+    local tectonic_version="0.17.0"
+    local tectonic_sha256="1a715688baf591e650c8aeb160ae934e181685eecbb38b317de30b269ac5d606"
+    local arch
+    case "$(uname -m)" in
+        x86_64|amd64) arch="x86_64-unknown-linux-gnu" ;;
+        *)
+            warn "tectonic has no prebuilt binary for $(uname -m); install it manually."
+            warn "PDF reports will use the weasyprint fallback, which omits tables, badges"
+            warn "and the table of contents."
+            return 0
+            ;;
+    esac
+    local tmp url
     tmp="$(mktemp -d)"
-    ( cd "$tmp" && curl --proto '=https' --tlsv1.2 -fsSL https://drop-sh.fullyjustified.net | sh ) || true
-    if [ -f "$tmp/tectonic" ]; then
+    url="https://github.com/tectonic-typesetting/tectonic/releases/download/tectonic%40${tectonic_version}/tectonic-${tectonic_version}-${arch}.tar.gz"
+    if curl --proto '=https' --tlsv1.2 -fsSL -o "$tmp/tectonic.tar.gz" "$url" \
+        && echo "${tectonic_sha256}  $tmp/tectonic.tar.gz" | sha256sum -c - >/dev/null 2>&1 \
+        && tar -xzf "$tmp/tectonic.tar.gz" -C "$tmp" tectonic; then
         sudo install -m 0755 "$tmp/tectonic" /usr/local/bin/tectonic
         rm -rf "$tmp"
         success "tectonic installed to /usr/local/bin/tectonic"
     else
         rm -rf "$tmp"
-        warn "tectonic download failed — PDF reports will use the weasyprint fallback,"
-        warn "which omits tables, badges and the table of contents."
+        warn "tectonic download failed or failed checksum verification — PDF reports"
+        warn "will use the weasyprint fallback, which omits tables, badges and the"
+        warn "table of contents."
         warn "Install it from https://tectonic-typesetting.github.io and re-run to fix."
     fi
 }

@@ -58,7 +58,7 @@ services:
       # the *development* default (localhost:5173), which has no business
       # being an allowed credentialed origin in production.
       - RT_CORS_ORIGINS=${RT_CORS_ORIGINS:-[]}
-      - RT_PROXY_TRUSTED_CIDR=${RT_PROXY_TRUSTED_CIDR:-127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}
+      - RT_PROXY_TRUSTED_CIDR=${RT_PROXY_TRUSTED_CIDR:-127.0.0.0/8,172.16.0.0/12}
       - RT_UPDATE_CHECK_TTL_SECONDS=${RT_UPDATE_CHECK_TTL_SECONDS:-3600}
       - RT_ALLOWED_HOSTS=${RT_ALLOWED_HOSTS:-}
       # Git author identity for autocommits
@@ -103,6 +103,8 @@ services:
       - DEPLOY_DIR=/deploy
       - COMPOSE_FILE=docker-compose.prod.yml
       - IMAGE_REPO=ghcr.io/callumnunesvaz/reqmesh
+      # Offline image uploads are not signature-verified. Opt in explicitly.
+      - ALLOW_UNSIGNED_IMAGE=${RT_UPDATE_ALLOW_UNSIGNED_IMAGE:-0}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - reqmesh-control:/control

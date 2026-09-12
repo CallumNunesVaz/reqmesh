@@ -196,7 +196,7 @@ generate_configs() {
     local port="${CFG[PORT]:-8000}"
     local domain="${CFG[DOMAIN]:-}"
     local proxy="${CFG[PROXY]:-none}"
-    local proxy_cidr="${CFG[PROXY_TRUSTED_CIDR]:-127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}"
+    local proxy_cidr="${CFG[PROXY_TRUSTED_CIDR]:-127.0.0.0/8}"
 
     # .env file
     local env_file="$INSTALL_DIR/.env"
@@ -319,7 +319,7 @@ install_service() {
     local data_root="${CFG[DATA_ROOT]:-${INSTALL_DIR}/data/projects}"
     local host="${CFG[HOST]:-127.0.0.1}"
     local port="${CFG[PORT]:-8000}"
-    local proxy_cidr="${CFG[PROXY_TRUSTED_CIDR]:-127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}"
+    local proxy_cidr="${CFG[PROXY_TRUSTED_CIDR]:-127.0.0.0/8}"
 
     local tmpl="$TEMPLATES/reqmesh.service.tmpl"
     local content

@@ -54,6 +54,9 @@ RT_GIT_COMMIT_INTERVAL_HOURS=${CFG[GIT_COMMIT_INTERVAL_HOURS]:-0}
 RT_GIT_COMMIT_CHANGES_THRESHOLD=${CFG[GIT_COMMIT_CHANGES_THRESHOLD]:-0}
 RT_CORS_ORIGINS=${CFG[CORS_ORIGINS]:-[]}
 RT_ALLOWED_HOSTS=${CFG[ALLOWED_HOSTS]:-}
+# Persisted so the compose template's RFC1918-wide fallback is never used: the
+# app's peer in a container is the bridge gateway, not loopback.
+RT_PROXY_TRUSTED_CIDR=${CFG[PROXY_TRUSTED_CIDR]:-127.0.0.0/8,172.16.0.0/12}
 GIT_USER_NAME=${CFG[GIT_USER_NAME]:-reqmesh}
 GIT_USER_EMAIL=${CFG[GIT_USER_EMAIL]:-reqmesh@localhost}
 EOF

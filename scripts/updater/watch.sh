@@ -38,6 +38,13 @@ VERSION_ENV="$CONTROL_DIR/version.env"
 IDENTITY_FILE="$CONTROL_DIR/update-cosign-identity"
 ISSUER_FILE="$CONTROL_DIR/update-cosign-issuer"
 
+# Offline image-mode updates load an uploaded tarball that carries no signature
+# to verify against, unlike the pull path's cosign check. Refuse by default so
+# write access to /control (which the app container has) cannot be turned into
+# an arbitrary root image swap; an operator who needs air-gapped updates opts
+# in explicitly.
+ALLOW_UNSIGNED_IMAGE="${ALLOW_UNSIGNED_IMAGE:-0}"
+
 now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 
 write_status() {
@@ -202,6 +209,10 @@ handle_pull() {
 
 handle_image() {
   # Load an uploaded image archive and recreate the app on it (offline path).
+  if [ "$ALLOW_UNSIGNED_IMAGE" != "1" ]; then
+    write_status failed "Image-mode updates are disabled because the uploaded archive is not signature-verified. Set ALLOW_UNSIGNED_IMAGE=1 on the updater service to permit them." ""
+    return
+  fi
   if [ ! -s "$IMAGE_FILE" ]; then
     write_status failed "No uploaded image archive found." ""
     return

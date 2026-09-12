@@ -617,7 +617,7 @@ p8_paths() {
     fi
 
     local proxy="${CFG[PROXY]:-none}"
-    local proxy_cidr="${CFG[PROXY_TRUSTED_CIDR]:-127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}"
+    local proxy_cidr="${CFG[PROXY_TRUSTED_CIDR]:-127.0.0.0/8}"
     save_cfg "PROXY_TRUSTED_CIDR" "$proxy_cidr"
 
     if [ "$proxy" = "caddy" ] || [ "$proxy" = "nginx" ]; then

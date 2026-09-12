@@ -129,6 +129,8 @@ services:
       - DEPLOY_DIR=/deploy
       - COMPOSE_FILE=docker-compose.prod.yml
       - IMAGE_REPO=ghcr.io/callumnunesvaz/reqmesh
+      # Offline image uploads are not signature-verified. Opt in explicitly.
+      - ALLOW_UNSIGNED_IMAGE=${RT_UPDATE_ALLOW_UNSIGNED_IMAGE:-0}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - reqmesh-control:/control
