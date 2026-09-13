@@ -18,6 +18,24 @@ from app.services.html_text import strip_html
 
 FILTERABLE_FIELDS = ("type", "priority", "status", "verification_status")
 
+# Stripped-HTML text, keyed by the raw HTML. `strip_html` parses the document,
+# which dominated a search over a large project; the same description is
+# stripped once and reused across keystrokes. Bounded so a project with many
+# distinct descriptions cannot grow it without limit.
+_strip_cache: dict[str, str] = {}
+_STRIP_CACHE_MAX = 2048
+
+
+def _stripped(text: str) -> str:
+    hit = _strip_cache.get(text)
+    if hit is not None:
+        return hit
+    stripped = strip_html(text)
+    if len(_strip_cache) >= _STRIP_CACHE_MAX:
+        _strip_cache.clear()
+    _strip_cache[text] = stripped
+    return stripped
+
 _KIND_LABELS: dict[str, str] = {
     "requirement": "Requirement",
     "component": "Component",
@@ -84,26 +102,35 @@ def search_project(store, query: str, kind: str | None = None, limit: int = 50) 
         # Keep the original-cased text alongside the folded copy: matching is
         # case-insensitive, but the snippet is shown to the user, and slicing
         # it out of the lowercased string rendered every result all-lowercase.
-        detail_s = strip_html(detail)
-        extra_s = strip_html(extra)
+        #
+        # HTML is only stripped once the id/name checks have not already decided
+        # the score, so an id lookup does not pay to parse every description.
         id_l, name_l = identifier.lower(), name.lower()
-        detail_l, extra_l = detail_s.lower(), extra_s.lower()
-
+        detail_s = extra_s = None
         if q_lower == id_l:
             score = 100
         elif q_lower == name_l:
             score = 80
         elif q_lower in name_l:
             score = 60
-        elif q_lower in detail_l:
-            score = 40
-        elif q_lower in extra_l or q_lower in id_l:
-            score = 20
         else:
-            return 0, "", ""
+            detail_s = _stripped(detail)
+            extra_s = _stripped(extra)
+            if q_lower in detail_s.lower():
+                score = 40
+            elif q_lower in extra_s.lower() or q_lower in id_l:
+                score = 20
+            else:
+                return 0, "", ""
 
         snippet = ""
-        for src, folded in ((detail_s, detail_l), (extra_s, extra_l), (name, name_l)):
+        for src, folded in (
+            (detail_s, detail_s.lower() if detail_s is not None else None),
+            (extra_s, extra_s.lower() if extra_s is not None else None),
+            (name, name_l),
+        ):
+            if src is None or folded is None:
+                continue
             idx = folded.find(q_lower)
             if idx >= 0:
                 start = max(0, idx - 30)
@@ -114,7 +141,7 @@ def search_project(store, query: str, kind: str | None = None, limit: int = 50) 
                 if end < len(src):
                     snippet = snippet + "..."
                 break
-        return score, strip_html(name) or identifier, snippet
+        return score, _stripped(name) or identifier, snippet
 
     # Requirements
     if not kind or kind == "requirement":
