@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import CreateRequirementModal, { type CreateIntent } from '../components/CreateRequirementModal';
 import { usePersistedState, setCodec } from '../hooks/usePersistedState';
 import { useRangeSelection } from '../hooks/useRangeSelection';
@@ -8,7 +9,7 @@ import {
   Inbox, Square, CheckSquare, SlidersHorizontal, Copy, AlertTriangle,
 } from 'lucide-react';
 import { api, baselineNames, getTruncationInfo, type Requirement, type EvalVerdict, type TruncationInfo, type Component, type StakeholderDef, type SystemStateDef } from '../api/client';
-import { useStore, useEntityVersion } from '../store';
+import { useStore } from '../store';
 import { useAuthStore } from '../store/auth';
 import { useUndoStore } from '../store/undo';
 import { useSelectedReq, useHoveredEntityBus, useHoverHighlight } from '../components/Layout';
@@ -60,9 +61,6 @@ export default function RequirementsPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { requirements, setRequirements } = useStore();
-  const dataVersion = useEntityVersion(
-    'requirements', 'components', 'verification', 'definitions', 'baselines', 'system-states',
-  );
   const bumpGraphVersion = useStore((s) => s.bumpGraphVersion);
   const bumpDataVersion = useStore((s) => s.bumpDataVersion);
   const editMode = useAuthStore((s) => s.canEdit());
@@ -118,25 +116,53 @@ export default function RequirementsPage() {
   const [loading, setLoading] = useState(true);
   const [truncation, setTruncation] = useState<TruncationInfo | null>(null);
 
+  // Server-state cache. The Layout invalidation bridge refetches these when the
+  // matching collection changes remotely; local mutations call `load()` below.
+  const queryClient = useQueryClient();
+  const requirementsQuery = useQuery({
+    queryKey: ['requirements', projectId],
+    queryFn: () => api.listRequirements(projectId!),
+    enabled: !!projectId,
+  });
+  const evaluationQuery = useQuery({
+    queryKey: ['evaluation', projectId],
+    queryFn: () => api.getEvaluation(projectId!),
+    enabled: !!projectId,
+  });
+  const projectQuery = useQuery({
+    queryKey: ['project', projectId],
+    queryFn: () => api.getProject(projectId!),
+    enabled: !!projectId,
+  });
+
+  useEffect(() => {
+    if (requirementsQuery.data) {
+      setRequirements(requirementsQuery.data);
+      setTruncation(getTruncationInfo(projectId!, 'requirements'));
+    }
+    if (requirementsQuery.isFetched) setLoading(false);
+  }, [requirementsQuery.data, requirementsQuery.isFetched, projectId, setRequirements]);
+  useEffect(() => {
+    if (evaluationQuery.data) {
+      setVerdicts(new Map(
+        evaluationQuery.data.requirements.filter((r) => r.verdict !== 'none').map((r) => [r.id, r.verdict]),
+      ));
+    }
+  }, [evaluationQuery.data]);
+  useEffect(() => {
+    if (projectQuery.data) {
+      setProjectBaselines(baselineNames(projectQuery.data.baselines));
+      setProjectStakeholders(projectQuery.data.stakeholders || []);
+      setProjectSystemStates(projectQuery.data.system_states || []);
+    }
+  }, [projectQuery.data]);
+
   const load = () => {
     if (!projectId) return;
-    api.listRequirements(projectId).then(setRequirements).catch(console.error)
-      .finally(() => { setLoading(false); setTruncation(getTruncationInfo(projectId, 'requirements')); });
-    // Constraint verdicts, so a failing parametric bound is visible from the
-    // list without opening each requirement.
-    api.getEvaluation(projectId)
-      .then((ev) => setVerdicts(new Map(
-        ev.requirements.filter((r) => r.verdict !== 'none').map((r) => [r.id, r.verdict]),
-      )))
-      .catch(() => {});
-    api.getProject(projectId).then((p) => {
-      setProjectBaselines(baselineNames(p.baselines));
-      setProjectStakeholders(p.stakeholders || []);
-      setProjectSystemStates(p.system_states || []);
-    }).catch(() => {});
+    queryClient.invalidateQueries({ queryKey: ['requirements', projectId] });
+    queryClient.invalidateQueries({ queryKey: ['evaluation', projectId] });
+    queryClient.invalidateQueries({ queryKey: ['project', projectId] });
   };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(load, [projectId, dataVersion]);
 
   // '/' focuses search
   useEffect(() => {

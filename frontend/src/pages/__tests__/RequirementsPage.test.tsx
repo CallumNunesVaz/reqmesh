@@ -3,6 +3,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import RequirementsPage from '../RequirementsPage';
@@ -112,12 +113,15 @@ function mkReq(overrides: Partial<Requirement> = {}): Requirement {
 }
 
 function renderPage() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <MemoryRouter initialEntries={['/project/P1/requirements']}>
-      <Routes>
-        <Route path="/project/:projectId/requirements" element={<RequirementsPage />} />
-      </Routes>
-    </MemoryRouter>,
+    <QueryClientProvider client={client}>
+      <MemoryRouter initialEntries={['/project/P1/requirements']}>
+        <Routes>
+          <Route path="/project/:projectId/requirements" element={<RequirementsPage />} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 

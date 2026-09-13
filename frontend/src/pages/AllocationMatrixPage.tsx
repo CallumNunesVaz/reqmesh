@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { Search, Grid3X3, Check, Loader, ArrowUpDown, Download } from 'lucide-react';
 import { api, type AllocationMatrixData, type MatrixAxis } from '../api/client';
@@ -41,7 +41,11 @@ export default function AllocationMatrixPage() {
   const [toggling, setToggling] = useState<Set<string>>(new Set());
   const [transpose, setTranspose] = useState(false);
   const [error, setError] = useState('');
+  const [page, setPage] = useState(0);
   const editable = useAuthStore((s) => s.canEdit());
+
+  // A filter or axis change re-pages from the top.
+  useEffect(() => { setPage(0); }, [axis, search, filterType, transpose, rows]);
 
   const load = useCallback(async () => {
     if (!projectId) return;
@@ -133,12 +137,24 @@ export default function AllocationMatrixPage() {
   const displayRows = transpose ? data.columns : data.rows;
   const displayCols = transpose ? data.rows : data.columns;
 
+  // Row paging bounds the rendered DOM: a 2,000 × 500 matrix is ~1M cells, and
+  // the transposed lookup below used to scan every row per cell (O(rows²·cols)).
+  const PAGE_SIZE = 200;
+  const pageCount = Math.max(1, Math.ceil(displayRows.length / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount - 1);
+  const pagedRows = displayRows.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE);
+
+  const rowsById = useMemo(
+    () => new Map(data.rows.map((r: any) => [r.row_id || r.req_id, r])),
+    [data.rows],
+  );
+
   const colKind = AXES.find((a) => a.key === axis)!.colKind;
   const rowKind: EntityKind = data.row_kind === 'components' ? 'component' : 'requirement';
 
   const isAllocated = (row: any, col: any): boolean => {
     if (!transpose) return row.cells?.[col.id] ?? false;
-    const origRow = data.rows.find((r) => (r.row_id || r.req_id) === col.row_id);
+    const origRow = rowsById.get(col.row_id || col.req_id);
     return origRow?.cells?.[row.id] ?? false;
   };
 
@@ -339,7 +355,7 @@ export default function AllocationMatrixPage() {
               </tr>
             </thead>
             <tbody>
-              {displayRows.map((row: any) => (
+              {pagedRows.map((row: any) => (
                 <tr key={transpose ? row.id : (row.row_id || row.req_id)}>
                   <td className={`sticky left-0 z-10 bg-card border-r border-b px-3 py-2 ${transpose ? '' : (row.req_status ? (STATUS_CLASSES[row.req_status] || '') : '')}`}>
                     <div className="flex flex-col">
@@ -396,6 +412,23 @@ export default function AllocationMatrixPage() {
           </table>
         )}
       </div>
+
+      {displayRows.length > PAGE_SIZE && (
+        <div className="shrink-0 flex items-center justify-between border-t px-4 py-2 text-xs text-muted-foreground">
+          <span>
+            Rows {safePage * PAGE_SIZE + 1}–{Math.min((safePage + 1) * PAGE_SIZE, displayRows.length)} of {displayRows.length}
+          </span>
+          <div className="flex items-center gap-2">
+            <button className="btn-secondary text-xs" disabled={safePage === 0} onClick={() => setPage(safePage - 1)}>
+              Prev
+            </button>
+            <span>Page {safePage + 1} / {pageCount}</span>
+            <button className="btn-secondary text-xs" disabled={safePage >= pageCount - 1} onClick={() => setPage(safePage + 1)}>
+              Next
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

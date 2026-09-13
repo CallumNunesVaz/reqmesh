@@ -1,4 +1,5 @@
 import { Suspense, lazy } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Outlet, useParams, useLocation } from 'react-router-dom';
 import { GuardedLink as Link } from './navGuard';
 import LoadingSplash from './LoadingSplash';
@@ -376,6 +377,28 @@ export default function Layout() {
   const bumpGraphVersion = useStore((s) => s.bumpGraphVersion);
   const bumpDataVersion = useStore((s) => s.bumpDataVersion);
   const bumpEntityVersion = useStore((s) => s.bumpEntityVersion);
+  // Bridge the entity-scoped invalidation signal into the server-state cache:
+  // a remote change to a collection invalidates only that collection's queries,
+  // and a local/unattributed change (dataVersion) invalidates everything.
+  const queryClient = useQueryClient();
+  const entityVersions = useStore((s) => s.entityVersions);
+  const globalDataVersion = useStore((s) => s.dataVersion);
+  const prevEntityVersions = useRef<Record<string, number>>({});
+  const prevGlobalDataVersion = useRef(globalDataVersion);
+  useEffect(() => {
+    for (const [kind, version] of Object.entries(entityVersions)) {
+      if (prevEntityVersions.current[kind] !== version) {
+        queryClient.invalidateQueries({ queryKey: [kind] });
+      }
+    }
+    prevEntityVersions.current = entityVersions;
+  }, [entityVersions, queryClient]);
+  useEffect(() => {
+    if (prevGlobalDataVersion.current !== globalDataVersion) {
+      prevGlobalDataVersion.current = globalDataVersion;
+      queryClient.invalidateQueries();
+    }
+  }, [globalDataVersion, queryClient]);
   const helpersEnabled = useStore((s) => s.helpersEnabled);
   const toggleHelpers = useStore((s) => s.toggleHelpers);
   const { undo, redo, canUndo, canRedo } = useUndoStore();
