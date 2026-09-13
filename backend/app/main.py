@@ -206,6 +206,47 @@ if _worker_count is not None and _worker_count > 1:
         "all per-process. Run with a single worker (--workers 1)."
     )
 
+
+# Held open for the process lifetime when RT_SINGLE_INSTANCE is on, so a second
+# process sharing the state dir is refused rather than racing it.
+_instance_lock_fh = None
+
+
+def _acquire_instance_lock() -> None:
+    """Refuse to start when another process holds the instance lock.
+
+    Two instances sharing one data root race on YAML writes, the event bus, the
+    rate limiter and the revoked-session set. The worker guard above stops
+    multiple workers in one process; this stops a second process. Opt in with
+    ``RT_SINGLE_INSTANCE=1`` (set by the Docker deployment, where the state dir
+    is on the shared volume).
+    """
+    global _instance_lock_fh
+    if not settings.single_instance:
+        return
+    try:
+        import fcntl
+    except ImportError:  # pragma: no cover - non-POSIX
+        return
+    from app.core.paths import state_dir
+
+    state = state_dir()
+    state.mkdir(parents=True, exist_ok=True)
+    fh = open(state / ".instance.lock", "w")
+    try:
+        fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError as exc:
+        fh.close()
+        raise RuntimeError(
+            f"Another reqmesh instance is already running against state dir {state}. "
+            "Two instances sharing one data root race on writes; run a single "
+            "instance, or set RT_SINGLE_INSTANCE=0 if you accept the risk."
+        ) from exc
+    _instance_lock_fh = fh
+
+
+_acquire_instance_lock()
+
 # Fail-fast on a dangerous CORS configuration. Sessions are cookie-based, so
 # credentials are always sent; a wildcard origin would tell the browser to
 # accept authenticated cross-origin requests from anywhere. Starlette silently

@@ -66,7 +66,7 @@ def file_lock(target: Path):
         with _fallback_lock(target):
             yield
         return
-    lock_dir = Path(tempfile.gettempdir()) / "reqmesh-locks"
+    lock_dir = _lock_dir()
     lock_dir.mkdir(parents=True, exist_ok=True)
     # sha256 purely to name the lock file; not a security boundary, but there
     # is no reason to keep sha1 here and trip every scanner that looks.
@@ -78,3 +78,21 @@ def file_lock(target: Path):
             yield
         finally:
             fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
+
+
+def _lock_dir() -> Path:
+    """Where lock files live.
+
+    Defaults to the OS temp dir, which is per-container. A deployment with more
+    than one container sharing a data volume must set ``RT_LOCK_DIR`` to a path
+    on that volume, otherwise the locks do not coordinate across containers.
+    """
+    try:
+        from app.core.config import settings
+
+        configured = (settings.lock_dir or "").strip()
+    except Exception:
+        configured = ""
+    if configured:
+        return Path(configured)
+    return Path(tempfile.gettempdir()) / "reqmesh-locks"

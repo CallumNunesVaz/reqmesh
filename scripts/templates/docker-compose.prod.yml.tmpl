@@ -32,6 +32,11 @@ services:
       # login returned 500, and any account that had been written would have
       # been discarded on the next restart.
       - RT_STATE_DIR=/data/.reqmesh
+      # Advisory locks and the single-instance guard must live on the shared
+      # volume, not the per-container temp dir, or a second container would
+      # race this one on the YAML files.
+      - RT_LOCK_DIR=/data/.reqmesh/locks
+      - RT_SINGLE_INSTANCE=1
       # TECTONIC_CACHE_DIR is deliberately NOT set here. The image ships a
       # pre-warmed cache at /opt/tectonic-cache (see Dockerfile.prod), so
       # rendering needs no network. Pointing it at /data put the cache on the

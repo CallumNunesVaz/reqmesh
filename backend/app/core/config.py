@@ -161,6 +161,17 @@ class Settings(BaseSettings):
     # proxy's exact address when it is not on localhost.
     proxy_trusted_cidr: str = "127.0.0.0/8"
 
+    # ── Process / instance coordination ───────────────────────────────────
+    # Directory for inter-process advisory lock files. The default (the OS temp
+    # dir) is per-container, so two containers sharing a data volume would not
+    # see each other's locks. Point this at the shared volume in a
+    # multi-container deployment.
+    lock_dir: str = ""
+    # Refuse to start when another process already holds the instance lock in
+    # the state dir. Two instances sharing one data root race on YAML writes,
+    # the event bus, the rate limiter and the revoked-session set; fail fast.
+    single_instance: bool = False
+
     # ── Request limits ────────────────────────────────────────────────────
     max_upload_size_mb: int = 50
     max_json_body_mb: int = 10
