@@ -190,7 +190,7 @@ def get_project(project_id: str, request: Request,
         # echoing it back does not overwrite the stored value.
         git_meta = dict(meta.get("git", {}) or {})
         if git_meta.get("remote_url"):
-            git_meta["remote_url"] = _redact_url(str(git_meta["remote_url"]))
+            git_meta["remote_url"] = _redact_remote_url(str(git_meta["remote_url"]))
         out["git"] = git_meta
     return out
 
@@ -208,7 +208,8 @@ class ProjectSettings(BaseModel):
 
 
 # Single definition, shared with git_service.test_remote — see the note there.
-from app.services.git_service import redact_url as _redact_url
+from app.services.git_service import redact_remote_url as _redact_remote_url
+from app.services.git_service import unredact_remote_url as _unredact_remote_url
 from app.services.git_service import remote_url_error as _remote_url_error
 from app.services.delete_guard import check_deletable
 from app.core.filelock import project_lock
@@ -255,8 +256,9 @@ def update_project_settings(project_id: str, data: ProjectSettings, user: dict =
             incoming_git = dict(updates["git"] or {})
             existing_url = str((meta.get("git") or {}).get("remote_url") or "")
             incoming_url = incoming_git.get("remote_url")
-            if incoming_url and existing_url and str(incoming_url) == _redact_url(existing_url):
-                incoming_git["remote_url"] = existing_url
+            restored = _unredact_remote_url(incoming_url, existing_url)
+            if restored != incoming_url:
+                incoming_git["remote_url"] = restored
                 updates["git"] = incoming_git
             _guard_git_settings(updates["git"], meta.get("git", {}), user)
         if "baselines" in updates and updates["baselines"] is not None:

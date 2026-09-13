@@ -216,3 +216,62 @@ def test_echoing_the_redacted_url_does_not_overwrite_the_stored_one(tmp_path, mo
     assert stored == "https://user:secret@github.com/o/r.git"
     assert store.read_meta()["git"]["user_name"] == "Someone"
     app.dependency_overrides.clear()
+
+
+def test_ssh_username_is_not_redacted_on_read(tmp_path, monkeypatch):
+    # `ssh://git@host` carries a username, not a secret. Masking it made the
+    # settings page show `ssh://***@host`, and "Test connection" then dialled
+    # that literally.
+    from app.core import dependencies as deps
+    from app.services.yaml_store import YamlStore
+
+    monkeypatch.setattr(
+        deps, "get_current_user",
+        lambda request, authorization=None: {"username": "adm", "role": "admin"},
+    )
+    client = _client("admin", tmp_path, monkeypatch)
+    client.post("/api/projects", json={"id": "p", "name": "P"})
+    store = YamlStore(Path(settings.data_root) / "p")
+    meta = store.read_meta()
+    meta["git"] = {"remote_url": "ssh://git@github.com/o/r.git"}
+    store.write_meta(meta)
+
+    res = client.get("/api/projects/p")
+    assert res.status_code == 200
+    assert res.json()["git"]["remote_url"] == "ssh://git@github.com/o/r.git"
+    app.dependency_overrides.clear()
+
+
+def test_redact_remote_url_masks_only_credentials():
+    assert git_service.redact_remote_url("ssh://git@github.com/o/r.git") == "ssh://git@github.com/o/r.git"
+    assert git_service.redact_remote_url("git@github.com:o/r.git") == "git@github.com:o/r.git"
+    assert git_service.redact_remote_url("https://github.com/o/r.git") == "https://github.com/o/r.git"
+    assert git_service.redact_remote_url("https://user:tok@github.com/o/r.git") == "https://***@github.com/o/r.git"
+    assert git_service.redact_remote_url("https://ghp_token@github.com/o/r.git") == "https://***@github.com/o/r.git"
+    assert git_service.redact_remote_url("ssh://git:pw@host/r.git") == "ssh://***@host/r.git"
+
+
+def test_test_remote_maps_the_redacted_echo_onto_the_stored_url(tmp_path, monkeypatch):
+    from app.services.yaml_store import YamlStore
+
+    client = _client("admin", tmp_path, monkeypatch)
+    client.post("/api/projects", json={"id": "p", "name": "P"})
+    store = YamlStore(Path(settings.data_root) / "p")
+    meta = store.read_meta()
+    meta["git"] = {"remote_url": "https://user:secret@github.com/o/r.git"}
+    store.write_meta(meta)
+
+    seen: list[str] = []
+    monkeypatch.setattr(git_service, "test_remote",
+                        lambda root, url: seen.append(url) or {"ok": True})
+    res = client.post("/api/projects/p/git/test-remote",
+                      json={"remote_url": "https://***@github.com/o/r.git"})
+    assert res.status_code == 200, res.text
+    assert seen == ["https://user:secret@github.com/o/r.git"]
+
+    # A different URL is tested as typed (and still validated).
+    res = client.post("/api/projects/p/git/test-remote",
+                      json={"remote_url": "https://other:tok@github.com/o/r.git"})
+    assert res.status_code == 400
+    assert len(seen) == 1
+    app.dependency_overrides.clear()

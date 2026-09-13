@@ -151,20 +151,25 @@ export function WhatIfProvider({ projectId, children }: { projectId: string; chi
     // and others not, with the panel still showing the overrides as pending.
     // The loop is not a transaction, so track what was written and put it back
     // if a later requirement is refused; If-Match means a concurrent edit is
-    // refused rather than silently clobbered.
-    const applied: { reqId: string; parameters: Requirement['parameters'] }[] = [];
+    // refused rather than silently clobbered. A requirement joins `applied`
+    // only once its own write has succeeded: recording it beforehand meant a
+    // 412 on that very write was followed by a rollback that overwrote the
+    // concurrent edit the 412 had just protected. The rollback carries the
+    // `modified` stamp our write produced, so it too is refused if someone
+    // edited in between.
+    const applied: { reqId: string; parameters: Requirement['parameters']; modified: string }[] = [];
     try {
       for (const [reqId, changes] of Object.entries(byReq)) {
         const req = await api.getRequirement(pid, reqId);
         const params = (req.parameters ?? []).map((p) =>
           changes[p.name] !== undefined ? { ...p, value: changes[p.name] } : p
         );
-        applied.push({ reqId, parameters: req.parameters ?? [] });
-        await api.updateRequirement(pid, reqId, { parameters: params }, req.modified);
+        const written = await api.updateRequirement(pid, reqId, { parameters: params }, req.modified);
+        applied.push({ reqId, parameters: req.parameters ?? [], modified: written.modified });
       }
     } catch (err) {
       await Promise.all(applied.map((a) =>
-        api.updateRequirement(pid, a.reqId, { parameters: a.parameters }).catch(() => {})
+        api.updateRequirement(pid, a.reqId, { parameters: a.parameters }, a.modified).catch(() => {})
       ));
       setError(err instanceof Error ? err.message : 'Could not apply the overrides');
       bumpGraphVersion();

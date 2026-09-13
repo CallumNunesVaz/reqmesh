@@ -291,6 +291,30 @@ def _has_embedded_credentials(remote_url: str) -> bool:
     return m.group("scheme").lower() in ("http", "https")
 
 
+def redact_remote_url(remote_url: str) -> str:
+    """The stored remote URL as it may be shown to a client.
+
+    Only a credential-bearing userinfo (see ``_has_embedded_credentials``) is
+    masked. ``redact_url`` masks *any* userinfo, which turned the ordinary
+    ``ssh://git@host/repo`` into ``ssh://***@host/repo`` on the settings page —
+    and the page's "Test connection" then tried to connect as user ``***``.
+    """
+    url = str(remote_url or "")
+    return redact_url(url) if _has_embedded_credentials(url) else url
+
+
+def unredact_remote_url(incoming: str | None, stored: str) -> str | None:
+    """Map a redacted remote URL echoed back by a client onto the stored one.
+
+    The read path masks a credentialed URL, so a client that read it and sends
+    it back unchanged means "leave the remote alone", not "set it to the
+    placeholder". Anything else is returned as-is.
+    """
+    if incoming and stored and str(incoming) == redact_remote_url(stored):
+        return stored
+    return incoming
+
+
 def remote_url_error(remote_url: str) -> str | None:
     """The reason *remote_url* is refused, or ``None`` when it is acceptable.
 

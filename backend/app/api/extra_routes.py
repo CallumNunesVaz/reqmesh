@@ -729,11 +729,20 @@ def git_test_remote(project_id: str, data: GitTestRemoteRequest, user: dict = De
     remote_url = data.remote_url.strip()
     if not remote_url:
         raise HTTPException(status_code=400, detail="remote_url is required")
-    error = git_service.remote_url_error(remote_url)
-    if error:
-        raise HTTPException(status_code=400, detail=error)
 
     store = get_store(project_id)
+    # The settings page holds the *redacted* form of a credentialed legacy
+    # remote (see `get_project`); testing that literally would dial `***@host`.
+    # Echoing the stored URL back unchanged means "test the configured remote",
+    # and `test_remote` applies the same URL checks to it — so a legacy
+    # credentialed remote is reported as such rather than as unreachable.
+    stored_url = str((store.read_meta().get("git") or {}).get("remote_url") or "")
+    remote_url = git_service.unredact_remote_url(remote_url, stored_url) or remote_url
+    if remote_url != stored_url:
+        error = git_service.remote_url_error(remote_url)
+        if error:
+            raise HTTPException(status_code=400, detail=error)
+
     return git_service.test_remote(store.root, remote_url)
 
 

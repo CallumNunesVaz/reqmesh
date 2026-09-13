@@ -19,7 +19,7 @@ import { useUndoStore } from '../store/undo';
 import { api, type PresenceUser } from '../api/client';
 import { SseBackoff } from '../lib/sseBackoff';
 import { pageKeyFor } from '../lib/pageKey';
-import { graphRelevant } from '../lib/mutationInvalidation';
+import { graphRelevant, mutationCollections, queryKeysFor } from '../lib/mutationInvalidation';
 import { OPEN_PALETTE_EVENT } from '../lib/appEvents';
 import { WhatIfProvider } from './WhatIfContext';
 import WhatIfBar from './WhatIfBar';
@@ -388,7 +388,12 @@ export default function Layout() {
   useEffect(() => {
     for (const [kind, version] of Object.entries(entityVersions)) {
       if (prevEntityVersions.current[kind] !== version) {
-        queryClient.invalidateQueries({ queryKey: [kind] });
+        // The collection itself plus the queries derived from it (the
+        // evaluation is solved from several collections; the project record
+        // carries the baseline and system-state definitions).
+        for (const key of queryKeysFor(kind)) {
+          queryClient.invalidateQueries({ queryKey: [key] });
+        }
       }
     }
     prevEntityVersions.current = entityVersions;
@@ -420,18 +425,19 @@ export default function Layout() {
       es = new EventSource(url);
       es.onopen = () => backoff.reset();
       es.addEventListener('change', (e) => {
-        // The server names the collection that changed. Invalidate just that
-        // one; only re-solve/re-layout the graph for collections it renders.
-        // An unattributed change (import, scan, new route) falls back to the
-        // global refresh so nothing is silently missed.
-        let collection: string | null = null;
+        // The server names the collections that changed (the one the route
+        // is keyed on plus any it rewrote as a side effect). Invalidate just
+        // those; only re-solve/re-layout the graph for collections it renders.
+        // An unattributed change (import, scan, rename, git restore, new
+        // route) falls back to the global refresh so nothing is silently
+        // missed.
+        let collections: string[] = [];
         try {
-          const data = JSON.parse((e as MessageEvent).data);
-          if (typeof data?.collection === 'string') collection = data.collection;
+          collections = mutationCollections(JSON.parse((e as MessageEvent).data));
         } catch { /* malformed frame — treat as global */ }
-        if (collection) {
-          bumpEntityVersion(collection);
-          if (graphRelevant(collection)) bumpGraphVersion();
+        if (collections.length) {
+          for (const collection of collections) bumpEntityVersion(collection);
+          if (collections.some(graphRelevant)) bumpGraphVersion();
         } else {
           bumpGraphVersion();
           bumpDataVersion();

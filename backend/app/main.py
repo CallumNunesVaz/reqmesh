@@ -469,12 +469,31 @@ _MUTATION_COLLECTIONS = {
 }
 
 
+# Collections a write to the keyed one also rewrites, so the client refreshes
+# them as well. Verification-case ownership is mirrored on both sides (a
+# requirement's `verification_cases` and a case's `verified_requirements`),
+# baseline membership lives on requirements and components, executing a change
+# request applies it to requirements, and a verification run writes the
+# requirement's `verification_status`.
+_MUTATION_SIDE_EFFECTS: dict[str, tuple[str, ...]] = {
+    "requirements": ("verification",),
+    "verification": ("requirements",),
+    "baselines": ("requirements", "components"),
+    "change-requests": ("requirements",),
+}
+
+# Actions whose blast radius is not confined to their collection: a rename
+# rewrites every reference across the project and a git restore replaces the
+# whole working tree. Reported as unattributed so the client reloads everything.
+_GLOBAL_ACTIONS = frozenset({"rename", "restore"})
+
+
 def _mutation_target(path: str) -> tuple[str | None, str | None]:
     """``(collection, item_id)`` for a project-scoped mutation path.
 
-    Returns ``(None, None)`` when the path is not project-scoped or names no
-    single collection, so the client falls back to a full refresh rather than
-    guessing.
+    Returns ``(None, None)`` when the path is not project-scoped, names no
+    single collection, or is an action that touches the whole project, so the
+    client falls back to a full refresh rather than guessing.
     """
     m = _PROJECT_PATH_RE.match(path)
     if not m:
@@ -483,9 +502,18 @@ def _mutation_target(path: str) -> tuple[str | None, str | None]:
     if not rest:
         return None, None
     parts = rest.split("/")
+    if any(p in _GLOBAL_ACTIONS for p in parts[1:]):
+        return None, None
     collection = _MUTATION_COLLECTIONS.get(parts[0])
     item_id = parts[1] if collection and len(parts) >= 2 else None
     return collection, item_id
+
+
+def _mutation_collections(collection: str | None) -> list[str]:
+    """Every collection the client must refresh for a write to *collection*."""
+    if collection is None:
+        return []
+    return [collection, *_MUTATION_SIDE_EFFECTS.get(collection, ())]
 
 from app.services.git_auto_commit import (  # noqa: E402 - module-level machinery
     commit_due as _commit_due,
@@ -617,6 +645,7 @@ async def git_autocommit_middleware(request: Request, call_next):
                 "method": request.method,
                 "path": request.url.path,
                 "collection": collection,
+                "collections": _mutation_collections(collection),
                 "id": item_id,
             })
     return response
