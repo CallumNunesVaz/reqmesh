@@ -422,6 +422,10 @@ export default function Layout() {
       });
       es.onerror = () => {
         es?.close();
+        // Clear any pending retry first: `onerror` can fire more than once
+        // before the close settles, and each firing used to schedule another
+        // connect, leaving two EventSources racing.
+        clearTimeout(reconnectTimer);
         reconnectTimer = setTimeout(connect, backoff.nextDelayMs());
       };
     };

@@ -518,7 +518,10 @@ const VIEW_SLOTS = 3;
 type LinkDir = 'both' | 'in' | 'out';
 
 // Plain-text cache for HTML descriptions (see stripHtml in the node build).
+// Bounded so a long editing session cannot grow it without limit; Map preserves
+// insertion order, so the oldest key is the first one.
 const stripHtmlCache = new Map<string, string>();
+const STRIP_HTML_CACHE_MAX = 500;
 
 // Above this many visible nodes the canvas drops to performance mode:
 // viewport culling on, per-node glow filters / infinite animations off, hover
@@ -996,6 +999,10 @@ export default function GraphPane({ projectId }: GraphPaneProps) {
       const hit = stripHtmlCache.get(html);
       if (hit !== undefined) return hit;
       const text = new DOMParser().parseFromString(html || '', 'text/html').body.textContent?.trim() ?? '';
+      if (stripHtmlCache.size >= STRIP_HTML_CACHE_MAX) {
+        const oldest = stripHtmlCache.keys().next().value;
+        if (oldest !== undefined) stripHtmlCache.delete(oldest);
+      }
       stripHtmlCache.set(html, text);
       return text;
     };

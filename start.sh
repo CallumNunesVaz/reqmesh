@@ -61,10 +61,14 @@ run_server() {
   # that survive plain HTTP). Production goes through docker-compose.prod.yml,
   # which pins RT_PROFILE=team. Set RT_PROFILE yourself to override.
   export RT_PROFILE="${RT_PROFILE:-personal}"
+  # Bind loopback by default. The personal posture allows anonymous reads and
+  # self-registration, so listening on all interfaces let anyone on the LAN read
+  # the data and create an account. Set RT_BIND=0.0.0.0 to expose it deliberately.
+  BIND_ADDR="${RT_BIND:-127.0.0.1}"
   # `python -m uvicorn` (not the uvicorn entry-point script): the script's
   # shebang hardcodes the venv's absolute path and breaks if the repo is
   # moved or renamed, while the python symlink keeps working.
-  .venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips '127.0.0.0/8' &
+  .venv/bin/python -m uvicorn app.main:app --host "$BIND_ADDR" --port 8000 --proxy-headers --forwarded-allow-ips '127.0.0.0/8' &
   BACKEND_PID=$!
 
   echo "[2/2] Starting frontend..."
@@ -74,7 +78,7 @@ run_server() {
     echo "  Installing dependencies..."
     npm install --silent
   fi
-  ./node_modules/.bin/vite --host 0.0.0.0 --port 5173 &
+  ./node_modules/.bin/vite --host "$BIND_ADDR" --port 5173 &
   FRONTEND_PID=$!
 
   echo ""

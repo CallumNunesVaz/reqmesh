@@ -157,7 +157,12 @@ jobs:
       - name: Attach AppImage to the release
         env:
           GH_TOKEN: ${{ github.token }}
+          REQMESH_SIGNING_KEY: ${{ secrets.REQMESH_SIGNING_KEY }}
         run: |
+          if [ -z "${REQMESH_SIGNING_KEY:-}" ]; then
+            echo "::error::REQMESH_SIGNING_KEY secret is not set — refusing to publish an unsigned desktop app."
+            exit 1
+          fi
           VERSION="$(cat VERSION)"
           SRC="$(find desktop/release -maxdepth 1 -name '*.AppImage' -print -quit)"
           if [ -z "$SRC" ]; then
@@ -170,8 +175,15 @@ jobs:
           ASSET="reqmesh-v${VERSION}-linux-x86_64.AppImage"
           mv "$SRC" "$ASSET"
           sha256sum "$ASSET" > "${ASSET}.sha256"
+          # Detached Ed25519 signature over the raw AppImage bytes, with the same
+          # release key and algorithm as the update bundle, so a download can be
+          # verified offline against the published reqmesh-vX.Y.Z.pub.
+          printf '%s\n' "$REQMESH_SIGNING_KEY" > signing-key.pem
+          chmod 600 signing-key.pem
+          openssl pkeyutl -sign -inkey signing-key.pem -in "$ASSET" -rawin -out "${ASSET}.sig"
+          rm -f signing-key.pem
           ls -lh "$ASSET"
-          gh release upload "$GITHUB_REF_NAME" "$ASSET" "${ASSET}.sha256" --clobber
+          gh release upload "$GITHUB_REF_NAME" "$ASSET" "${ASSET}.sha256" "${ASSET}.sig" --clobber
 
   docker:
     name: Build & push Docker image

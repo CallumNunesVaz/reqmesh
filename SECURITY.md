@@ -110,6 +110,10 @@ instance:
   `https://token.actions.githubusercontent.com`). The updater sidecar resolves
   the requested tag to a digest, verifies that signature, and pulls **by digest**
   — never a mutable tag.
+- **Desktop app** (`reqmesh-vX.Y.Z-linux-x86_64.AppImage`) is published with a
+  detached Ed25519 signature (`.sig`) and a `.sha256`, signed with the same
+  release key as the update bundle, so a download can be verified offline
+  against the published `reqmesh-vX.Y.Z.pub`.
 
 ## Supported Versions
 
@@ -119,5 +123,7 @@ instance:
 | `main` branch | Yes (pre-release) |
 | Older releases | No |
 
-Container images are published with immutable semver tags and digests.
-Check `/api/health` for the running version.
+Container images are published with immutable semver tags and digests. The
+installer defaults to the mutable `latest` tag so that re-running it moves the
+deployment forward; set `REQMESH_VERSION` to pin an immutable tag. Check
+`/api/health` for the running version.
