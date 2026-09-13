@@ -123,6 +123,10 @@ export default function RequirementDetailPage() {
   const [crSaving, setCrSaving] = useState(false);
   const [reviewing, setReviewing] = useState(false);
   const [dirty, setDirty] = useState(false);
+  // Sections whose background fetch failed, so a silent empty panel is
+  // distinguishable from a real empty result and can be retried.
+  const [loadFailures, setLoadFailures] = useState<string[]>([]);
+  const [reloadKey, setReloadKey] = useState(0);
   const [saving, setSaving] = useState(false);
   const savedRef = useRef<Requirement | null>(null);
   const [createIntent, setCreateIntent] = useState<{ mode: 'child'; parent: string } | { mode: 'duplicate'; source: Requirement } | null>(null);
@@ -293,7 +297,15 @@ export default function RequirementDetailPage() {
     // response land last and set `req`/`savedRef` while the URL says B. Delete
     // then removed B while the undo entry snapshotted A, making B unrecoverable.
     let alive = true;
-    Promise.all([
+    // A failed backlinks/definitions request used to be indistinguishable from
+    // "none": the panel just rendered empty and the page reported success. Record
+    // which sections failed so the banner can name them and offer a retry.
+    const failed: string[] = [];
+    const fail = (label: string) => { failed.push(label); };
+    const tracked: Promise<unknown>[] = [];
+
+    setLoadFailures([]);
+    tracked.push(Promise.all([
       api.getRequirement(projectId, reqId),
       api.listRequirements(projectId),
       api.listVerificationCases(projectId),
@@ -309,53 +321,58 @@ export default function RequirementDetailPage() {
       setDirty(false);
       setAllReqs(all.filter((r) => r.id !== reqId));
       setAllVcs(vcs);
-    }).catch((err) => { if (alive) console.error(err); }).finally(() => { if (alive) setLoading(false); });
-    api.getComponentsForRequirement(projectId, reqId).then((v) => { if (alive) setSatisfiedBy(v); }).catch(() => { if (alive) setSatisfiedBy([]); });
-    api.listComponents(projectId).then((v) => { if (alive) setAllComponents(v); }).catch(() => { if (alive) setAllComponents([]); });
-    api.getCoverageNeeds().then((v) => { if (alive) setCoverageNeedOptions(v.items); }).catch(() => { if (alive) setCoverageNeedOptions([]); });
+    }).catch((err) => { fail('requirement'); if (alive) console.error(err); }).finally(() => { if (alive) setLoading(false); }));
+
+    tracked.push(api.getComponentsForRequirement(projectId, reqId).then((v) => { if (alive) setSatisfiedBy(v); }).catch(() => { fail('components'); if (alive) setSatisfiedBy([]); }));
+    tracked.push(api.listComponents(projectId).then((v) => { if (alive) setAllComponents(v); }).catch(() => { fail('components'); if (alive) setAllComponents([]); }));
+    tracked.push(api.getCoverageNeeds().then((v) => { if (alive) setCoverageNeedOptions(v.items); }).catch(() => { fail('coverage needs'); if (alive) setCoverageNeedOptions([]); }));
     // Backlinks: everything else in the project that names this requirement.
-    api.listSpecifications(projectId)
+    tracked.push(api.listSpecifications(projectId)
       .then((specs) => { if (alive) setInSpecs(specs.filter((s) => s.requirements.includes(reqId))); })
-      .catch(() => { if (alive) setInSpecs([]); });
-    api.listChangeRequests(projectId)
+      .catch(() => { fail('specifications'); if (alive) setInSpecs([]); }));
+    tracked.push(api.listChangeRequests(projectId)
       .then((crs) => { if (alive) setAffectingCrs(crs.filter((c) => c.affected_requirements.includes(reqId))); })
-      .catch(() => { if (alive) setAffectingCrs([]); });
-    api.listRisks(projectId)
+      .catch(() => { fail('change requests'); if (alive) setAffectingCrs([]); }));
+    tracked.push(api.listRisks(projectId)
       .then((risks) => {
         if (!alive) return;
         setAllRisksRaw(risks);
         setLinkedRisks(risks.filter((r) => r.linked_requirements.includes(reqId)));
         setMitigatingRisks(risks.filter((r) => (r.mitigating_requirements || []).includes(reqId)));
       })
-      .catch(() => { if (alive) { setAllRisksRaw([]); setLinkedRisks([]); setMitigatingRisks([]); } });
-    api.getBacklinks(projectId, reqId)
+      .catch(() => { fail('risks'); if (alive) { setAllRisksRaw([]); setLinkedRisks([]); setMitigatingRisks([]); } }));
+    tracked.push(api.getBacklinks(projectId, reqId)
       .then((b) => { if (alive) setBacklinks(b); })
-      .catch(() => { if (alive) setBacklinks(null); });
-    api.getEvaluation(projectId)
+      .catch(() => { fail('backlinks'); if (alive) setBacklinks(null); }));
+    tracked.push(api.getEvaluation(projectId)
       .then((ev) => { if (alive) setEvaluated(ev.requirements.find((r) => r.id === reqId)); })
-      .catch(() => { if (alive) setEvaluated(undefined); });
-    api.listDefinitions(projectId).then((v) => { if (alive) setDefinitions(v); }).catch(() => { if (alive) setDefinitions([]); });
-    api.getWorkflow(projectId).then((wf) => { if (alive) setWorkflow(wf); }).catch(() => {});
-    api.getQuality(projectId).then((q) => {
+      .catch(() => { fail('evaluation'); if (alive) setEvaluated(undefined); }));
+    tracked.push(api.listDefinitions(projectId).then((v) => { if (alive) setDefinitions(v); }).catch(() => { fail('definitions'); if (alive) setDefinitions([]); }));
+    tracked.push(api.getWorkflow(projectId).then((wf) => { if (alive) setWorkflow(wf); }).catch(() => { fail('workflow'); }));
+    tracked.push(api.getQuality(projectId).then((q) => {
       const match = q.per_requirement.find((r) => r.id === reqId);
       if (alive) {
         setQualityConfig(q.config);
         if (match) setQualityResult(match);
       }
-    }).catch(() => {});
-    api.getUnreviewed(projectId).then((u) => {
+    }).catch(() => { fail('quality'); }));
+    tracked.push(api.getUnreviewed(projectId).then((u) => {
       if (alive) setUnreviewedIds(new Set(u.items.map((r) => r.id)));
-    }).catch(() => {});
-    api.getProject(projectId).then((p) => {
+    }).catch(() => { fail('review status'); }));
+    tracked.push(api.getProject(projectId).then((p) => {
       if (!alive) return;
       setProjectBaselines(baselineNames(p.baselines));
       setProjectStakeholders(p.stakeholders || []);
       setProjectSystemStates(p.system_states || []);
-    }).catch(() => {});
-    api.getRequirementValue(projectId, reqId).then((v) => { if (alive) setReqValue(v); }).catch(() => { if (alive) setReqValue(null); });
-    api.listDecisions(projectId).then((decs) => { if (alive) setDecisions(decs.filter((d) => d.linked_requirements?.includes(reqId))); }).catch(() => { if (alive) setDecisions([]); });
+    }).catch(() => { fail('project settings'); }));
+    tracked.push(api.getRequirementValue(projectId, reqId).then((v) => { if (alive) setReqValue(v); }).catch(() => { fail('stakeholder value'); if (alive) setReqValue(null); }));
+    tracked.push(api.listDecisions(projectId).then((decs) => { if (alive) setDecisions(decs.filter((d) => d.linked_requirements?.includes(reqId))); }).catch(() => { fail('decisions'); if (alive) setDecisions([]); }));
+
+    Promise.allSettled(tracked).then(() => {
+      if (alive && failed.length) setLoadFailures([...new Set(failed)]);
+    });
     return () => { alive = false; };
-  }, [projectId, reqId]);
+  }, [projectId, reqId, reloadKey]);
   const save = (updates: Partial<Requirement>) => {
     if (!req || !editable || !savedRef.current) return;
     const next = { ...req, ...updates } as Requirement;
@@ -796,6 +813,17 @@ export default function RequirementDetailPage() {
           <AlertTriangle size={14} /> {saveError}
           <button onClick={() => setSaveError('')} className="ml-auto text-cs-red/50 hover:text-cs-red">
             <X size={14} />
+          </button>
+        </div>
+      )}
+      {loadFailures.length > 0 && (
+        <div className="mb-4 px-4 py-2 rounded-lg bg-cs-amber/10 border border-cs-amber/20 text-cs-amber text-sm flex items-center gap-2">
+          <AlertTriangle size={14} />
+          <span className="flex-1">
+            Some sections could not be loaded: {loadFailures.join(', ')}.
+          </span>
+          <button onClick={() => setReloadKey((k) => k + 1)} className="btn-secondary text-xs">
+            Retry
           </button>
         </div>
       )}
