@@ -221,50 +221,6 @@ def find_referrers(store, collection: str, item_id: str,
     return out
 
 
-def build_referrer_index(store) -> dict[tuple[str, str], list[dict]]:
-    """One pass over every holder collection, keyed by ``(target, id)``.
-
-    ``find_referrers`` scans every holder collection per call, so a bulk delete
-    over k ids would rescan the corpus k times. Build this once and look up
-    instead. Tree links are excluded, matching ``include_tree=False``.
-    """
-    index: dict[tuple[str, str], list[dict]] = {}
-    by_holder: dict[str, list[Link]] = {}
-    for ln in LINKS:
-        if ln.tree:
-            continue
-        by_holder.setdefault(ln.holder, []).append(ln)
-
-    for holder, holder_links in by_holder.items():
-        try:
-            items = store.list_items(holder)
-        except Exception:
-            continue
-        for it in items:
-            for ln in holder_links:
-                if not kind_matches(it, ln):
-                    continue
-                for target_id in targets_of(it, ln):
-                    index.setdefault((ln.target, target_id), []).append({
-                        "holder": holder,
-                        "id": it.get("id", ""),
-                        "name": it.get("name") or it.get("title") or "",
-                        "field": ln.field,
-                        "label": ln.label,
-                        "tree": ln.tree,
-                    })
-    return index
-
-
-def referrers_from_index(index: dict[tuple[str, str], list[dict]],
-                         collection: str, item_id: str) -> list[dict]:
-    """Referrers of ``collection/item_id`` from a prebuilt index."""
-    out = [r for r in index.get((collection, item_id), [])
-           if not (r["holder"] == collection and r["id"] == item_id)]
-    out.sort(key=lambda r: (r["holder"], r["id"]))
-    return out
-
-
 def find_dangling(store) -> list[dict]:
     """Every reference in the project whose target does not exist.
 

@@ -23,11 +23,7 @@ from __future__ import annotations
 from fastapi import HTTPException
 
 from app.services.errors import error_envelope
-from app.services.link_registry import (
-    COLLECTION_LABELS,
-    find_referrers,
-    referrers_from_index,
-)
+from app.services.link_registry import COLLECTION_LABELS, find_referrers
 
 
 def _describe(referrers: list[dict]) -> str:
@@ -41,26 +37,15 @@ def _describe(referrers: list[dict]) -> str:
     return ", ".join(parts)
 
 
-def check_deletable(store, collection: str, item_id: str, force: bool = False,
-                    *, index: dict | None = None,
-                    ignore: set[tuple[str, str]] | None = None) -> list[dict]:
+def check_deletable(store, collection: str, item_id: str, force: bool = False) -> list[dict]:
     """Raise 409 if anything references ``collection/item_id``.
 
     Returns the referrer list so the caller can record it. With ``force`` the
     references are returned rather than raised on, and the caller proceeds —
     the records are left pointing at a missing id, which the integrity check
     will then report as ``dangling_reference``.
-
-    Pass ``index`` (from :func:`link_registry.build_referrer_index`) for a bulk
-    operation to avoid rescanning every collection per id, and ``ignore`` for
-    ``(holder, id)`` records that are being deleted in the same batch.
     """
-    if index is not None:
-        referrers = referrers_from_index(index, collection, item_id)
-    else:
-        referrers = find_referrers(store, collection, item_id, include_tree=False)
-    if ignore:
-        referrers = [r for r in referrers if (r["holder"], r["id"]) not in ignore]
+    referrers = find_referrers(store, collection, item_id, include_tree=False)
     if force or not referrers:
         return referrers
 

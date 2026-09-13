@@ -20,7 +20,6 @@ from app.services.history import record_change
 from app.services.baseline_membership import apply_membership, defined_baseline_names
 from app.services.reparent import apply_reparent, plan_reparent, validate_component_parent
 from app.services.link_validation import first_missing
-from app.services.link_registry import build_referrer_index
 from app.services.delete_guard import check_deletable
 from app.core.filelock import project_lock
 from app.services.meta_defs import normalize_system_states, serialize_meta_defs
@@ -30,16 +29,13 @@ router = APIRouter()
 
 def _bulk_delete_simple(store, collection: str, ids: list[str], force: bool,
                         get_one, delete_one, user: str) -> dict:
-    """Delete a batch with one referrer index for the whole request.
+    """Delete a batch under one project lock.
 
-    ``check_deletable`` scans every holder collection per id, so a k-id bulk
-    delete rescanned the corpus k times. The index is built once; ids deleted in
-    the same batch are ignored as referrers because they are about to be gone.
+    The referrer check is per id on purpose: a reference can be created
+    concurrently (the reference-holding routes do not take the project lock), so
+    a single index built up front would miss one created mid-batch and delete an
+    id that is now referenced. `test_composite_races.py` pins that.
     """
-    from app.services.link_registry import build_referrer_index
-
-    index = build_referrer_index(store)
-    ignore = {(collection, i) for i in ids}
     deleted = 0
     refused: list[Any] = []
     with project_lock(store.root):
@@ -48,7 +44,7 @@ def _bulk_delete_simple(store, collection: str, ids: list[str], force: bool,
             if before is None:
                 continue
             try:
-                check_deletable(store, collection, item_id, force, index=index, ignore=ignore)
+                check_deletable(store, collection, item_id, force)
             except HTTPException as exc:
                 if exc.status_code == 409:
                     refused.append(exc.detail)
@@ -237,8 +233,6 @@ def bulk_delete_components(project_id: str, data: BulkDeleteRequest, user: dict 
     force = data.force
     deleted = 0
     refused = []
-    index = build_referrer_index(store)
-    ignore = {("components", i) for i in data.ids}
     with project_lock(store.root):
         # One listing for the whole request, kept current as we go, instead of
         # re-listing per id. Writes merge into the collection cache rather than
@@ -256,8 +250,7 @@ def bulk_delete_components(project_id: str, data: BulkDeleteRequest, user: dict 
             if before is None:
                 continue
             try:
-                check_deletable(store, "components", comp_id, force,
-                                index=index, ignore=ignore)
+                check_deletable(store, "components", comp_id, force)
             except HTTPException as exc:
                 if exc.status_code == 409:
                     refused.append(exc.detail)
