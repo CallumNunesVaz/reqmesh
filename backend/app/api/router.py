@@ -23,6 +23,8 @@ from app.services.meta_defs import (
     serialize_meta_defs,
 )
 from app.services.rename import matches_scheme, rename_parameter, rename_requirement, suggest_id
+from app.services.reparent import assert_no_parent_cycle
+from app.services import cascade as cascade_service
 from app.services.naming import KINDS, ids_for, next_id as generate_next_id
 from app.api._utils import check_precondition, enforce_naming, paginate
 from app.models.specification import SpecificationCreate, SpecificationUpdate
@@ -558,19 +560,11 @@ def update_requirement(project_id: str, req_id: str, data: RequirementUpdate,
     # the tree and sent the old recursive walk in circles.
     if "parent" in update_dict and update_dict["parent"]:
         new_parent = update_dict["parent"]
-        if new_parent == req_id:
-            raise HTTPException(status_code=400, detail="A requirement cannot be its own parent")
         parent_of = {r["id"]: r.get("parent") for r in store.list_requirements()}
-        parent_of[req_id] = new_parent
-        seen, cursor = {req_id}, new_parent
-        while cursor:
-            if cursor in seen:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Setting parent to {new_parent} would create a parent cycle",
-                )
-            seen.add(cursor)
-            cursor = parent_of.get(cursor)
+        try:
+            assert_no_parent_cycle(parent_of, req_id, new_parent)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     # A write arriving on the requirement side is applied to the owning
     # verification cases, so setting the list actually changes the
@@ -596,40 +590,10 @@ def update_requirement(project_id: str, req_id: str, data: RequirementUpdate,
     # verify each requirement, and a cascaded child has its own cases (usually
     # none yet). Copying the parent's would assert a verification the child has
     # not had.
-    propagated_fields = {"name", "description", "priority", "status", "type", "rationale", "source", "allocated_to"}
-    has_propagation = any(k in update_dict for k in propagated_fields)
-    if has_propagation and result.get("cascade_from") is None:
-        # Only the fields that actually changed. Writing back the whole `r`
-        # snapshot re-applied every field as it looked *before* this request,
-        # clobbering any concurrent edit to the child — the per-file lock can't
-        # help when the stale data is already in the payload.
-        patch = {f: update_dict[f] for f in propagated_fields if f in update_dict}
-        changed = False
-        # Walk transitively with a visited set: a REQ → C1 → C2 chain used to
-        # stop at C1, leaving C2 permanently stale.
-        all_reqs = store.list_requirements()
-        children_of: dict[str, list[dict]] = {}
-        for r in all_reqs:
-            src = r.get("cascade_from")
-            if src:
-                children_of.setdefault(src, []).append(r)
-
-        seen = {req_id}
-        queue = list(children_of.get(req_id, []))
-        while queue:
-            child = queue.pop(0)
-            cid = child["id"]
-            if cid in seen:
-                continue
-            seen.add(cid)
-            child_before = dict(child)
-            updated_child = store.update_requirement(cid, patch)
-            if updated_child is not None:
-                record_change(store, cid, "update", child_before, updated_child,
-                              user.get("username", ""))
-                changed = True
-            queue.extend(children_of.get(cid, []))
-        if changed:
+    if result.get("cascade_from") is None and any(
+        k in update_dict for k in cascade_service.PROPAGATED_FIELDS
+    ):
+        if cascade_service.propagate(store, req_id, update_dict, user.get("username", "")):
             return {"cascaded": True, **result}
     return result
 
@@ -723,41 +687,10 @@ def restore_requirement_version(project_id: str, req_id: str, entry_id: str,
 @router.post("/projects/{project_id}/requirements/{req_id}/cascade")
 def cascade_requirement(project_id: str, req_id: str, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
-    source = store.get_requirement(req_id)
-    if source is None:
+    if store.get_requirement(req_id) is None:
         raise HTTPException(status_code=404, detail="Requirement not found")
 
-    all_reqs = store.list_requirements()
-    meta = store.read_meta()
-    # See the note on propagated_fields: verification is derived per requirement.
-    cascade_fields = ["name", "description", "priority", "status", "type"]
-
-    # `known` grows as copies are allocated so the next suggestion sees the
-    # previous one — suggest_id picks the next free slot by scanning the list,
-    # and cascading to several child groups allocates several ids in one pass.
-    known = list(all_reqs)
-
-    created = []
-    for child in all_reqs:
-        if child.get("parent") == req_id and child.get("cascade_from") is None:
-            # Follow the project's naming scheme rather than a synthetic
-            # `{source}-C-{hex}`: a cascaded copy is an ordinary requirement in
-            # its group, and the old shape also sanitised into a noisier SysML
-            # name on export.
-            new_id = suggest_id(known, meta, child["id"])
-            new_req = {k: source[k] for k in cascade_fields}
-            new_req["id"] = new_id
-            new_req["parent"] = child["id"]
-            new_req["cascade_from"] = req_id
-            new_req["attributes"] = []
-            new_req["relations"] = [{"type": "derives", "target": req_id}]
-            new_req["verification_cases"] = []
-            new_req["verification_status"] = "pending"
-            store.create_requirement(new_req)
-            record_change(store, new_id, "create", None, new_req, user.get("username", ""))
-            known.append(new_req)
-            created.append(new_id)
-
+    created = cascade_service.create_copies(store, req_id, user.get("username", ""))
     if not created:
         raise HTTPException(status_code=400, detail="No child groups to cascade to")
 
@@ -773,18 +706,9 @@ def break_cascade(project_id: str, req_id: str, data: BreakCascade | None = None
     if not req.get("cascade_from"):
         raise HTTPException(status_code=400, detail="Not a cascaded requirement")
 
-    break_children = data.break_children if data else False
-    source_id = req["cascade_from"]
-
-    req["cascade_from"] = None
-    store.update_requirement(req_id, req)
-
-    if break_children:
-        for r in store.list_requirements():
-            if r.get("cascade_from") == req_id:
-                r["cascade_from"] = None
-                store.update_requirement(r["id"], r)
-
+    source_id = cascade_service.break_link(
+        store, req_id, data.break_children if data else False
+    )
     return {"broken": True, "id": req_id, "was_cascaded_from": source_id}
 
 

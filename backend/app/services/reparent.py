@@ -18,6 +18,25 @@ from dataclasses import dataclass, field
 from typing import cast
 
 
+def assert_no_parent_cycle(parent_of: dict[str, str | None], req_id: str, new_parent: str) -> None:
+    """Raise ValueError if making *new_parent* the parent of *req_id* loops.
+
+    Pure: takes the id→parent map the caller already has, so it needs no store
+    and can be tested without one. The route translates the error to a 400.
+    """
+    if new_parent == req_id:
+        raise ValueError("A requirement cannot be its own parent")
+    parent_of = dict(parent_of)
+    parent_of[req_id] = new_parent
+    seen: set[str] = {req_id}
+    cursor: str | None = new_parent
+    while cursor:
+        if cursor in seen:
+            raise ValueError(f"Setting parent to {new_parent} would create a parent cycle")
+        seen.add(cursor)
+        cursor = parent_of.get(cursor)
+
+
 def leading_prefix(item_id: str) -> str:
     """The leading alphabetic run of an ID, e.g. 'REQ' from 'REQ-0001'."""
     m = re.match(r"^([A-Za-z]+)", item_id or "")
