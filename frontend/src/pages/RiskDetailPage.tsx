@@ -1,4 +1,5 @@
 import { useEffect, useState, useId } from 'react';
+import { formatDateTime } from '../lib/datetime';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Trash2, ArrowLeft, AlertTriangle, X } from 'lucide-react';
 import { api, RISK_STATUSES, type Risk, type Requirement, type Component, type RiskMatrix } from '../api/client';
@@ -322,8 +323,8 @@ export default function RiskDetailPage() {
           </Reveal>
 
           <div className="text-xs text-muted-foreground space-y-1">
-            <div>Created: {new Date(risk.created).toLocaleString()}</div>
-            <div>Modified: {new Date(risk.modified).toLocaleString()}</div>
+            <div>Created: {formatDateTime(risk.created)}</div>
+            <div>Modified: {formatDateTime(risk.modified)}</div>
           </div>
         </div>
       </div>

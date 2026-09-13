@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useRef, useCallback, useId } from 'react';
+import { formatDateTime } from '../lib/datetime';
 import { useParams, useNavigate } from 'react-router-dom';
 import { GuardedLink as Link } from '../components/navGuard';
 import { motion } from 'framer-motion';
@@ -1778,8 +1779,8 @@ export default function RequirementDetailPage() {
             </div>
           </Reveal>
           <div className="text-xs text-muted-foreground space-y-1">
-            <div>Created: {new Date(req.created).toLocaleString()}</div>
-            <div>Modified: {new Date(req.modified).toLocaleString()}</div>
+            <div>Created: {formatDateTime(req.created)}</div>
+            <div>Modified: {formatDateTime(req.modified)}</div>
           </div>
         </div>
       </div>

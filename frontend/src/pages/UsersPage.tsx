@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
+import { formatDateTime } from '../lib/datetime';
 import { copyText } from '../lib/clipboard';
 import { motion, AnimatePresence } from 'framer-motion';
 import { slideDown } from '../lib/animations';
@@ -295,7 +296,7 @@ export default function UsersPage() {
   };
 
   const fmtDate = (d: string) => d ? d.slice(0, 10) : '—';
-  const fmtLast = (d: string) => d ? new Date(d).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'never';
+  const fmtLast = (d: string) => d ? formatDateTime(d) : 'never';
 
   const SortHead = ({ col, label }: { col: typeof sortBy; label: string }) => (
     <button onClick={() => toggleSort(col)} className={`text-3xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground flex items-center gap-0.5 ${sortBy === col ? 'text-foreground' : ''}`}>

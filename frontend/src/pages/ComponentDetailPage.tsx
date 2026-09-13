@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useId } from 'react';
+import { formatDateTime } from '../lib/datetime';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Trash2, ArrowLeft, Save, X, ChevronRight, AlertTriangle, Tag } from 'lucide-react';
 import { api, baselineNames, COMPONENT_TYPES, type Component, type Requirement, type VerificationCase, type Backlinks } from '../api/client';
@@ -491,8 +492,8 @@ export default function ComponentDetailPage() {
           )}
 
           <div className="text-xs text-muted-foreground space-y-1">
-            <div>Created: {new Date(component.created).toLocaleString()}</div>
-            <div>Modified: {new Date(component.modified).toLocaleString()}</div>
+            <div>Created: {formatDateTime(component.created)}</div>
+            <div>Modified: {formatDateTime(component.modified)}</div>
           </div>
         </div>
       </div>

@@ -1,4 +1,5 @@
 import { useEffect, useState, useId } from 'react';
+import { formatDateTime } from '../lib/datetime';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Trash2, X, Play, CheckCircle2, XCircle, Clock, FlaskConical, ClipboardList, ListChecks, Link as LinkIcon, Loader, Plus } from 'lucide-react';
 import { api, type VerificationCase, type Requirement, type Component } from '../api/client';
@@ -515,7 +516,7 @@ export default function VerificationDetailPage() {
                     <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
                       run.status === 'passed' ? 'bg-cs-green' : run.status === 'failed' ? 'bg-cs-red' : 'bg-cs-amber'
                     }`} />
-                    <span className="font-mono text-muted-foreground">{new Date(run.timestamp).toLocaleString()}</span>
+                    <span className="font-mono text-muted-foreground">{formatDateTime(run.timestamp)}</span>
                     <span className="text-foreground font-medium capitalize">{run.status}</span>
                     {run.executed_by && <span className="text-muted-foreground">by {run.executed_by}</span>}
                     {run.notes && <span className="text-muted-foreground">— {run.notes}</span>}
@@ -560,8 +561,8 @@ export default function VerificationDetailPage() {
           </Reveal>
 
           <div className="text-xs text-muted-foreground space-y-1">
-            <div>Created: {new Date(vc.created).toLocaleString()}</div>
-            <div>Modified: {new Date(vc.modified).toLocaleString()}</div>
+            <div>Created: {formatDateTime(vc.created)}</div>
+            <div>Modified: {formatDateTime(vc.modified)}</div>
           </div>
         </div>
       </div>

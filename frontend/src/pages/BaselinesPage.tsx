@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useId } from 'react';
+import { formatDate, formatDateTime } from '../lib/datetime';
 import { usePersistedState, setCodec } from '../hooks/usePersistedState';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -330,7 +331,7 @@ export default function BaselinesPage() {
             {b.frozen_at && (
               <span className="flex items-center gap-1">
                 <Clock size={12} />
-                {new Date(b.frozen_at).toLocaleDateString()}
+                {formatDate(b.frozen_at)}
               </span>
             )}
             {b.due_date && (
@@ -677,7 +678,7 @@ export default function BaselinesPage() {
                     Diff: {diffResult.baseline}
                   </h3>
                   <p className="text-xs text-muted-foreground">
-                    Frozen {new Date(diffResult.frozen_at).toLocaleString()} —{' '}
+                    Frozen {formatDateTime(diffResult.frozen_at)} —{' '}
                     {diffResult.changed_count} change{diffResult.changed_count !== 1 ? 's' : ''}
                   </p>
                 </div>

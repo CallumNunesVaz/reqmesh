@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { formatDateTime } from '../lib/datetime';
 import { useParams } from 'react-router-dom';
 import { ChevronDown } from 'lucide-react';
 import { api, type HistoryEntry } from '../api/client';
@@ -113,7 +114,7 @@ export function HistoryPanel({ itemId, defaultOpen = false, onRestored }: {
         <p className="text-xs text-muted-foreground">No recorded changes</p>
       ) : (
         entries.map((entry) => {
-          const ts = new Date(entry.timestamp).toLocaleString();
+          const ts = formatDateTime(entry.timestamp);
           const fieldNames = Object.keys(entry.changes);
           return (
             <div key={entry.id} className="text-xs py-1 px-2 rounded-md bg-muted/30">

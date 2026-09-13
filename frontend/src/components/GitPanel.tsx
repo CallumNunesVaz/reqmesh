@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { formatDateTime } from '../lib/datetime';
 import {
   GitBranch, Clock, User, RotateCw, AlertTriangle,
   CheckCircle, XCircle, Plug, Unplug, Trash2, Upload,
@@ -334,7 +335,7 @@ export default function GitPanel({ projectId, isAdmin, canEdit, remoteUrl, onRem
 
           <div className="flex flex-wrap gap-x-6 gap-y-1 mt-2 text-2xs text-muted-foreground">
             <span>Fingerprint: <code className="font-mono text-card-foreground">{keyInfo.fingerprint}</code></span>
-            <span>Created: {new Date(keyInfo.created).toLocaleString()}</span>
+            <span>Created: {formatDateTime(keyInfo.created)}</span>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 mt-3">
@@ -733,7 +734,7 @@ export default function GitPanel({ projectId, isAdmin, canEdit, remoteUrl, onRem
                     </span>
                     <span className="flex items-center gap-1">
                       <Clock size={10} />
-                      {new Date(commit.date).toLocaleString()}
+                      {formatDateTime(commit.date)}
                     </span>
                   </div>
                 </div>
