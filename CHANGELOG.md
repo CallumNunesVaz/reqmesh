@@ -14,6 +14,8 @@ rather than a substitute.
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-09-14
+
 ### Added
 
 - Audit-trail retention, off by default. Set `RT_HISTORY_RETENTION_DAYS` to
