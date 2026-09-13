@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import datetime
 import logging
 from pathlib import Path
 from typing import Optional
@@ -13,7 +12,6 @@ from app.core.filelock import file_lock
 from app.core.ids import safe_id
 from app.core.rate_limit import rate_limit
 from app.core.tree_utils import build_flat_tree
-from app.models.baseline import DUE_DATE_RE
 from app.models.requirement import Requirement, RequirementCreate, RequirementUpdate
 from app.services.load_guard import is_safe_id, validate_on_load
 from app.services.meta_defs import (
@@ -25,6 +23,8 @@ from app.services.meta_defs import (
 from app.services.rename import matches_scheme, rename_parameter, rename_requirement, suggest_id
 from app.services.reparent import assert_no_parent_cycle
 from app.services import cascade as cascade_service
+from app.services import baselines
+from app.services.baselines import BaselineError
 from app.services.naming import KINDS, ids_for, next_id as generate_next_id
 from app.api._utils import check_precondition, enforce_naming, paginate
 from app.models.specification import SpecificationCreate, SpecificationUpdate
@@ -55,64 +55,6 @@ class BaselineDefItem(BaseModel):
     symbol: str = ""
     description: str = ""
     due_date: str = ""
-
-
-def _baseline_def_by_name(baselines: list, name: str) -> dict | None:
-    for b in normalize_baseline_defs(baselines):
-        if b["name"] == name:
-            return b
-    return None
-
-
-def _validate_due_dates(baselines: list) -> None:
-    """Validate every due date is ``YYYY-MM-DD`` or ``""`` and the sequence
-    is monotonic (non-empty due dates must not go backwards).
-
-    Raises ``HTTPException(400)`` on the first violation.
-
-    The raw input is validated for individual date format/parseability, because
-    ``normalize_baseline_defs`` degrades malformed dates on the read path.
-    The monotonic check runs on the normalized form so it sees the sequence
-    order.
-    """
-    # Phase 1: validate each individual due_date on the raw input.
-    for item in (baselines or []):
-        if isinstance(item, str):
-            continue
-        if not isinstance(item, dict):
-            continue
-        due = str(item.get("due_date", "") or "").strip()
-        if not due:
-            continue
-        if not DUE_DATE_RE.match(due):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid due date: {due} (expected YYYY-MM-DD)",
-            )
-        try:
-            datetime.date.fromisoformat(due)
-        except ValueError:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid due date: {due} (expected YYYY-MM-DD)",
-            ) from None
-
-    # Phase 2: monotonic check on the normalized form which knows the order.
-    defs = normalize_baseline_defs(baselines)
-    prev_date = None
-    prev_name = None
-    for d in defs:
-        due = d.get("due_date", "")
-        if not due:
-            continue
-        if prev_date is not None and due < prev_date:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Due dates must not go backwards: {d['name']} ({due}) "
-                       f"is due before {prev_name} ({prev_date})",
-            )
-        prev_date = due
-        prev_name = d["name"]
 
 
 class ReorderBaselines(BaseModel):
@@ -321,7 +263,10 @@ def update_project_settings(project_id: str, data: ProjectSettings, user: dict =
             # Validate due dates on the raw input before normalization, which
             # degrades bad dates on the read path. A rejected write must leave
             # _meta.yaml untouched.
-            _validate_due_dates(updates["baselines"])
+            try:
+                baselines.validate_due_dates(updates["baselines"])
+            except BaselineError as exc:
+                raise HTTPException(status_code=exc.status, detail=exc.message) from exc
             defs = normalize_baseline_defs(updates["baselines"])
             # Baseline names become filenames when a baseline is frozen
             # (`store.get_item("baselines", name)`), so they need the same
@@ -854,142 +799,34 @@ def list_baselines(project_id: str, user: dict = Depends(require_view)):
 def create_baseline(project_id: str, data: BaselineCreate, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     name = safe_id(data.name, "baseline name")
-    # Upsert the baseline definition into project metadata.
-    with store.meta_lock():
-        meta = store.read_meta()
-        defs = normalize_baseline_defs(meta.get("baselines", []))
-        existing = next((d for d in defs if d["name"] == name), None)
-        if existing:
-            existing["symbol"] = data.symbol or existing["symbol"]
-            existing["description"] = data.description or existing["description"]
-            if data.due_date:
-                existing["due_date"] = data.due_date
-        else:
-            defs.append({"name": name, "symbol": data.symbol, "description": data.description,
-                         "due_date": data.due_date})
-        serialized = serialize_meta_defs(defs)
-        # Validate the proposed list before writing — a rejected write must
-        # leave _meta.yaml untouched.
-        _validate_due_dates(serialized)
-        meta["baselines"] = serialized
-        store._write_meta_unlocked(meta)
-    # Assign the baseline to specified requirements
-    updated = 0
-    for req_id in data.requirements:
-        req = store.get_requirement(req_id)
-        if req is None:
-            continue
-        blist = list(req.get("baselines") or [])
-        if name not in blist:
-            blist.append(name)
-            if store.update_requirement(req_id, {"baselines": blist}):
-                updated += 1
-    return {"name": name, "symbol": data.symbol, "description": data.description,
-            "due_date": data.due_date, "requirements_assigned": updated}
+    try:
+        return baselines.upsert(store, name, data.symbol, data.description,
+                                data.due_date, data.requirements)
+    except BaselineError as exc:
+        raise HTTPException(status_code=exc.status, detail=exc.message) from exc
 
 
 @router.put("/projects/{project_id}/baselines/order")
 def reorder_baselines(project_id: str, data: ReorderBaselines, user: dict = Depends(require_maintain)):
     """Rewrite the baseline sequence."""
     store = get_store(project_id)
-    with store.meta_lock():
-        meta = store.read_meta()
-        current_defs = normalize_baseline_defs(meta.get("baselines", []))
-        defined_names = [d["name"] for d in current_defs]
-
-        # Must be exactly the same set — a permutation, no duplicates, no missing.
-        if set(data.names) != set(defined_names) or len(data.names) != len(defined_names):
-            raise HTTPException(
-                status_code=400,
-                detail="names must list every defined baseline exactly once",
-            )
-
-        # Build the new list in the requested order, preserving other fields.
-        by_name = {d["name"]: d for d in current_defs}
-        # `order` is left alone here: serialize_meta_defs is the one place it is
-        # dropped, and duplicating that responsibility is how the derived value and
-        # the list position start to disagree.
-        reordered = [dict(by_name[nm]) for nm in data.names]
-
-        serialized = serialize_meta_defs(reordered)
-        # Validate due dates in the new order before writing.
-        _validate_due_dates(serialized)
-        meta["baselines"] = serialized
-        store._write_meta_unlocked(meta)
-
-    return {"baselines": normalize_baseline_defs(serialized)}
+    try:
+        return {"baselines": baselines.reorder(store, data.names)}
+    except BaselineError as exc:
+        raise HTTPException(status_code=exc.status, detail=exc.message) from exc
 
 
 @router.patch("/projects/{project_id}/baselines/{name}")
 def rename_baseline(project_id: str, name: str, data: RenameBaseline, user: dict = Depends(require_maintain)):
     store = get_store(project_id)
     safe_id(name, "baseline name")
-    new_name = data.name
-    if not new_name:
-        raise HTTPException(status_code=400, detail="New name is required")
-    safe_id(new_name, "baseline name")
-    # A rename onto an existing frozen snapshot is a collision. Skipped when the
-    # name is unchanged, so a symbol/description/due-date edit on a frozen
-    # baseline is not refused as a duplicate of itself.
-    if new_name != name and store.get_item("baselines", new_name) is not None:
-        raise HTTPException(status_code=409, detail="A baseline with that name already exists")
-    found = False
-    # Update the baseline definition in project metadata.
-    with store.meta_lock():
-        meta = store.read_meta()
-        defs = normalize_baseline_defs(meta.get("baselines", []))
-        # A rename onto an existing *unfrozen* definition is also a collision —
-        # without this check, renaming onto one would silently merge two
-        # definitions under one name.
-        if new_name != name and any(d["name"] == new_name for d in defs):
-            raise HTTPException(status_code=409, detail="A baseline with that name already exists")
-        for d in defs:
-            if d["name"] == name:
-                found = True
-                d["name"] = new_name
-                if data.symbol is not None:
-                    d["symbol"] = data.symbol
-                if data.description is not None:
-                    d["description"] = data.description
-                if data.due_date is not None:
-                    d["due_date"] = data.due_date
-        if found:
-            serialized = serialize_meta_defs(defs)
-            # Validate before writing — a rejected write must leave _meta.yaml untouched.
-            _validate_due_dates(serialized)
-            meta["baselines"] = serialized
-            store._write_meta_unlocked(meta)
-    # Rename on all requirements
-    updated = 0
-    for r in store.list_requirements():
-        blist = list(r.get("baselines") or [])
-        if name in blist:
-            blist = [new_name if b == name else b for b in blist]
-            store.update_requirement(r["id"], {"baselines": blist})
-            updated += 1
-    # Rename on all components
-    comps_updated = 0
-    for c in store.list_components():
-        blist = list(c.get("baselines") or [])
-        if name in blist:
-            blist = [new_name if b == name else b for b in blist]
-            store.update_item("components", c["id"], {"baselines": blist})
-            comps_updated += 1
-    frozen = store.get_item("baselines", name)
-    if frozen is not None:
-        if data.symbol is not None:
-            frozen["symbol"] = data.symbol
-        if data.description is not None:
-            frozen["description"] = data.description
-        if new_name != name:
-            frozen["name"] = new_name
-            store.write_item("baselines", new_name, frozen)
-            store.delete_item("baselines", name)
-        else:
-            store.write_item("baselines", name, frozen)
-    elif not found and updated == 0 and comps_updated == 0:
-        raise HTTPException(status_code=404, detail="Baseline not found")
-    return {"old_name": name, "new_name": new_name, "requirements_updated": updated}
+    if data.name:
+        safe_id(data.name, "baseline name")
+    try:
+        return baselines.rename(store, name, data.name, data.symbol,
+                                data.description, data.due_date)
+    except BaselineError as exc:
+        raise HTTPException(status_code=exc.status, detail=exc.message) from exc
 
 
 @router.delete("/projects/{project_id}/baselines/{name}")
@@ -1000,34 +837,10 @@ def delete_baseline(project_id: str, name: str, user: dict = Depends(require_mai
     # guard here could never fire — it would read as protection that isn't
     # there. Membership is cleared from every requirement below instead.
     store = get_store(project_id)
-    baseline = store.get_item("baselines", name)
-    meta = store.read_meta()
-    defs = normalize_baseline_defs(meta.get("baselines", []))
-    in_defs = any(d["name"] == name for d in defs)
-    if baseline is None and not in_defs:
-        raise HTTPException(status_code=404, detail="Baseline not found")
-    store.delete_item("baselines", name)
-    # Remove the baseline definition from project metadata.
-    with store.meta_lock():
-        meta = store.read_meta()
-        defs = normalize_baseline_defs(meta.get("baselines", []))
-        defs = [d for d in defs if d["name"] != name]
-        serialized = serialize_meta_defs(defs)
-        meta["baselines"] = serialized
-        store._write_meta_unlocked(meta)
-    updated = 0
-    for r in store.list_requirements():
-        blist = list(r.get("baselines") or [])
-        if name in blist:
-            blist.remove(name)
-            store.update_requirement(r["id"], {"baselines": blist})
-            updated += 1
-    for c in store.list_components():
-        blist = list(c.get("baselines") or [])
-        if name in blist:
-            blist.remove(name)
-            store.update_item("components", c["id"], {"baselines": blist})
-    return {"name": name, "requirements_cleared": updated}
+    try:
+        return baselines.delete(store, name)
+    except BaselineError as exc:
+        raise HTTPException(status_code=exc.status, detail=exc.message) from exc
 
 
 # ── System States ────────────────────────────────────────────────────────────
