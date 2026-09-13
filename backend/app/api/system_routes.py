@@ -305,6 +305,27 @@ async def upload_bundle(
     return {**result, "archive_bytes": size}
 
 
+@router.post("/history/prune")
+async def prune_history(admin: dict = Depends(require_admin)):
+    """Delete audit entries older than ``RT_HISTORY_RETENTION_DAYS``.
+
+    Retention is off by default (the audit trail is the product's record), so
+    this returns 400 until the operator sets the setting.
+    """
+    from pathlib import Path
+
+    from app.services.history import prune_all_history
+
+    days = settings.history_retention_days
+    if days <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Set RT_HISTORY_RETENTION_DAYS to a positive number to enable pruning.",
+        )
+    pruned = await asyncio.to_thread(prune_all_history, Path(settings.data_root), days)
+    return {"pruned": pruned, "retention_days": days}
+
+
 @router.post("/restart")
 async def restart_app(admin: dict = Depends(require_admin)):
     """Restart the app in place (re-exec). Applies any staged bundle update on

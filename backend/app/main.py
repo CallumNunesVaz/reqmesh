@@ -101,6 +101,20 @@ async def lifespan(app: FastAPI):
             "Point RT_STATE_DIR somewhere outside the data root."
         )
 
+    if settings.history_retention_days > 0:
+        from app.services.history import prune_all_history
+        try:
+            pruned = await asyncio.to_thread(
+                prune_all_history, root, settings.history_retention_days
+            )
+            if pruned:
+                logging.getLogger(__name__).info(
+                    "Pruned %d audit entries older than %d days",
+                    pruned, settings.history_retention_days,
+                )
+        except Exception:
+            logging.getLogger(__name__).exception("history retention sweep failed")
+
     # Repair and migrate the state dir before anything reads accounts from it.
     try:
         from app.services.state_migrations import run_state_migrations

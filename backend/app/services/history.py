@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from pathlib import Path
 
 # Bookkeeping fields that change on every write and would drown the log.
 _IGNORED_FIELDS = {"modified"}
@@ -29,3 +30,24 @@ def record_change(store, item_id: str, action: str, before: dict | None, after: 
         "user": user,
         "changes": changes,
     })
+
+
+def prune_all_history(data_root: Path, retention_days: int) -> int:
+    """Prune every project's audit history under *data_root*; return the count.
+
+    Walks the data root rather than taking a project id so the startup sweep and
+    the admin endpoint share one implementation.
+    """
+    from app.services.yaml_store import YamlStore
+
+    root = Path(data_root)
+    if not root.exists() or retention_days <= 0:
+        return 0
+    removed = 0
+    for d in sorted(root.iterdir()):
+        if d.is_dir() and (d / "_meta.yaml").exists():
+            try:
+                removed += YamlStore(d).prune_history(retention_days)
+            except Exception:
+                continue
+    return removed

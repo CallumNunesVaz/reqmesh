@@ -172,6 +172,12 @@ class Settings(BaseSettings):
     # the event bus, the rate limiter and the revoked-session set; fail fast.
     single_instance: bool = False
 
+    # ── Data retention ────────────────────────────────────────────────────
+    # Delete audit entries older than this many days at startup (and on demand
+    # via POST /system/history/prune). 0 keeps the full history, which is the
+    # default: the audit trail is the product's record.
+    history_retention_days: int = 0
+
     # ── Request limits ────────────────────────────────────────────────────
     max_upload_size_mb: int = 50
     max_json_body_mb: int = 10

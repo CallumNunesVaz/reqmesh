@@ -660,6 +660,39 @@ class YamlStore:
 
     # --- History (append-only audit trail, one file per entry) ---
 
+    def prune_history(self, retention_days: int) -> int:
+        """Delete audit entries older than *retention_days*; return the count.
+
+        Retention is opt-in (0 keeps everything): the audit trail is the
+        product's record, so discarding it is never a silent default. Judged by
+        the filename's date prefix, which `append_history` stamps in UTC, so the
+        files do not have to be parsed.
+        """
+        if retention_days <= 0:
+            return 0
+        root = self._root / "history"
+        if not root.exists():
+            return 0
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=retention_days)).strftime("%Y%m%d")
+        removed = 0
+        for item_dir in root.iterdir():
+            if not item_dir.is_dir():
+                continue
+            for f in item_dir.glob("*.yaml"):
+                day = f.stem[:8]
+                if len(day) == 8 and day.isdigit() and day < cutoff:
+                    try:
+                        f.unlink()
+                        removed += 1
+                    except OSError:
+                        pass
+            try:
+                if not any(item_dir.iterdir()):
+                    item_dir.rmdir()
+            except OSError:
+                pass
+        return removed
+
     def history_dir(self, item_id: str) -> Path:
         return self._root / "history" / safe_id(item_id)
 
