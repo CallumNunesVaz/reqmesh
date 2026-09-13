@@ -1188,7 +1188,7 @@ def import_project(
 
         from app.services.table_io import import_table as table_import
         try:
-            with store.batch():
+            with store.batch(), store.import_snapshot(mode == "replace"):
                 return _normalise_summary(table_import(store, text, fmt=fmt, mode=mode,
                                                        dry_run=dry_run, username=username))
         except ValueError as exc:
@@ -1199,7 +1199,7 @@ def import_project(
     if format in ("csv", "tsv"):
         from app.services.table_io import import_table as table_import
         try:
-            with store.batch():
+            with store.batch(), store.import_snapshot(mode == "replace"):
                 return _normalise_summary(table_import(store, content.decode("utf-8", errors="replace"),
                                                        fmt=format, mode=mode, dry_run=dry_run, username=username))
         except ValueError as exc:
@@ -1208,7 +1208,7 @@ def import_project(
     if format == "xlsx":
         from app.services.table_io import import_xlsx
         try:
-            with store.batch():
+            with store.batch(), store.import_snapshot(mode == "replace"):
                 return _normalise_summary(import_xlsx(store, content, mode=mode, dry_run=dry_run))
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=f"Import failed: {exc}") from exc
@@ -1218,7 +1218,7 @@ def import_project(
     from app.services.sysml_import import SysMLParseError
 
     try:
-        with store.batch():
+        with store.batch(), store.import_snapshot(mode == "replace"):
             summary = parse_and_import(store, content, fmt=format, mode=mode)
     except (ReqIFParseError, SysMLParseError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=f"Import failed: {exc}") from exc

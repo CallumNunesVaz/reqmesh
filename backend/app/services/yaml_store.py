@@ -90,6 +90,14 @@ def _dir_signature(d: Path) -> tuple:
         return ()
 
 
+#: Collections a replace-mode import can rewrite, preserved by
+#: ``YamlStore.import_snapshot`` so a failed import can be rolled back.
+_IMPORT_SNAPSHOT_COLLECTIONS = (
+    "requirements", "verification_cases", "components", "definitions",
+    "analysis_cases", "specifications", "traces",
+)
+
+
 def invalidate_cache(path: Optional[Path] = None) -> None:
     """Drop cached collections. Called after every write.
 
@@ -190,6 +198,47 @@ class YamlStore:
     @property
     def root(self) -> Path:
         return self._root
+
+    @contextlib.contextmanager
+    def import_snapshot(self, enabled: bool = True,
+                        collections: tuple[str, ...] = _IMPORT_SNAPSHOT_COLLECTIONS):
+        """Preserve the collections a replace-mode import can rewrite.
+
+        Replace mode deletes the current corpus and writes the new one item by
+        item; a failure partway through used to leave a half-imported project
+        with no way back. The collections are copied aside first and restored if
+        the import raises. The copy lives in the system temp dir, never in the
+        project, so it cannot reach the git tree.
+        """
+        if not enabled:
+            yield
+            return
+        import shutil
+
+        backup = Path(tempfile.mkdtemp(prefix="reqmesh-import-"))
+        existing: list[str] = []
+        try:
+            for name in collections:
+                src = self._root / name
+                if src.exists():
+                    shutil.copytree(src, backup / name)
+                    existing.append(name)
+            yield
+        except BaseException:
+            for name in existing:
+                src = self._root / name
+                if src.exists():
+                    shutil.rmtree(src, ignore_errors=True)
+                shutil.copytree(backup / name, src)
+            for name in collections:
+                if name not in existing:
+                    extra = self._root / name
+                    if extra.exists():
+                        shutil.rmtree(extra, ignore_errors=True)
+            invalidate_cache()
+            raise
+        finally:
+            shutil.rmtree(backup, ignore_errors=True)
 
     @contextlib.contextmanager
     def batch(self):
