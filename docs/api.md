@@ -291,6 +291,7 @@ operation; a path served by several methods therefore appears several times.
 | POST | `/api/system/demo-project/reseed` | Reseed Demo Project |
 | GET | `/api/system/dependencies` | List Dependencies |
 | POST | `/api/system/dependencies/{dep_id}/test` | Test Dependency |
+| POST | `/api/system/history/prune` | Prune History |
 | GET | `/api/system/info` | System Info |
 | GET | `/api/system/latex-status` | Latex Status |
 | GET | `/api/system/public-config` | Public Config |
