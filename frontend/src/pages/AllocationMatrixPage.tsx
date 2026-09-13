@@ -122,6 +122,14 @@ export default function AllocationMatrixPage() {
     a.remove();
   };
 
+  // Above the early returns: a hook below them is only called once `data`
+  // arrives, and React refuses a render whose hook count differs from the last
+  // one (the page crashed into the error boundary on every load).
+  const rowsById = useMemo(
+    () => new Map((data?.rows ?? []).map((r: any) => [r.row_id || r.req_id, r])),
+    [data?.rows],
+  );
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -143,11 +151,6 @@ export default function AllocationMatrixPage() {
   const pageCount = Math.max(1, Math.ceil(displayRows.length / PAGE_SIZE));
   const safePage = Math.min(page, pageCount - 1);
   const pagedRows = displayRows.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE);
-
-  const rowsById = useMemo(
-    () => new Map(data.rows.map((r: any) => [r.row_id || r.req_id, r])),
-    [data.rows],
-  );
 
   const colKind = AXES.find((a) => a.key === axis)!.colKind;
   const rowKind: EntityKind = data.row_kind === 'components' ? 'component' : 'requirement';

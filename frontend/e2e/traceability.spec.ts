@@ -50,7 +50,7 @@ test.describe('risk matrix', () => {
       .locator('td button[style*="background"]').nth(2);
     await cell.scrollIntoViewIfNeeded();
     await cell.click();
-    await app.getByRole('button', { name: /^Save$/ }).first().click();
+    await app.getByRole('button', { name: /^Save( Changes \*)?$/ }).first().click();
     // Poll the API until the save lands — no fixed sleep.
     await expect(async () => {
       const stored = await api<any>(app, `/projects/${P}/risk-matrix`);

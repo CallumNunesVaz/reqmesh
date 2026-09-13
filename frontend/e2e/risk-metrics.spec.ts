@@ -64,7 +64,7 @@ test('re-banding a matrix cell moves the metrics without touching any risk', asy
   // Cycling the cell lands on some other band; assert what it became rather
   // than assuming one click reaches `other`.
   await cell.click();
-  await app.getByRole('button', { name: /^Save$/ }).first().click();
+  await app.getByRole('button', { name: /^Save( Changes \*)?$/ }).first().click();
   // Poll the API until the save lands — no fixed sleep.
   await expect(async () => {
     const stored = await api<any>(app, `/projects/${P}/risk-matrix`);
