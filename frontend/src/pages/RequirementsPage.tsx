@@ -554,6 +554,7 @@ export default function RequirementsPage() {
                 <span className="text-2xs text-muted-foreground">Select all</span>
               </button>
             )}
+            <div role="tree" aria-label="Requirements" className="divide-y divide-border/60">
             <DndContext
               sensors={sensors}
               collisionDetection={collisionDetection}
@@ -577,7 +578,10 @@ export default function RequirementsPage() {
               <div
                 id={`entity-${req.id}`}
                 role="treeitem"
-                tabIndex={0}
+                aria-level={depth + 1}
+                aria-expanded={childCount > 0 ? !isCollapsed : undefined}
+                aria-selected={selectedReqId === req.id}
+                tabIndex={req.id === (selectedReqId ?? rows[0]?.req.id) ? 0 : -1}
                 onClick={() => navigate(`/project/${projectId}/requirements/${req.id}`)}
                 onMouseEnter={() => setHoveredEntity({ kind: 'requirement', id: req.id })}
                 onMouseLeave={() => setHoveredEntity(null)}
@@ -735,6 +739,7 @@ export default function RequirementsPage() {
               )}
             </DragOverlay>
             </DndContext>
+            </div>
           </>
         )}
       </div>

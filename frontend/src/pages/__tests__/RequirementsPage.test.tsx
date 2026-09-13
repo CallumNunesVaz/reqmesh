@@ -185,3 +185,26 @@ describe('RequirementsPage row layout', () => {
     expect(cell!.hasAttribute('title')).toBe(false);
   });
 });
+
+describe('RequirementsPage tree semantics', () => {
+  it('exposes a tree with one tabbable row and level/expanded state', async () => {
+    const parent = mkReq({ id: 'REQ-1', name: 'Parent' });
+    const child = mkReq({ id: 'REQ-2', name: 'Child', parent: 'REQ-1' });
+    useStore.setState({ requirements: [parent, child] });
+    vi.mocked(api.listRequirements).mockResolvedValue([parent, child] as never);
+
+    const { container } = renderPage();
+    await screen.findByText('Parent');
+
+    expect(container.querySelector('[role="tree"]')).not.toBeNull();
+    const items = container.querySelectorAll('[role="treeitem"]');
+    expect(items.length).toBe(2);
+    // Roving tabindex: exactly one row is in the tab order.
+    expect([...items].filter((el) => el.getAttribute('tabindex') === '0')).toHaveLength(1);
+
+    const parentItem = container.querySelector('#entity-REQ-1');
+    expect(parentItem?.getAttribute('aria-level')).toBe('1');
+    expect(parentItem?.getAttribute('aria-expanded')).toBe('true');
+    expect(container.querySelector('#entity-REQ-2')?.getAttribute('aria-level')).toBe('2');
+  });
+});
