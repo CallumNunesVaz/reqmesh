@@ -3,7 +3,7 @@
 # FastAPI backend on a single origin — no Vite dev server, no CORS issues.
 
 # ═══ Stage 1 — build frontend ═══════════════════════════════════════════════════
-FROM node:20-slim AS frontend-build
+FROM node:20-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0 AS frontend-build
 
 WORKDIR /app/frontend
 
@@ -14,7 +14,7 @@ COPY frontend/ ./
 RUN npm run build
 
 # ═══ Stage 2 — backend + built frontend ════════════════════════════════════════
-FROM python:3.12-slim
+FROM python:3.12-slim@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea
 
 # OCI provenance labels. VERSION and REVISION are injected at build time by
 # release.yml from the git tag and commit — never hardcoded here, so a release

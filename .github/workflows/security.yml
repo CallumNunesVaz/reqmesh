@@ -29,7 +29,7 @@ jobs:
   semgrep:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    container: semgrep/semgrep
+    container: semgrep/semgrep@sha256:34ab619bf1391a24bfda3f05debd0d8a6ce3093c2d5f9d39cfc00f83c1397823
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: semgrep ci --config p/python --config p/react --config p/secrets --config p/dockerfile
@@ -49,7 +49,7 @@ jobs:
       # bandit.sarif is written, and the upload step below fails the job — so
       # this reported red for a missing formatter while pip-audit was green
       # and bandit had never actually run.
-      - run: pip install 'bandit[toml,sarif]' pip-audit
+      - run: pip install 'bandit[toml,sarif]==1.9.4' pip-audit==2.10.1
       # `continue-on-error: true` here hid a *tool* failure as well as findings,
       # which is how the missing formatter went unnoticed. bandit exits 1 for
       # findings — reported via SARIF, not a build failure — and 2+ when bandit
