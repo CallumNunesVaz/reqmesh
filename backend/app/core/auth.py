@@ -446,10 +446,15 @@ def authenticate(username: str, password: str, *, client_ip: str | None = None) 
         now = int(time.time())
         locked_until = int(user.get("locked_until", 0) or 0)
         if locked_until > now:
+            # Compare anyway so a locked account takes as long as a wrong
+            # password; otherwise the lockout state is a timing oracle for
+            # whether the account exists.
+            verify_password(password, user["password_hash"])
             audit_logger.warning("Login failed: user=%s reason=locked", username)
             return {"status": "locked", "until": locked_until}
 
         if user.get("disabled"):
+            verify_password(password, user["password_hash"])
             audit_logger.warning("Login failed: user=%s reason=disabled", username)
             return {"status": "disabled"}
 
