@@ -70,6 +70,13 @@ echo "==> Copying deploy configs and docs"
 for f in Dockerfile.prod docker-compose.prod.yml Caddyfile nginx.conf DEPLOYMENT.md LICENSE README.md VERSION; do
   [ -e "$f" ] && cp -a "$f" "$DEST/" || echo "    (skip missing $f)"
 done
+# The README is a short front page that links into docs/ for the technical
+# guide, the API reference and its screenshots; ship those so the links hold
+# in an offline bundle.
+mkdir -p "$DEST/docs"
+for f in docs/TECHNICAL.md docs/api.md docs/screenshots; do
+  [ -e "$f" ] && cp -a "$f" "$DEST/docs/" || echo "    (skip missing $f)"
+done
 # ── 5b. The installer ────────────────────────────────────────────────────────
 # The bundle ships the real installer and its companions, not a parallel
 # implementation. It used to carry two of its own: bundle_install.sh (as
