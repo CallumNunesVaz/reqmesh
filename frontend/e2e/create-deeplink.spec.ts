@@ -35,6 +35,8 @@ test('?new=1&parent=<id> opens child form with parent selected', async ({ app, s
   await expect(parentSelect).toHaveValue(parentId!);
 
   const idInput = app.locator('[role="dialog"] input.font-mono');
+  // The id is suggested asynchronously after the dialog opens.
+  await expect(idInput).not.toHaveValue('', { timeout: 15_000 });
   const newId = await idInput.inputValue();
   expect(newId).toBeTruthy();
   expect(newId).not.toBe(parentId);

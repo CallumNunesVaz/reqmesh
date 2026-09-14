@@ -126,7 +126,10 @@ test('creating from the + button sets the correct parent', async ({ app, server 
 
   await expect(app.getByRole('heading', { name: new RegExp(`New child of ${parentId}`) })).toBeVisible();
 
+  // The id is suggested by `getNextUid` after the dialog opens, and
+  // `inputValue()` does not wait — read it only once it has arrived.
   const idInput = app.locator('[role="dialog"] input.font-mono');
+  await expect(idInput).not.toHaveValue('', { timeout: 15_000 });
   const newId = await idInput.inputValue();
   expect(newId).toBeTruthy();
 

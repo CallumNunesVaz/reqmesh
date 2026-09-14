@@ -18,6 +18,8 @@ test('creating a requirement raises a toast linking to its detail page', async (
   await expect(app.getByRole('heading', { name: 'New Requirement' })).toBeVisible();
 
   const idInput = app.locator('[role="dialog"] input.font-mono');
+  // The id is suggested asynchronously after the dialog opens.
+  await expect(idInput).not.toHaveValue('', { timeout: 15_000 });
   const newId = await idInput.inputValue();
   expect(newId).toBeTruthy();
 

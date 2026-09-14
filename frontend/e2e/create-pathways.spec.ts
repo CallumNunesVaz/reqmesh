@@ -31,6 +31,8 @@ test('add child from tree row prefills parent and a fresh id', async ({ app, ser
   expect(parentValue).not.toBe('');
 
   const idInput = app.locator('[role="dialog"] input.font-mono');
+  // The id is suggested asynchronously after the dialog opens.
+  await expect(idInput).not.toHaveValue('', { timeout: 15_000 });
   const newId = await idInput.inputValue();
   expect(newId).toBeTruthy();
 
@@ -51,6 +53,8 @@ test('creating a child from a tree row sets the correct parent', async ({ app, s
   await expect(app.getByRole('heading', { name: /New child of/ })).toBeVisible();
 
   const idInput = app.locator('[role="dialog"] input.font-mono');
+  // The id is suggested asynchronously after the dialog opens.
+  await expect(idInput).not.toHaveValue('', { timeout: 15_000 });
   const newId = await idInput.inputValue();
   expect(newId).toBeTruthy();
 
@@ -75,6 +79,8 @@ test('duplicate from tree row copies name, type and priority', async ({ app, ser
   await expect(app.getByRole('heading', { name: /Duplicate/ })).toBeVisible();
 
   const idInput = app.locator('[role="dialog"] input.font-mono');
+  // The id is suggested asynchronously after the dialog opens.
+  await expect(idInput).not.toHaveValue('', { timeout: 15_000 });
   const newId = await idInput.inputValue();
   expect(newId).toBeTruthy();
   expect(newId).not.toBe(source);
@@ -104,6 +110,8 @@ test('duplicated requirement carries no relations', async ({ app, server }) => {
   await expect(app.getByRole('heading', { name: /Duplicate/ })).toBeVisible();
 
   const idInput = app.locator('[role="dialog"] input.font-mono');
+  // The id is suggested asynchronously after the dialog opens.
+  await expect(idInput).not.toHaveValue('', { timeout: 15_000 });
   const newId = await idInput.inputValue();
   expect(newId).toBeTruthy();
 
@@ -122,6 +130,8 @@ test('add child from detail page navigates to the new requirement', async ({ app
   await expect(app.getByRole('heading', { name: /New child of/ })).toBeVisible();
 
   const idInput = app.locator('[role="dialog"] input.font-mono');
+  // The id is suggested asynchronously after the dialog opens.
+  await expect(idInput).not.toHaveValue('', { timeout: 15_000 });
   const newId = await idInput.inputValue();
   expect(newId).toBeTruthy();
 
