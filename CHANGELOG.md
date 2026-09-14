@@ -14,6 +14,14 @@ rather than a substitute.
 
 ## [Unreleased]
 
+### Security
+
+- `weasyprint` 69.0 → 70.0 (PYSEC-2026-3940) and the Tiptap editor packages
+  3.29 → 3.31.3, clearing two high advisories in `@tiptap/core` (own
+  `__proto__` keys becoming executable DOM attributes via `mergeAttributes`,
+  and a quadratic ReDoS in Markdown attribute parsing). `npm audit` and
+  `pip-audit` both report no known vulnerabilities.
+
 ## [0.6.1] - 2026-09-14
 
 ### Added
