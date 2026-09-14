@@ -7,10 +7,19 @@
 ![The requirements workspace: the hierarchy tree, the graph canvas and the inspector open on a selected requirement — its relations, verification, allocation, quality score and attributes](docs/screenshots/requirements-inspector.png)
 
 **reqmesh** is an open-source requirements management tool for engineering
-teams. Every requirement, component, test and decision is one human-readable
-YAML file in a git repository — no database, no binary blobs — and the web app
-on top of it gives you a hierarchy, a live model graph, computable constraints,
-traceability, review, change control and publishing.
+teams, built for the gap between two extremes. At one end, requirements live in
+a spreadsheet or a wiki page — easy to start, but nothing checks them, nothing
+links them, and nobody knows what changed. At the other, a full SysML model
+captures everything — and demands a modelling language, a tool licence and a
+modelling discipline before the first requirement is written.
+
+reqmesh sits between them. Every requirement, component, test and decision is
+one human-readable YAML file in a git repository — no database, no binary
+blobs — so the barrier to entry is a text editor and `git init`. On top of
+that you get the parts of SysML that pay for themselves — a design tree
+mapped onto the requirements it satisfies, parameters and constraints that
+are evaluated rather than merely stated, and traceability that is checked — in
+plain language, without having to learn a modelling language to use them.
 
 - **Git-native** — one YAML file per entity, auto-committed on every change, with an optional push to a remote and a field-level audit trail.
 - **Computable** — requirements carry typed parameters and constraints; verdicts, margins and budget rollups are evaluated live, and a what-if preview shows a change's blast radius before anything is written.
@@ -72,8 +81,12 @@ The first launch creates an `admin` account and seeds the example project.
     <td width="50%"><img src="docs/screenshots/definitions.png" alt="Reusable constraint and calc definitions"><br><sub><b>Definitions.</b> Reusable SysML v2-style <code>constraint def</code> and <code>calc def</code>, bound by name from any requirement; <b>Analysis Cases</b> scope what-if studies over them, and <b>System States</b> say when a requirement holds.</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/screenshots/graph.png" alt="Graph view of the model"><br><sub><b>The graph.</b> Requirements, <b>Components</b> and <b>Specifications</b> as a diagram, with derivation highlighting, saved views and a live what-if cascade lighting up the nodes whose verdict changes.</sub></td>
-    <td width="50%"><img src="docs/screenshots/requirement-detail.png" alt="A requirement's parameters, constraints and measured verdicts"><br><sub><b>Parametrics.</b> Typed parameters, constraints over them, and design vs measured verdicts with signed margins.</sub><br><br><img src="docs/screenshots/git-panel.png" alt="Git integration in project settings"><br><sub><b>Git.</b> Initialise, push, hooks and the remote from project settings; a failed push is the loudest thing on the panel.</sub></td>
+    <td width="50%"><img src="docs/screenshots/graph.png" alt="The graph as a UML block diagram"><br><sub><b>The graph, as blocks.</b> Requirements, <b>Components</b> and <b>Specifications</b> laid out as a UML block diagram, collapsible by level, with derivation highlighting, saved views and a live what-if cascade lighting up the nodes whose verdict changes.</sub></td>
+    <td width="50%"><img src="docs/screenshots/graph-force.png" alt="The same model as a force-directed graph"><br><sub><b>The graph, force-directed.</b> The same 57 requirements and 122 relations as a physics layout: clusters fall out of the link structure, and selecting a node lights up its neighbourhood to one, two or three hops.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/requirement-detail.png" alt="A requirement's parameters, constraints and measured verdicts"><br><sub><b>Parametrics.</b> Typed parameters, constraints over them, and design vs measured verdicts with signed margins.</sub></td>
+    <td width="50%"><img src="docs/screenshots/git-panel.png" alt="Git integration in project settings"><br><sub><b>Git.</b> Initialise, push, hooks and the remote from project settings; a failed push is the loudest thing on the panel.</sub></td>
   </tr>
 </table>
 

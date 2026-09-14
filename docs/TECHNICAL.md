@@ -349,7 +349,17 @@ opening anything.
 The same model as a diagram — requirements, components and their relationships,
 with derivation highlighting and saved views.
 
-![Graph view of the model](screenshots/graph.png)
+![Graph view of the model as a UML block diagram](screenshots/graph.png)
+
+The canvas has two layouts, switched from its toolbar and remembered per
+browser. The **UML block diagram** (ELK, layered) reads top-down like a
+specification tree and collapses by level. The **force-directed** layout
+(d3-force) treats every relation as a spring, so clusters fall out of the link
+structure rather than the hierarchy; selecting or hovering a node highlights
+its neighbourhood out to one, two or three hops and dims the rest. Both share
+the same filters, saved views and what-if highlighting.
+
+![The same model as a force-directed graph](screenshots/graph-force.png)
 
 ### Components (the synthesised design)
 
