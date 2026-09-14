@@ -6,7 +6,6 @@ import { BACKEND_KIND_TO_ENTITY } from '../lib/searchKinds';
 import { loadEntityIndex, searchEntities, recordEntityVisit, type IndexedEntity } from './entityIndex';
 import { useEntityVersion } from '../store';
 import { api, type SearchResult } from '../api/client';
-import { OPEN_PALETTE_EVENT } from '../lib/appEvents';
 import Modal from './Modal';
 
 function highlightMatch(text: string, query: string): React.ReactNode {
@@ -27,9 +26,21 @@ function highlightMatch(text: string, query: string): React.ReactNode {
  * name and description, and navigates to the pick — the fastest traversal
  * path between any two things in the app.
  */
-export default function CommandPalette({ projectId }: { projectId: string }) {
+/**
+ * Controlled: `open` lives in Layout, which owns the Ctrl/Cmd+K shortcut and
+ * the `OPEN_PALETTE_EVENT` listener. This component is lazily loaded, so a
+ * listener registered here did not exist until its chunk arrived — a Ctrl+K
+ * (or a click on the header button) in the first moments after load was
+ * silently dropped. With the state upstream, an early press is remembered and
+ * the palette opens as soon as the chunk mounts.
+ */
+export default function CommandPalette({ projectId, open, onOpenChange }: {
+  projectId: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
   const navigate = useGuardedNavigate();
-  const [open, setOpen] = useState(false);
+  const setOpen = onOpenChange;
   const [query, setQuery] = useState('');
   const [entities, setEntities] = useState<IndexedEntity[]>([]);
   const [cursor, setCursor] = useState(0);
@@ -72,22 +83,6 @@ export default function CommandPalette({ projectId }: { projectId: string }) {
   }, [open, query, projectId]);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        setOpen((o) => !o);
-      }
-    };
-    const onOpen = () => setOpen(true);
-    window.addEventListener('keydown', onKey);
-    window.addEventListener(OPEN_PALETTE_EVENT, onOpen);
-    return () => {
-      window.removeEventListener('keydown', onKey);
-      window.removeEventListener(OPEN_PALETTE_EVENT, onOpen);
-    };
-  }, []);
-
-  useEffect(() => {
     if (open) {
       document.body.style.overflow = 'hidden';
       setQuery('');
@@ -125,12 +120,12 @@ export default function CommandPalette({ projectId }: { projectId: string }) {
   const pickCreate = useCallback(() => {
     setOpen(false);
     navigate(`/project/${projectId}/requirements?new=1`);
-  }, [navigate, projectId]);
+  }, [navigate, projectId, setOpen]);
 
   const pickSeeAll = useCallback(() => {
     setOpen(false);
     navigate(`/project/${projectId}/search?q=${encodeURIComponent(trimmed)}`);
-  }, [navigate, projectId, trimmed]);
+  }, [navigate, projectId, trimmed, setOpen]);
 
   const totalItems = combinedResults.length + (showCreateAction ? 1 : 0) + (showSeeAll ? 1 : 0);
 
@@ -175,7 +170,7 @@ export default function CommandPalette({ projectId }: { projectId: string }) {
     // Kinds with no page of their own stay in the palette but go nowhere.
     const target = entityPath(entity.kind, projectId, entity.id);
     if (target) navigate(target);
-  }, [navigate, projectId, recentIds]);
+  }, [navigate, projectId, recentIds, setOpen]);
 
   const onInputKey = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') { setOpen(false); return; }

@@ -201,6 +201,27 @@ export default function Layout() {
   const setContextOpen = useStore((s) => s.setContextOpen);
   const [loginOpen, setLoginOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  // The palette's open state and its triggers live here, not in the (lazy)
+  // palette itself: a listener inside a lazy chunk does not exist until the
+  // chunk has loaded, so Ctrl+K or the header button right after page load
+  // used to do nothing. Held here, an early press is remembered and the
+  // palette opens the moment its chunk mounts.
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setPaletteOpen((o) => !o);
+      }
+    };
+    const onOpen = () => setPaletteOpen(true);
+    window.addEventListener('keydown', onKey);
+    window.addEventListener(OPEN_PALETTE_EVENT, onOpen);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener(OPEN_PALETTE_EVENT, onOpen);
+    };
+  }, []);
   const [importOpen, setImportOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [docsOpen, setDocsOpen] = useState(false);
@@ -772,7 +793,7 @@ export default function Layout() {
       </div>
 
       <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
-      {isInProject && <Suspense fallback={null}><CommandPalette projectId={projectId!} /></Suspense>}
+      {isInProject && <Suspense fallback={null}><CommandPalette projectId={projectId!} open={paletteOpen} onOpenChange={setPaletteOpen} /></Suspense>}
       {isInProject && <Suspense fallback={null}><ExportDialog open={exportOpen} onClose={() => setExportOpen(false)} projectId={projectId!} /></Suspense>}
       {isInProject && <Suspense fallback={null}><ImportDialog open={importOpen} onClose={() => setImportOpen(false)} projectId={projectId!} /></Suspense>}
 

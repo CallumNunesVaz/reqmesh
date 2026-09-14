@@ -125,6 +125,8 @@ rather than a substitute.
   edit is refused rather than overwritten.
 - Escape inside a dialog no longer also navigates the page behind it, and
   focus returns to the control that opened the dialog when it closes.
+- Ctrl/Cmd+K and the header's palette button work immediately after a page
+  load, rather than only once the palette's code has finished downloading.
 - Leaving project settings with unsaved naming, stakeholder, risk-matrix or git
   edits asks first; only the name was guarded before.
 - The SSE reconnect no longer races two connections after a dropped stream,
