@@ -109,7 +109,11 @@ test('the kind filter offers exactly the kinds the search endpoint branches on',
   await app.goto(`${server.baseURL}/project/${DEMO_PROJECT}/search?q=system`);
   await app.waitForSelector('main');
 
-  const values = await app.locator('main select').first()
+  // `evaluateAll` does not wait: run right after `main` appears it can beat
+  // the search route's lazy chunk and read an empty option list.
+  const select = app.locator('main select').first();
+  await expect(select).toBeVisible({ timeout: 15_000 });
+  const values = await select
     .locator('option').evaluateAll((els: HTMLOptionElement[]) => els.map((e) => e.value));
 
   expect(values.filter((v) => v !== '').sort()).toEqual([
